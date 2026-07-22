@@ -13,7 +13,9 @@ model Category {
   name String @unique
   code String @unique
 
-  products Product[]
+  products       Product[]
+
+  inventoryItems InventoryItem[]
 }
 
 model Brand {
@@ -21,7 +23,9 @@ model Brand {
 
   name String @unique
 
-  products Product[]
+  products       Product[]
+
+  inventoryItems InventoryItem[]
 }
 
 model VehicleModel {
@@ -32,7 +36,9 @@ model VehicleModel {
   endYear    Int
   systemType String?
 
-  products Product[]
+  products       Product[]
+
+  inventoryItems InventoryItem[]
 
   @@unique([name, startYear, endYear])
 }
@@ -93,9 +99,12 @@ model Product {
 
   inventories Inventory[]
 
+
+
   createdAt DateTime @default(now())
 
-  updatedAt DateTime @updatedAt
+  updatedAt      DateTime        @updatedAt
+  inventoryItems InventoryItem[]
 }
 
 model LocationType {
@@ -137,9 +146,12 @@ model Location {
 
   inventoryLogs InventoryLog[]
 
+  inventoryCounts InventoryCount[]
+
   createdAt DateTime @default(now())
 
   inventorySessionLocations InventorySessionLocation[]
+
 }
 
 enum InventoryAction {
@@ -223,11 +235,14 @@ model User {
 
   inventoryLogs InventoryLog[]
 
+inventoryCounts InventoryCount[]
+
   sessions InventorySession[]
 
   createdAt DateTime @default(now())
 
-  updatedAt DateTime @updatedAt
+  updatedAt       DateTime         @updatedAt
+
 }
 
 model InventorySessionLocation {
@@ -269,5 +284,73 @@ model InventorySession {
 
   logs InventoryLog[]
 
-  locations InventorySessionLocation[]
+
+
+  locations       InventorySessionLocation[]
+  inventoryCounts InventoryCount[]
+}
+
+model InventoryCount {
+  id String @id @default(uuid())
+
+  sessionId String
+  session   InventorySession @relation(fields: [sessionId], references: [id])
+
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  status String @default("OPEN")
+
+  items InventoryItem[]
+
+  createdAt  DateTime  @default(now())
+  finishedAt DateTime?
+}
+
+model InventoryItem {
+  id String @id @default(uuid())
+
+  countId String
+  count   InventoryCount @relation(fields: [countId], references: [id])
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  name String
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id])
+
+  vehicleModelId String?
+  vehicleModel   VehicleModel? @relation(fields: [vehicleModelId], references: [id])
+
+  goodQuantity Int @default(0)
+  badQuantity  Int @default(0)
+
+  image     String?
+  voiceText String?
+  note      String?
+
+  barcodes ItemBarcode[]
+
+  createdAt DateTime @default(now())
+}
+
+model ItemBarcode {
+  id String @id @default(uuid())
+
+  itemId String
+  item   InventoryItem @relation(fields: [itemId], references: [id])
+
+  barcode String @unique
+
+  status String @default("GOOD")
+
+  createdAt DateTime @default(now())
 }
