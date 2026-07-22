@@ -21,6 +21,7 @@ import { InventorySessionModule } from './inventory-session/inventory-session.mo
 import { InventoryTransferModule } from './inventory-transfer/inventory-transfer.module';
 import { InventoryOperationModule } from './inventory-operation/inventory-operation.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { InventoryCountModule } from './inventory-count/inventory-count.module';
 
 @Module({
 
@@ -58,6 +59,7 @@ ServeStaticModule.forRoot({
 
     InventoryOperationModule,
     UploadsModule,
+    InventoryCountModule,
   ],
 
   controllers: [

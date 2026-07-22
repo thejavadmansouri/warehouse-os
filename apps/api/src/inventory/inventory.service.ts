@@ -310,4 +310,239 @@ async getLog(id:string){
   });
 
 }
+async findOne(
+  productId:string,
+  locationId:string
+){
+
+  return this.prisma.inventory.findUnique({
+
+    where:{
+      productId_locationId:{
+        productId,
+        locationId
+      }
+    },
+
+    include:{
+      product:{
+        include:{
+          brand:true,
+          vehicleModel:true
+        }
+      },
+
+      location:true
+
+    }
+
+  });
+
+}
+async scan(barcode:string){
+
+  const product =
+    await this.prisma.product.findFirst({
+
+      where:{
+        OR:[
+          {
+            internalBarcode: barcode
+          },
+          {
+            factoryBarcode: barcode
+          }
+        ]
+      },
+
+      include:{
+        brand:true,
+        vehicleModel:true
+      }
+
+    });
+
+
+  if(!product){
+
+    throw new Error('کالا با این بارکد پیدا نشد');
+
+  }
+
+
+
+  const stocks =
+    await this.prisma.inventory.findMany({
+
+      where:{
+        productId:product.id
+      },
+
+      include:{
+        location:true
+      }
+
+    });
+
+
+
+  return {
+
+    product:{
+      id:product.id,
+      name:product.name,
+      sku:product.sku,
+      barcode:barcode,
+      brand:product.brand?.name,
+      vehicleModel:product.vehicleModel?.name,
+      image:product.image
+    },
+
+
+    stocks: stocks.map(item=>({
+
+      locationId:item.locationId,
+
+      location:item.location.name,
+
+      quantity:item.quantity
+
+    }))
+
+
+  };
+
+
+}
+async scanOut(dto:any){
+
+
+  const product =
+    await this.prisma.product.findFirst({
+
+      where:{
+        OR:[
+          {
+            internalBarcode:dto.barcode
+          },
+          {
+            factoryBarcode:dto.barcode
+          }
+        ]
+      }
+
+    });
+
+
+
+  if(!product){
+
+    throw new Error('کالا پیدا نشد');
+
+  }
+
+
+
+
+  const inventory =
+    await this.prisma.inventory.findUnique({
+
+      where:{
+        productId_locationId:{
+          productId:product.id,
+          locationId:dto.locationId
+        }
+      }
+
+    });
+
+
+
+
+
+  if(!inventory){
+
+    throw new Error('این کالا در این موقعیت موجود نیست');
+
+  }
+
+
+
+
+  if(inventory.quantity < dto.quantity){
+
+    throw new Error(
+      `موجودی کافی نیست. موجودی فعلی: ${inventory.quantity}`
+    );
+
+  }
+
+
+
+
+
+  const updated =
+    await this.prisma.inventory.update({
+
+      where:{
+        productId_locationId:{
+          productId:product.id,
+          locationId:dto.locationId
+        }
+      },
+
+
+      data:{
+        quantity:{
+          decrement:dto.quantity
+        }
+      }
+
+    });
+
+
+
+
+
+  await this.prisma.inventoryLog.create({
+
+    data:{
+
+      productId:product.id,
+
+      locationId:dto.locationId,
+
+      quantity:-dto.quantity,
+
+      action:'SALE',
+
+      note:dto.note || 'Barcode OUT',
+
+      userId:dto.userId || null
+
+    }
+
+  });
+
+
+
+
+
+  return {
+
+    product:product.name,
+
+    before:
+      inventory.quantity,
+
+    out:
+      dto.quantity,
+
+    after:
+      updated.quantity
+
+  };
+
+
+}
 }
