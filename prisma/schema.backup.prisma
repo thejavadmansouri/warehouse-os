@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  code     String    @unique
+  products Product[]
+}
+
+model Brand {
+  id       String    @id @default(uuid())
+  name     String    @unique
+  products Product[]
+}
+
+model VehicleModel {
+  id         String  @id @default(uuid())
+  name       String
+  startYear  Int
+  endYear    Int
+  systemType String?
+
+  products Product[]
+
+  @@unique([name, startYear, endYear])
+}
+
+model Product {
+  id String @id @default(uuid())
+
+  name String
+
+  // کد داخلی سیستم
+  sku String @unique
+
+  // بارکد تولیدی خودمان
+  internalBarcode String @unique
+
+  // بارکد کارخانه
+  factoryBarcode String? @unique
+
+  partNumber String?
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+
+  brandId String?
+  brand   Brand?  @relation(fields: [brandId], references: [id])
+
+  vehicleModelId String?
+  vehicleModel   VehicleModel? @relation(fields: [vehicleModelId], references: [id])
+
+  image String?
+
+  inventoryLogs InventoryLog[]
+  inventories   Inventory[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LocationType {
+  id String @id @default(uuid())
+
+  name String
+
+  level Int
+
+  locations Location[]
+}
+
+model Location {
+  id String @id @default(uuid())
+
+  name String
+
+  barcode String @unique
+
+  typeId String
+  type   LocationType @relation(fields: [typeId], references: [id])
+
+  parentId String?
+  parent   Location? @relation("LocationTree", fields: [parentId], references: [id])
+
+  children Location[] @relation("LocationTree")
+
+  inventoryLogs InventoryLog[]
+  inventories   Inventory[]
+
+  createdAt DateTime @default(now())
+}
+
+enum InventoryAction {
+  IN
+  OUT
+  TRANSFER
+  ADJUST
+  SALE
+  RETURN
+  COUNT
+}
+
+model InventoryLog {
+  id String @id @default(uuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+
+  quantity Int
+
+  action InventoryAction
+
+  note String?
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  sessionId String?
+  session   InventorySession? @relation(fields: [sessionId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+model User {
+  id String @id @default(uuid())
+
+  username String @unique
+
+  password String
+
+  fullName String
+
+  role Role @default(STAFF)
+
+  inventoryLogs InventoryLog[]
+  sessions      InventorySession[]
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+}
+
+model Inventory {
+  id String @id @default(uuid())
+
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+
+  locationId String
+  location   Location @relation(fields: [locationId], references: [id])
+
+  quantity Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([productId, locationId])
+}
+
+model InventorySession {
+  id String @id @default(uuid())
+
+  warehouseName String
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  startedAt DateTime @default(now())
+
+  finishedAt DateTime?
+
+  logs InventoryLog[]
+}
