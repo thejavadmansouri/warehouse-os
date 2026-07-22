@@ -123,3 +123,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer base {
+  :root {
+    --primary: 25 100% 50%; /* #FF6B00 Industrial Orange */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 52% 24%; /* #1E3A5F Industrial Blue */
+    --secondary-foreground: 0 0% 100%;
+  }
+}

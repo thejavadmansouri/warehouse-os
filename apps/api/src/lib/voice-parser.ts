@@ -5,67 +5,196 @@ export type VoiceParseResult = {
   quantity: number | null;
 };
 
+
 const PART_BRANDS = [
-  "ایساکو", "تکستار", "بوش", "والئو", "لوک", "ساکس", "مان", "فرام",
-  "NGK", "ان جی کی", "دنسو", "کروز", "عظام", "هرینگتون", "جنیون",
-  "جنیون پارت", "مندو", "گیتس", "INA", "ای ان ای", "SKF", "اس کا اف",
-  "FEBI", "فبی",
-].sort((a, b) => b.length - a.length);
+  "ایساکو",
+  "تکستار",
+  "TEXTAR",
+  "بوش",
+  "والئو",
+  "لوک",
+  "ساکس",
+  "مان",
+  "فرام",
+  "NGK",
+  "دنسو",
+  "کروز",
+  "عظام",
+].sort((a,b)=>b.length-a.length);
+
 
 const VEHICLE_MODELS = [
-  "پژو ۲۰۶", "پژو 206", "پژو ۴۰۵", "پژو 405", "پراید", "سمند", "تیبا",
-  "دنا", "رانا", "کوییک", "ال۹۰", "ال90", "کیا", "هیوندای", "پارس",
-].sort((a, b) => b.length - a.length);
+  "پراید",
+  "پژو 206",
+  "پژو ۲۰۶",
+  "پژو 405",
+  "سمند",
+  "دنا",
+  "تیبا",
+  "کوییک",
+].sort((a,b)=>b.length-a.length);
+
+
 
 const PERSIAN_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
 const ENGLISH_DIGITS = "0123456789";
 
-function normalizeDigits(text: string): string {
-  return text.replace(/[۰-۹]/g, (d) => ENGLISH_DIGITS[PERSIAN_DIGITS.indexOf(d)]);
+
+function normalizeDigits(text:string){
+
+ return text.replace(/[۰-۹]/g,(d)=>
+   ENGLISH_DIGITS[PERSIAN_DIGITS.indexOf(d)]
+ );
+
 }
 
-function normalizeText(text: string): string {
-  return normalizeDigits(text)
-    .replace(/ي/g, "ی")
-    .replace(/ك/g, "ک")
-    .replace(/\s+/g, " ")
-    .trim();
+
+
+function numberFromWords(text:string){
+
+ const nums:any={
+  "یک":1,
+  "دو":2,
+  "سه":3,
+  "چهار":4,
+  "پنج":5,
+  "شش":6,
+  "هفت":7,
+  "هشت":8,
+  "نه":9,
+  "ده":10,
+  "بیست":20,
+  "سی":30,
+  "چهل":40,
+  "پنجاه":50,
+  "صد":100
+ };
+
+
+ return nums[text] || null;
+
 }
 
-function escapeRegex(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+
+function normalizeText(text:string){
+
+ return normalizeDigits(text)
+ .replace(/ي/g,"ی")
+ .replace(/ك/g,"ک")
+ .replace(/\s+/g," ")
+ .trim();
+
 }
 
-export function extractInventoryFromVoice(sentence: string): VoiceParseResult {
-  let text = normalizeText(sentence);
 
-  let quantity: number | null = null;
-  let brand: string | null = null;
-  let compatibleVehicle: string | null = null;
 
-  const qtyMatch = text.match(/(\d+)\s*(عدد|تا|جفت|دست|بسته)\s*$/i);
-  if (qtyMatch) {
-    quantity = Number(qtyMatch[1]);
-    text = text.substring(0, qtyMatch.index).trim();
+function removeWord(text:string,word:string){
+
+ return text
+ .replace(
+ new RegExp(`(^|\\s)${word}(?=\\s|$)`,"gi"),
+ " "
+ )
+ .replace(/\s+/g," ")
+ .trim();
+
+}
+
+
+
+export function extractInventoryFromVoice(sentence:string):VoiceParseResult{
+
+
+ let text=normalizeText(sentence);
+
+
+ let quantity:number|null=null;
+
+
+ const digitMatch=text.match(/(\d+)\s*(عدد|تا|جفت|دست)?/);
+
+ if(digitMatch){
+
+  quantity=Number(digitMatch[1]);
+
+  text=text.replace(digitMatch[0]," ");
+
+ }
+ else{
+
+  const words=text.split(" ");
+
+  for(const w of words){
+
+   const n=numberFromWords(w);
+
+   if(n){
+
+    quantity=n;
+    text=removeWord(text,w);
+    break;
+
+   }
+
   }
 
-  for (const vehicle of VEHICLE_MODELS) {
-    const regex = new RegExp(`(^|\\s)${escapeRegex(normalizeText(vehicle))}(?=\\s|$)`, "i");
-    if (regex.test(text)) {
-      compatibleVehicle = vehicle;
-      text = text.replace(regex, " ").replace(/\s+/g, " ").trim();
-      break;
-    }
+ }
+
+
+ let brand:string|null=null;
+
+
+ for(const b of PART_BRANDS){
+
+  if(text.toLowerCase().includes(b.toLowerCase())){
+
+    brand=b;
+
+    text=removeWord(text,b);
+
+    break;
+
   }
 
-  for (const partBrand of PART_BRANDS) {
-    const regex = new RegExp(`(^|\\s)${escapeRegex(normalizeText(partBrand))}(?=\\s|$)`, "i");
-    if (regex.test(text)) {
-      brand = partBrand;
-      text = text.replace(regex, " ").replace(/\s+/g, " ").trim();
-      break;
-    }
+ }
+
+
+
+ let compatibleVehicle:string|null=null;
+
+
+ for(const v of VEHICLE_MODELS){
+
+  if(text.includes(v)){
+
+   compatibleVehicle=v;
+
+   text=removeWord(text,v);
+
+   break;
+
   }
 
-  return { productName: text, brand, compatibleVehicle, quantity };
+ }
+
+
+
+ text=text
+ .replace(/عدد|تا|موجودی|دارم/g," ")
+ .replace(/\s+/g," ")
+ .trim();
+
+
+
+ return {
+
+  productName:text,
+  brand,
+  compatibleVehicle,
+  quantity
+
+ };
+
+
 }

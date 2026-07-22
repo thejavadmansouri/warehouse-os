@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Vazirmatn } from "next/font/google";
 import "./globals.css";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
@@ -9,7 +10,7 @@ const vazirmatn = Vazirmatn({
 });
 
 export const metadata: Metadata = {
-  title: "سیستم انبارداری",
+  title: "سیستم انبارداری هوشمند",
   description: "پنل مدیریت انبار لوازم یدکی خودرو",
 };
 
@@ -24,7 +25,9 @@ export default function RootLayout({
       dir="rtl"
       className={`${vazirmatn.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
+        <TooltipProvider>{children}</TooltipProvider>
+      </body>
     </html>
   );
 }

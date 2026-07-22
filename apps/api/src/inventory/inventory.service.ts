@@ -1,76 +1,297 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { extractInventoryFromVoice } from '../lib/voice-parser';
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  constructor(
+    private prisma: PrismaService
+  ) {}
+
+
+
+  async findByLocation(locationId: string) {
+
     return this.prisma.inventoryLog.findMany({
-      include: { product: true, location: { include: { type: true } } },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
 
-  create(data: { productId: string; locationId: string; quantity: number }) {
-    return this.prisma.inventoryLog.create({
-      data,
-      include: { product: true, location: { include: { type: true } } },
-    });
-  }
-
-  findByLocation(locationId: string) {
-    return this.prisma.inventoryLog.findMany({
-      where: { locationId },
-      include: { product: true },
-      orderBy: { createdAt: 'desc' },
-    });
-  }
-
-  async voiceEntry(data: { locationId: string; voiceText: string }) {
-    const location = await this.prisma.location.findUnique({
-      where: { id: data.locationId },
-    });
-    if (!location) {
-      throw new NotFoundException('موقعیت مورد نظر یافت نشد؛ ابتدا بارکد را اسکن کنید');
-    }
-
-    const parsed = extractInventoryFromVoice(data.voiceText);
-
-    if (!parsed.productName) {
-      throw new BadRequestException('نام کالا از متن صوتی قابل تشخیص نبود');
-    }
-    if (!parsed.quantity) {
-      throw new BadRequestException(
-        'تعداد مشخص نشد؛ لطفاً واحد را صریح بگویید (مثلاً «۳۰ عدد»)',
-      );
-    }
-
-    let product = await this.prisma.product.findFirst({
-      where: { name: parsed.productName, brand: parsed.brand },
-    });
-
-    if (!product) {
-      product = await this.prisma.product.create({
-        data: {
-          name: parsed.productName,
-          brand: parsed.brand,
-          compatibleVehicle: parsed.compatibleVehicle,
-          sku: `AUTO-${Date.now()}`,
-        },
-      });
-    }
-
-    const inventoryLog = await this.prisma.inventoryLog.create({
-      data: {
-        productId: product.id,
-        locationId: data.locationId,
-        quantity: parsed.quantity,
+      where:{
+        locationId
       },
-      include: { product: true, location: { include: { type: true } } },
+
+      include:{
+        product:true,
+        location:true,
+        user:true,
+      },
+
+      orderBy:{
+        createdAt:'desc'
+      }
+
     });
 
-    return { parsed, product, inventoryLog };
   }
+
+
+
+
+
+  async create(dto:any) {
+
+    return this.prisma.inventoryLog.create({
+
+      data:{
+
+        productId: dto.productId,
+
+        locationId: dto.locationId,
+
+        quantity: dto.quantity,
+
+
+        action:
+          dto.action || 'IN',
+
+
+        note:
+          dto.note || null,
+
+
+        userId:
+          dto.userId || null,
+
+      }
+
+    });
+
+  }
+
+
+
+
+
+
+async getStock(){
+
+  return this.prisma.inventory.findMany({
+
+    where:{
+      quantity:{
+        gt:0
+      }
+    },
+
+    include:{
+      product:{
+        include:{
+          brand:true,
+          vehicleModel:true
+        }
+      },
+
+      location:true
+
+    },
+
+    orderBy:{
+      updatedAt:'desc'
+    }
+
+  });
+
+}
+
+
+async getLogs(){
+
+  return this.prisma.inventoryLog.findMany({
+
+    include:{
+      product:true,
+      location:true,
+      user:true
+    },
+
+    orderBy:{
+      createdAt:'desc'
+    }
+
+  });
+
+}
+
+
+  async out(dto:any){
+
+    const inventory =
+      await this.prisma.inventory.findUnique({
+
+        where:{
+          productId_locationId:{
+            productId:dto.productId,
+            locationId:dto.locationId
+          }
+        }
+
+      });
+
+
+    if(!inventory || inventory.quantity < dto.quantity){
+      throw new Error('موجودی کافی نیست');
+    }
+
+
+    await this.prisma.inventory.update({
+
+      where:{
+        productId_locationId:{
+          productId:dto.productId,
+          locationId:dto.locationId
+        }
+      },
+
+      data:{
+        quantity:{
+          decrement:dto.quantity
+        }
+      }
+
+    });
+
+
+    return this.prisma.inventoryLog.create({
+
+      data:{
+
+        productId:dto.productId,
+
+        locationId:dto.locationId,
+
+        quantity:dto.quantity,
+
+        action:'SALE',
+
+        note:dto.note || 'فروش',
+
+        userId:dto.userId || null
+
+      }
+
+    });
+
+  }
+
+
+
+
+  async scanBarcode(dto:any){
+
+    const product =
+      await this.prisma.product.findFirst({
+
+        where:{
+          OR:[
+            {
+              internalBarcode:dto.barcode
+            },
+            {
+              factoryBarcode:dto.barcode
+            }
+          ]
+        }
+
+      });
+
+
+    if(!product){
+      throw new Error('کالا پیدا نشد');
+    }
+
+
+
+    const location =
+      await this.prisma.location.findUnique({
+
+        where:{
+          barcode:dto.locationBarcode
+        }
+
+      });
+
+
+
+    if(!location){
+      throw new Error('موقعیت پیدا نشد');
+    }
+
+
+
+    if(dto.action === 'OUT'){
+
+      return this.out({
+
+        productId: product.id,
+
+        locationId: location.id,
+
+        quantity: dto.quantity,
+
+        note:'Barcode OUT'
+
+      });
+
+    }
+
+
+
+    if(dto.action === 'IN'){
+
+
+      await this.prisma.inventory.upsert({
+
+        where:{
+          productId_locationId:{
+            productId:product.id,
+            locationId:location.id
+          }
+        },
+
+        update:{
+          quantity:{
+            increment:dto.quantity
+          }
+        },
+
+        create:{
+          productId:product.id,
+          locationId:location.id,
+          quantity:dto.quantity
+        }
+
+      });
+
+
+
+      return this.create({
+
+        productId:product.id,
+
+        locationId:location.id,
+
+        quantity:dto.quantity,
+
+        action:'IN',
+
+        note:'Barcode IN'
+
+      });
+
+    }
+
+
+
+    throw new Error('عملیات نامعتبر');
+
+  }
+
 }

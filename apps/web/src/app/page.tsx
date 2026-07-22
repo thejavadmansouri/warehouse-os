@@ -1,8 +1,23 @@
-export default function Home() {
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+
+export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    const token = localStorage.getItem("wos_token");
+    if (token) {
+      router.push("/admin");
+    } else {
+      router.push("/login");
+    }
+  }, [router]);
+
   return (
-    <main className="flex flex-1 flex-col items-center justify-center gap-4 p-8">
-      <h1 className="text-3xl font-bold text-primary">سیستم انبارداری</h1>
-      <p className="text-muted-foreground">پنل مدیریت انبار لوازم یدکی خودرو</p>
-    </main>
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-sm">
+      در حال انتقال به سامانه انبارداری...
+    </div>
   );
 }

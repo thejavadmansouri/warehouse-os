@@ -1,29 +1,92 @@
-import { Controller, Get, Post, Query, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
-import { CreateInventoryLogDto } from './dto/create-inventory-log.dto';
-import { VoiceEntryDto } from './dto/voice-entry.dto';
+import { VoiceInventoryService } from './voice-inventory.service';
+import { VoiceInventoryDto } from './dto/voice-inventory.dto';
+
 
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly service: InventoryService) {}
 
-  @Get()
-  findAll() {
-    return this.service.findAll();
+
+  constructor(
+    private readonly service: InventoryService,
+    private readonly voiceService: VoiceInventoryService
+  ) {}
+
+
+
+  @Get('current-stock')
+  getCurrentStock(){
+
+    return this.service.getStock();
+
   }
 
-  @Get('by-location')
-  findByLocation(@Query('locationId') locationId: string) {
+
+
+
+  @Get('location/:locationId')
+  findByLocation(
+    @Param('locationId') locationId:string
+  ){
+
     return this.service.findByLocation(locationId);
+
   }
+
+
+
 
   @Post()
-  create(@Body() dto: CreateInventoryLogDto) {
+  create(
+    @Body() dto:any
+  ){
+
     return this.service.create(dto);
+
   }
 
-  @Post('voice-entry')
-  voiceEntry(@Body() dto: VoiceEntryDto) {
-    return this.service.voiceEntry(dto);
+
+
+
+
+  @Post('voice')
+  voice(
+    @Body() dto:VoiceInventoryDto
+  ){
+
+return this.voiceService.process(
+  dto.locationBarcode,
+  dto.text,
+  dto.sessionId
+);
   }
+
+
+
+  @Post('out')
+  out(
+    @Body() dto:any
+  ){
+    return this.service.out(dto);
+  }
+
+
+
+  @Get('stock')
+  stock(){
+
+    return this.service.getStock();
+
+  }
+
+
+  @Get('logs')
+  logs(){
+
+    return this.service.getLogs();
+
+  }
+
+
 }
