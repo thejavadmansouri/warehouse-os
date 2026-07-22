@@ -93,9 +93,9 @@ async create(dto:any) {
   };
 
 }
+    });
 
-
-
+  }
 
 
 
@@ -257,48 +257,49 @@ async getLogs(){
 
 
 
-if(dto.action === 'OUT'){
+    if(dto.action === 'OUT'){
 
-  return this.out({
+      return this.out({
 
-    productId: product.id,
+        productId: product.id,
 
-    locationId: location.id,
+        locationId: location.id,
 
-    quantity: dto.quantity,
+        quantity: dto.quantity,
 
-    note:'Barcode OUT',
+        note:'Barcode OUT'
 
-    userId:dto.userId
+      });
 
-  });
-
-}
+    }
 
 
 
     if(dto.action === 'IN'){
 
 
-if(dto.action === 'IN'){
+      await this.prisma.inventory.upsert({
 
-  return this.create({
+        where:{
+          productId_locationId:{
+            productId:product.id,
+            locationId:location.id
+          }
+        },
 
-    productId:product.id,
+        update:{
+          quantity:{
+            increment:dto.quantity
+          }
+        },
 
-    locationId:location.id,
+        create:{
+          productId:product.id,
+          locationId:location.id,
+          quantity:dto.quantity
+        }
 
-    quantity:dto.quantity,
-
-    action:'IN',
-
-    note:'Barcode IN',
-
-    userId:dto.userId
-
-  });
-
-}
+      });
 
 
 
@@ -442,7 +443,7 @@ async scan(barcode:string){
 
   };
 
-}
+
 async scanOut(dto:any){
 
 

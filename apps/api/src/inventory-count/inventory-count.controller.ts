@@ -1,10 +1,13 @@
-import { Controller, Post, Get, Body, Param, Patch } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, Patch, UseGuards } from '@nestjs/common';
+import { Role } from '@prisma/client';
+
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
 import { InventoryCountService } from './inventory-count.service';
-
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { AddItemDto } from './dto/add-item.dto';
-
 
 @Controller('inventory-count')
 export class InventoryCountController {
@@ -47,11 +50,12 @@ export class InventoryCountController {
   }
 
 
-  @Post(':id/apply')
-  apply(
-    @Param('id') id: string
-  ) {
-    return this.service.apply(id);
-  }
-
+@Post(':id/apply')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(Role.ADMIN, Role.MANAGER)
+apply(
+  @Param('id') id:string
+) {
+  return this.service.apply(id);
+}
 }

@@ -1,4 +1,5 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Req, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 import { ScanBarcodeDto } from './dto/scan-barcode.dto';
 import { ScanOutDto } from './dto/scan-out.dto';
@@ -114,12 +115,17 @@ export class InventoryController {
 
 
   // ثبت ورود دستی
+  @UseGuards(JwtAuthGuard)
   @Post()
   create(
-    @Body() dto:any
+    @Body() dto:any,
+    @Req() req:any
   ){
 
-    return this.service.create(dto);
+    return this.service.create({
+      ...dto,
+      userId:req.user.id
+    });
 
   }
 
@@ -146,21 +152,33 @@ export class InventoryController {
 
 
   // خروج کالا
+  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard)
   @Post('out')
   out(
-    @Body() dto:any
+    @Body() dto:any,
+    @Req() req:any
   ){
 
-    return this.service.out(dto);
+    return this.service.out({
+      ...dto,
+      userId:req.user.id
+    });
 
   }
 
+  @UseGuards(JwtAuthGuard)
 @Post('scan-out')
 scanOut(
-  @Body() dto:ScanOutDto
+  @Body() dto:ScanOutDto,
+  @Req() req:any
 ){
 
-  return this.service.scanOut(dto);
+  return this.service.scanOut({
+    ...dto,
+    userId:req.user.id
+  });
 
 }
 }
