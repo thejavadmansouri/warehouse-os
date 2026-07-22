@@ -9,15 +9,77 @@ export class InventorySessionService {
   ) {}
 
 
-  create(
-    warehouseName:string,
-    userId?:string
+
+
+
+
+  async addLocation(
+    sessionId:string,
+    locationBarcode:string
+  ){
+
+    const location =
+      await this.prisma.location.findUnique({
+
+        where:{
+          barcode:locationBarcode
+        }
+
+      });
+
+
+    if(!location){
+      throw new Error('قفسه پیدا نشد');
+    }
+
+
+    return this.prisma.inventorySessionLocation.create({
+
+      data:{
+        sessionId,
+        locationId:location.id
+      },
+
+      include:{
+        location:true
+      }
+
+    });
+
+  }
+
+
+  async start(
+    warehouseId?: string,
+    userId?: string
   ){
 
     return this.prisma.inventorySession.create({
 
       data:{
-        warehouseName,
+        warehouseId,
+        userId
+      },
+
+      include:{
+        warehouse:true,
+        user:true
+      }
+
+    });
+
+  }
+
+
+  create(
+    warehouseId: string,
+    userId?: string
+  ){
+
+    return this.prisma.inventorySession.create({
+
+      data:{
+        warehouseId,
         userId
       }
 
@@ -32,6 +94,11 @@ export class InventorySessionService {
 
       where:{
         finishedAt:null
+      },
+
+      include:{
+        warehouse:true,
+        user:true
       },
 
       orderBy:{

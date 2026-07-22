@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-
+import { ServeStaticModule } from 
+'@nestjs/serve-static';
+import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -18,10 +20,15 @@ import { InventoryEngineModule } from './inventory-engine/inventory-engine.modul
 import { InventorySessionModule } from './inventory-session/inventory-session.module';
 import { InventoryTransferModule } from './inventory-transfer/inventory-transfer.module';
 import { InventoryOperationModule } from './inventory-operation/inventory-operation.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
 
   imports: [
+ServeStaticModule.forRoot({
+  rootPath: join(__dirname, '..', 'storage'),
+  serveRoot: '/storage',
+}),
 
     PrismaModule,
 
@@ -50,7 +57,7 @@ import { InventoryOperationModule } from './inventory-operation/inventory-operat
     InventoryTransferModule,
 
     InventoryOperationModule,
-    InventoryOperationModule,
+    UploadsModule,
   ],
 
   controllers: [

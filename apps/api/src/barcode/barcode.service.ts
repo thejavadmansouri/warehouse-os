@@ -34,7 +34,7 @@ export class BarcodeService {
 
 
 
-  async scan(dto:any){
+  async scan(dto:any, userId?:string){
 
     const product =
       await this.prisma.product.findFirst({
@@ -77,8 +77,8 @@ export class BarcodeService {
 
 
 
-
     let toLocationId = null;
+
 
 
     if(dto.action === 'TRANSFER'){
@@ -88,6 +88,7 @@ export class BarcodeService {
         throw new Error('مقصد انتقال مشخص نیست');
 
       }
+
 
 
       const toLocation =
@@ -100,11 +101,13 @@ export class BarcodeService {
         });
 
 
+
       if(!toLocation){
 
         throw new Error('موقعیت مقصد پیدا نشد');
 
       }
+
 
 
       toLocationId = toLocation.id;
@@ -113,7 +116,7 @@ export class BarcodeService {
 
 
 
-    return this.inventoryOperation.execute({
+return this.inventoryOperation.execute({
 
       type:dto.action,
 
@@ -127,9 +130,123 @@ export class BarcodeService {
 
       note:'Barcode scan',
 
-      source:'BARCODE'
+      source:'BARCODE',
+
+      userId:userId
 
     });
+
   }
+
+
+  async operation(dto:any, userId?:string){
+
+    return this.scan(dto, userId);
+
+  }
+
+
+
+
+  async lookup(barcode:string){
+
+    const product =
+      await this.prisma.product.findFirst({
+
+        where:{
+          OR:[
+            {
+              internalBarcode: barcode
+            },
+            {
+              factoryBarcode: barcode
+            }
+          ]
+        },
+
+        include:{
+
+          brand:true,
+
+          vehicleModel:true,
+
+          category:true,
+
+          inventories:{
+            where:{
+              quantity:{
+                gt:0
+              }
+            },
+
+            include:{
+              location:true
+            }
+          }
+
+        }
+
+      });
+
+
+    if(!product){
+
+      throw new Error('کالا پیدا نشد');
+
+    }
+
+
+    const totalStock =
+      product.inventories.reduce(
+        (sum,item)=>sum + item.quantity,
+        0
+      );
+
+
+    return {
+
+      product:{
+
+        id:product.id,
+
+        name:product.name,
+
+        sku:product.sku,
+
+        internalBarcode:product.internalBarcode,
+
+        factoryBarcode:product.factoryBarcode,
+
+        partNumber:product.partNumber,
+
+        image:product.image,
+
+        brand:product.brand?.name || null,
+
+        vehicleModel:product.vehicleModel?.name || null
+
+      },
+
+
+      totalStock,
+
+
+      locations:
+        product.inventories.map(item=>({
+
+          name:item.location.name,
+
+          barcode:item.location.barcode,
+
+          quantity:item.quantity
+
+        }))
+
+
+    };
+
+
+  }
+
 
 }

@@ -16,11 +16,22 @@ export class InventoryOperationService {
       productId,
       locationId,
       toLocationId,
-      quantity,
       note,
       userId,
-      source
+      source,
+      image
     } = dto;
+
+    const quantity = Number(dto.quantity);
+
+
+    const logData = {
+      productId,
+      quantity,
+      userId: userId ?? null,
+      image: image ?? null,
+      note: `${source || 'SYSTEM'}: ${note || ''}`
+    };
 
 
 
@@ -40,7 +51,6 @@ export class InventoryOperationService {
 
     if(type === 'IN'){
 
-
       const updated =
         await this.prisma.inventory.upsert({
 
@@ -51,13 +61,11 @@ export class InventoryOperationService {
             }
           },
 
-
           update:{
             quantity:{
               increment:quantity
             }
           },
-
 
           create:{
             productId,
@@ -72,12 +80,9 @@ export class InventoryOperationService {
       await this.prisma.inventoryLog.create({
 
         data:{
-          productId,
+          ...logData,
           locationId,
-          quantity,
-          action:'IN',
-          note:`${source || 'SYSTEM'}: ${note || 'ورود'}`,
-          userId:userId || null
+          action:'IN'
         }
 
       });
@@ -91,7 +96,6 @@ export class InventoryOperationService {
 
 
     if(type === 'OUT' || type === 'SALE'){
-
 
       if(!inventory || inventory.quantity < quantity){
 
@@ -111,7 +115,6 @@ export class InventoryOperationService {
             }
           },
 
-
           data:{
             quantity:{
               decrement:quantity
@@ -125,12 +128,9 @@ export class InventoryOperationService {
       await this.prisma.inventoryLog.create({
 
         data:{
-          productId,
+          ...logData,
           locationId,
-          quantity,
-          action:type === 'SALE' ? 'SALE':'OUT',
-          note:`${source || 'SYSTEM'}: ${note || 'خروج'}`,
-          userId:userId || null
+          action:type === 'SALE' ? 'SALE':'OUT'
         }
 
       });
@@ -177,7 +177,6 @@ export class InventoryOperationService {
               }
             },
 
-
             data:{
               quantity:{
                 decrement:quantity
@@ -198,13 +197,11 @@ export class InventoryOperationService {
                 }
               },
 
-
               update:{
                 quantity:{
                   increment:quantity
                 }
               },
-
 
               create:{
                 productId,
@@ -221,22 +218,18 @@ export class InventoryOperationService {
             data:[
 
               {
-                productId,
+                ...logData,
                 locationId,
-                quantity,
                 action:'TRANSFER',
-                note:`TRANSFER OUT -> ${toLocationId}`,
-                userId:userId || null
+                note:`TRANSFER OUT -> ${toLocationId}`
               },
 
 
               {
-                productId,
+                ...logData,
                 locationId:toLocationId,
-                quantity,
                 action:'TRANSFER',
-                note:`TRANSFER IN <- ${locationId}`,
-                userId:userId || null
+                note:`TRANSFER IN <- ${locationId}`
               }
 
             ]
@@ -261,8 +254,6 @@ export class InventoryOperationService {
       };
 
     }
-
-
 
 
 

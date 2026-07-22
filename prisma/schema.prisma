@@ -138,6 +138,8 @@ model Location {
   inventoryLogs InventoryLog[]
 
   createdAt DateTime @default(now())
+
+  inventorySessionLocations InventorySessionLocation[]
 }
 
 enum InventoryAction {
@@ -228,6 +230,28 @@ model User {
   updatedAt DateTime @updatedAt
 }
 
+model InventorySessionLocation {
+  id String @id @default(uuid())
+
+  sessionId String
+
+  session InventorySession @relation(fields: [sessionId], references: [id])
+
+  locationId String
+
+  location Location @relation(fields: [locationId], references: [id])
+
+  status String @default("PENDING")
+
+  startedAt DateTime?
+
+  finishedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([sessionId, locationId])
+}
+
 model InventorySession {
   id String @id @default(uuid())
 
@@ -244,4 +268,6 @@ model InventorySession {
   finishedAt DateTime?
 
   logs InventoryLog[]
+
+  locations InventorySessionLocation[]
 }

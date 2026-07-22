@@ -81,6 +81,18 @@ return this.voiceService.process(
   }
 
 
+
+
+  @Get('logs/:id')
+  log(
+    @Param('id') id:string
+  ){
+
+    return this.service.getLog(id);
+
+  }
+
+
   @Get('logs')
   logs(){
 

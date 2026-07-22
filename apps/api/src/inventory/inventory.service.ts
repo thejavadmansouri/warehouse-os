@@ -293,5 +293,21 @@ async getLogs(){
     throw new Error('عملیات نامعتبر');
 
   }
+async getLog(id:string){
 
+  return this.prisma.inventoryLog.findUnique({
+
+    where:{
+      id
+    },
+
+    include:{
+      product:true,
+      location:true,
+      user:true
+    }
+
+  });
+
+}
 }

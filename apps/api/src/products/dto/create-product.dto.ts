@@ -1,37 +1,62 @@
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsNumber } from 'class-validator';
 
 export class CreateProductDto {
 
   @IsString()
-  name: string;
+  name:string;
 
 
   @IsString()
-  sku: string;
+  sku:string;
 
 
   @IsOptional()
   @IsString()
-  brandId?: string;
+  internalBarcode?:string;
 
 
   @IsOptional()
   @IsString()
-  categoryId?: string;
+  factoryBarcode?:string;
 
 
   @IsOptional()
   @IsString()
-  vehicleModelId?: string;
+  partNumber?:string;
 
 
   @IsOptional()
   @IsString()
-  factoryBarcode?: string;
+  brandId?:string;
 
 
   @IsOptional()
   @IsString()
-  partNumber?: string;
+  categoryId?:string;
+
+
+  @IsOptional()
+  @IsString()
+  vehicleModelId?:string;
+
+
+  @IsOptional()
+  @IsNumber()
+  purchasePrice?:number;
+
+
+  @IsOptional()
+  @IsNumber()
+  salePrice?:number;
+
+
+  @IsOptional()
+  @IsNumber()
+  minStock?:number;
+
+
+  @IsOptional()
+  @IsString()
+  image?:string;
 
 }

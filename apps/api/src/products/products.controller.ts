@@ -26,6 +26,16 @@ export class ProductsController {
     return this.productsService.search(q);
   }
 
+  @Get('barcode/:barcode')
+  detailByBarcode(
+    @Param('barcode') barcode:string
+  ){
+
+    return this.productsService.detailByBarcode(barcode);
+
+  }
+
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);

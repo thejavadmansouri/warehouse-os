@@ -1,26 +1,51 @@
-import { Controller, Post, Get, Patch, Body, Param } from '@nestjs/common';
+import { 
+  Controller,
+  Post,
+  Get,
+  Patch,
+  Body,
+  Param
+} from '@nestjs/common';
+
 import { InventorySessionService } from './inventory-session.service';
 
 
 @Controller('inventory-session')
 export class InventorySessionController {
 
+
   constructor(
     private service: InventorySessionService
   ){}
 
 
-  @Post()
-  create(
-    @Body() body:any
+
+  @Post('start')
+  start(
+    @Body() dto:any
   ){
 
-    return this.service.create(
-      body.warehouseName,
-      body.userId
+    return this.service.start(
+      dto.warehouseId,
+      dto.userId
     );
 
   }
+
+
+
+  @Post('location')
+  addLocation(
+    @Body() dto:any
+  ){
+
+    return this.service.addLocation(
+      dto.sessionId,
+      dto.locationBarcode
+    );
+
+  }
+
 
 
   @Get()
@@ -31,6 +56,7 @@ export class InventorySessionController {
   }
 
 
+
   @Patch(':id/finish')
   finish(
     @Param('id') id:string
@@ -39,5 +65,6 @@ export class InventorySessionController {
     return this.service.finish(id);
 
   }
+
 
 }
