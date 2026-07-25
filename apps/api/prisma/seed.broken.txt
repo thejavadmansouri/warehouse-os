@@ -1,0 +1,415 @@
+import { PrismaClient } from '@prisma/client';
+
+const prisma = new PrismaClient();
+
+async function main() {
+  console.log('🚀 شروع Seed دیتای استاندارد Warehouse OS');
+
+  // ======================================================
+  // 1) PART BRANDS - برند قطعات
+  // ======================================================
+
+  const brandsData = [
+    // برندهای خارجی پرمصرف
+    { code: 'TXT', nameEn: 'Textar', nameFa: 'تکستار' },
+    { code: 'BSH', nameEn: 'Bosch', nameFa: 'بوش' },
+    { code: 'VAL', nameEn: 'Valeo', nameFa: 'والئو' },
+    { code: 'LUK', nameEn: 'LUK', nameFa: 'لوک' },
+    { code: 'SAC', nameEn: 'Sachs', nameFa: 'ساکس' },
+    { code: 'MAN', nameEn: 'Mann Filter', nameFa: 'مان' },
+    { code: 'FRM', nameEn: 'Fram', nameFa: 'فرام' },
+    { code: 'NGK', nameEn: 'NGK', nameFa: 'ان جی کی' },
+    { code: 'DEN', nameEn: 'Denso', nameFa: 'دنسو' },
+    { code: 'SKF', nameEn: 'SKF', nameFa: 'اس کا اف' },
+    { code: 'INA', nameEn: 'INA', nameFa: 'اینا' },
+    { code: 'FAG', nameEn: 'FAG', nameFa: 'اف ای جی' },
+    { code: 'GAT', nameEn: 'Gates', nameFa: 'گیتس' },
+    { code: 'DAY', nameEn: 'Dayco', nameFa: 'دایکو' },
+    { code: 'KYB', nameEn: 'KYB', nameFa: 'کایابا' },
+    { code: 'CTR', nameEn: 'CTR', nameFa: 'سی تی آر' },
+    { code: '555', nameEn: '555', nameFa: 'سه پنج' },
+    { code: 'TRW', nameEn: 'TRW', nameFa: 'تی آر دبلیو' },
+
+    // برندهای ایرانی مهم بازار
+    { code: 'ISA', nameEn: 'ISACO', nameFa: 'ایساکو' },
+    { code: 'SYK', nameEn: 'Saipa Yadak', nameFa: 'سایپا یدک' },
+    { code: 'EZM', nameEn: 'Ezam', nameFa: 'عظام' },
+    { code: 'CRZ', nameEn: 'Crouse', nameFa: 'کروز' },
+    { code: 'DNP', nameEn: 'Dina Part', nameFa: 'دینا پارت' },
+    { code: 'MKP', nameEn: 'Mehrkam Pars', nameFa: 'مهرکام پارس' },
+    { code: 'PLN', nameEn: 'Pars Lent', nameFa: 'پارس لنت' },
+    { code: 'JLN', nameEn: 'Jahan Lent', nameFa: 'جهان لنت' },
+    { code: 'KVR', nameEn: 'Kavir Lent', nameFa: 'کویر لنت' },
+    { code: 'HRG', nameEn: 'Harrington', nameFa: 'هرینگتون' },
+    { code: 'MOT', nameEn: 'Motogen', nameFa: 'موتوژن' },
+    { code: 'TAM', nameEn: 'Tam Iran Khodro', nameFa: 'تام ایران خودرو' },
+    { code: 'ATI', nameEn: 'Atiyeh', nameFa: 'عطیه' },
+    { code: 'ASL', nameEn: 'Asal Part', nameFa: 'اصل پارت' },
+    { code: 'TBR', nameEn: 'Tabriz Bearing', nameFa: 'تبریز بلبرینگ' },
+    { code: 'YTK', nameEn: 'Yatagan Iran', nameFa: 'یاتاقان ایران' },
+    { code: 'GKN', nameEn: 'GKN Iran', nameFa: 'جی کی ان ایران' },
+    { code: 'EMC', nameEn: 'Emco', nameFa: 'امکو' },
+    { code: 'SND', nameEn: 'Sando', nameFa: 'ساندو' },
+    { code: 'KSH', nameEn: 'Koosha', nameFa: 'کوشا' },
+    { code: 'IRR', nameEn: 'Iran Radiator', nameFa: 'ایران رادیاتور' },
+  ];
+
+  for (const b of brandsData) {
+    await prisma.brand.upsert({
+      where: { code: b.code },
+      update: { nameFa: b.nameFa, nameEn: b.nameEn },
+      create: { code: b.code, nameFa: b.nameFa, nameEn: b.nameEn },
+    });
+  }
+  console.log('✅ برند قطعات ثبت شد');
+
+  // ======================================================
+  // 2) VEHICLE MAKES
+  // ======================================================
+
+  const makes = [
+    { code: 'IKCO', nameFa: 'ایران خودرو', nameEn: 'Iran Khodro' },
+    { code: 'SAIPA', nameFa: 'سایپا', nameEn: 'SAIPA' },
+    { code: 'PARS_KHODRO', nameFa: 'پارس خودرو', nameEn: 'Pars Khodro' },
+    { code: 'RENAULT', nameFa: 'رنو', nameEn: 'Renault' },
+    { code: 'JAC', nameFa: 'جک', nameEn: 'JAC' },
+    { code: 'KMC', nameFa: 'KMC', nameEn: 'Kerman Motor' },
+    { code: 'MVM', nameFa: 'ام وی ام', nameEn: 'MVM' },
+    { code: 'CHERY', nameFa: 'چری', nameEn: 'Chery' },
+    { code: 'BAIC', nameFa: 'بایک', nameEn: 'BAIC' },
+  ];
+
+  for (const m of makes) {
+    await prisma.vehicleMake.upsert({
+      where: { code: m.code },
+      update: { nameFa: m.nameFa, nameEn: m.nameEn },
+      create: { code: m.code, nameFa: m.nameFa, nameEn: m.nameEn },
+    });
+  }
+  console.log('✅ برند خودرو ثبت شد');
+
+  // ======================================================
+  // 3) VEHICLE MODELS
+  // ======================================================
+
+  const vehicleModels = [
+    // سایپا
+    { code: 'PRIDE_111', makeCode: 'SAIPA', nameFa: 'پراید 111', fromYear: 1389, toYear: 1399 },
+    { code: 'PRIDE_131', makeCode: 'SAIPA', nameFa: 'پراید 131', fromYear: 1389, toYear: 1399 },
+    { code: 'PRIDE_132', makeCode: 'SAIPA', nameFa: 'پراید 132', fromYear: 1387, toYear: 1398 },
+    { code: 'PRIDE_141', makeCode: 'SAIPA', nameFa: 'پراید 141', fromYear: 1382, toYear: 1393 },
+    { code: 'PRIDE_151', makeCode: 'SAIPA', nameFa: 'وانت پراید 151', fromYear: 1393, toYear: 1403 },
+
+    { code: 'TIBA', makeCode: 'SAIPA', nameFa: 'تیبا صندوق دار', fromYear: 1389, toYear: 1401 },
+    { code: 'TIBA2', makeCode: 'SAIPA', nameFa: 'تیبا 2 هاچ بک', fromYear: 1392, toYear: 1401 },
+
+    { code: 'SAINA', makeCode: 'SAIPA', nameFa: 'ساینا EX', fromYear: 1395, toYear: 1401 },
+    { code: 'SAINA_S', makeCode: 'SAIPA', nameFa: 'ساینا S', fromYear: 1399, toYear: 1403 },
+
+    { code: 'QUICK', makeCode: 'SAIPA', nameFa: 'کوییک معمولی', fromYear: 1397, toYear: 1403 },
+    { code: 'QUICK_R', makeCode: 'SAIPA', nameFa: 'کوییک R', fromYear: 1398, toYear: 1403 },
+    { code: 'QUICK_S', makeCode: 'SAIPA', nameFa: 'کوییک S', fromYear: 1400, toYear: 1403 },
+    { code: 'QUICK_GX', makeCode: 'SAIPA', nameFa: 'کوییک GX', fromYear: 1402, toYear: 1403 },
+
+    { code: 'SHAHIN', makeCode: 'SAIPA', nameFa: 'شاهین G', fromYear: 1399, toYear: 1403 },
+    { code: 'SHAHIN_AT', makeCode: 'SAIPA', nameFa: 'شاهین اتوماتیک', fromYear: 1402, toYear: 1403 },
+
+    { code: 'ATLAS', makeCode: 'SAIPA', nameFa: 'اطلس', fromYear: 1402, toYear: 1403 },
+    { code: 'SAHAND', makeCode: 'SAIPA', nameFa: 'سهند', fromYear: 1403, toYear: 1403 },
+
+    { code: 'ZAMYAD', makeCode: 'SAIPA', nameFa: 'نیسان زامیاد', fromYear: 1365, toYear: 1403 },
+
+    // ایران خودرو
+    { code: 'PEUGEOT_405_GLX', makeCode: 'IKCO', nameFa: 'پژو 405 GLX', fromYear: 1370, toYear: 1399 },
+    { code: 'PEUGEOT_405_SLX', makeCode: 'IKCO', nameFa: 'پژو 405 SLX TU5', fromYear: 1388, toYear: 1399 },
+
+    { code: 'PEUGEOT_RD', makeCode: 'IKCO', nameFa: 'پژو RD', fromYear: 1378, toYear: 1385 },
+    { code: 'ROA', makeCode: 'IKCO', nameFa: 'پژو روآ', fromYear: 1385, toYear: 1390 },
+
+    { code: 'PEUGEOT_PARS', makeCode: 'IKCO', nameFa: 'پژو پارس سال', fromYear: 1385, toYear: 1403 },
+    { code: 'PEUGEOT_PARS_TU5', makeCode: 'IKCO', nameFa: 'پژو پارس TU5', fromYear: 1390, toYear: 1403 },
+
+    { code: 'PEUGEOT_206_T2', makeCode: 'IKCO', nameFa: 'پژو 206 تیپ 2', fromYear: 1380, toYear: 1401 },
+    { code: 'PEUGEOT_206_T5', makeCode: 'IKCO', nameFa: 'پژو 206 تیپ 5', fromYear: 1382, toYear: 1399 },
+    { code: 'PEUGEOT_206_SD', makeCode: 'IKCO', nameFa: 'پژو 206 صندوق دار', fromYear: 1385, toYear: 1400 },
+
+    { code: 'PEUGEOT_207', makeCode: 'IKCO', nameFa: 'پژو 207', fromYear: 1389, toYear: 1403 },
+
+    { code: 'SAMAND_LX', makeCode: 'IKCO', nameFa: 'سمند LX', fromYear: 1383, toYear: 1401 },
+    { code: 'SAMAND_EF7', makeCode: 'IKCO', nameFa: 'سمند EF7', fromYear: 1388, toYear: 1401 },
+
+    { code: 'SORAN', makeCode: 'IKCO', nameFa: 'سورن', fromYear: 1386, toYear: 1398 },
+    { code: 'SORAN_PLUS', makeCode: 'IKCO', nameFa: 'سورن پلاس', fromYear: 1399, toYear: 1403 },
+
+    { code: 'DENA', makeCode: 'IKCO', nameFa: 'دنا', fromYear: 1393, toYear: 1403 },
+    { code: 'DENA_PLUS', makeCode: 'IKCO', nameFa: 'دنا پلاس', fromYear: 1395, toYear: 1403 },
+    { code: 'DENA_TURBO', makeCode: 'IKCO', nameFa: 'دنا پلاس توربو', fromYear: 1399, toYear: 1403 },
+
+    { code: 'RANA', makeCode: 'IKCO', nameFa: 'رانا', fromYear: 1391, toYear: 1399 },
+    { code: 'RANA_PLUS', makeCode: 'IKCO', nameFa: 'رانا پلاس', fromYear: 1399, toYear: 1403 },
+
+    { code: 'TARA', makeCode: 'IKCO', nameFa: 'تارا', fromYear: 1400, toYear: 1403 },
+    { code: 'TARA_AUTO', makeCode: 'IKCO', nameFa: 'تارا اتوماتیک', fromYear: 1401, toYear: 1403 },
+
+    { code: 'ARISAN', makeCode: 'IKCO', nameFa: 'آریسان', fromYear: 1394, toYear: 1402 },
+    { code: 'ARISAN2', makeCode: 'IKCO', nameFa: 'آریسان 2', fromYear: 1401, toYear: 1403 },
+
+    // پارس خودرو / رنو
+    { code: 'L90', makeCode: 'RENAULT', nameFa: 'تندر 90 (L90)', fromYear: 1386, toYear: 1398 },
+    { code: 'SANDERO', makeCode: 'RENAULT', nameFa: 'رنو ساندرو', fromYear: 1394, toYear: 1398 },
+    { code: 'BRILLIANCE_H330', makeCode: 'PARS_KHODRO', nameFa: 'برلیانس H330', fromYear: 1394, toYear: 1400 },
+
+    // چینی های بازار ایران
+    { code: 'JAC_S5', makeCode: 'JAC', nameFa: 'جک S5', fromYear: 1394, toYear: 1403 },
+    { code: 'JAC_S3', makeCode: 'JAC', nameFa: 'جک S3', fromYear: 1396, toYear: 1403 },
+
+    { code: 'KMC_T8', makeCode: 'KMC', nameFa: 'KMC T8', fromYear: 1399, toYear: 1403 },
+    { code: 'KMC_J7', makeCode: 'KMC', nameFa: 'KMC J7', fromYear: 1401, toYear: 1403 },
+
+    { code: 'MVM315', makeCode: 'MVM', nameFa: 'MVM 315', fromYear: 1391, toYear: 1400 },
+    { code: 'MVM_X22', makeCode: 'MVM', nameFa: 'MVM X22', fromYear: 1396, toYear: 1403 },
+    { code: 'MVM_X33', makeCode: 'MVM', nameFa: 'MVM X33', fromYear: 1389, toYear: 1401 },
+    { code: 'MVM_X55', makeCode: 'MVM', nameFa: 'MVM X55', fromYear: 1398, toYear: 1403 },
+
+    { code: 'ARRIZO5', makeCode: 'CHERY', nameFa: 'چری آریزو 5', fromYear: 1395, toYear: 1403 },
+  ];
+
+  for (const vm of vehicleModels) {
+    await prisma.vehicleModel.upsert({
+      where: { code: vm.code },
+      update: {
+        nameFa: vm.nameFa,
+        fromYear: vm.fromYear,
+        toYear: vm.toYear,
+      },
+      create: {
+        code: vm.code,
+        nameFa: vm.nameFa,
+        fromYear: vm.fromYear,
+        toYear: vm.toYear,
+        make: {
+          connect: { code: vm.makeCode },
+        },
+      },
+    });
+  }
+  console.log(`✅ ${vehicleModels.length} مدل خودرو ثبت شد`);
+
+  // ======================================================
+  // 4) CATEGORY
+  // ======================================================
+
+  const categories = [
+    { code: 'BRAKE', nameFa: 'سیستم ترمز' },
+    { code: 'CLUTCH', nameFa: 'کلاچ و انتقال قدرت' },
+    { code: 'SUSPENSION', nameFa: 'جلوبندی و تعلیق' },
+    { code: 'ENGINE', nameFa: 'موتور' },
+    { code: 'ELECTRICAL', nameFa: 'برق خودرو' },
+    { code: 'BODY', nameFa: 'بدنه و تزئینات' },
+    { code: 'GEARBOX', nameFa: 'گیربکس' },
+    { code: 'COOLING', nameFa: 'خنک کننده و اگزوز' },
+  ];
+
+  for (const c of categories) {
+    await prisma.category.upsert({
+      where: { code: c.code },
+      update: { nameFa: c.nameFa },
+      create: { code: c.code, nameFa: c.nameFa },
+    });
+  }
+  console.log('✅ دسته بندی ها ثبت شد');
+
+  // ======================================================
+  // 5) PART CATALOG
+  // ======================================================
+
+  const partsCatalog = [
+    // ترمز
+    {
+      code: 'BRK001',
+      categoryCode: 'BRAKE',
+      nameFa: 'لنت ترمز جلو',
+      aliases: ['لنت جلو', 'لنت ترمز جلو', 'لنت جلوی ماشین', 'لنت جلو پراید', 'لنت جلو 405', 'لنت تکستار'],
+    },
+    {
+      code: 'BRK002',
+      categoryCode: 'BRAKE',
+      nameFa: 'لنت ترمز عقب',
+      aliases: ['لنت عقب', 'لنت عقب دیسکی', 'کفشک ترمز', 'لنت کاسه ای'],
+    },
+    {
+      code: 'BRK003',
+      categoryCode: 'BRAKE',
+      nameFa: 'دیسک ترمز جلو',
+      aliases: ['دیسک جلو', 'دیسک ترمز', 'دیسک چرخ'],
+    },
+    {
+      code: 'BRK004',
+      categoryCode: 'BRAKE',
+      nameFa: 'بوستر ترمز',
+      aliases: ['بوستر', 'بوستر ترمز', 'بوستر دوبل'],
+    },
+
+    // کلاچ
+    {
+      code: 'CLT001',
+      categoryCode: 'CLUTCH',
+      nameFa: 'دیسک و صفحه کلاچ',
+      aliases: ['دیسک صفحه', 'کیت کلاچ', 'دیسک و صفحه', 'دیسک صفحه والئو', 'دیسک صفحه لوک'],
+    },
+    {
+      code: 'CLT002',
+      categoryCode: 'CLUTCH',
+      nameFa: 'بلبرینگ کلاچ',
+      aliases: ['بلبرینگ کلاج', 'بلبرینگ کلاچ'],
+    },
+
+    // جلوبندی
+    {
+      code: 'SUS001',
+      categoryCode: 'SUSPENSION',
+      nameFa: 'طبق جلو',
+      aliases: ['طبق', 'طبق جلو', 'طبق کامل'],
+    },
+    {
+      code: 'SUS002',
+      categoryCode: 'SUSPENSION',
+      nameFa: 'سیبک فرمان',
+      aliases: ['سیبک', 'سیبک فرمان', 'چپقی فرمان'],
+    },
+    {
+      code: 'SUS003',
+      categoryCode: 'SUSPENSION',
+      nameFa: 'کمک فنر جلو',
+      aliases: ['کمک جلو', 'کمک فنر جلو', 'کمک kyb'],
+    },
+    {
+      code: 'SUS004',
+      categoryCode: 'SUSPENSION',
+      nameFa: 'بلبرینگ چرخ',
+      aliases: ['بلبرینگ چرخ', 'بلبرینگ جلو', 'بلبرینگ عقب'],
+    },
+
+    // موتور
+    {
+      code: 'ENG001',
+      categoryCode: 'ENGINE',
+      nameFa: 'تسمه تایم',
+      aliases: ['تسمه تایم', 'تسمه تایمینگ', 'کیت تایم', 'تسمه تایم گیتس'],
+    },
+    {
+      code: 'ENG002',
+      categoryCode: 'ENGINE',
+      nameFa: 'تسمه دینام',
+      aliases: ['تسمه دینام', 'تسمه کولر', 'تسمه 6pk'],
+    },
+    {
+      code: 'ENG003',
+      categoryCode: 'ENGINE',
+      nameFa: 'واتر پمپ',
+      aliases: ['واترپمپ', 'پمپ آب', 'پمپ آب موتور'],
+    },
+    {
+      code: 'ENG004',
+      categoryCode: 'ENGINE',
+      nameFa: 'شمع موتور',
+      aliases: ['شمع', 'شمع موتور', 'شمع ngk', 'شمع بوش'],
+    },
+    {
+      code: 'ENG005',
+      categoryCode: 'ENGINE',
+      nameFa: 'فیلتر روغن',
+      aliases: ['فیلتر روغن', 'صافی روغن'],
+    },
+    {
+      code: 'ENG006',
+      categoryCode: 'ENGINE',
+      nameFa: 'فیلتر هوا',
+      aliases: ['فیلتر هوا', 'صافی هوا'],
+    },
+
+    // برق
+    {
+      code: 'ELC001',
+      categoryCode: 'ELECTRICAL',
+      nameFa: 'کوئل خودرو',
+      aliases: ['کوئل', 'کویل', 'کوئل 206', 'کوئل کروز'],
+    },
+    {
+      code: 'ELC002',
+      categoryCode: 'ELECTRICAL',
+      nameFa: 'سنسور اکسیژن',
+      aliases: ['سنسور اکسیژن', 'سنسور اکسیژن ntk'],
+    },
+    {
+      code: 'ELC003',
+      categoryCode: 'ELECTRICAL',
+      nameFa: 'دینام',
+      aliases: ['دینام', 'ژنراتور'],
+    },
+    {
+      code: 'ELC004',
+      categoryCode: 'ELECTRICAL',
+      nameFa: 'استارت',
+      aliases: ['استارت', 'موتور استارت'],
+    },
+
+    // گیربکس
+    {
+      code: 'GBX001',
+      categoryCode: 'GEARBOX',
+      nameFa: 'پلوس کامل',
+      aliases: ['پلوس', 'پلوس کامل', 'پلوس چپ', 'پلوس راست'],
+    },
+    {
+      code: 'GBX002',
+      categoryCode: 'GEARBOX',
+      nameFa: 'سرپلوس',
+      aliases: ['سرپلوس', 'کله پلوس'],
+    },
+
+    // بدنه
+    {
+      code: 'BDY001',
+      categoryCode: 'BODY',
+      nameFa: 'سپر جلو',
+      aliases: ['سپر جلو', 'سپر', 'سپر خام'],
+    },
+    {
+      code: 'BDY002',
+      categoryCode: 'BODY',
+      nameFa: 'چراغ جلو',
+      aliases: ['چراغ جلو', 'کاسه چراغ'],
+    },
+  ];
+
+  for (const item of partsCatalog) {
+    await prisma.partCatalog.upsert({
+      where: { code: item.code },
+      update: {
+        nameFa: item.nameFa,
+        aliases: item.aliases,
+      },
+      create: {
+        code: item.code,
+        nameFa: item.nameFa,
+        aliases: item.aliases,
+        category: {
+          connect: { code: item.categoryCode },
+        },
+      },
+    });
+  }
+
+  console.log(`✅ ${partsCatalog.length} قطعه استاندارد ثبت شد`);
+  console.log('🎉 Seed با موفقیت تمام شد');
+}
+
+main()
+  .catch((e) => {
+    console.error('❌ Seed Error:', e);
+    process.exit(1);
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+  });

@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -21,7 +22,15 @@ export class AuthService implements OnModuleInit {
 
     if (!adminExists) {
 
-      const hashedPassword = await argon2.hash('123456');
+      // پسورد ادمین دیگه هاردکد ('123456') نیست چون هرکسی که سورس رو ببینه می‌دونستش.
+      // اگه ADMIN_INITIAL_PASSWORD توی .env تنظیم شده باشه از همون استفاده می‌شه،
+      // وگرنه یک پسورد تصادفی امن ساخته می‌شه که فقط همین یک‌بار توی لاگ چاپ می‌شه
+      // تا ادمین همون بار اول لاگین کنه و عوضش کنه.
+      const initialPassword =
+        process.env.ADMIN_INITIAL_PASSWORD ||
+        randomBytes(9).toString('base64url');
+
+      const hashedPassword = await argon2.hash(initialPassword);
 
       await this.prisma.user.create({
 
@@ -36,7 +45,7 @@ export class AuthService implements OnModuleInit {
 
 
       console.log(
-        '✅ ادمین پیش‌فرض ساخته شد: admin / 123456'
+        `✅ ادمین پیش‌فرض ساخته شد: admin / ${initialPassword} (این پسورد فقط همین یک‌بار نمایش داده می‌شه — همین حالا لاگین کن و عوضش کن)`
       );
 
     }

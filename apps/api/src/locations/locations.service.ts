@@ -41,6 +41,12 @@ export class LocationsService {
       await this.barcodeService.generateLocationBarcode();
 
 
+    // 'code' یک فیلد اجباری و یکتاست؛ اگر کاربر خودش نداده، از همون بارکد
+    // (که خودش یکتاست) به‌عنوان کد هم استفاده می‌کنیم.
+    const code =
+      dto.code || barcode;
+
+
 
     return this.prisma.location.create({
 
@@ -48,9 +54,15 @@ export class LocationsService {
 
         name:dto.name,
 
+        code,
+
         typeId:dto.typeId,
 
         barcode,
+
+
+        warehouseId:
+          dto.warehouseId || null,
 
 
         parentId:

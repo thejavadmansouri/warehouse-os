@@ -36,18 +36,17 @@ export class BarcodeService {
 
   async scan(dto:any, userId?:string){
 
+    // بارکد (چه INTERNAL چه FACTORY) خودش توی ProductBarcode یکتاست،
+    // پس کافیه دنبال یک رکورد با همین مقدار بگردیم.
     const product =
       await this.prisma.product.findFirst({
 
         where:{
-          OR:[
-            {
-              internalBarcode:dto.barcode
-            },
-            {
-              factoryBarcode:dto.barcode
+          barcodes:{
+            some:{
+              barcode:dto.barcode
             }
-          ]
+          }
         }
 
       });
@@ -154,14 +153,11 @@ return this.inventoryOperation.execute({
       await this.prisma.product.findFirst({
 
         where:{
-          OR:[
-            {
-              internalBarcode: barcode
-            },
-            {
-              factoryBarcode: barcode
+          barcodes:{
+            some:{
+              barcode
             }
-          ]
+          }
         },
 
         include:{
@@ -171,6 +167,10 @@ return this.inventoryOperation.execute({
           vehicleModel:true,
 
           category:true,
+
+          barcodes:true,
+
+          assets:true,
 
           inventories:{
             where:{
@@ -198,7 +198,7 @@ return this.inventoryOperation.execute({
 
     const totalStock =
       product.inventories.reduce(
-        (sum,item)=>sum + item.quantity,
+        (sum:number,item)=>sum + item.quantity,
         0
       );
 
@@ -213,13 +213,16 @@ return this.inventoryOperation.execute({
 
         sku:product.sku,
 
-        internalBarcode:product.internalBarcode,
+        internalBarcode:
+          product.barcodes.find(b=>b.type === 'INTERNAL')?.barcode ?? null,
 
-        factoryBarcode:product.factoryBarcode,
+        factoryBarcode:
+          product.barcodes.find(b=>b.type === 'FACTORY')?.barcode ?? null,
 
         partNumber:product.partNumber,
 
-        image:product.image,
+        image:
+          product.assets.find(a=>a.type === 'PRODUCT_IMAGE')?.path ?? null,
 
         brand:product.brand?.name || null,
 

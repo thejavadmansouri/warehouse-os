@@ -1,0 +1,1215 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+
+model User {
+
+  id String @id @default(uuid())
+
+  username String @unique
+
+  password String
+
+  fullName String
+
+  role Role @default(STAFF)
+
+
+  inventoryLogs InventoryLog[]
+
+  inventoryCounts InventoryCount[]
+
+  sessions InventorySession[]
+
+  voiceRecords VoiceRecord[]
+
+  auditLogs AuditLog[]
+
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+}
+
+
+
+model Warehouse {
+
+  id String @id @default(uuid())
+
+
+  name String
+
+  code String @unique
+
+
+  isActive Boolean @default(true)
+
+
+  locations Location[]
+
+  sessions InventorySession[]
+
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+}
+
+
+
+
+enum LocationLevel {
+
+  WAREHOUSE
+
+  ZONE
+
+  RACK
+
+  SHELF
+
+  BIN
+
+}
+
+
+
+model LocationType {
+
+  id String @id @default(uuid())
+
+
+  name String
+
+  level LocationLevel
+
+
+  locations Location[]
+
+}
+
+
+
+
+model Location {
+
+  id String @id @default(uuid())
+
+
+  name String
+
+
+  code String @unique
+
+
+  barcode String @unique
+
+
+  warehouseId String?
+
+  warehouse Warehouse?
+    @relation(
+      fields:[warehouseId],
+      references:[id]
+    )
+
+
+  typeId String
+
+  type LocationType
+    @relation(
+      fields:[typeId],
+      references:[id]
+    )
+
+
+
+  parentId String?
+
+
+  parent Location?
+    @relation(
+      "LocationTree",
+      fields:[parentId],
+      references:[id]
+    )
+
+
+  children Location[]
+    @relation("LocationTree")
+
+
+
+  inventories Inventory[]
+
+  inventoryLogs InventoryLog[]
+
+  inventoryCounts InventoryCount[]
+
+
+
+  sessionLocations InventorySessionLocation[]
+
+
+  isActive Boolean @default(true)
+
+
+  deletedAt DateTime?
+
+
+  sortOrder Int @default(0)
+
+
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+
+}
+
+
+
+
+
+model Category {
+
+  id String @id @default(uuid())
+
+
+  name String @unique
+
+
+  code String @unique
+
+
+
+  products Product[]
+
+  inventoryItems InventoryItem[]
+
+
+  createdAt DateTime @default(now())
+
+}
+
+
+
+
+model Brand {
+
+  id String @id @default(uuid())
+
+
+  name String @unique
+
+
+
+  products Product[]
+
+  inventoryItems InventoryItem[]
+
+
+  createdAt DateTime @default(now())
+
+}
+
+
+
+
+
+model Supplier {
+
+  id String @id @default(uuid())
+
+
+  name String
+
+
+  phone String?
+
+
+  address String?
+
+
+  products Product[]
+
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+}
+model VehicleModel {
+
+  id String @id @default(uuid())
+
+
+  name String
+
+  startYear Int
+
+  endYear Int
+
+
+  systemType String?
+
+
+
+  products Product[]
+
+  inventoryItems InventoryItem[]
+
+
+
+  createdAt DateTime @default(now())
+
+
+
+  @@unique([name,startYear,endYear])
+
+}
+
+
+
+
+
+
+model Product {
+
+
+  id String @id @default(uuid())
+
+
+  name String
+
+
+  sku String @unique
+
+
+
+  partNumber String?
+
+
+
+  description String?
+
+
+
+  unit String @default("عدد")
+
+
+
+  weight Float?
+
+
+
+  minStock Int @default(0)
+
+
+
+  categoryId String?
+
+  category Category?
+    @relation(
+      fields:[categoryId],
+      references:[id]
+    )
+
+
+
+  brandId String?
+
+  brand Brand?
+    @relation(
+      fields:[brandId],
+      references:[id]
+    )
+
+
+
+  vehicleModelId String?
+
+  vehicleModel VehicleModel?
+    @relation(
+      fields:[vehicleModelId],
+      references:[id]
+    )
+
+
+
+  supplierId String?
+
+  supplier Supplier?
+    @relation(
+      fields:[supplierId],
+      references:[id]
+    )
+
+
+
+
+  barcodes ProductBarcode[]
+
+
+
+  prices ProductPrice[]
+
+
+
+  assets Asset[]
+
+
+
+  inventories Inventory[]
+
+
+
+  inventoryLogs InventoryLog[]
+
+
+
+  inventoryItems InventoryItem[]
+
+
+
+  voiceRecords VoiceRecord[]
+
+
+
+  accountingSyncs AccountingSync[]
+
+
+
+  isActive Boolean @default(true)
+
+
+
+  deletedAt DateTime?
+
+
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+
+}
+
+
+
+
+
+
+
+
+enum BarcodeType {
+
+  INTERNAL
+
+  FACTORY
+
+  QR
+
+  OTHER
+
+}
+
+
+
+
+
+
+model ProductBarcode {
+
+
+  id String @id @default(uuid())
+
+
+  barcode String @unique
+
+
+
+  type BarcodeType
+
+
+
+  productId String
+
+
+  product Product
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+model ProductPrice {
+
+
+  id String @id @default(uuid())
+
+
+
+  productId String
+
+
+  product Product
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  purchasePrice Int?
+
+
+  salePrice Int?
+
+
+  wholesalePrice Int?
+
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+
+enum AssetType {
+
+  PRODUCT_IMAGE
+
+  DAMAGE_IMAGE
+
+  INVOICE_IMAGE
+
+  INVENTORY_IMAGE
+
+  OTHER
+
+}
+
+
+
+
+
+
+model Asset {
+
+
+  id String @id @default(uuid())
+
+
+
+  path String
+
+
+
+  fileName String?
+
+
+
+  type AssetType
+
+
+
+  productId String?
+
+
+  product Product?
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  inventoryLogId String?
+
+
+  inventoryLog InventoryLog?
+    @relation(
+      fields:[inventoryLogId],
+      references:[id]
+    )
+
+
+
+  createdAt DateTime @default(now())
+
+}
+
+enum InventoryAction {
+
+  IN
+
+  OUT
+
+  TRANSFER
+
+  ADJUST
+
+  SALE
+
+  RETURN
+
+  COUNT
+
+}
+
+
+
+
+
+model Inventory {
+
+
+  id String @id @default(uuid())
+
+
+  productId String
+
+
+  product Product
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  locationId String
+
+
+  location Location
+    @relation(
+      fields:[locationId],
+      references:[id]
+    )
+
+
+
+  quantity Int @default(0)
+
+
+
+  version Int @default(1)
+
+
+
+  updatedAt DateTime @updatedAt
+
+
+
+  @@unique([
+    productId,
+    locationId
+  ])
+
+}
+
+
+
+
+
+
+
+model InventoryLog {
+
+
+  id String @id @default(uuid())
+
+
+  productId String
+
+
+  product Product
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  locationId String
+
+
+  location Location
+    @relation(
+      fields:[locationId],
+      references:[id]
+    )
+
+
+
+  quantity Int
+
+
+
+  action InventoryAction
+
+
+
+  note String?
+
+
+
+  userId String?
+
+
+  user User?
+    @relation(
+      fields:[userId],
+      references:[id]
+    )
+
+
+
+  sessionId String?
+
+
+  session InventorySession?
+    @relation(
+      fields:[sessionId],
+      references:[id]
+    )
+
+
+
+  assets Asset[]
+
+
+
+  voiceRecordId String?
+
+
+  voiceRecord VoiceRecord?
+    @relation(
+      fields:[voiceRecordId],
+      references:[id]
+    )
+
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+
+model InventorySession {
+
+
+  id String @id @default(uuid())
+
+
+
+  warehouseId String?
+
+
+  warehouse Warehouse?
+    @relation(
+      fields:[warehouseId],
+      references:[id]
+    )
+
+
+
+  userId String?
+
+
+  user User?
+    @relation(
+      fields:[userId],
+      references:[id]
+    )
+
+
+
+  startedAt DateTime @default(now())
+
+
+  finishedAt DateTime?
+
+
+
+  status String @default("OPEN")
+
+
+
+  logs InventoryLog[]
+
+
+
+  locations InventorySessionLocation[]
+
+
+
+  counts InventoryCount[]
+
+
+}
+
+
+
+
+
+
+
+
+model InventorySessionLocation {
+
+
+  id String @id @default(uuid())
+
+
+
+  sessionId String
+
+
+  session InventorySession
+    @relation(
+      fields:[sessionId],
+      references:[id]
+    )
+
+
+
+  locationId String
+
+
+  location Location
+    @relation(
+      fields:[locationId],
+      references:[id]
+    )
+
+
+
+  status String @default("PENDING")
+
+
+
+  startedAt DateTime?
+
+
+  finishedAt DateTime?
+
+
+
+  @@unique([
+    sessionId,
+    locationId
+  ])
+
+}
+
+
+
+
+
+
+
+
+
+model InventoryCount {
+
+
+  id String @id @default(uuid())
+
+
+  sessionId String
+
+
+
+  session InventorySession
+    @relation(
+      fields:[sessionId],
+      references:[id]
+    )
+
+
+
+  locationId String
+
+
+
+  location Location
+    @relation(
+      fields:[locationId],
+      references:[id]
+    )
+
+
+
+  userId String?
+
+
+  user User?
+    @relation(
+      fields:[userId],
+      references:[id]
+    )
+
+
+
+  status String @default("OPEN")
+
+
+
+  items InventoryItem[]
+
+
+
+  createdAt DateTime @default(now())
+
+
+
+  finishedAt DateTime?
+
+
+}
+
+
+
+
+
+
+
+
+
+model InventoryItem {
+
+
+  id String @id @default(uuid())
+
+
+
+  countId String
+
+
+  count InventoryCount
+    @relation(
+      fields:[countId],
+      references:[id]
+    )
+
+
+
+  productId String?
+
+
+  product Product?
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  name String
+
+
+
+  categoryId String?
+
+
+  category Category?
+    @relation(
+      fields:[categoryId],
+      references:[id]
+    )
+
+
+
+  brandId String?
+
+
+  brand Brand?
+    @relation(
+      fields:[brandId],
+      references:[id]
+    )
+
+
+
+  vehicleModelId String?
+
+
+  vehicleModel VehicleModel?
+    @relation(
+      fields:[vehicleModelId],
+      references:[id]
+    )
+
+
+
+  goodQuantity Int @default(0)
+
+
+
+  badQuantity Int @default(0)
+
+
+
+  image String?
+
+
+
+  note String?
+
+
+
+  voiceText String?
+
+
+
+  createdAt DateTime @default(now())
+
+
+
+  barcodes ItemBarcode[]
+
+
+}
+
+
+
+
+
+
+
+
+
+model ItemBarcode {
+
+
+  id String @id @default(uuid())
+
+
+  itemId String
+
+
+
+  item InventoryItem
+    @relation(
+      fields:[itemId],
+      references:[id]
+    )
+
+
+
+  barcode String @unique
+
+
+
+  status String @default("GOOD")
+
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+
+
+model VoiceRecord {
+
+
+  id String @id @default(uuid())
+
+
+
+  filePath String
+
+
+
+  text String?
+
+
+
+  confidence Float?
+
+
+
+  status String @default("PENDING")
+
+
+
+  productId String?
+
+
+  product Product?
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  userId String?
+
+
+  user User?
+    @relation(
+      fields:[userId],
+      references:[id]
+    )
+
+
+
+  inventoryLogs InventoryLog[]
+
+
+
+  createdAt DateTime @default(now())
+
+}
+
+
+
+
+
+
+
+
+
+model AccountingSync {
+
+
+  id String @id @default(uuid())
+
+
+
+  productId String
+
+
+
+  product Product
+    @relation(
+      fields:[productId],
+      references:[id]
+    )
+
+
+
+  system String
+
+
+
+  externalId String?
+
+
+
+  lastSync DateTime?
+
+
+
+  status String @default("PENDING")
+
+
+
+  createdAt DateTime @default(now())
+
+
+}
+
+
+
+
+
+
+
+
+model AuditLog {
+
+
+  id String @id @default(uuid())
+
+
+
+  userId String?
+
+
+
+  user User?
+    @relation(
+      fields:[userId],
+      references:[id]
+    )
+
+
+
+  action String
+
+
+
+  entity String
+
+
+
+  entityId String?
+
+
+
+  oldData Json?
+
+
+
+  newData Json?
+
+
+
+  createdAt DateTime @default(now())
+
+}

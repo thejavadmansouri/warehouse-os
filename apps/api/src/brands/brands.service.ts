@@ -23,4 +23,23 @@ export class BrandsService {
 
   }
 
+
+  update(id:string, dto:any){
+
+    return this.prisma.brand.update({
+      where:{ id },
+      data:{ name:dto.name }
+    });
+
+  }
+
+
+  remove(id:string){
+
+    return this.prisma.brand.delete({
+      where:{ id }
+    });
+
+  }
+
 }

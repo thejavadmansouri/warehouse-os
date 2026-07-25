@@ -1,0 +1,21 @@
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { ParsingEngineCore } from './parsing-engine.core';
+import { AUTOMOTIVE_DICTIONARY } from './dictionaries/automotive.dictionary';
+import { ParseResult } from './types/engine.types';
+
+@Injectable()
+export class ParsingEngineService implements OnModuleInit {
+
+  private engine!: ParsingEngineCore;
+
+  onModuleInit() {
+    this.engine = new ParsingEngineCore(
+      AUTOMOTIVE_DICTIONARY
+    );
+  }
+
+  parse(input: string): ParseResult {
+    return this.engine.parse(input);
+  }
+
+}

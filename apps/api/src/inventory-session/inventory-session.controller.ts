@@ -1,11 +1,15 @@
-import { 
+import {
   Controller,
   Post,
   Get,
   Patch,
   Body,
-  Param
+  Param,
+  Req
 } from '@nestjs/common';
+
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
 
 import { InventorySessionService } from './inventory-session.service';
 
@@ -20,20 +24,23 @@ export class InventorySessionController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('start')
   start(
-    @Body() dto:any
+    @Body() dto:any,
+    @Req() req:any
   ){
 
     return this.service.start(
       dto.warehouseId,
-      dto.userId
+      req.user.userId
     );
 
   }
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('location')
   addLocation(
     @Body() dto:any
@@ -48,6 +55,7 @@ export class InventorySessionController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Get()
   active(){
 
@@ -57,6 +65,7 @@ export class InventorySessionController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Patch(':id/finish')
   finish(
     @Param('id') id:string

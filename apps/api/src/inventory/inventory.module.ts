@@ -2,30 +2,27 @@ import { Module } from '@nestjs/common';
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
 import { VoiceInventoryService } from './voice-inventory.service';
-import { PrismaModule } from '../prisma/prisma.module';
-import { InventoryEngineModule } from '../inventory-engine/inventory-engine.module';
-
+import { PrismaService } from '../prisma/prisma.service';
+import { InventoryOperationService } from 
+'../inventory-operation/inventory-operation.service';
+import { ParsingEngineModule } from '../engine/parsing-engine.module';
 
 @Module({
-
-  imports:[
-    PrismaModule,
-    InventoryEngineModule
+  imports: [
+    ParsingEngineModule,
   ],
-
-  controllers:[
+  controllers: [
     InventoryController
   ],
-
-  providers:[
+  providers: [
+    PrismaService,
     InventoryService,
-    VoiceInventoryService
+    InventoryOperationService,
+    VoiceInventoryService,
   ],
-
-  exports:[
+  exports: [
     InventoryService,
-    VoiceInventoryService
-  ]
-
+    VoiceInventoryService,
+  ],
 })
 export class InventoryModule {}

@@ -10,6 +10,9 @@ import {
   FileInterceptor
 } from '@nestjs/platform-express';
 
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
+
 import { UploadsService } from './uploads.service';
 
 
@@ -23,6 +26,7 @@ export class UploadsController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post('product/:id/image')
   @UseInterceptors(
     FileInterceptor('file')
@@ -42,6 +46,7 @@ export class UploadsController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('inventory-log/:id/image')
   @UseInterceptors(
     FileInterceptor('file')

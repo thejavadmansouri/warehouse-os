@@ -1,32 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 
 @Injectable()
 export class InventoryService {
 
   constructor(
-    private prisma: PrismaService
+    private prisma: PrismaService,
+    private operation: InventoryOperationService
   ) {}
 
 
+  async create(dto:any){
 
-  async findByLocation(locationId: string) {
+    return this.operation.execute({
 
-    return this.prisma.inventoryLog.findMany({
+      type:'IN',
 
-      where:{
-        locationId
-      },
+      productId:dto.productId,
 
-      include:{
-        product:true,
-        location:true,
-        user:true,
-      },
+      locationId:dto.locationId,
 
-      orderBy:{
-        createdAt:'desc'
-      }
+      quantity:dto.quantity,
+
+      note:dto.note,
+
+      userId:dto.userId,
+
+      source:'MANUAL'
 
     });
 
@@ -34,184 +35,42 @@ export class InventoryService {
 
 
 
-
-
-async create(dto:any) {
-
-  const inventory =
-    await this.prisma.inventory.upsert({
-
-      where:{
-        productId_locationId:{
-          productId:dto.productId,
-          locationId:dto.locationId
-        }
-      },
-
-      update:{
-        quantity:{
-          increment:dto.quantity
-        }
-      },
-
-      create:{
-        productId:dto.productId,
-        locationId:dto.locationId,
-        quantity:dto.quantity
-      }
-
+  async adjust(dto:any){
+    return this.operation.execute({
+      type:'ADJUST',
+      productId:dto.productId,
+      locationId:dto.locationId,
+      targetQuantity:dto.targetQuantity,
+      note:dto.note,
+      source:'MANUAL',
+      userId:dto.userId,
     });
+  }
 
-
-
-  const log =
-    await this.prisma.inventoryLog.create({
-
-      data:{
-
-        productId:dto.productId,
-
-        locationId:dto.locationId,
-
-        quantity:dto.quantity,
-
-        action:dto.action || 'IN',
-
-        note:dto.note || null,
-
-        userId:dto.userId || null
-
-      }
-
-    });
-
-
-
-  return {
-    inventory,
-    log
-  };
-
-}
-
-
-
-
-
-
-
-
-
-async getStock(){
-
-  return this.prisma.inventory.findMany({
-
-    where:{
-      quantity:{
-        gt:0
-      }
-    },
-
-    include:{
-      product:{
-        include:{
-          brand:true,
-          vehicleModel:true
-        }
-      },
-
-      location:true
-
-    },
-
-    orderBy:{
-      updatedAt:'desc'
-    }
-
-  });
-
-}
-
-
-async getLogs(){
-
-  return this.prisma.inventoryLog.findMany({
-
-    include:{
-      product:true,
-      location:true,
-      user:true
-    },
-
-    orderBy:{
-      createdAt:'desc'
-    }
-
-  });
-
-}
 
 
   async out(dto:any){
+    // موجودی داخل InventoryOperationService.execute به‌صورت اتمیک (داخل تراکنش) چک می‌شه؛
+    // چک جداگانه‌ی اینجا حذف شد چون race condition ایجاد می‌کرد (بین این چک و اجرای عملیات).
+    return this.operation.execute({
 
-    const inventory =
-      await this.prisma.inventory.findUnique({
+      type:'SALE',
 
-        where:{
-          productId_locationId:{
-            productId:dto.productId,
-            locationId:dto.locationId
-          }
-        }
+      productId:dto.productId,
 
-      });
+      locationId:dto.locationId,
 
+      quantity:dto.quantity,
 
-    if(!inventory || inventory.quantity < dto.quantity){
-      throw new Error('موجودی کافی نیست');
-    }
+      note:dto.note,
 
+      userId:dto.userId,
 
-    await this.prisma.inventory.update({
-
-      where:{
-        productId_locationId:{
-          productId:dto.productId,
-          locationId:dto.locationId
-        }
-      },
-
-      data:{
-        quantity:{
-          decrement:dto.quantity
-        }
-      }
-
-    });
-
-
-    return this.prisma.inventoryLog.create({
-
-      data:{
-
-        productId:dto.productId,
-
-        locationId:dto.locationId,
-
-        quantity:dto.quantity,
-
-        action:'SALE',
-
-        note:dto.note || 'فروش',
-
-        userId:dto.userId || null
-
-      }
+      source:'SALE'
 
     });
 
   }
-
 
 
 
@@ -221,14 +80,11 @@ async getLogs(){
       await this.prisma.product.findFirst({
 
         where:{
-          OR:[
-            {
-              internalBarcode:dto.barcode
-            },
-            {
-              factoryBarcode:dto.barcode
+          barcodes:{
+            some:{
+              barcode:dto.barcode
             }
-          ]
+          }
         }
 
       });
@@ -237,7 +93,6 @@ async getLogs(){
     if(!product){
       throw new Error('کالا پیدا نشد');
     }
-
 
 
     const location =
@@ -250,329 +105,284 @@ async getLogs(){
       });
 
 
-
     if(!location){
       throw new Error('موقعیت پیدا نشد');
     }
 
 
 
-if(dto.action === 'OUT'){
+    return this.operation.execute({
 
-  return this.out({
+      type:dto.action || 'IN',
 
-    productId: product.id,
+      productId:product.id,
 
-    locationId: location.id,
+      locationId:location.id,
 
-    quantity: dto.quantity,
+      quantity:dto.quantity,
 
-    note:'Barcode OUT',
+      note:'BARCODE',
 
-    userId:dto.userId
+      userId:dto.userId,
 
-  });
+      source:'BARCODE'
 
-}
+    });
 
-
-
-    if(dto.action === 'IN'){
-
-
-if(dto.action === 'IN'){
-
-  return this.create({
-
-    productId:product.id,
-
-    locationId:location.id,
-
-    quantity:dto.quantity,
-
-    action:'IN',
-
-    note:'Barcode IN',
-
-    userId:dto.userId
-
-  });
-
-}
+  }
 
 
 
-      return this.create({
 
-        productId:product.id,
+  async scanOut(dto:any){
 
-        locationId:location.id,
+    const product =
+      await this.prisma.product.findFirst({
 
-        quantity:dto.quantity,
-
-        action:'IN',
-
-        note:'Barcode IN'
+        where:{
+          barcodes:{
+            some:{
+              barcode:dto.barcode
+            }
+          }
+        }
 
       });
 
+
+    if(!product){
+      throw new Error('کالا پیدا نشد');
     }
 
 
 
-    throw new Error('عملیات نامعتبر');
+    return this.operation.execute({
 
-  }
-async getLog(id:string){
-
-  return this.prisma.inventoryLog.findUnique({
-
-    where:{
-      id
-    },
-
-    include:{
-      product:true,
-      location:true,
-      user:true
-    }
-
-  });
-
-}
-async findOne(
-  productId:string,
-  locationId:string
-){
-
-  return this.prisma.inventory.findUnique({
-
-    where:{
-      productId_locationId:{
-        productId,
-        locationId
-      }
-    },
-
-    include:{
-      product:{
-        include:{
-          brand:true,
-          vehicleModel:true
-        }
-      },
-
-      location:true
-
-    }
-
-  });
-
-}
-async scan(barcode:string){
-
-  const product =
-    await this.prisma.product.findFirst({
-
-      where:{
-        OR:[
-          {
-            internalBarcode: barcode
-          },
-          {
-            factoryBarcode: barcode
-          }
-        ]
-      },
-
-      include:{
-        brand:true,
-        vehicleModel:true
-      }
-
-    });
-
-
-  if(!product){
-
-    throw new Error('کالا با این بارکد پیدا نشد');
-
-  }
-
-
-
-  const stocks =
-    await this.prisma.inventory.findMany({
-
-      where:{
-        productId:product.id
-      },
-
-      include:{
-        location:true
-      }
-
-    });
-
-
-
-  return {
-
-    product:{
-      id:product.id,
-      name:product.name,
-      sku:product.sku,
-      barcode:barcode,
-      brand:product.brand?.name,
-      vehicleModel:product.vehicleModel?.name,
-      image:product.image
-    },
-
-
-    stocks: stocks.map(item=>({
-
-      locationId:item.locationId,
-
-      location:item.location.name,
-
-      quantity:item.quantity
-
-    }))
-
-
-  };
-
-}
-async scanOut(dto:any){
-
-
-  const product =
-    await this.prisma.product.findFirst({
-
-      where:{
-        OR:[
-          {
-            internalBarcode:dto.barcode
-          },
-          {
-            factoryBarcode:dto.barcode
-          }
-        ]
-      }
-
-    });
-
-
-
-  if(!product){
-
-    throw new Error('کالا پیدا نشد');
-
-  }
-
-
-
-
-  const inventory =
-    await this.prisma.inventory.findUnique({
-
-      where:{
-        productId_locationId:{
-          productId:product.id,
-          locationId:dto.locationId
-        }
-      }
-
-    });
-
-
-
-
-
-  if(!inventory){
-
-    throw new Error('این کالا در این موقعیت موجود نیست');
-
-  }
-
-
-
-
-  if(inventory.quantity < dto.quantity){
-
-    throw new Error(
-      `موجودی کافی نیست. موجودی فعلی: ${inventory.quantity}`
-    );
-
-  }
-
-
-
-
-
-  const updated =
-    await this.prisma.inventory.update({
-
-      where:{
-        productId_locationId:{
-          productId:product.id,
-          locationId:dto.locationId
-        }
-      },
-
-
-      data:{
-        quantity:{
-          decrement:dto.quantity
-        }
-      }
-
-    });
-
-
-
-
-
-  await this.prisma.inventoryLog.create({
-
-    data:{
+      type:'SALE',
 
       productId:product.id,
 
       locationId:dto.locationId,
 
-      quantity:-dto.quantity,
-
-      action:'SALE',
+      quantity:dto.quantity,
 
       note:dto.note || 'Barcode OUT',
 
-      userId:dto.userId || null
+      userId:dto.userId,
 
+      source:'BARCODE'
+
+    });
+
+  }
+
+
+
+
+      async getStock(page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.prisma.inventory.findMany({
+        skip,
+        take: limit,
+        where: {
+          quantity: {
+            gt: 0
+          }
+        },
+        include: {
+          product: {
+            include: {
+              brand: true,
+              vehicleModel: true
+            }
+          },
+          location: true
+        },
+        orderBy: {
+          updatedAt: 'desc'
+        }
+      }),
+      this.prisma.inventory.count({
+        where: {
+          quantity: {
+            gt: 0
+          }
+        }
+      })
+    ]);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      }
+    };
+  }
+
+  async findByLocation(locationId:string){
+
+    return this.prisma.inventoryLog.findMany({
+
+      where:{
+        locationId
+      },
+
+      include:{
+        product:true,
+        location:true,
+        user:true
+      },
+
+      orderBy:{
+        createdAt:'desc'
+      }
+
+    });
+
+  }
+
+
+
+  async getLogs(query:any){
+
+    const { productId, locationId, action, from, to, page = 1, limit = 20 } = query;
+
+    const where:any = {};
+    if (productId) where.productId = productId;
+    if (locationId) where.locationId = locationId;
+    if (action) where.action = action;
+    if (from || to) {
+      where.createdAt = {};
+      if (from) where.createdAt.gte = new Date(from);
+      if (to) where.createdAt.lte = new Date(to);
+    }
+
+    const [items, total] = await Promise.all([
+      this.prisma.inventoryLog.findMany({
+        where,
+        include:{ product:true, location:true, user:true },
+        orderBy:{ createdAt:'desc' },
+        skip:(Number(page)-1)*Number(limit),
+        take:Number(limit),
+      }),
+      this.prisma.inventoryLog.count({ where }),
+    ]);
+
+    return { items, total, page:Number(page), limit:Number(limit) };
+
+  }
+
+
+
+  async getLog(id:string){
+
+    return this.prisma.inventoryLog.findUnique({
+
+      where:{
+        id
+      },
+
+      include:{
+        product:true,
+        location:true,
+        user:true
+      }
+
+    });
+
+  }
+
+
+
+
+  async findOne(
+    productId:string,
+    locationId:string
+  ){
+
+    return this.prisma.inventory.findUnique({
+
+      where:{
+        productId_locationId:{
+          productId,
+          locationId
+        }
+      },
+
+      include:{
+        product:{
+          include:{
+            brand:true,
+            vehicleModel:true
+          }
+        },
+        location:true
+      }
+
+    });
+
+  }
+
+
+
+  async scan(barcode:string){
+
+    const product =
+      await this.prisma.product.findFirst({
+
+        where:{
+          barcodes:{
+            some:{
+              barcode
+            }
+          }
+        },
+
+        include:{
+          brand:true,
+          vehicleModel:true,
+          assets:true
+        }
+
+      });
+
+
+
+    if(!product){
+
+      throw new Error('کالا با این بارکد پیدا نشد');
 
     }
 
-  });
+
+
+    const stocks =
+      await this.prisma.inventory.findMany({
+
+        where:{
+          productId:product.id
+        },
+
+        include:{
+          location:true
+        }
+
+      });
 
 
 
+    return {
 
+      product,
 
-  return {
+      stocks
 
-    product:product.name,
+    };
 
-    before:
-      inventory.quantity,
+  }
 
-    out:
-      dto.quantity,
-
-    after:
-      updated.quantity
-
-  };
-
-
-}
 }

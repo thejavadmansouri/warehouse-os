@@ -72,14 +72,16 @@ export class UploadsService {
       `/storage/products/${filename}`;
 
 
-    return this.prisma.product.update({
-
-      where:{
-        id:productId
-      },
+    return this.prisma.asset.create({
 
       data:{
-        image
+
+        path:image,
+
+        type:'PRODUCT_IMAGE',
+
+        productId
+
       }
 
     });
@@ -117,14 +119,16 @@ export class UploadsService {
       `/storage/inventory-logs/${filename}`;
 
 
-    return this.prisma.inventoryLog.update({
-
-      where:{
-        id:logId
-      },
+    return this.prisma.asset.create({
 
       data:{
-        image
+
+        path:image,
+
+        type:'INVENTORY_IMAGE',
+
+        inventoryLogId:logId
+
       }
 
     });
