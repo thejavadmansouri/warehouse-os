@@ -1,217 +1,78 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { CreateInventoryCountDto } from './dto/create-inventory-count.dto';
 import { AddItemDto } from './dto/add-item.dto';
 
-
 @Injectable()
 export class InventoryCountService {
+  constructor(private prisma: PrismaService, private operation: InventoryOperationService) {}
 
-  constructor(
-    private prisma: PrismaService
-  ) {}
+  async findAll(){
+    return this.prisma.inventoryCount.findMany({
+      orderBy:{ createdAt:'desc' },
+      include:{ location:true, items:true }
+    });
+  }
 
 
   async create(dto: CreateInventoryCountDto) {
-
     return this.prisma.inventoryCount.create({
-
-      data:{
-        sessionId: dto.sessionId,
-        locationId: dto.locationId,
-        userId: dto.userId
-      }
-
+      data: { sessionId: dto.sessionId, locationId: dto.locationId, userId: dto.userId },
     });
-
   }
 
-
-
-  async addItem(
-    countId:string,
-    dto:AddItemDto
-  ){
-
+  async addItem(countId: string, dto: AddItemDto) {
     return this.prisma.inventoryItem.create({
-
-      data:{
-
+      data: {
         countId,
-
-        productId:dto.productId,
-
-        name:dto.name,
-
-        goodQuantity:dto.goodQuantity ?? 0,
-
-        badQuantity:dto.badQuantity ?? 0,
-
-        voiceText:dto.voiceText,
-
-        note:dto.note
-
-      }
-
-    });
-
-  }
-
-
-
-
-  async findOne(id:string){
-
-    return this.prisma.inventoryCount.findUnique({
-
-      where:{
-        id
+        productId: dto.productId,
+        name: dto.name,
+        goodQuantity: dto.goodQuantity ?? 0,
+        badQuantity: dto.badQuantity ?? 0,
+        voiceText: dto.voiceText,
+        note: dto.note,
       },
-
-      include:{
-        items:true
-      }
-
     });
-
   }
 
-async finish(id:string){
-
-  return this.prisma.inventoryCount.update({
-    where:{
-      id
-    },
-    data:{
-      status:"FINISHED",
-      finishedAt:new Date()
-    }
-  });
-
-
-}
-async apply(id:string){
-
-  const count = await this.prisma.inventoryCount.findUnique({
-    where:{
-      id
-    },
-    include:{
-      items:true
-    }
-  });
-
-
-  if(!count){
-    throw new Error('Inventory count not found');
+  async findOne(id: string) {
+    return this.prisma.inventoryCount.findUnique({ where: { id }, include: { items: true } });
   }
 
-
-  const results = [];
-
-
-  for(const item of count.items){
-
-
-    if(!item.productId){
-      results.push({
-        item:item.name,
-        status:'NO_PRODUCT_LINK'
-      });
-
-      continue;
-    }
-
-
-
-    const current =
-      await this.prisma.inventory.findUnique({
-        where:{
-          productId_locationId:{
-            productId:item.productId,
-            locationId:count.locationId
-          }
-        }
-      });
-
-
-
-    const oldQty = current?.quantity ?? 0;
-
-    const newQty = item.goodQuantity;
-
-
-    const diff = newQty - oldQty;
-
-
-
-    await this.prisma.inventory.upsert({
-
-      where:{
-        productId_locationId:{
-          productId:item.productId,
-          locationId:count.locationId
-        }
-      },
-
-      update:{
-        quantity:newQty
-      },
-
-      create:{
-        productId:item.productId,
-        locationId:count.locationId,
-        quantity:newQty
-      }
-
-    });
-
-
-
-    if(diff !== 0){
-
-      await this.prisma.inventoryLog.create({
-
-        data:{
-          productId:item.productId,
-          locationId:count.locationId,
-          quantity:diff,
-          action:'COUNT',
-          note:'Inventory count adjustment'
-        }
-
-      });
-
-    }
-
-
-    results.push({
-      product:item.name,
-      oldQty,
-      newQty,
-      diff
-    });
-
-
+  async finish(id: string) {
+    return this.prisma.inventoryCount.update({ where: { id }, data: { status: 'FINISHED', finishedAt: new Date() } });
   }
 
+  async apply(id: string) {
+    const count = await this.prisma.inventoryCount.findUnique({ where: { id }, include: { items: true } });
+    if (!count) throw new NotFoundException('Inventory count not found');
 
-  await this.prisma.inventoryCount.update({
+    const grouped = new Map<string, { name: string; goodQuantity: number; itemIds: string[] }>();
+    const unlinked: { name: string }[] = [];
 
-    where:{
-      id
-    },
-
-    data:{
-      status:'APPLIED'
+    for (const item of count.items) {
+      if (!item.productId) { unlinked.push({ name: item.name }); continue; }
+      const existing = grouped.get(item.productId);
+      if (existing) { existing.goodQuantity += item.goodQuantity; existing.itemIds.push(item.id); }
+      else grouped.set(item.productId, { name: item.name, goodQuantity: item.goodQuantity, itemIds: [item.id] });
     }
 
-  });
+    const results: any[] = unlinked.map((u) => ({ item: u.name, status: 'NO_PRODUCT_LINK' }));
 
+    for (const [productId, data] of grouped.entries()) {
+      const r = await this.operation.execute({
+        type: 'ADJUST',
+        productId,
+        locationId: count.locationId,
+        targetQuantity: data.goodQuantity,
+        source: 'MOBILE',
+        note: `Inventory count adjustment (${data.itemIds.length} item(s) merged)`,
+      });
+      results.push({ product: data.name, oldQty: r.oldQty, newQty: r.newQty, diff: r.diff });
+    }
 
-
-  return results;
-
-}
+    await this.prisma.inventoryCount.update({ where: { id }, data: { status: 'APPLIED' } });
+    return results;
+  }
 }

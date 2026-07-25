@@ -1,62 +1,26 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { InventoryEngineService } from '../inventory-engine/inventory-engine.service';
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 
 @Injectable()
 export class InventoryTransferService {
 
-  constructor(
-    private prisma: PrismaService,
-    private inventoryEngine: InventoryEngineService
-  ) {}
-
+  constructor(private inventoryOperation: InventoryOperationService) {}
 
   async transfer(
-    productId:string,
-    fromLocationId:string,
-    toLocationId:string,
-    quantity:number
-  ){
-
-    const result =
-      await this.inventoryEngine.transferStock(
-        productId,
-        fromLocationId,
-        toLocationId,
-        quantity
-      );
-
-
-    await this.prisma.inventoryLog.createMany({
-
-      data:[
-
-        {
-          productId,
-          locationId:fromLocationId,
-          quantity,
-          action:'TRANSFER',
-          note:`Transfer OUT to ${toLocationId}`
-        },
-
-        {
-          productId,
-          locationId:toLocationId,
-          quantity,
-          action:'TRANSFER',
-          note:`Transfer IN from ${fromLocationId}`
-        }
-
-      ]
-
+    productId: string,
+    fromLocationId: string,
+    toLocationId: string,
+    quantity: number,
+    userId?: string,
+  ) {
+    return this.inventoryOperation.execute({
+      type: 'TRANSFER',
+      productId,
+      locationId: fromLocationId,
+      toLocationId,
+      quantity,
+      source: 'MANUAL_TRANSFER',
+      userId,
     });
-
-
-    return {
-      success:true,
-      inventory:result
-    };
-
   }
-
 }

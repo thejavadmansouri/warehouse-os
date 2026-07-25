@@ -35,4 +35,28 @@ export class VehicleModelsService {
 
   }
 
+
+  update(id:string, dto:any){
+
+    return this.prisma.vehicleModel.update({
+      where:{ id },
+      data:{
+        name:dto.name,
+        startYear:dto.startYear,
+        endYear:dto.endYear,
+        systemType:dto.systemType
+      }
+    });
+
+  }
+
+
+  remove(id:string){
+
+    return this.prisma.vehicleModel.delete({
+      where:{ id }
+    });
+
+  }
+
 }

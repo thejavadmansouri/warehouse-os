@@ -1,62 +1,74 @@
-import { IsString, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator';
 
 export class CreateProductDto {
 
   @IsString()
-  name:string;
-
+  name: string;
 
   @IsString()
-  sku:string;
-
+  sku: string;
 
   @IsOptional()
   @IsString()
-  internalBarcode?:string;
-
-
-  @IsOptional()
-  @IsString()
-  factoryBarcode?:string;
-
+  internalBarcode?: string;
 
   @IsOptional()
   @IsString()
-  partNumber?:string;
-
-
-  @IsOptional()
-  @IsString()
-  brandId?:string;
-
+  factoryBarcode?: string;
 
   @IsOptional()
   @IsString()
-  categoryId?:string;
-
+  partNumber?: string;
 
   @IsOptional()
   @IsString()
-  vehicleModelId?:string;
+  description?: string;
 
+  @IsOptional()
+  @IsString()
+  unit?: string; // مثلاً: عدد، جفت، کارتن، متر
 
   @IsOptional()
   @IsNumber()
-  purchasePrice?:number;
-
-
-  @IsOptional()
-  @IsNumber()
-  salePrice?:number;
-
-
-  @IsOptional()
-  @IsNumber()
-  minStock?:number;
-
+  weight?: number;
 
   @IsOptional()
   @IsString()
-  image?:string;
+  brandId?: string;
 
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+
+  @IsOptional()
+  @IsString()
+  vehicleModelId?: string;
+
+  @IsOptional()
+  @IsString()
+  supplierId?: string;
+
+  @IsOptional()
+  @IsNumber()
+  purchasePrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  salePrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  wholesalePrice?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minStock?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  isActive?: boolean;
+
+  @IsOptional()
+  @IsString()
+  image?: string;
 }

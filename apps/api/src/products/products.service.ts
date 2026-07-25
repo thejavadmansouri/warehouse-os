@@ -44,16 +44,13 @@ export class ProductsService {
         },
 
         {
-          internalBarcode:{
-            contains:search,
-            mode:'insensitive'
-          }
-        },
-
-        {
-          factoryBarcode:{
-            contains:search,
-            mode:'insensitive'
+          barcodes:{
+            some:{
+              barcode:{
+                contains:search,
+                mode:'insensitive'
+              }
+            }
           }
         },
 
@@ -98,6 +95,10 @@ export class ProductsService {
           vehicleModel:true,
 
           category:true,
+
+          barcodes:true,
+
+          assets:true,
 
           inventories:{
             include:{
@@ -162,6 +163,17 @@ export class ProductsService {
 
           category:true,
 
+          barcodes:true,
+
+          assets:true,
+
+          prices:{
+            orderBy:{
+              createdAt:'desc'
+            },
+            take:1
+          },
+
 
           inventories:{
             include:{
@@ -195,9 +207,35 @@ export class ProductsService {
   create(dto:any){
 
 
+
+
+
+
+    const internalBarcode =
+      dto.internalBarcode ||
+      `WOS${Date.now()}`;
+
+
+    const barcodesToCreate:{barcode:string; type:'INTERNAL'|'FACTORY'}[] = [
+      {
+        barcode:internalBarcode,
+        type:'INTERNAL'
+      }
+    ];
+
+    if(dto.factoryBarcode){
+      barcodesToCreate.push({
+        barcode:dto.factoryBarcode,
+        type:'FACTORY'
+      });
+    }
+
+
     return this.prisma.product.create({
 
       data:{
+        internalBarcode: internalBarcode,
+        
 
 
         name:dto.name,
@@ -206,16 +244,16 @@ export class ProductsService {
         sku:dto.sku,
 
 
-        internalBarcode:
-          dto.internalBarcode ||
-          `WOS${Date.now()}`,
-
-
-
-        factoryBarcode:dto.factoryBarcode,
-
-
         partNumber:dto.partNumber,
+
+
+        description:dto.description,
+
+
+        unit:dto.unit,
+
+
+        weight:dto.weight,
 
 
 
@@ -228,19 +266,59 @@ export class ProductsService {
         vehicleModelId:dto.vehicleModelId,
 
 
+        supplierId:dto.supplierId,
 
-        purchasePrice:dto.purchasePrice,
-
-
-        salePrice:dto.salePrice,
 
 
         minStock:dto.minStock || 0,
 
 
-        image:dto.image
+
+        barcodes:{
+          create:barcodesToCreate
+        },
 
 
+        // فقط اگه قیمتی داده شده یه رکورد قیمت هم می‌سازیم
+        ...(
+          (dto.purchasePrice != null || dto.salePrice != null)
+            ? {
+                prices:{
+                  create:{
+                    purchasePrice:dto.purchasePrice ?? null,
+                    salePrice:dto.salePrice ?? null,
+                    wholesalePrice:dto.wholesalePrice ?? null
+                  }
+                }
+              }
+            : {}
+        ),
+
+
+        // فقط اگه مسیر عکسی داده شده یه Asset می‌سازیم
+        ...(
+          dto.image
+            ? {
+                assets:{
+                  create:{
+                    path:dto.image,
+                    type:'PRODUCT_IMAGE'
+                  }
+                }
+              }
+            : {}
+        )
+
+
+      },
+
+      include:{
+        barcodes:true,
+        prices:true,
+        assets:true,
+        brand:true,
+        category:true,
+        vehicleModel:true
       }
 
     });
@@ -252,8 +330,26 @@ export class ProductsService {
 
 
 
-  update(id:string,dto:any){
+  update(id:string, dto:any){
 
+    // فقط فیلدهای مستقیم روی Product رو آپدیت می‌کنیم.
+    // تغییر بارکد/عکس/قیمت باید از endpointهای مخصوص خودشون
+    // (barcode / uploads / prices) انجام بشه، چون این‌ها روی
+    // جدول‌های جدا (ProductBarcode / Asset / ProductPrice) هستن.
+    const {
+      name,
+      sku,
+      partNumber,
+      description,
+      unit,
+      weight,
+      minStock,
+      categoryId,
+      brandId,
+      vehicleModelId,
+      supplierId,
+      isActive,
+    } = dto;
 
     return this.prisma.product.update({
 
@@ -262,9 +358,23 @@ export class ProductsService {
       },
 
 
-      data:dto
+      data:{
+        name,
+        sku,
+        partNumber,
+        description,
+        unit,
+        weight,
+        minStock,
+        categoryId,
+        brandId,
+        vehicleModelId,
+        supplierId,
+        isActive,
+      }
 
     });
+
 
   }
 
@@ -316,14 +426,11 @@ export class ProductsService {
     const product = await this.prisma.product.findFirst({
 
       where:{
-        OR:[
-          {
-            internalBarcode: barcode
-          },
-          {
-            factoryBarcode: barcode
+        barcodes:{
+          some:{
+            barcode
           }
-        ]
+        }
       },
 
       include:{
@@ -333,6 +440,10 @@ export class ProductsService {
         vehicleModel:true,
 
         category:true,
+
+        barcodes:true,
+
+        assets:true,
 
 
         inventories:{
@@ -349,7 +460,8 @@ export class ProductsService {
           take:20,
           include:{
             location:true,
-            user:true
+            user:true,
+            assets:true
           }
         }
 
@@ -367,7 +479,7 @@ export class ProductsService {
 
     const totalStock =
       product.inventories.reduce(
-        (sum,item)=>sum+item.quantity,
+        (sum:number,item)=>sum+item.quantity,
         0
       );
 
@@ -382,13 +494,16 @@ export class ProductsService {
 
         sku:product.sku,
 
-        internalBarcode:product.internalBarcode,
+        internalBarcode:
+          product.barcodes.find(b=>b.type === 'INTERNAL')?.barcode ?? null,
 
-        factoryBarcode:product.factoryBarcode,
+        factoryBarcode:
+          product.barcodes.find(b=>b.type === 'FACTORY')?.barcode ?? null,
 
         partNumber:product.partNumber,
 
-        image:product.image,
+        image:
+          product.assets.find(a=>a.type === 'PRODUCT_IMAGE')?.path ?? null,
 
         brand:product.brand,
 
@@ -423,7 +538,8 @@ export class ProductsService {
 
         note: log.note,
 
-        image: log.image,
+        image:
+          log.assets?.find(a=>a.type === 'INVENTORY_IMAGE')?.path ?? null,
 
         location:{
 
@@ -445,6 +561,63 @@ export class ProductsService {
   }
 
 
+  async exportCsv() {
+
+    const products = await this.prisma.product.findMany({
+      where: { deletedAt: null },
+      include: {
+        brand: true,
+        category: true,
+        vehicleModel: true,
+        barcodes: true,
+        inventories: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const header = [
+      'نام کالا',
+      'SKU',
+      'بارکد داخلی',
+      'بارکد کارخانه',
+      'شماره فنی',
+      'برند',
+      'دسته‌بندی',
+      'خودرو سازگار',
+      'واحد',
+      'حداقل موجودی',
+      'موجودی کل',
+    ];
+
+    const escapeCsv = (value: any) => {
+      const str = value === null || value === undefined ? '' : String(value);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = products.map((p) => {
+      const internalBarcode = p.barcodes.find((b) => b.type === 'INTERNAL')?.barcode ?? '';
+      const factoryBarcode = p.barcodes.find((b) => b.type === 'FACTORY')?.barcode ?? '';
+      const totalStock = p.inventories.reduce((sum, inv) => sum + inv.quantity, 0);
+
+      return [
+        p.name,
+        p.sku,
+        internalBarcode,
+        factoryBarcode,
+        p.partNumber ?? '',
+        p.brand?.name ?? '',
+        p.category?.name ?? '',
+        p.vehicleModel?.name ?? '',
+        p.unit,
+        p.minStock,
+        totalStock,
+      ].map(escapeCsv).join(',');
+    });
+
+    // BOM (\uFEFF) برای اینکه اکسل فارسی رو درست نمایش بده
+    return '\uFEFF' + [header.join(','), ...rows].join('\n');
+  }
 }
-
-
