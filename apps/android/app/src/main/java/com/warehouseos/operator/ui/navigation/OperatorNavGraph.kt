@@ -2,22 +2,26 @@ package com.warehouseos.operator.ui.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.warehouseos.operator.data.repository.StartupDestination
 import com.warehouseos.operator.ui.screens.count.CountScreen
 import com.warehouseos.operator.ui.screens.login.LoginScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
+import com.warehouseos.operator.ui.screens.startup.StartupScreen
 import com.warehouseos.operator.ui.screens.voice.VoiceEntryScreen
 
 /**
- * App navigation skeleton (Epic 0).
+ * App navigation.
  *
- * Start destination is [Routes.LOGIN]; the app-start routing that decides
- * Login vs ShiftHome based on a cached token lands in Epic 2 (task 13).
- * Screen bodies are placeholders wired only for navigation for now.
+ * Start destination is [Routes.STARTUP], which validates any cached session and
+ * routes to Login or ShiftHome (Epic 2, task 13). Login/ShiftHome are real; the
+ * scan/voice/count screens remain placeholders until their epics.
  */
 @Composable
 fun OperatorNavGraph(
@@ -25,8 +29,22 @@ fun OperatorNavGraph(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Routes.LOGIN,
+        startDestination = Routes.STARTUP,
     ) {
+        composable(Routes.STARTUP) {
+            StartupScreen(
+                onResolved = { destination ->
+                    val target = when (destination) {
+                        StartupDestination.LOGIN -> Routes.LOGIN
+                        StartupDestination.SHIFT_HOME -> Routes.SHIFT_HOME
+                    }
+                    navController.navigate(target) {
+                        popUpTo(Routes.STARTUP) { inclusive = true }
+                    }
+                },
+            )
+        }
+
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoggedIn = {
@@ -52,12 +70,15 @@ fun OperatorNavGraph(
 
         composable(Routes.SCAN) {
             ScanScreen(
-                onProceedToVoice = { navController.navigate(Routes.VOICE_ENTRY) },
+                onScanned = { barcode -> navController.navigate(Routes.voiceEntry(barcode)) },
                 onBack = { navController.popBackStack() },
             )
         }
 
-        composable(Routes.VOICE_ENTRY) {
+        composable(
+            route = Routes.VOICE_ENTRY_ROUTE,
+            arguments = listOf(navArgument(Routes.ARG_BARCODE) { type = NavType.StringType }),
+        ) {
             VoiceEntryScreen(
                 onBack = { navController.popBackStack() },
                 onScanNext = {
