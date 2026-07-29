@@ -1,6 +1,29 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { DomainDictionaryConfig } from '../types/engine.types';
+import { normalizePersian } from '../utils/persian-normalize';
+
+/**
+ * Vehicle names are stored as full variants ("پژو 206 تیپ 5", "پراید 111"), but
+ * workers say the family ("پراید") or family + model number ("پژو 206"). Derive
+ * those shorter aliases so the trie can match partial mentions; the matched span
+ * (not this payload) becomes the output family, and the matcher fans out to all
+ * matching trims via a contains lookup.
+ */
+function vehicleFamilyAliases(name: string): string[] {
+  const normalized = normalizePersian(name);
+  const tokens = normalized.split(' ').filter(Boolean);
+  if (!tokens.length) return [];
+
+  const out = new Set<string>([normalized]);
+  const family = tokens[0]; // پراید / پژو / سمند …
+  out.add(family);
+
+  const modelNumber = tokens.find((t) => /^\d+$/.test(t));
+  if (modelNumber) out.add(`${family} ${modelNumber}`); // «پژو 206»
+
+  return [...out];
+}
 
 @Injectable()
 export class DictionaryLoaderService {
@@ -39,8 +62,10 @@ export class DictionaryLoaderService {
         engine: v.systemType ?? "",
         gearbox: "",
         aliases: [
-          v.name,
-          ...(v.aliases ?? [])
+          ...new Set([
+            ...vehicleFamilyAliases(v.name),
+            ...(v.aliases ?? []).map((a) => normalizePersian(a)),
+          ]),
         ]
       })),
 
