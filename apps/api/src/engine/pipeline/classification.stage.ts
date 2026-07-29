@@ -1,6 +1,7 @@
 import { MatchingResult } from './matching.stage';
 
 
+
 export interface ClassifiedResult {
 
   product:any|null;
@@ -35,6 +36,8 @@ export interface ClassifiedResult {
 
 
 
+
+
 export class ClassificationStage {
 
 
@@ -47,37 +50,62 @@ export class ClassificationStage {
 
 
     const product =
-      matched.product;
+      matched.product ?? null;
 
 
 
     const vehicle =
-      matched.vehicle;
+      matched.vehicle ?? null;
 
 
 
-    let engine =
-      matched.engine;
+    /**
+     * اولویت:
+     * 1- تشخیص مستقیم موتور
+     * 2- اطلاعات خودرو
+     */
+
+
+    const engine =
+      matched.engine ??
+      vehicle?.engine ??
+      null;
 
 
 
-    let gearbox =
-      matched.gearbox;
+    const gearbox =
+      matched.gearbox ??
+      vehicle?.gearbox ??
+      null;
 
 
 
-    if(vehicle && !engine){
 
-      engine = vehicle.engine;
+    /**
+     * برند:
+     * اگر از متن پیدا شد استفاده کن
+     * در غیر این صورت از خود محصول بردار
+     */
 
-    }
+
+    const brand =
+      matched.brand ??
+      product?.brand?.name ??
+      null;
 
 
-    if(vehicle && !gearbox){
 
-      gearbox = vehicle.gearbox;
 
-    }
+    /**
+     * دسته بندی:
+     * چند منبع برای سازگاری
+     */
+
+
+    const category =
+      product?.category ??
+      product?.partCatalog?.name ??
+      null;
 
 
 
@@ -91,36 +119,30 @@ export class ClassificationStage {
       vehicle,
 
 
+
       productName:
-        product
-          ? product.name
-          : null,
+        product?.name ??
+        null,
 
 
 
-      category:
-        product
-          ? product.category
-          : null,
+      category,
 
 
 
-      brand:
-        matched.brand,
+      brand,
 
 
 
       vehicleFamily:
-        vehicle
-          ? vehicle.family
-          : null,
+        vehicle?.family ??
+        null,
 
 
 
       vehicleVariant:
-        vehicle
-          ? vehicle.variant
-          : null,
+        vehicle?.variant ??
+        null,
 
 
 
@@ -133,7 +155,8 @@ export class ClassificationStage {
 
 
       condition:
-        matched.condition,
+        matched.condition ??
+        null,
 
 
 
@@ -141,9 +164,13 @@ export class ClassificationStage {
 
 
 
-      goodQuantity:
-        quantity ?? 0,
+      /**
+       * اینجا فقط مقدار خام را نگه میداریم
+       * تصمیم سالم/خراب در ContextResolutionStage
+       */
 
+
+      goodQuantity:0,
 
 
       badQuantity:0,
@@ -151,7 +178,8 @@ export class ClassificationStage {
 
 
       unknownTokens:
-        matched.unknownTokens
+        matched.unknownTokens ?? []
+
 
 
     };

@@ -1,5 +1,6 @@
 import { TrieDictionary } from '../utils/trie.util';
 import { DomainDictionaryConfig } from '../types/engine.types';
+import { normalizePersian } from '../utils/persian-normalize';
 
 
 export interface MatchingResult {
@@ -53,12 +54,14 @@ export class MatchingStage {
   private load(){
 
 
+    // Keys are normalized so they match the normalized token stream; payloads
+    // keep their original (raw) values for downstream display/lookup.
     for(const item of this.config.products){
 
       for(const alias of item.aliases){
 
         this.productTrie.insert(
-          alias,
+          normalizePersian(alias),
           item
         );
 
@@ -73,7 +76,7 @@ export class MatchingStage {
       for(const alias of item.aliases){
 
         this.vehicleTrie.insert(
-          alias,
+          normalizePersian(alias),
           item
         );
 
@@ -86,7 +89,7 @@ export class MatchingStage {
     for(const [key,value] of Object.entries(this.config.brands)){
 
       this.brandTrie.insert(
-        key,
+        normalizePersian(key),
         value
       );
 
@@ -97,7 +100,7 @@ export class MatchingStage {
     for(const [key,value] of Object.entries(this.config.engines)){
 
       this.engineTrie.insert(
-        key,
+        normalizePersian(key),
         value
       );
 
@@ -108,7 +111,7 @@ export class MatchingStage {
     for(const [key,value] of Object.entries(this.config.gearboxes)){
 
       this.gearboxTrie.insert(
-        key,
+        normalizePersian(key),
         value
       );
 
@@ -119,7 +122,7 @@ export class MatchingStage {
     for(const [key,value] of Object.entries(this.config.conditions)){
 
       this.conditionTrie.insert(
-        key,
+        normalizePersian(key),
         value
       );
 
@@ -132,133 +135,161 @@ export class MatchingStage {
 
 
 
-  execute(
-    tokens:any[]
-  ):MatchingResult {
-
-    tokens = tokens.map((t:any) =>
-      typeof t === 'string'
-        ? t
-        : t.text ?? t.value ?? String(t)
-    );
+execute(tokens:any[]):MatchingResult {
 
 
-
-    let product:any=null;
-
-    let vehicle:any=null;
-
-    let brand:string|null=null;
-
-    let engine:string|null=null;
-
-    let gearbox:string|null=null;
-
-    let condition:string|null=null;
+  tokens = tokens.map((t:any) =>
+    typeof t === 'string'
+      ? t
+      : t.text ?? t.value ?? String(t)
+  );
 
 
-    const unknown:string[]=[];
+  let product:any=null;
+
+  let vehicle:any=null;
+
+  let brand:string|null=null;
+
+  let engine:string|null=null;
+
+  let gearbox:string|null=null;
+
+  let condition:string|null=null;
 
 
 
-    for(let i=0;i<tokens.length;i++){
+  const unknown:string[]=[];
 
 
 
-      const checks:any[]=[
-
-        [
-          this.vehicleTrie,
-          'vehicle'
-        ],
-
-        [
-          this.productTrie,
-          'product'
-        ],
-
-        [
-          this.brandTrie,
-          'brand'
-        ],
-
-        [
-          this.engineTrie,
-          'engine'
-        ],
-
-        [
-          this.gearboxTrie,
-          'gearbox'
-        ],
-
-        [
-          this.conditionTrie,
-          'condition'
-        ]
-
-      ];
+  for(let i=0;i<tokens.length;i++){
 
 
+    const checks:any[]=[
 
-      let found=false;
+      [
+        this.vehicleTrie,
+        'vehicle'
+      ],
 
+      [
+        this.productTrie,
+        'product'
+      ],
 
+      [
+        this.brandTrie,
+        'brand'
+      ],
 
-      for(const [trie,type] of checks){
+      [
+        this.engineTrie,
+        'engine'
+      ],
 
+      [
+        this.gearboxTrie,
+        'gearbox'
+      ],
 
-        const result =
-          trie.findLongestMatch(
-            tokens,
-            i
-          );
+      [
+        this.conditionTrie,
+        'condition'
+      ]
+
+    ];
 
 
 
-        if(result){
-
-          if(type==='vehicle')
-            vehicle=result.payload;
-
-
-          if(type==='product')
-            product=result.payload;
-
-
-          if(type==='brand')
-            brand=result.payload;
-
-
-          if(type==='engine')
-            engine=result.payload;
-
-
-          if(type==='gearbox')
-            gearbox=result.payload;
-
-
-          if(type==='condition')
-            condition=result.payload;
+    let found=false;
 
 
 
-          i += result.length-1;
+    for(const [trie,type] of checks){
 
-          found=true;
 
-          break;
+      const result =
+        trie.findLongestMatch(
+          tokens,
+          i
+        );
+
+
+
+      if(result){
+
+
+        const payloads =
+          result.payloads ?? [];
+
+
+
+        if(type==='vehicle'){
+
+          vehicle =
+            this.resolveBestVehicle(
+              payloads,
+              tokens
+            );
 
         }
 
 
-      }
+
+        if(type==='product'){
+
+          product =
+            payloads[0] ?? null;
+
+        }
 
 
 
-      if(!found){
+        if(type==='brand'){
 
-        unknown.push(tokens[i]);
+          brand =
+            payloads[0] ?? null;
+
+        }
+
+
+
+        if(type==='engine'){
+
+          engine =
+            payloads[0] ?? null;
+
+        }
+
+
+
+        if(type==='gearbox'){
+
+          gearbox =
+            payloads[0] ?? null;
+
+        }
+
+
+
+        if(type==='condition'){
+
+          condition =
+            payloads[0] ?? null;
+
+        }
+
+
+
+        i += result.length - 1;
+
+
+        found=true;
+
+
+        break;
+
 
       }
 
@@ -267,27 +298,92 @@ export class MatchingStage {
 
 
 
+    if(!found){
 
-    return {
+      unknown.push(tokens[i]);
 
-      product,
-
-      vehicle,
-
-      brand,
-
-      engine,
-
-      gearbox,
-
-      condition,
-
-      unknownTokens:unknown
-
-    };
+    }
 
 
   }
+
+
+
+
+  return {
+
+    product,
+
+    vehicle,
+
+    brand,
+
+    engine,
+
+    gearbox,
+
+    condition,
+
+    unknownTokens:unknown
+
+  };
+
+
+}
+
+
+
+
+
+private resolveBestVehicle(
+  vehicles:any[],
+  tokens:string[]
+){
+
+
+  if(!vehicles.length)
+    return null;
+
+
+
+  if(vehicles.length===1)
+    return vehicles[0];
+
+
+
+  const joined =
+    tokens.join(' ');
+
+
+
+  const exact =
+    vehicles.find(v=>{
+
+
+      if(!v)
+        return false;
+
+
+      const name =
+        String(v.name ?? '')
+        .toLowerCase();
+
+
+
+      return joined
+        .toLowerCase()
+        .includes(name);
+
+
+    });
+
+
+
+  return exact ?? null;
+
+
+}
+
 
 
 }

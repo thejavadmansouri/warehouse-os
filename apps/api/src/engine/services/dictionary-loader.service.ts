@@ -23,6 +23,7 @@ export class DictionaryLoaderService {
     return {
 
       products: products.map(p => ({
+        id: p.id,
         name: p.name,
         category: "قطعه",
         aliases: [

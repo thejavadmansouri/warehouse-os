@@ -2,7 +2,10 @@ import { ClassifiedResult } from './classification.stage';
 import { ConfidenceResult } from './confidence.stage';
 
 
+
 export interface ContextResult {
+
+  productId:string|null;
 
   productName:string|null;
 
@@ -30,6 +33,8 @@ export interface ContextResult {
 
 
 
+
+
 export class ContextResolutionStage {
 
 
@@ -48,79 +53,141 @@ export class ContextResolutionStage {
 
 
 
+    /**
+     * تعیین وضعیت موجودی
+     */
+
     if(data.condition === 'سالم'){
 
-      goodQuantity = quantity ?? 0;
+      goodQuantity =
+        quantity ?? 0;
+
+    }
+
+
+    else if(data.condition === 'خراب'){
+
+      badQuantity =
+        quantity ?? 0;
+
+    }
+
+
+    /**
+     * اگر وضعیت مشخص نبود
+     * پیش فرض کالا سالم است
+     */
+
+    else if(quantity !== null){
+
+      goodQuantity =
+        quantity;
 
     }
 
 
 
-    if(data.condition === 'خراب'){
-
-      badQuantity = quantity ?? 0;
-
-    }
 
 
+    /**
+     * برند:
+     * اول از متن
+     * بعد از relation محصول
+     */
 
-    if(
-      goodQuantity === 0 &&
-      badQuantity === 0 &&
-      quantity
-    ){
+    const resolvedBrand =
+      data.brand ??
+      data.product?.brand?.name ??
+      null;
 
-      goodQuantity = quantity;
 
-    }
+
+
+    /**
+     * دسته بندی:
+     * اول category مستقیم
+     * بعد partCatalog
+     */
+
+    const resolvedCategory =
+      data.category ??
+      data.product?.category?.name ??
+      data.product?.partCatalog?.name ??
+      null;
+
+
+
 
 
 
     return {
 
+
+      productId:
+        data.product?.id ??
+        null,
+
+
+
       productName:
-        data.product?.name ?? null,
+        data.product?.name ??
+        null,
+
 
 
       category:
-        data.product?.category ?? null,
+        resolvedCategory,
+
 
 
       brand:
-        data.brand ?? null,
+        resolvedBrand,
+
 
 
       vehicleFamily:
-        data.vehicle?.family ?? null,
+        data.vehicleFamily ??
+        data.product?.vehicleModel?.name ??
+        null,
+
 
 
       vehicleVariant:
-        data.vehicle?.variant ?? null,
+        data.vehicleVariant ??
+        data.product?.vehicleModel?.name ??
+        null,
+
 
 
       engine:
         data.engine ??
-        data.vehicle?.engine ??
+        data.product?.vehicleModel?.engine ??
         null,
+
 
 
       gearbox:
         data.gearbox ??
-        data.vehicle?.gearbox ??
+        data.product?.vehicleModel?.gearbox ??
         null,
+
 
 
       quantity,
 
 
+
       goodQuantity,
+
 
 
       badQuantity,
 
 
+
       confidence:
         confidence.score
+
 
     };
 

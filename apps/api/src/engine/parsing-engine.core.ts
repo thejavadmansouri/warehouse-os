@@ -11,23 +11,47 @@ import { ContextResolutionStage } from './pipeline/context-resolution.stage';
 import { ConfidenceStage } from './pipeline/confidence.stage';
 
 
-
 export class ParsingEngineCore {
 
 
-  private normalizer = new NormalizerStage();
+  private readonly normalizer =
+    new NormalizerStage();
 
-  private tokenizer = new TokenizerStage();
+
+  private readonly tokenizer =
+    new TokenizerStage();
+
+
+  private readonly numberParser =
+    new NumberParserStage();
+
+
+  private readonly spellCorrection:
+    SpellCorrectionStage;
+
+
+  private readonly matchingStage:
+    MatchingStage;
+
 
 
   constructor(
-    private config:DomainDictionaryConfig
-  ){}
+    private config: DomainDictionaryConfig
+  ){
+
+    this.matchingStage =
+      new MatchingStage(this.config);
+
+
+    this.spellCorrection =
+      new SpellCorrectionStage(this.config);
+
+  }
 
 
 
 
-  parse(input:string):ParseResult{
+  parse(input:string):ParseResult {
 
 
     const start =
@@ -35,54 +59,87 @@ export class ParsingEngineCore {
 
 
 
+    /*
+      1- Normalize
+    */
+
     const normalized =
       this.normalizer.execute(input);
 
 
+
+    /*
+      2- Tokenize
+    */
 
     const tokens =
       this.tokenizer.execute(normalized);
 
 
 
+    /*
+      3- Spell correction
+    */
+
     const corrected =
-      new SpellCorrectionStage(this.config)
-      .execute(tokens);
+      this.spellCorrection.execute(tokens);
 
 
 
-    const numberResult =
-      new NumberParserStage()
-      .execute(corrected);
+    /*
+      4- Extract numbers
+    */
+
+    const numbers =
+      this.numberParser.execute(corrected);
 
 
 
-    const words =
-      numberResult.map((x:any)=>{
+    /*
+      برای Matching فقط متن لازم است
+      نه آبجکت عدد
+    */
 
-        if(typeof x === 'string'){
-          return x;
-        }
+    const matchingTokens =
+      corrected.map((token:any)=>{
 
-        if(typeof x.token === 'string'){
-          return x.token;
-        }
+        if(typeof token === 'string')
+          return token;
 
-        if(typeof x.text === 'string'){
-          return x.text;
-        }
 
-        if(typeof x.value === 'string'){
-          return x.value;
-        }
+        if(token.text)
+          return token.text;
 
-        return String(x);
+
+        if(token.value)
+          return String(token.value);
+
+
+        return String(token);
 
       });
 
+
+
+    /*
+      5- Dictionary Matching
+    */
+
     const matched =
-      new MatchingStage(this.config)
-      .execute(words);
+      this.matchingStage.execute(
+        matchingTokens
+      );
+
+
+
+    /*
+      6- Classification
+    */
+
+    const quantity =
+      numbers.length
+      ? numbers[0].value
+      : null;
 
 
 
@@ -90,16 +147,26 @@ export class ParsingEngineCore {
       new ClassificationStage()
       .execute(
         matched,
-        numberResult.find((x:any)=>x.value)?.value ?? null
+        quantity
       );
 
 
 
+    /*
+      7- Validation
+    */
+
     const validation =
       new ValidationStage()
-      .execute(classified);
+      .execute(
+        classified
+      );
 
 
+
+    /*
+      8- Confidence
+    */
 
     const confidence =
       new ConfidenceStage()
@@ -110,52 +177,164 @@ export class ParsingEngineCore {
 
 
 
+    /*
+      9- Context
+    */
+
     const context =
       new ContextResolutionStage()
       .execute(
         classified,
         confidence,
-        numberResult.find((x:any)=>x.value)?.value ?? null
+        quantity
       );
+
 
 
 
     return {
 
+
       success:
         validation.status !== 'Failed',
 
 
+
       data:{
-        productName:context.productName ?? null,
-        productCategory:context.category ?? null,
-        brand:context.brand ?? null,
-        vehicleFamily:context.vehicleFamily ?? null,
-        vehicleVariant:context.vehicleVariant ?? null,
-        engine:context.engine ?? null,
-        gearbox:context.gearbox ?? null,
+
+
+        productName:
+          context.productName ?? null,
+
+
+        productCategory:
+          context.category ?? null,
+
+
+        brand:
+          context.brand ?? null,
+
+
+        vehicleFamily:
+          context.vehicleFamily ?? null,
+
+
+        vehicleVariant:
+          context.vehicleVariant ?? null,
+
+
+        engine:
+          context.engine ?? null,
+
+
+        gearbox:
+          context.gearbox ?? null,
+
+
         position:null,
+
         side:null,
-        condition:null,
+
+        condition:
+          classified.condition ?? null,
+
+
         year:null,
-        quantity:context.quantity ?? null,
-        goodQuantity:context.goodQuantity ?? 0,
-        badQuantity:context.badQuantity ?? 0
+
+
+        quantity:
+          context.quantity ?? null,
+
+
+        goodQuantity:
+          context.goodQuantity ?? 0,
+
+
+        badQuantity:
+          context.badQuantity ?? 0
+
       },
+
+
 
 
       explanation:{
-        goodQuantity:context.goodQuantity ?? 0,
-        badQuantity:context.badQuantity ?? 0,
-        unknownTokens:classified.unknownTokens,
-        validationStatus:validation.status,
-        validationMessages:validation.messages ?? [],
-        confidence:confidence.score,
-        matchedDetails:{}
+
+
+        tokens,
+
+
+        normalized,
+
+
+        correctedTokens:
+          corrected,
+
+
+        numbers,
+
+
+        goodQuantity:
+          context.goodQuantity ?? 0,
+
+
+        badQuantity:
+          context.badQuantity ?? 0,
+
+
+
+        unknownTokens:
+          classified.unknownTokens,
+
+
+
+        validationStatus:
+          validation.status,
+
+
+
+        validationMessages:
+          validation.messages ?? [],
+
+
+
+        confidence:
+          confidence.score,
+
+
+
+        matchedDetails:{
+
+
+          product:
+            matched.product?.name ?? null,
+
+
+          vehicle:
+            matched.vehicle?.name ?? null,
+
+
+          brand:
+            matched.brand ?? null,
+
+
+          engine:
+            matched.engine ?? null,
+
+
+          gearbox:
+            matched.gearbox ?? null
+
+        }
+
       },
 
 
-      rawInput:input,
+
+
+      rawInput:
+        input,
+
 
 
       processingTimeMs:
