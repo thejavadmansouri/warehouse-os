@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Simple warehouse-box glyph, sized for the adaptive-icon 108dp canvas
+     (safe zone ~66dp centered). Orange on the blue adaptive background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#F57C00"
+        android:pathData="M54,30 L78,42 L78,66 L54,78 L30,66 L30,42 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,30 L78,42 L54,54 L30,42 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M54,54 L54,78" />
+</vector>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The warehouse backend is a plain-HTTP LAN server (no TLS on-prem).
+     Cleartext is enabled broadly here because the server IP is user-configurable
+     at runtime; on a locked-down deployment, narrow this to known subnets. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
