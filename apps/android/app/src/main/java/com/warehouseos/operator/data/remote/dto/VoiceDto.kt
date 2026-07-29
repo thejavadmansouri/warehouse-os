@@ -33,6 +33,9 @@ data class VoiceInputRequest(
 data class VoiceResponseDto(
     val success: Boolean = false,
     val needSelection: Boolean? = null,
+    // Preview (/inventory/voice/preview) sets this on a confident match instead of
+    // committing — the app shows a confirmation screen and then calls confirm.
+    val needConfirm: Boolean? = null,
     val message: String? = null,
     val product: ProductRef? = null,
     val quantity: Int? = null,
@@ -80,9 +83,13 @@ data class InventoryRef(
     val quantity: Int,
 )
 
+/**
+ * A ranked match suggestion from voice preview/submit. The backend shape is
+ * { product, confidence, reasons } — not a bare product.
+ */
 @Serializable
 data class VoiceSuggestionDto(
-    val id: String,
-    val name: String,
-    val sku: String? = null,
+    val product: ProductRef? = null,
+    val confidence: Double? = null,
+    val reasons: List<String>? = null,
 )

@@ -49,6 +49,10 @@ interface ApiService {
     suspend fun startSession(@Body body: VoiceSessionStartRequest): VoiceSessionDto
 
     // ---- Voice stock-in ----
+    // Preview: parse + match, NO commit — used for the propose→confirm flow.
+    @POST("inventory/voice/preview")
+    suspend fun previewVoice(@Body body: VoiceInputRequest): VoiceResponseDto
+
     @POST("inventory/voice")
     suspend fun submitVoice(@Body body: VoiceInputRequest): VoiceResponseDto
 

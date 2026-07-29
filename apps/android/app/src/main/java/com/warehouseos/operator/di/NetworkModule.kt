@@ -3,8 +3,7 @@ package com.warehouseos.operator.di
 import com.warehouseos.operator.BuildConfig
 import com.warehouseos.operator.data.remote.ApiService
 import com.warehouseos.operator.data.remote.interceptor.AuthInterceptor
-import com.warehouseos.operator.data.session.InMemoryTokenProvider
-import com.warehouseos.operator.data.session.TokenProvider
+import com.warehouseos.operator.data.remote.interceptor.BaseUrlInterceptor
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -34,14 +33,14 @@ object NetworkModule {
         isLenient = true
     }
 
-    // Interceptor reads the token via the interface; login writes it via the concrete type.
-    @Provides
-    @Singleton
-    fun provideTokenProvider(impl: InMemoryTokenProvider): TokenProvider = impl
+    // TokenProvider binding lives in StorageModule (backed by encrypted storage).
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(authInterceptor: AuthInterceptor): OkHttpClient {
+    fun provideOkHttpClient(
+        baseUrlInterceptor: BaseUrlInterceptor,
+        authInterceptor: AuthInterceptor,
+    ): OkHttpClient {
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
                 HttpLoggingInterceptor.Level.BODY
@@ -50,6 +49,7 @@ object NetworkModule {
             }
         }
         return OkHttpClient.Builder()
+            .addInterceptor(baseUrlInterceptor) // must run first: repoints host/port
             .addInterceptor(authInterceptor)
             .addInterceptor(logging)
             .connectTimeout(15, TimeUnit.SECONDS)
