@@ -1,0 +1,414 @@
+import { Injectable } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { normalizePersian } from '../engine/utils/persian-normalize';
+
+/**
+ * وزن‌های امتیازدهی — ترتیب اولویت:
+ * 1) قطعه (Part)   2) مدل خودرو (Vehicle)   3) برند (Brand)   4) توضیحات/alias
+ */
+const WEIGHT = {
+  PART_ID_MATCH: 100,
+  PART_NAME_MATCH: 80,
+  PART_ALIAS_MATCH: 70,
+  PART_TOKEN_FALLBACK: 25, // فقط وقتی هیچ partCatalogId شناسایی نشده
+
+  VEHICLE_ID_MATCH: 70,
+  VEHICLE_NAME_MATCH: 60,
+  VEHICLE_ALIAS_MATCH: 55,
+
+  BRAND_ID_MATCH: 25,
+  BRAND_NAME_MATCH: 20,
+  BRAND_ALIAS_MATCH: 20,
+
+  DESCRIPTION_TOKEN_MATCH: 5,
+};
+
+const MAX_CANDIDATES = 100;
+const MAX_SUGGESTIONS = 5;
+
+// اینها روی confidence (نه score خام) اعمال می‌شوند
+const AUTO_CONFIRM_MIN_CONFIDENCE = 90;
+const MIN_MARGIN_OVER_SECOND = 15;
+
+const MIN_TOKEN_LENGTH = 2;
+
+// کلماتی که معنای قطعه/برند/خودرو ندارند و نباید در matching شرکت کنند
+// (در حالت ایده‌آل پارسر باید اینها را به‌عنوان UNIT/NUMBER مصرف کند؛
+// این لیست فقط یک لایهٔ دفاعی اضافه در matcher است)
+const STOPWORDS = new Set([
+  'تا', 'دونه', 'عدد', 'تومن', 'تومان', 'ریال',
+  'لطفا', 'لطفاً', 'یه', 'یک', 'یکی', 'برای', 'از', 'به', 'در',
+]);
+
+// اگر بهترین کاندید confidence خیلی پایینی دارد (یعنی فقط از fallback
+// ضعیف کلمات آمده)، اصلاً نباید به‌عنوان suggestion نمایش داده شود
+const MIN_SUGGESTION_CONFIDENCE = 15;
+
+// موقعیت/سمت — تفکیک‌کننده‌ی مهم SKU (لنت جلو ≠ لنت عقب، آینه چپ ≠ آینه راست)
+const POSITION_WORDS = new Set(['جلو', 'عقب']);
+const SIDE_WORDS = new Set(['چپ', 'راست']);
+const ANTONYM: Record<string, string> = {
+  جلو: 'عقب',
+  عقب: 'جلو',
+  چپ: 'راست',
+  راست: 'چپ',
+};
+const POSITION_MATCH_SCORE = 20;
+const POSITION_CONTRADICT_SCORE = -40;
+const CONFIDENCE_POSITION_PENALTY = 25;
+
+// نرمال‌سازی یکسان با موتور پارس؛ تا نام‌های دیتابیس و توکن‌های گفتار برابر مقایسه شوند
+function norm(text?: string | null) {
+  return normalizePersian(text);
+}
+
+interface MatchInput {
+  partCatalogId?: string | null;
+  partName?: string | null; // خروجی خام پارسر (parsed.productName)
+  vehicleModelIds?: string[]; // همهٔ تریم‌های منطبق با نام خانوادهٔ خودرو
+  vehicleName?: string | null; // parsed.vehicleFamily / vehicleVariant
+  brandId?: string | null;
+  brandName?: string | null; // parsed.brand
+  keywordTokens?: string[];
+}
+
+interface ScoredCandidate {
+  product: any;
+  score: number;
+  confidence: number;
+  reasons: string[];
+  partMatched: boolean;
+  vehicleMatched: boolean;
+  brandMatched: boolean;
+  disqualified: boolean;
+}
+
+@Injectable()
+export class ProductMatcherService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  async findVehicleModelIdsByName(name: string | null): Promise<string[]> {
+    if (!name) return [];
+
+    // هر ورودی خانواده (مثل "پژو 405") می‌تواند به چند تریم واقعی
+    // (GLX, SLX, ...) نگاشته شود؛ همهٔ آن‌ها را برمی‌گردانیم، نه فقط اولین match.
+    const vehicles = await this.prisma.vehicleModel.findMany({
+      where: {
+        OR: [
+          { name: { contains: name, mode: 'insensitive' } },
+          { aliases: { has: name } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return vehicles.map((v) => v.id);
+  }
+
+  async findBrandIdByName(name: string | null) {
+    if (!name) return null;
+
+    const brand = await this.prisma.brand.findFirst({
+      where: {
+        OR: [
+          { name: { contains: name, mode: 'insensitive' } },
+          { aliases: { has: name } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return brand?.id ?? null;
+  }
+
+  // متد جدید — قبلاً اصلاً وجود نداشت، به همین دلیل قطعه هیچ نقشی در matching نداشت
+  async findPartCatalogIdByName(name: string | null) {
+    if (!name) return null;
+
+    const part = await this.prisma.partCatalog.findFirst({
+      where: {
+        isActive: true,
+        OR: [
+          { name: { contains: name, mode: 'insensitive' } },
+          { aliases: { has: name } },
+        ],
+      },
+      select: { id: true },
+    });
+
+    return part?.id ?? null;
+  }
+
+  async match(input: MatchInput) {
+    const tokens = (input.keywordTokens ?? [])
+      .map((x: string) => norm(x))
+      .filter((x: string) => x.length >= MIN_TOKEN_LENGTH)
+      .filter((x: string) => !STOPWORDS.has(x));
+
+    const candidates = await this.fetchCandidates(
+      input.partCatalogId ?? null,
+      input.vehicleModelIds ?? [],
+      input.brandId ?? null,
+      tokens,
+    );
+
+    if (!candidates.length) {
+      return { status: 'NONE', best: null, suggestions: [] };
+    }
+
+    const ranked = candidates
+      .map((product) => this.scoreCandidate(product, input, tokens))
+      // کاندیدهایی که صراحتاً با مدل خودروی ورودی تناقض دارند حذف می‌شوند
+      // (نه فقط امتیاز کمتر — اصلاً وارد رقابت نمی‌شوند)
+      .filter((c) => !c.disqualified)
+      // کاندیدهایی که فقط با نویز (مثل توکن‌های بی‌معنی) امتیاز گرفته‌اند
+      // را نباید به کاربر پیشنهاد داد — بهتر است هیچ پیشنهادی نداشته باشیم
+      .filter((c) => c.confidence >= MIN_SUGGESTION_CONFIDENCE)
+      .sort((a, b) => b.confidence - a.confidence || b.score - a.score);
+
+    if (!ranked.length) {
+      return { status: 'NONE', best: null, suggestions: [] };
+    }
+
+    const best = ranked[0];
+    const second = ranked[1];
+
+    const hasVehicleInput = !!(input.vehicleModelIds?.length || input.vehicleName);
+    const vehicleRequirementSatisfied = !hasVehicleInput ? true : best.vehicleMatched;
+
+    const canAutoConfirm =
+      best.partMatched &&
+      vehicleRequirementSatisfied &&
+      best.confidence >= AUTO_CONFIRM_MIN_CONFIDENCE &&
+      (!second || best.confidence - second.confidence >= MIN_MARGIN_OVER_SECOND);
+
+    if (canAutoConfirm) {
+      return {
+        status: 'AUTO',
+        best,
+        suggestions: ranked.slice(0, MAX_SUGGESTIONS),
+      };
+    }
+
+    return {
+      status: 'SUGGEST',
+      best: null,
+      suggestions: ranked.slice(0, MAX_SUGGESTIONS),
+    };
+  }
+
+  private async fetchCandidates(
+    partCatalogId: string | null,
+    vehicleModelIds: string[],
+    brandId: string | null,
+    tokens: string[],
+  ) {
+    const or: Prisma.ProductWhereInput[] = [];
+
+    // سیگنال‌های ساخت‌یافته (ID) اولویت دارند و pool کاندیدها را دقیق‌تر می‌کنند
+    if (partCatalogId) or.push({ partCatalogId });
+    if (vehicleModelIds.length) or.push({ vehicleModelId: { in: vehicleModelIds } });
+    if (brandId) or.push({ brandId });
+
+    for (const token of tokens) {
+      or.push({ name: { contains: token, mode: 'insensitive' } });
+      or.push({ description: { contains: token, mode: 'insensitive' } });
+      or.push({ partNumber: { contains: token, mode: 'insensitive' } });
+    }
+
+    // اگر هیچ سیگنالی نداریم، به‌جای برگرداندن کل جدول محصولات، چیزی برنگردان
+    if (!or.length) return [];
+
+    return this.prisma.product.findMany({
+      where: { deletedAt: null, isActive: true, OR: or },
+      include: { brand: true, vehicleModel: true, partCatalog: true },
+      take: MAX_CANDIDATES,
+    });
+  }
+
+  private scoreCandidate(
+    product: any,
+    input: MatchInput,
+    tokens: string[],
+  ): ScoredCandidate {
+    const reasons: string[] = [];
+    let score = 0;
+    let disqualified = false;
+
+    const name = norm(product.name);
+    const desc = norm(product.description);
+
+    const partName = norm(product.partCatalog?.name);
+    const partAliases: string[] = product.partCatalog?.aliases ?? [];
+
+    const vehicleName = norm(product.vehicleModel?.name);
+    const vehicleAliases: string[] = product.vehicleModel?.aliases ?? [];
+
+    const brandName = norm(product.brand?.name);
+    const brandAliases: string[] = product.brand?.aliases ?? [];
+
+    // ---------- 1) قطعه — بالاترین اولویت ----------
+    let partMatched = false;
+
+    if (input.partCatalogId && product.partCatalogId === input.partCatalogId) {
+      score += WEIGHT.PART_ID_MATCH;
+      partMatched = true;
+      reasons.push(`part matched: ${product.partCatalog?.name ?? ''}`);
+    } else if (input.partName) {
+      const pn = norm(input.partName);
+
+      if (partName && (partName.includes(pn) || pn.includes(partName))) {
+        score += WEIGHT.PART_NAME_MATCH;
+        partMatched = true;
+        reasons.push(`part matched by name: ${product.partCatalog?.name ?? ''}`);
+      } else if (partAliases.some((a) => norm(a) === pn)) {
+        score += WEIGHT.PART_ALIAS_MATCH;
+        partMatched = true;
+        reasons.push(`part matched by alias`);
+      }
+    }
+
+    // فقط اگر هیچ partCatalog شناسایی نشد، به‌عنوان fallback ضعیف از توکن‌های خام نام استفاده کن
+    if (!partMatched) {
+      for (const token of tokens) {
+        if (name.includes(token)) {
+          score += WEIGHT.PART_TOKEN_FALLBACK;
+          reasons.push(`weak keyword match in name: ${token}`);
+        }
+      }
+    }
+
+    // ---------- 2) مدل خودرو — اولویت دوم، با رد قطعی در صورت تناقض ----------
+    let vehicleMatched = false;
+
+    if (input.vehicleModelIds && input.vehicleModelIds.length) {
+      if (product.vehicleModelId && input.vehicleModelIds.includes(product.vehicleModelId)) {
+        score += WEIGHT.VEHICLE_ID_MATCH;
+        vehicleMatched = true;
+        reasons.push(`vehicle matched: ${product.vehicleModel?.name ?? ''}`);
+      } else if (product.vehicleModelId) {
+        // محصول صراحتاً برای یک خودروی دیگر است -> کاملاً حذف شود
+        disqualified = true;
+        reasons.push(
+          `vehicle mismatch: product is for ${product.vehicleModel?.name ?? 'other vehicle'}, not the requested vehicle`,
+        );
+      }
+      // اگر محصول vehicleModelId ندارد (قطعهٔ یونیورسال)، بی‌طرف می‌ماند — نه رد و نه امتیاز
+    } else if (input.vehicleName) {
+      const vn = norm(input.vehicleName);
+
+      if (vehicleName && (vehicleName.includes(vn) || vn.includes(vehicleName))) {
+        score += WEIGHT.VEHICLE_NAME_MATCH;
+        vehicleMatched = true;
+        reasons.push(`vehicle matched by name: ${product.vehicleModel?.name ?? ''}`);
+      } else if (vehicleAliases.some((a) => norm(a) === vn)) {
+        score += WEIGHT.VEHICLE_ALIAS_MATCH;
+        vehicleMatched = true;
+        reasons.push(`vehicle matched by alias`);
+      }
+    }
+
+    // ---------- 3) برند ----------
+    let brandMatched = false;
+
+    if (input.brandId && product.brandId === input.brandId) {
+      score += WEIGHT.BRAND_ID_MATCH;
+      brandMatched = true;
+      reasons.push(`brand matched: ${product.brand?.name ?? ''}`);
+    } else if (input.brandName) {
+      const bn = norm(input.brandName);
+
+      if (brandName && (brandName.includes(bn) || bn.includes(brandName))) {
+        score += WEIGHT.BRAND_NAME_MATCH;
+        brandMatched = true;
+        reasons.push(`brand matched by name: ${product.brand?.name ?? ''}`);
+      } else if (brandAliases.some((a) => norm(a) === bn)) {
+        score += WEIGHT.BRAND_ALIAS_MATCH;
+        brandMatched = true;
+        reasons.push(`brand matched by alias`);
+      }
+    }
+
+    // ---------- 4) توضیحات — فقط tie-breaker جزئی ----------
+    for (const token of tokens) {
+      if (desc.includes(token)) {
+        score += WEIGHT.DESCRIPTION_TOKEN_MATCH;
+      }
+    }
+
+    // ---------- 5) موقعیت/سمت — جلو/عقب و چپ/راست ----------
+    // کلمات موقعیت معمولاً داخل نام محصول‌اند (مثل «لنت ترمز جلو ...»). تطابق را
+    // تقویت و تناقض (جلو در برابر عقب) را قویاً جریمه می‌کنیم — بدون رد قطعی،
+    // چون داده‌ها همیشه این فیلد را ندارند.
+    let positionContradiction = false;
+    for (const token of tokens) {
+      if (!POSITION_WORDS.has(token) && !SIDE_WORDS.has(token)) continue;
+
+      if (name.includes(token)) {
+        score += POSITION_MATCH_SCORE;
+        reasons.push(`position/side matched: ${token}`);
+      } else if (ANTONYM[token] && name.includes(ANTONYM[token])) {
+        score += POSITION_CONTRADICT_SCORE;
+        positionContradiction = true;
+        reasons.push(
+          `position/side contradiction: requested ${token}, product is ${ANTONYM[token]}`,
+        );
+      }
+    }
+
+    let confidence = disqualified
+      ? 0
+      : this.computeConfidence({
+          partMatched,
+          vehicleMatched,
+          brandMatched,
+          hasVehicleInput: !!(input.vehicleModelIds?.length || input.vehicleName),
+        });
+
+    // یک کاندید با موقعیت متناقض نباید به‌راحتی auto-confirm شود یا بالاتر بنشیند
+    if (positionContradiction) {
+      confidence = Math.max(0, confidence - CONFIDENCE_POSITION_PENALTY);
+    }
+
+    return {
+      product,
+      score,
+      confidence,
+      reasons,
+      partMatched,
+      vehicleMatched,
+      brandMatched,
+      disqualified,
+    };
+  }
+
+  /**
+   * Confidence مستقل از score خام محاسبه می‌شود؛ فقط بر اساس اینکه واقعاً
+   * کدام مؤلفه‌ها (part/vehicle/brand) match شده‌اند.
+   * اگر کاربر مدل خودرو را گفته ولی match نشده، کاندید در scoreCandidate
+   * قبلاً disqualified شده و اصلاً به این تابع با مقدار معنادار نمی‌رسد.
+   */
+  private computeConfidence(f: {
+    partMatched: boolean;
+    vehicleMatched: boolean;
+    brandMatched: boolean;
+    hasVehicleInput: boolean;
+  }) {
+    let c = 0;
+
+    if (f.partMatched) c += 45;
+
+    if (f.hasVehicleInput) {
+      if (f.vehicleMatched) c += 40;
+      // اگر match نشده، این کاندید اصلاً اینجا نمی‌رسد (disqualified)
+    } else {
+      // خودرو در گفتار مشخص نشده -> این بعد را خنثی محاسبه کن تا overconfident نشویم
+      c += 15;
+    }
+
+    if (f.brandMatched) c += 15;
+
+    return Math.min(100, c);
+  }
+}
