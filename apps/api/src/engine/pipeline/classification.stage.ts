@@ -134,7 +134,9 @@ export class ClassificationStage {
 
 
 
+      // متن ماچ‌شده («پراید» یا «پژو 206») اولویت دارد تا matcher درست fan-out کند
       vehicleFamily:
+        matched.vehicleText ??
         vehicle?.family ??
         null,
 

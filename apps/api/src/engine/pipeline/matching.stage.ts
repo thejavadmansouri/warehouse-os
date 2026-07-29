@@ -9,6 +9,9 @@ export interface MatchingResult {
 
   vehicle:any|null;
 
+  // متن دقیقی که به‌عنوان خودرو تطبیق خورد («پراید» یا «پژو 206») — نه نام کامل payload
+  vehicleText:string|null;
+
   brand:string|null;
 
   engine:string|null;
@@ -149,6 +152,8 @@ execute(tokens:any[]):MatchingResult {
 
   let vehicle:any=null;
 
+  let vehicleText:string|null=null;
+
   let brand:string|null=null;
 
   let engine:string|null=null;
@@ -233,6 +238,12 @@ execute(tokens:any[]):MatchingResult {
               tokens
             );
 
+          // متن واقعی خودرو که ماچ شد (طول ماچ از trie)
+          vehicleText =
+            tokens
+              .slice(i, i + result.length)
+              .join(' ');
+
         }
 
 
@@ -316,6 +327,8 @@ execute(tokens:any[]):MatchingResult {
 
     vehicle,
 
+    vehicleText,
+
     brand,
 
     engine,
@@ -365,7 +378,7 @@ private resolveBestVehicle(
 
 
       const name =
-        String(v.name ?? '')
+        String(v.variant ?? v.family ?? '')
         .toLowerCase();
 
 
@@ -379,7 +392,9 @@ private resolveBestVehicle(
 
 
 
-  return exact ?? null;
+  // اگر تطبیق کامل نام پیدا نشد، اولین کاندید را برگردان (نه null) —
+  // فامیلی خروجی از vehicleText می‌آید، این فقط برای engine/gearbox است.
+  return exact ?? vehicles[0] ?? null;
 
 
 }
