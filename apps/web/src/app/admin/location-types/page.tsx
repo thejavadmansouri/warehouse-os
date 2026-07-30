@@ -161,7 +161,11 @@ export default function LocationTypesPage() {
     queryFn: () => getLocationTypes(),
   });
 
-  const form = useForm<FormValues>({
+  const form = useForm<
+    z.input<typeof formSchema>,
+    unknown,
+    z.output<typeof formSchema>
+  >({
     resolver: zodResolver(formSchema),
     defaultValues: { name: "", level: undefined },
   });

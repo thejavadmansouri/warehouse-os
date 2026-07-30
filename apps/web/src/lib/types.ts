@@ -484,3 +484,39 @@ export interface VoiceSuggestion {
   [key: string]: unknown;
 }
 
+// عملیات در انتظار تأیید مدیر (Stage 3 — sync/approval)
+export interface PendingOperation {
+  id: string;
+  clientRequestId: string;
+  status: string;
+  type: string;
+  locationBarcode: string;
+  voiceText?: string | null;
+  parsed?: {
+    parsed?: Record<string, unknown> | null;
+    suggestions?: { id: string; name: string; confidence?: number }[];
+  } | null;
+  quantity: number;
+  unit?: string | null;
+  warehouseId?: string | null;
+  productId?: string | null;
+  createdAt: string;
+  location?: {
+    id: string;
+    name: string;
+    code?: string | null;
+    barcode?: string | null;
+    path?: string | null;
+    warehouse?: { id: string; name: string; code?: string } | null;
+  } | null;
+  product?: {
+    id: string;
+    name: string;
+    sku?: string;
+    internalBarcode?: string;
+    brand?: { id: string; name: string } | null;
+    barcodes?: { barcode: string; type?: string }[];
+  } | null;
+  worker?: { id: string; username: string; fullName?: string } | null;
+}
+

@@ -10,18 +10,43 @@ export const API_URL =
 
 // ----- کمک‌کننده‌های داخلی -----
 
-function buildInit(init: RequestInit): RequestInit {
+// درخواست‌های این کلاینت می‌توانند body را به‌صورت یک آبجکت JSON بدهند؛ این تایپ
+// همان قرارداد را در سطح صحیح بیان می‌کند (به‌جای اینکه هر call-site با BodyInit
+// درگیر شود). serialize کردن داخل buildInit انجام می‌شود.
+export type ApiRequestInit = Omit<RequestInit, "body"> & { body?: unknown };
+
+function isRawBody(value: unknown): value is BodyInit {
+  return (
+    typeof value === "string" ||
+    value instanceof FormData ||
+    value instanceof Blob ||
+    value instanceof ArrayBuffer ||
+    value instanceof URLSearchParams ||
+    value instanceof ReadableStream ||
+    ArrayBuffer.isView(value)
+  );
+}
+
+function buildInit(init: ApiRequestInit): RequestInit {
   const { body, headers, ...rest } = init;
   const finalHeaders: Record<string, string> = {
     ...((headers as Record<string, string>) ?? {}),
   };
-  let finalBody: BodyInit | undefined = body;
-  if (body && !(body instanceof FormData) && typeof body === "object") {
+
+  let finalBody: BodyInit | undefined;
+  if (body == null) {
+    finalBody = undefined;
+  } else if (isRawBody(body)) {
+    finalBody = body;
+  } else if (typeof body === "object") {
     finalBody = JSON.stringify(body);
     if (!finalHeaders["Content-Type"]) {
       finalHeaders["Content-Type"] = "application/json";
     }
+  } else {
+    finalBody = String(body);
   }
+
   return { ...rest, body: finalBody, headers: finalHeaders };
 }
 
@@ -46,7 +71,7 @@ function defaultStatusMessage(status: number): string {
 // fetch پایین‌سطحی — بدون تزریق خودکار توکن، بدون redirect
 async function rawFetch<R>(
   path: string,
-  init: RequestInit = {}
+  init: ApiRequestInit = {}
 ): Promise<R> {
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
@@ -71,7 +96,7 @@ async function rawFetch<R>(
 }
 
 // fetch احراز‌شده — توکن را از store می‌خواند و روی ۴۰۱ لاگ‌اوت + ریدایرکت می‌کند
-async function apiFetch<R>(path: string, init: RequestInit = {}): Promise<R> {
+async function apiFetch<R>(path: string, init: ApiRequestInit = {}): Promise<R> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = {
     ...((init.headers as Record<string, string>) ?? {}),
@@ -141,9 +166,13 @@ export function getProducts(): Promise<T.Product[]> {
 }
 
 // طبق بخش ۶.۳ — GET /products/search?q=
+// سرور پاسخ صفحه‌بندی‌شده { data, meta } برمی‌گرداند؛ اینجا آرایه‌ی محصولات را
+// استخراج می‌کنیم و در برابر هر دو شکل (آرایه‌ی خام یا wrapped) مقاوم می‌مانیم.
 export function searchProducts(q: string): Promise<T.Product[]> {
   const qs = new URLSearchParams({ q });
-  return apiFetch<T.Product[]>(`/products/search?${qs.toString()}`);
+  return apiFetch<T.Product[] | { data?: T.Product[] }>(
+    `/products/search?${qs.toString()}`
+  ).then((r) => (Array.isArray(r) ? r : (r.data ?? [])));
 }
 
 // طبق بخش ۶.۳ — GET /products/:id
@@ -644,5 +673,41 @@ export function confirmVoice(
   return apiFetch<T.VoiceConfirmResponse>("/inventory/voice/confirm", {
     method: "POST",
     body: dto,
+  });
+}
+
+// =====================================================
+// بازبینی عملیات کارگر (Stage 3 — Manager Review)
+// =====================================================
+
+// GET /manager/review/pending — صف تأیید مدیر (اختیاری بر اساس انبار)
+export function getPendingOperations(
+  warehouseId?: string
+): Promise<T.PendingOperation[]> {
+  const qs = warehouseId
+    ? `?warehouseId=${encodeURIComponent(warehouseId)}`
+    : "";
+  return apiFetch<T.PendingOperation[]>(`/manager/review/pending${qs}`);
+}
+
+// POST /manager/review/:id/approve — تأیید = ثبت واقعی موجودی (idempotent سمت سرور)
+export function approvePendingOperation(
+  id: string,
+  body: { productId?: string; quantity?: number } = {}
+): Promise<unknown> {
+  return apiFetch(`/manager/review/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+    body,
+  });
+}
+
+// POST /manager/review/:id/reject — رد با ذخیره‌ی دلیل
+export function rejectPendingOperation(
+  id: string,
+  body: { reviewNote?: string } = {}
+): Promise<unknown> {
+  return apiFetch(`/manager/review/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    body,
   });
 }
