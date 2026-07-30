@@ -2,6 +2,9 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ParsingEngineService } from '../engine/parsing-engine.service';
 
+const CONFIDENCE_AUTO_CONFIRM = 95;
+const CONFIDENCE_NEEDS_REVIEW = 80;
+
 @Injectable()
 export class MobileCountService {
   constructor(
@@ -43,13 +46,10 @@ export class MobileCountService {
     };
   }
 
-  // ثبت آیتم شمارش با صدا — الان از همون موتور اصلی voice parsing استفاده می‌کنه
-  // (src/engine) که دیکشنری‌اش از دیتابیس لود می‌شه، به‌جای پارسر جدا و هاردکد قبلی
-  // (src/lib/voice-parser.ts) که حذف شد. این باعث می‌شه ثبت صوتی کالا و شمارش صوتی
-  // دقیقاً یک نتیجه برای یک جمله بدن، و برند/مدل جدید توی دیتابیس بدون تغییر کد شناخته بشه.
   async addVoiceItem(countId: string, text: string, userId?: string) {
     const engineResult = this.parsingEngine.parse(text);
     const parsed = engineResult.data;
+    const confidence = engineResult.explanation.confidence;
 
     const matchedProduct = await this.findBestMatchingProduct(
       parsed.productName,
@@ -60,6 +60,8 @@ export class MobileCountService {
     const goodQuantity = parsed.goodQuantity || parsed.quantity || 1;
     const badQuantity = parsed.badQuantity || 0;
 
+    const reviewStatus = this.resolveReviewStatus(confidence, matchedProduct);
+
     const item = await this.prisma.inventoryItem.create({
       data: {
         countId,
@@ -68,9 +70,11 @@ export class MobileCountService {
         goodQuantity,
         badQuantity,
         voiceText: text,
+        voiceConfidence: confidence,
         recognizedName: parsed.productName,
         recognizedBrand: parsed.brand,
         recognizedCategory: parsed.vehicleFamily,
+        reviewStatus,
       },
     });
 
@@ -80,14 +84,65 @@ export class MobileCountService {
       matchedProduct: matchedProduct
         ? { id: matchedProduct.id, name: matchedProduct.name }
         : null,
+      confidence,
+      reviewStatus,
+      needsConfirmation: reviewStatus === 'NEEDS_REVIEW',
+      needsCorrection: reviewStatus === 'NEEDS_CORRECTION',
       item,
       explanation: engineResult.explanation,
     };
   }
 
-  // تطبیق کالا فقط بر اساس فیلدهای ساختاریافته‌ای که موتور تشخیص داده انجام می‌شه —
-  // دیگه کل جدول محصولات (که می‌تونه هزاران ردیف باشه) لود و توی جاوااسکریپت خطی
-  // فیلتر نمی‌شه؛ این کوئری مستقیم به دیتابیس سپرده می‌شه.
+  private resolveReviewStatus(
+    confidence: number,
+    matchedProduct: { id: string; name: string } | null,
+  ): 'CONFIRMED' | 'NEEDS_REVIEW' | 'NEEDS_CORRECTION' {
+    if (!matchedProduct) {
+      return confidence >= CONFIDENCE_NEEDS_REVIEW
+        ? 'NEEDS_REVIEW'
+        : 'NEEDS_CORRECTION';
+    }
+
+    if (confidence >= CONFIDENCE_AUTO_CONFIRM) return 'CONFIRMED';
+    if (confidence >= CONFIDENCE_NEEDS_REVIEW) return 'NEEDS_REVIEW';
+    return 'NEEDS_CORRECTION';
+  }
+
+  async listPendingReview(warehouseId?: string) {
+    return this.prisma.inventoryItem.findMany({
+      where: {
+        reviewStatus: { in: ['NEEDS_REVIEW', 'NEEDS_CORRECTION'] },
+        ...(warehouseId
+          ? { count: { session: { warehouseId } } }
+          : {}),
+      },
+      include: {
+        product: true,
+        brand: true,
+        count: { include: { location: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async confirmItem(itemId: string, productId?: string) {
+    const item = await this.prisma.inventoryItem.findUnique({
+      where: { id: itemId },
+    });
+
+    if (!item) {
+      throw new NotFoundException('آیتم یافت نشد.');
+    }
+
+    return this.prisma.inventoryItem.update({
+      where: { id: itemId },
+      data: {
+        reviewStatus: 'CONFIRMED',
+        ...(productId ? { productId } : {}),
+      },
+    });
+  }
+
   private async findBestMatchingProduct(
     productName?: string | null,
     brand?: string | null,

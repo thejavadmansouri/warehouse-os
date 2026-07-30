@@ -1,187 +1,427 @@
 "use client";
 
-import { useEffect, useState } from "react";
+// طبق بخش ۶.۱۰ — مدیریت کاربران (فقط ADMIN)
+import * as React from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Users as UsersIcon, UserPlus, KeyRound, ShieldCheck } from "lucide-react";
+import { useAuthStore } from "@/lib/auth-store";
+import {
+  getUsers,
+  createUser,
+  updateUserRole,
+  updateUserPassword,
+} from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { ApiException } from "@/lib/api-error-messages";
+import { PageHeader } from "@/components/page-header";
+import { LoadingState, EmptyState, ErrorState } from "@/components/states";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ROLE_LABELS } from "@/lib/format";
+import type { User, Role, CreateUserDto } from "@/lib/types";
 
-export default function UsersManagementPage() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+const ROLE_OPTIONS: Role[] = ["ADMIN", "MANAGER", "STAFF"];
 
-  // فرم ساخت کاربر جدید
-  const [username, setUsername] = useState("");
-  const [pass, setPass] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState("STAFF");
+const ROLE_BADGE_CLASS: Record<Role, string> = {
+  ADMIN: "bg-rose-100 text-rose-700",
+  MANAGER: "bg-amber-100 text-amber-700",
+  STAFF: "bg-emerald-100 text-emerald-700",
+};
 
-  const fetchUsers = async () => {
-    try {
-      const token = localStorage.getItem("wos_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-      const res = await fetch(`${apiUrl}/users`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setUsers(data);
-      } else {
-        setError(data.message || "خطا در دریافت لیست پرسنل");
-      }
-    } catch (err) {
-      setError("خطا در ارتباط با سرور");
-    } finally {
-      setLoading(false);
-    }
-  };
+export default function UsersPage() {
+  const user = useAuthStore((s) => s.user);
+  const { toast } = useToast();
+  const qc = useQueryClient();
 
-  useEffect(() => {
-    fetchUsers();
-  }, []);
+  // طبق بخش ۶.۱۰ — GET /users
+  const usersQ = useQuery({
+    queryKey: ["users"],
+    queryFn: () => getUsers(),
+  });
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  // ----- state دیالوگ‌ها -----
+  const [createOpen, setCreateOpen] = React.useState(false);
+  const [createForm, setCreateForm] = React.useState<CreateUserDto>({
+    username: "",
+    password: "",
+    fullName: "",
+    role: "STAFF",
+  });
 
-    try {
-      const token = localStorage.getItem("wos_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-      const res = await fetch(`${apiUrl}/users`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ username, pass, fullName, role }),
-      });
+  // دیالوگ تغییر نقش
+  const [roleTarget, setRoleTarget] = React.useState<User | null>(null);
+  const [roleValue, setRoleValue] = React.useState<Role>("STAFF");
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "خطا در ساخت کاربر");
+  // دیالوگ بازنشانی رمز
+  const [pwdTarget, setPwdTarget] = React.useState<User | null>(null);
+  const [pwdValue, setPwdValue] = React.useState("");
 
-      setSuccess("کاربر جدید با موفقیت ایجاد شد.");
-      setUsername("");
-      setPass("");
-      setFullName("");
-      fetchUsers();
-    } catch (err: any) {
-      setError(err.message);
-    }
-  };
+  // ----- mutations -----
+
+  // طبق بخش ۶.۱۰ — POST /users
+  const createMut = useMutation({
+    mutationFn: () => createUser(createForm),
+    onSuccess: () => {
+      toast({ title: "کاربر ساخته شد" });
+      qc.invalidateQueries({ queryKey: ["users"] });
+      setCreateOpen(false);
+      setCreateForm({ username: "", password: "", fullName: "", role: "STAFF" });
+    },
+    onError: (e: unknown) => {
+      const msg = e instanceof ApiException ? e.message : "خطا در ساخت کاربر";
+      toast({ variant: "destructive", title: "خطا", description: msg });
+    },
+  });
+
+  // طبق بخش ۶.۱۰ — PATCH /users/:id/role
+  const roleMut = useMutation({
+    mutationFn: () => updateUserRole(roleTarget!.id, { role: roleValue }),
+    onSuccess: () => {
+      toast({ title: "نقش به‌روزرسانی شد" });
+      qc.invalidateQueries({ queryKey: ["users"] });
+      setRoleTarget(null);
+    },
+    onError: (e: unknown) => {
+      const msg =
+        e instanceof ApiException ? e.message : "خطا در تغییر نقش";
+      toast({ variant: "destructive", title: "خطا", description: msg });
+    },
+  });
+
+  // طبق بخش ۶.۱۰ — PATCH /users/:id/password
+  const pwdMut = useMutation({
+    mutationFn: () => updateUserPassword(pwdTarget!.id, { password: pwdValue }),
+    onSuccess: () => {
+      toast({ title: "رمز عبور بازنشانی شد" });
+      setPwdTarget(null);
+      setPwdValue("");
+    },
+    onError: (e: unknown) => {
+      const msg =
+        e instanceof ApiException ? e.message : "خطا در بازنشانی رمز";
+      toast({ variant: "destructive", title: "خطا", description: msg });
+    },
+  });
+
+  // محافظت نقش — فقط ADMIN (پس از تمام hookها)
+  if (user && user.role !== "ADMIN") {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <Card className="max-w-md border-destructive/40">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <ShieldCheck className="h-5 w-5" />
+              دسترسی غیرمجاز
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              این صفحه فقط برای نقش «مدیر کل» (ADMIN) قابل دسترس است.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-8" dir="rtl">
-      <div>
-        <h1 className="text-2xl font-black text-white">مدیریت پرسنل و دسترسی‌ها</h1>
-        <p className="text-xs text-slate-400 mt-1">ساخت حساب کاربری جدید برای کارمندان و تعیین سطح دسترسی آن‌ها</p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="کاربران"
+        description="مدیریت کاربران سیستم و نقش‌ها"
+        icon={UsersIcon}
+        actions={
+          <Button onClick={() => setCreateOpen(true)}>
+            <UserPlus className="h-4 w-4" />
+            کاربر جدید
+          </Button>
+        }
+      />
 
-      {error && <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-xs p-4 rounded-xl font-bold">{error}</div>}
-      {success && <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs p-4 rounded-xl font-bold">{success}</div>}
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* فرم ثبت کاربر */}
-        <div className="bg-[#0B132B] border border-slate-800 rounded-2xl p-6 space-y-4">
-          <h2 className="text-sm font-black text-white border-b border-slate-800 pb-3">افزودن کاربر جدید</h2>
-          <form onSubmit={handleCreateUser} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">نام کامل</label>
-              <input
-                type="text"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                placeholder="مثال: علی احمدی"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">نام کاربری</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                required
-                placeholder="مثال: ali_ahmadi"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">رمز عبور</label>
-              <input
-                type="password"
-                value={pass}
-                onChange={(e) => setPass(e.target.value)}
-                required
-                placeholder="••••••••"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500 font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">سطح دسترسی (نقش)</label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-500"
-              >
-                <option value="STAFF">کاربر انبار (STAFF)</option>
-                <option value="MANAGER">مدیر انبار (MANAGER)</option>
-                <option value="ADMIN">مدیر کل (ADMIN)</option>
-              </select>
-            </div>
-
-            <button
-              type="submit"
-              className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-black py-3 rounded-xl text-xs transition-all shadow-lg shadow-amber-500/20"
-            >
-              ثبت و ایجاد کاربر
-            </button>
-          </form>
-        </div>
-
-        {/* جدول لیست کاربران موجود */}
-        <div className="lg:col-span-2 bg-[#0B132B] border border-slate-800 rounded-2xl p-6 space-y-4">
-          <h2 className="text-sm font-black text-white border-b border-slate-800 pb-3">لیست پرسنل فعال سیستم</h2>
-          {loading ? (
-            <div className="text-xs text-slate-400 py-6 text-center">در حال بارگذاری لیست...</div>
+      <Card className="shadow-sm">
+        <CardContent className="p-0">
+          {usersQ.isLoading ? (
+            <LoadingState />
+          ) : usersQ.isError ? (
+            <ErrorState
+              message="بارگذاری کاربران ناموفق بود"
+              onRetry={() => usersQ.refetch()}
+            />
+          ) : !usersQ.data?.length ? (
+            <EmptyState
+              title="کاربری ثبت نشده"
+              description="برای شروع، اولین کاربر را بسازید."
+              action={
+                <Button onClick={() => setCreateOpen(true)}>
+                  <UserPlus className="h-4 w-4" />
+                  کاربر جدید
+                </Button>
+              }
+            />
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-xs">
-                <thead>
-                  <tr className="border-b border-slate-800 text-slate-400 font-bold">
-                    <th className="pb-3 pr-2">نام کامل</th>
-                    <th className="pb-3">نام کاربری</th>
-                    <th className="pb-3">نقش سیستم</th>
-                    <th className="pb-3">تاریخ ایجاد</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/60 text-slate-300">
-                  {users.map((u) => (
-                    <tr key={u.id} className="hover:bg-slate-900/40">
-                      <td className="py-3.5 pr-2 font-bold text-white">{u.fullName}</td>
-                      <td className="py-3.5 font-mono text-slate-400">{u.username}</td>
-                      <td className="py-3.5">
-                        <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${
-                          u.role === "ADMIN" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" :
-                          u.role === "MANAGER" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" :
-                          "bg-slate-800 text-slate-300"
-                        }`}>
-                          {u.role}
-                        </span>
-                      </td>
-                      <td className="py-3.5 text-slate-500 font-mono text-[11px]">
-                        {new Date(u.createdAt).toLocaleDateString("fa-IR")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>نام کامل</TableHead>
+                  <TableHead>نام کاربری</TableHead>
+                  <TableHead>نقش</TableHead>
+                  <TableHead className="text-end">عملیات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {usersQ.data.map((u) => (
+                  <TableRow key={u.id}>
+                    <TableCell className="font-medium">{u.fullName}</TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {u.username}
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={ROLE_BADGE_CLASS[u.role]}>
+                        {ROLE_LABELS[u.role] ?? u.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-end">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setRoleTarget(u);
+                            setRoleValue(u.role);
+                          }}
+                        >
+                          <ShieldCheck className="h-3.5 w-3.5" />
+                          تغییر نقش
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPwdTarget(u);
+                            setPwdValue("");
+                          }}
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          بازنشانی رمز
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </div>
-      </div>
+        </CardContent>
+      </Card>
+
+      {/* دیالوگ کاربر جدید */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>کاربر جدید</DialogTitle>
+            <DialogDescription>
+              فرم زیر را برای ساخت کاربر جدید پر کنید.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="u-fullname">نام کامل *</Label>
+              <Input
+                id="u-fullname"
+                value={createForm.fullName}
+                onChange={(e) =>
+                  setCreateForm((f) => ({ ...f, fullName: e.target.value }))
+                }
+                placeholder="مثلاً علی رضایی"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="u-username">نام کاربری *</Label>
+              <Input
+                id="u-username"
+                value={createForm.username}
+                onChange={(e) =>
+                  setCreateForm((f) => ({ ...f, username: e.target.value }))
+                }
+                placeholder="مثلاً ali.r"
+                autoComplete="off"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="u-password">رمز عبور *</Label>
+              <Input
+                id="u-password"
+                type="password"
+                value={createForm.password}
+                onChange={(e) =>
+                  setCreateForm((f) => ({ ...f, password: e.target.value }))
+                }
+                placeholder="حداقل ۶ کاراکتر"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label>نقش *</Label>
+              <Select
+                value={createForm.role}
+                onValueChange={(v: Role) =>
+                  setCreateForm((f) => ({ ...f, role: v }))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="انتخاب نقش" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLE_OPTIONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateOpen(false)}
+              disabled={createMut.isPending}
+            >
+              انصراف
+            </Button>
+            <Button
+              onClick={() => createMut.mutate()}
+              disabled={
+                createMut.isPending ||
+                !createForm.username.trim() ||
+                !createForm.password.trim() ||
+                !createForm.fullName.trim()
+              }
+            >
+              {createMut.isPending ? "در حال ساخت..." : "ساخت کاربر"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* دیالوگ تغییر نقش */}
+      <Dialog
+        open={!!roleTarget}
+        onOpenChange={(o) => !o && setRoleTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>تغییر نقش کاربر</DialogTitle>
+            <DialogDescription>
+              نقش جدید را برای «{roleTarget?.fullName}» انتخاب کنید.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label>نقش</Label>
+            <Select
+              value={roleValue}
+              onValueChange={(v: Role) => setRoleValue(v)}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((r) => (
+                  <SelectItem key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRoleTarget(null)}
+              disabled={roleMut.isPending}
+            >
+              انصراف
+            </Button>
+            <Button
+              onClick={() => roleMut.mutate()}
+              disabled={roleMut.isPending || roleValue === roleTarget?.role}
+            >
+              {roleMut.isPending ? "در حال ذخیره..." : "ذخیره"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* دیالوگ بازنشانی رمز */}
+      <Dialog
+        open={!!pwdTarget}
+        onOpenChange={(o) => !o && setPwdTarget(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>بازنشانی رمز عبور</DialogTitle>
+            <DialogDescription>
+              رمز عبور جدید را برای «{pwdTarget?.fullName}» وارد کنید.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="new-pwd">رمز جدید *</Label>
+            <Input
+              id="new-pwd"
+              type="password"
+              value={pwdValue}
+              onChange={(e) => setPwdValue(e.target.value)}
+              placeholder="حداقل ۶ کاراکتر"
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setPwdTarget(null)}
+              disabled={pwdMut.isPending}
+            >
+              انصراف
+            </Button>
+            <Button
+              onClick={() => pwdMut.mutate()}
+              disabled={pwdMut.isPending || pwdValue.trim().length < 6}
+            >
+              {pwdMut.isPending ? "در حال ذخیره..." : "بازنشانی رمز"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

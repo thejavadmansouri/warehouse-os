@@ -138,6 +138,19 @@ export class InventoryController {
     );
   }
 
+  // پیش‌نمایش صوتی: parse + match بدون ثبت (propose، نه auto-commit)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Post('voice/preview')
+  voicePreview(
+    @Body() dto: VoiceInventoryDto
+  ) {
+    return this.voiceService.preview(
+      dto.locationBarcode,
+      dto.text,
+      dto.sessionId
+    );
+  }
+
 
 
   // تعدیل دستی موجودی (ADJUST)

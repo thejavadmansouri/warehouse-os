@@ -1,223 +1,298 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import * as React from "react";
+import { useQuery } from "@tanstack/react-query";
+import Link from "next/link";
+import {
+  Package,
+  Boxes,
+  Activity,
+  TrendingUp,
+  ArrowLeft,
+} from "lucide-react";
+import {
+  getCurrentStock,
+  getInventoryLogs,
+  getProducts,
+} from "@/lib/api";
+import { PageHeader } from "@/components/page-header";
+import { LoadingState, ErrorState, EmptyState } from "@/components/states";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import {
+  ACTION_LABELS,
+  ACTION_BADGE_CLASS,
+  formatDateTime,
+  formatNumber,
+} from "@/lib/format";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 
-export default function AdminDashboard() {
-  const [stats, setStats] = useState({ productsCount: 0, locationsCount: 0 });
-  const [loading, setLoading] = useState(true);
+function StatCard({
+  title,
+  value,
+  icon: Icon,
+  hint,
+  loading,
+  error,
+}: {
+  title: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+  hint?: string;
+  loading?: boolean;
+  error?: boolean;
+}) {
+  return (
+    <Card className="shadow-sm">
+      <CardContent className="flex items-center gap-4 p-5">
+        <div className="rounded-xl bg-primary/10 p-3 text-primary">
+          <Icon className="h-6 w-6" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm text-muted-foreground">{title}</p>
+          {loading ? (
+            <div className="mt-1 h-7 w-20 animate-pulse rounded bg-muted" />
+          ) : error ? (
+            <p className="mt-1 text-lg font-bold text-destructive">—</p>
+          ) : (
+            <p className="mt-0.5 text-2xl font-bold">{value}</p>
+          )}
+          {hint ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+          ) : null}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
-  // فرم ایجاد مکان
-  const [locName, setLocName] = useState("");
-  const [locCode, setLocCode] = useState("");
-  const [locMessage, setLocMessage] = useState("");
+export default function DashboardPage() {
+  // طبق بخش ۶.۲ — داشبورد از ترکیب چند endpoint ساخته می‌شود
+  const productsQ = useQuery({
+    queryKey: ["products", "all"],
+    queryFn: () => getProducts(),
+  });
 
-  // فرم ایجاد محصول
-  const [prodName, setProdName] = useState("");
-  const [prodSku, setProdSku] = useState("");
-  const [prodBrand, setProdBrand] = useState("");
-  const [prodMessage, setProdMessage] = useState("");
+  const stockQ = useQuery({
+    queryKey: ["inventory", "current-stock", 1, 200],
+    queryFn: () => getCurrentStock(1, 200),
+  });
 
-  const fetchStats = async () => {
-    try {
-      const token = localStorage.getItem("wos_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
+  const logsQ = useQuery({
+    queryKey: ["inventory", "logs", { limit: 10 }],
+    queryFn: () => getInventoryLogs({ limit: 10 }),
+  });
 
-      const [prodRes, locRes] = await Promise.all([
-        fetch(`${apiUrl}/products`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${apiUrl}/locations`, { headers: { Authorization: `Bearer ${token}` } }),
-      ]);
+  // نمودار روند فعالیت — طبق بخش ۶.۲: تجمیع سمت کلاینت روی لاگ‌ها
+  const logsForChartQ = useQuery({
+    queryKey: ["inventory", "logs", "chart", { limit: 100 }],
+    queryFn: () => getInventoryLogs({ limit: 100 }),
+  });
 
-      const prodData = await prodRes.json();
-      const locData = await locRes.json();
-
-      setStats({
-        productsCount: prodData.meta?.total || prodData.data?.length || 0,
-        locationsCount: Array.isArray(locData) ? locData.length : 0,
-      });
-    } catch (err) {
-      console.error("خطا در دریافت آمار داشبورد", err);
-    } finally {
-      setLoading(false);
+  const chartData = React.useMemo(() => {
+    const items = logsForChartQ.data?.items ?? [];
+    const byDay = new Map<string, { date: string; count: number }>();
+    for (const it of items) {
+      const d = new Date(it.createdAt);
+      if (isNaN(d.getTime())) continue;
+      const key = new Intl.DateTimeFormat("fa-IR", {
+        month: "short",
+        day: "numeric",
+      }).format(d);
+      const cur = byDay.get(key) ?? { date: key, count: 0 };
+      cur.count += 1;
+      byDay.set(key, cur);
     }
-  };
+    return Array.from(byDay.values()).slice(-12);
+  }, [logsForChartQ.data]);
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
-
-  const handleCreateLocation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLocMessage("");
-    try {
-      const token = localStorage.getItem("wos_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-      const res = await fetch(`${apiUrl}/locations`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: locName, barcode: locCode }),
-      });
-      if (!res.ok) throw new Error("خطا در ثبت مکان");
-      setLocMessage("✅ مکان با موفقیت ثبت شد.");
-      setLocName("");
-      setLocCode("");
-      fetchStats();
-    } catch (err: any) {
-      setLocMessage("❌ خطا در ثبت مکان");
-    }
-  };
-
-  const handleCreateProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setProdMessage("");
-    try {
-      const token = localStorage.getItem("wos_token");
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
-      const res = await fetch(`${apiUrl}/products`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ name: prodName, sku: prodSku, brand: prodBrand }),
-      });
-      if (!res.ok) throw new Error("خطا در ثبت محصول");
-      setProdMessage("✅ محصول با موفقیت در PostgreSQL ذخیره شد.");
-      setProdName("");
-      setProdSku("");
-      setProdBrand("");
-      fetchStats();
-    } catch (err: any) {
-      setProdMessage("❌ خطا در ثبت محصول");
-    }
-  };
+  const totalProducts = productsQ.data?.length ?? 0;
+  const itemsWithStock =
+    stockQ.data?.data?.filter((r) => r.quantity > 0).length ?? 0;
+  const totalStockQty =
+    stockQ.data?.data?.reduce((s, r) => s + (r.quantity ?? 0), 0) ?? 0;
 
   return (
-    <div className="space-y-8" dir="rtl">
-      {/* هدر بخش داشبورد */}
-      <div className="bg-slate-950 border border-slate-800 rounded-3xl p-8 shadow-2xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-black text-white">داشبورد مدیریتی انبار (متصل به دیتابیس)</h1>
-          <p className="text-xs text-slate-400 mt-1">آمار لحظه‌ای اقلام، موجودی‌ها و موقعیت‌های ثبت‌شده در بک‌اند</p>
-        </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="داشبورد"
+        description="نمای کلی وضعیت انبار و فعالیت‌های اخیر"
+        icon={Boxes}
+      />
 
-        {/* کارت‌های آماری */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold">منطقه کاری فعال</span>
-            <div className="text-lg font-black text-amber-400">مرکزی / تهران</div>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold">وضعیت اتصال سرور</span>
-            <div className="text-lg font-black text-emerald-400 flex items-center gap-2">
-              <span>✅</span> متصل
-            </div>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold">کل محصولات تعریف‌شده</span>
-            <div className="text-2xl font-black text-white font-mono">
-              {loading ? "..." : stats.productsCount} <span className="text-xs font-normal text-slate-400">محصول</span>
-            </div>
-          </div>
-          <div className="bg-slate-900 border border-slate-800 p-5 rounded-2xl space-y-1">
-            <span className="text-[11px] text-slate-400 font-bold">تعداد مکان‌ها / انبارها</span>
-            <div className="text-2xl font-black text-amber-400 font-mono">
-              {loading ? "..." : stats.locationsCount} <span className="text-xs font-normal text-slate-400">مکان</span>
-            </div>
-          </div>
-        </div>
+      {/* کارت‌های آماری */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          title="کل محصولات"
+          value={formatNumber(totalProducts)}
+          icon={Package}
+          hint="تعداد کل قطعات ثبت‌شده"
+          loading={productsQ.isLoading}
+          error={productsQ.isError}
+        />
+        <StatCard
+          title="اقلام دارای موجودی"
+          value={formatNumber(itemsWithStock)}
+          icon={Boxes}
+          hint="از مجموع ثبت‌شده"
+          loading={stockQ.isLoading}
+          error={stockQ.isError}
+        />
+        <StatCard
+          title="مجموع موجودی انبار"
+          value={formatNumber(totalStockQty)}
+          icon={TrendingUp}
+          hint="مجموع تعداد همه اقلام"
+          loading={stockQ.isLoading}
+          error={stockQ.isError}
+        />
+        <StatCard
+          title="فعالیت اخیر"
+          value={formatNumber(logsQ.data?.total ?? 0)}
+          icon={Activity}
+          hint="تعداد کل تراکنش‌های موجودی"
+          loading={logsQ.isLoading}
+          error={logsQ.isError}
+        />
       </div>
 
-      {/* بخش فرم‌های سریع عملیاتی */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        
-        {/* فرم ایجاد مکان */}
-        <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-          <div className="border-b border-slate-800 pb-3">
-            <h2 className="text-sm font-black text-white">📍 ایجاد مکان / قفسه جدید</h2>
-          </div>
-          {locMessage && <div className="text-xs font-bold p-3 rounded-xl bg-slate-900 text-amber-300">{locMessage}</div>}
-          <form onSubmit={handleCreateLocation} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">نام مکان (مثلاً قفسه A-1)</label>
-              <input
-                type="text"
-                value={locName}
-                onChange={(e) => setLocName(e.target.value)}
-                required
-                placeholder="مثلاً قفسه A-1"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">کد یکتا (مثلاً LOC-A1)</label>
-              <input
-                type="text"
-                value={locCode}
-                onChange={(e) => setLocCode(e.target.value)}
-                required
-                placeholder="مثلاً LOC-A1"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-400 font-mono"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black py-3 rounded-xl text-xs transition-all shadow-lg shadow-amber-400/20"
-            >
-              ثبت مکان در ساختار درختی
-            </button>
-          </form>
-        </div>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        {/* نمودار روند فعالیت */}
+        <Card className="shadow-sm lg:col-span-2">
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">روند فعالیت انبار</CardTitle>
+            <Badge variant="secondary" className="gap-1">
+              <TrendingUp className="h-3 w-3" />
+              ۱۰۰ تراکنش اخیر
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            {logsForChartQ.isLoading ? (
+              <LoadingState />
+            ) : logsForChartQ.isError ? (
+              <ErrorState message="بارگذاری نمودار ناموفق بود" />
+            ) : chartData.length === 0 ? (
+              <EmptyState title="داده‌ای برای نمایش وجود ندارد" />
+            ) : (
+              <div className="h-64 w-full" dir="ltr">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData}>
+                    <defs>
+                      <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop
+                          offset="5%"
+                          stopColor="oklch(0.68 0.19 44)"
+                          stopOpacity={0.4}
+                        />
+                        <stop
+                          offset="95%"
+                          stopColor="oklch(0.68 0.19 44)"
+                          stopOpacity={0}
+                        />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11 }}
+                      className="text-muted-foreground"
+                    />
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      allowDecimals={false}
+                      className="text-muted-foreground"
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        borderRadius: 8,
+                        border: "1px solid oklch(0.92 0.008 250)",
+                        fontSize: 12,
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="count"
+                      stroke="oklch(0.68 0.19 44)"
+                      strokeWidth={2}
+                      fill="url(#actGrad)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* فرم ثبت سریع محصول */}
-        <div className="bg-slate-950 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-xl">
-          <div className="border-b border-slate-800 pb-3">
-            <h2 className="text-sm font-black text-white">➕ ثبت سریع محصول جدید در دیتابیس</h2>
-          </div>
-          {prodMessage && <div className="text-xs font-bold p-3 rounded-xl bg-slate-900 text-amber-300">{prodMessage}</div>}
-          <form onSubmit={handleCreateProduct} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">نام قطعه (مثلاً لنت ترمز جلو)</label>
-              <input
-                type="text"
-                value={prodName}
-                onChange={(e) => setProdName(e.target.value)}
-                required
-                placeholder="مثلاً لنت ترمز جلو"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-400"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">کد SKU (مثلاً AP-10024)</label>
-              <input
-                type="text"
-                value={prodSku}
-                onChange={(e) => setProdSku(e.target.value)}
-                placeholder="مثلاً AP-10024"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-400 font-mono"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1.5">برند (مثلاً TRW)</label>
-              <input
-                type="text"
-                value={prodBrand}
-                onChange={(e) => setProdBrand(e.target.value)}
-                placeholder="مثلاً TRW"
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-xs text-white outline-none focus:border-amber-400"
-              />
-            </div>
-            <button
-              type="submit"
-              className="w-full bg-amber-400 hover:bg-amber-500 text-slate-950 font-black py-3 rounded-xl text-xs transition-all shadow-lg shadow-amber-400/20"
+        {/* آخرین فعالیت‌ها */}
+        <Card className="shadow-sm">
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">آخرین فعالیت‌ها</CardTitle>
+            <Link
+              href="/admin/inventory/logs"
+              className="flex items-center gap-1 text-xs text-accent hover:underline"
             >
-              ذخیره محصول در PostgreSQL
-            </button>
-          </form>
-        </div>
-
+              مشاهده همه
+              <ArrowLeft className="h-3 w-3" />
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {logsQ.isLoading ? (
+              <LoadingState />
+            ) : logsQ.isError ? (
+              <ErrorState message="بارگذاری فعالیت‌ها ناموفق بود" />
+            ) : !logsQ.data?.items?.length ? (
+              <EmptyState title="فعالیتی ثبت نشده" />
+            ) : (
+              <ul className="flex max-h-80 flex-col gap-3 overflow-y-auto scroll-thin pe-1">
+                {logsQ.data.items.map((log) => (
+                  <li
+                    key={log.id}
+                    className="flex items-center gap-3 rounded-lg border p-2.5"
+                  >
+                    <Badge
+                      variant="secondary"
+                      className={`shrink-0 ${ACTION_BADGE_CLASS[log.action] ?? ""}`}
+                    >
+                      {ACTION_LABELS[log.action] ?? log.action}
+                    </Badge>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {log.product?.name ?? "محصول حذف‌شده"}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {log.location?.name ?? "—"}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-end">
+                      <p className="text-sm font-semibold">
+                        {formatNumber(log.quantity)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        {formatDateTime(log.createdAt)}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

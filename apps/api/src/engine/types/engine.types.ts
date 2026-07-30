@@ -200,6 +200,9 @@ export interface ParseResult {
 
     vehicleFamily: string | null;
 
+    // فقط اگر کارگر مدل را صریح گفته باشد؛ در غیر این صورت null (هرگز حدس زده نمی‌شود)
+    vehicleModel: string | null;
+
     vehicleVariant: string | null;
 
     engine: string | null;

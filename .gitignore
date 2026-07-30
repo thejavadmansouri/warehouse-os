@@ -11,3 +11,6 @@ build/
 coverage/
 .turbo/
 *.tsbuildinfo
+
+# Runtime-generated storage (uploaded images, generated label PNGs)
+apps/api/storage/

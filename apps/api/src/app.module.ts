@@ -11,6 +11,7 @@ import { UsersModule } from './users/users.module';
 import { RolesGuard } from './auth/roles.guard';
 import { BarcodeModule } from './barcode/barcode.module';
 import { ProductsModule } from './products/products.module';
+import { LocationBuilderModule } from './location-builder/location-builder.module';
 import { LocationsModule } from './locations/locations.module';
 import { LocationTypesModule } from './location-types/location-types.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -27,6 +28,7 @@ import { ImportsModule } from './imports/imports.module';
 import { CategoriesModule } from './categories/categories.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { LabelsModule } from './labels/labels.module';
+import { PrintJobsModule } from './print-jobs/print-jobs.module';
 
 @Module({
   imports: [
@@ -41,6 +43,7 @@ import { LabelsModule } from './labels/labels.module';
     ProductsModule,
     LocationsModule,
     LocationTypesModule,
+LocationBuilderModule,
     InventoryModule,
     VehicleModelsModule,
     BrandsModule,
@@ -55,6 +58,7 @@ import { LabelsModule } from './labels/labels.module';
     CategoriesModule,
     SuppliersModule,
     LabelsModule,
+    PrintJobsModule,
   ],
   controllers: [
     AppController,

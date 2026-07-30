@@ -1,0 +1,27 @@
+{
+  "name": "انبار کارگر — لوازم یدکی خودرو",
+  "short_name": "انبار کارگر",
+  "description": "صفحه‌ی سریع ثبت ورود و انبارگردانی برای کارگر انبار",
+  "start_url": "/worker",
+  "scope": "/worker",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1729",
+  "theme_color": "#0f1729",
+  "lang": "fa",
+  "dir": "rtl",
+  "icons": [
+    {
+      "src": "/icons/worker-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/worker-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

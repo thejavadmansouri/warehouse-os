@@ -71,6 +71,9 @@ interface MatchInput {
   brandId?: string | null;
   brandName?: string | null; // parsed.brand
   keywordTokens?: string[];
+  // true فقط وقتی کارگر مدل را صریح گفته («پراید 131»). اگر family-only باشد،
+  // هرگز auto-confirm نمی‌کنیم — کارگر باید از بین محصولات سازگار انتخاب کند.
+  modelIsExplicit?: boolean;
 }
 
 interface ScoredCandidate {
@@ -178,6 +181,8 @@ export class ProductMatcherService {
     const vehicleRequirementSatisfied = !hasVehicleInput ? true : best.vehicleMatched;
 
     const canAutoConfirm =
+      // مدل باید صریح باشد؛ در حالت family-only هرگز یک محصول را خودکار انتخاب نکن
+      !!input.modelIsExplicit &&
       best.partMatched &&
       vehicleRequirementSatisfied &&
       best.confidence >= AUTO_CONFIRM_MIN_CONFIDENCE &&
