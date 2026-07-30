@@ -192,15 +192,26 @@ model ProductPrice {
 }
 
 model Asset {
-  id             String        @id @default(uuid())
-  path           String
-  fileName       String?
-  type           AssetType
-  productId      String?
-  inventoryLogId String?
-  createdAt      DateTime      @default(now())
-  inventoryLog   InventoryLog? @relation(fields: [inventoryLogId], references: [id])
-  product        Product?      @relation(fields: [productId], references: [id])
+  id                 String            @id @default(uuid())
+  path               String
+  fileName           String?
+  type               AssetType
+  productId          String?
+  inventoryLogId     String?
+  pendingOperationId String? // worker photo captured offline, before an InventoryLog exists
+  mimeType           String? // validated server-side (image/jpeg | image/webp)
+  bytes              Int? // stored file size after client compression
+  width              Int?
+  height             Int?
+  thumbnailPath      String? // small derivative for list views
+  sha256             String? // integrity + idempotent re-upload dedupe
+  createdAt          DateTime          @default(now())
+  inventoryLog       InventoryLog?     @relation(fields: [inventoryLogId], references: [id])
+  product            Product?          @relation(fields: [productId], references: [id])
+  // Keep the photo even if the pending op is later deleted (audit evidence).
+  pendingOperation   PendingOperation? @relation(fields: [pendingOperationId], references: [id], onDelete: SetNull)
+
+  @@index([pendingOperationId])
 }
 
 model Inventory {
@@ -515,6 +526,7 @@ model PendingOperation {
   product    Product?  @relation(fields: [productId], references: [id])
   worker     User?     @relation("PendingWorker", fields: [workerId], references: [id])
   reviewedBy User?     @relation("PendingReviewer", fields: [reviewedById], references: [id])
+  assets     Asset[] // optional worker photos (0..n); v1 captures at most one
 
   @@index([warehouseId, status])
   @@index([status])

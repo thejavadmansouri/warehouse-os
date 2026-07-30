@@ -117,7 +117,7 @@ export class InventoryOperationService {
 
 
 
-        await tx.inventoryLog.create({
+        const log = await tx.inventoryLog.create({
 
           data:{
             ...logBase,
@@ -129,7 +129,10 @@ export class InventoryOperationService {
         });
 
 
-        return updated;
+        // Return the stock row plus the created ledger id. Additive: existing IN
+        // callers read the inventory fields and ignore inventoryLogId; approve()
+        // uses it to back-link the pending op and its photo(s) to the ledger row.
+        return { ...updated, inventoryLogId: log.id };
 
 
       });
