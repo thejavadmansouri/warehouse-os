@@ -11,6 +11,8 @@ import com.warehouseos.operator.data.remote.dto.LoginResponse
 import com.warehouseos.operator.data.remote.dto.ProductDto
 import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
+import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
+import com.warehouseos.operator.data.remote.dto.SyncOperationsResponse
 import com.warehouseos.operator.data.remote.dto.VoiceConfirmRequest
 import com.warehouseos.operator.data.remote.dto.VoiceConfirmResponse
 import com.warehouseos.operator.data.remote.dto.VoiceInputRequest
@@ -72,6 +74,12 @@ interface ApiService {
         @Path("countId") countId: String,
         @Body body: CountVoiceRequest,
     ): CountVoiceResponse
+
+    // ---- Offline sync ----
+    // Batch-upload the local outbox; server dedupes by clientRequestId and lands
+    // each op as PENDING for manager approval.
+    @POST("sync/operations")
+    suspend fun syncOperations(@Body body: SyncOperationsRequest): SyncOperationsResponse
 
     // ---- Review ----
     @GET("mobile/review/pending")

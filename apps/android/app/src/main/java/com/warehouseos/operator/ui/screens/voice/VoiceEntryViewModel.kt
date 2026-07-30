@@ -5,8 +5,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.dto.VoiceResponseDto
+import com.warehouseos.operator.data.repository.OutboxRepository
 import com.warehouseos.operator.data.repository.SessionRepository
 import com.warehouseos.operator.data.repository.VoiceRepository
+import com.warehouseos.operator.data.sync.SyncScheduler
 import com.warehouseos.operator.data.speech.SpeechToTextProvider
 import com.warehouseos.operator.data.speech.SttError
 import com.warehouseos.operator.data.speech.SttEvent
@@ -44,15 +46,17 @@ data class VoiceUiState(
 )
 
 /**
- * Voice stock-in flow (propose → confirm). STT produces a transcript, the backend
- * `preview` proposes a product WITHOUT committing, the worker confirms, and only
- * then `confirm` writes inventory. Honours the "voice never auto-commits" rule.
+ * Voice stock-in flow. STT → server `preview` proposes a product (no commit) →
+ * worker confirms. Confirm now writes to the local OUTBOX (offline-first) and
+ * triggers a background sync; stock is applied only after a manager approves.
  */
 @HiltViewModel
 class VoiceEntryViewModel @Inject constructor(
     private val speech: SpeechToTextProvider,
     private val voiceRepository: VoiceRepository,
     private val sessionRepository: SessionRepository,
+    private val outboxRepository: OutboxRepository,
+    private val syncScheduler: SyncScheduler,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -189,29 +193,29 @@ class VoiceEntryViewModel @Inject constructor(
         }
     }
 
-    // ---------- Confirm (the single commit path) ----------
+    // ---------- Confirm = enqueue locally (offline-first) ----------
+    // Writes to the outbox and triggers a background sync. Stock is applied only
+    // after a manager approves — so a worker is never blocked by connectivity.
     fun confirm() {
         val productId = pendingProductId ?: return
-        val sessionId = sessionRepository.sessionId.value
-        if (sessionId.isNullOrBlank()) {
-            failConfirm("شیفت فعال نیست")
-            return
-        }
         val qty = _uiState.value.quantity
+        val name = _uiState.value.proposalName.ifBlank { "کالا" }
         _uiState.update { it.copy(phase = VoicePhase.SUBMITTING, error = null) }
         viewModelScope.launch {
-            when (val result = voiceRepository.confirm(productId, barcode, qty, sessionId)) {
-                is ApiResult.Success -> {
-                    val total = result.data.inventory?.quantity
-                    val name = _uiState.value.proposalName.ifBlank { "کالا" }
-                    val totalText = if (total != null) " • موجودی قفسه: $total" else ""
-                    _uiState.update {
-                        it.copy(phase = VoicePhase.SUCCESS, successText = "$name × $qty ثبت شد$totalText")
-                    }
-                }
-                ApiResult.Unauthorized -> failConfirm("نشست شما منقضی شده")
-                is ApiResult.NetworkError -> failConfirm("اتصال به سرور برقرار نشد")
-                is ApiResult.ServerError -> failConfirm(result.message)
+            outboxRepository.enqueue(
+                type = "IN",
+                locationBarcode = barcode,
+                voiceText = _uiState.value.transcript.ifBlank { null },
+                productId = productId,
+                quantity = qty,
+                unit = _uiState.value.unit,
+            )
+            syncScheduler.requestSync()
+            _uiState.update {
+                it.copy(
+                    phase = VoicePhase.SUCCESS,
+                    successText = "$name × $qty در صف ثبت شد — پس از تأیید مدیر اعمال می‌شود",
+                )
             }
         }
     }
