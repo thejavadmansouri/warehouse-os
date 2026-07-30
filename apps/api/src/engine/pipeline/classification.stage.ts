@@ -16,6 +16,9 @@ export interface ClassifiedResult {
 
   vehicleFamily:string|null;
 
+  // فقط وقتی کارگر مدل را صریح گفته (مثل «پراید 131»)؛ وگرنه null
+  vehicleModel:string|null;
+
   vehicleVariant:string|null;
 
   engine:string|null;
@@ -109,6 +112,35 @@ export class ClassificationStage {
 
 
 
+    /**
+     * تفکیک خانواده از مدل:
+     * متن ماچ‌شده‌ی خودرو («پراید» یا «پراید 131» یا «پژو 206») را می‌گیریم.
+     * - vehicleFamily = اولین توکن (همیشه؛ هرگز حدس زده نمی‌شود)
+     * - vehicleModel  = فقط اگر کارگر چیزی صریح‌تر از خانواده گفته باشد
+     * این تضمین می‌کند سیستم هرگز مدلی را که کارگر نگفته اختراع نکند.
+     */
+    const vehicleText =
+      matched.vehicleText ?? null;
+
+    const derivedFamily =
+      vehicleText
+        ? vehicleText.split(' ')[0]
+        : null;
+
+    const vehicleFamily =
+      derivedFamily ??
+      vehicle?.family ??
+      null;
+
+    const vehicleModel =
+      vehicleText &&
+      derivedFamily &&
+      vehicleText !== derivedFamily
+        ? vehicleText
+        : null;
+
+
+
 
     return {
 
@@ -134,11 +166,9 @@ export class ClassificationStage {
 
 
 
-      // متن ماچ‌شده («پراید» یا «پژو 206») اولویت دارد تا matcher درست fan-out کند
-      vehicleFamily:
-        matched.vehicleText ??
-        vehicle?.family ??
-        null,
+      vehicleFamily,
+
+      vehicleModel,
 
 
 

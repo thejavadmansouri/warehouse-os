@@ -94,19 +94,19 @@ export class ImportsService {
       rowsToCreate.push({
         importJobId: importJob.id,
         rowNumber: index + 1,
-        productName,
+        productName: productName || 'بدون نام',
         brandName: brandName || null,
         vehicleModelName: vehicleName || null,
-        partNumber,
-        unit,
-        purchasePrice,
-        salePrice,
-        wholesalePrice,
+        partNumber: partNumber || null,
+        unit: unit || 'عدد',
+        purchasePrice: purchasePrice !== null ? purchasePrice : 0,
+        salePrice: salePrice !== null ? salePrice : 0,
+        wholesalePrice: wholesalePrice !== null ? wholesalePrice : 0,
         quantity,
         matchedBrandId: matchedBrand?.id || null,
         matchedCatalogId: matchedCatalog?.id || null,
         matchedVehicleId: matchedVehicle?.id || null,
-        status,
+        status: status as ImportRowStatus,
       });
 
       previewResult.push({
@@ -166,7 +166,7 @@ export class ImportsService {
             const newBrand = await tx.brand.create({
               data: {
                 name: row.brandName,
-                aliases: [],
+                aliases: [row.brandName],
               },
             });
             brandId = newBrand.id;
@@ -185,7 +185,7 @@ export class ImportsService {
               data: {
                 name: row.productName ?? 'بدون نام',
                 unit: row.unit || 'عدد',
-                aliases: [],
+                aliases: [row.productName ?? 'بدون نام'],
               },
             });
             catalogId = newCatalog.id;
@@ -205,7 +205,7 @@ export class ImportsService {
                 name: row.vehicleModelName,
                 startYear: 1300,
                 endYear: 1405,
-                aliases: [],
+                aliases: [row.vehicleModelName],
               },
             });
             vehicleId = newVehicle.id;

@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BarcodeService } from '../barcode/barcode.service';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class LocationsService {
@@ -35,6 +36,37 @@ export class LocationsService {
 
   async create(dto:any) {
 
+    const type = await this.prisma.locationType.findUnique({
+      where:{ id: dto.typeId },
+    });
+
+    if(!type){
+      throw new NotFoundException('نوع موقعیت پیدا نشد');
+    }
+
+
+    let parent:{ id:string; path:string; warehouseId:string|null } | null = null;
+
+    if(dto.parentId){
+
+      parent = await this.prisma.location.findUnique({
+        where:{ id: dto.parentId },
+        select:{ id:true, path:true, warehouseId:true },
+      });
+
+      if(!parent){
+        throw new NotFoundException('موقعیت والد پیدا نشد');
+      }
+
+    }
+
+
+    if(dto.warehouseId && dto.warehouseId !== type.warehouseId){
+      throw new BadRequestException('نوع موقعیت انتخاب‌شده متعلق به این انبار نیست');
+    }
+
+    const warehouseId = type.warehouseId;
+
 
     const barcode =
       dto.barcode ||
@@ -47,10 +79,17 @@ export class LocationsService {
       dto.code || barcode;
 
 
+    const id = randomUUID();
+
+    // path به همون شکل materialized-path که LocationBuilder می‌سازه: <parentPath><id>/
+    const path = `${parent?.path ?? ''}${id}/`;
+
 
     return this.prisma.location.create({
 
       data:{
+
+        id,
 
         name:dto.name,
 
@@ -60,13 +99,14 @@ export class LocationsService {
 
         barcode,
 
-
-        warehouseId:
-          dto.warehouseId || null,
-
+        warehouseId,
 
         parentId:
           dto.parentId || null,
+
+        path,
+
+        depth: type.depth,
 
       },
 

@@ -21,24 +21,33 @@ model User {
   sessions        InventorySession[]
   voiceRecords    VoiceRecord[]
   voiceSessions   VoiceSession[]
+  printJobs       PrintJob[]
 }
 
 model Warehouse {
-  id        String             @id @default(uuid())
-  name      String
-  code      String             @unique
-  isActive  Boolean            @default(true)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  sessions  InventorySession[]
-  locations Location[]
+  id            String             @id @default(uuid())
+  name          String
+  code          String             @unique
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  sessions      InventorySession[]
+  locations     Location[]
+  locationTypes LocationType[]
 }
 
 model LocationType {
-  id        String        @id @default(uuid())
-  name      String
-  level     LocationLevel
-  locations Location[]
+  id          String     @id @default(uuid())
+  warehouseId String
+  name        String
+  depth       Int
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  warehouse   Warehouse  @relation(fields: [warehouseId], references: [id])
+  locations   Location[]
+
+  @@unique([warehouseId, depth])
+  @@unique([warehouseId, name])
 }
 
 model Location {
@@ -46,6 +55,8 @@ model Location {
   name             String
   code             String                     @unique
   barcode          String                     @unique
+  path             String
+  depth            Int
   warehouseId      String?
   typeId           String
   parentId         String?
@@ -58,10 +69,16 @@ model Location {
   inventoryCounts  InventoryCount[]
   inventoryLogs    InventoryLog[]
   sessionLocations InventorySessionLocation[]
+  printJobItems    PrintJobItem[]
   parent           Location?                  @relation("LocationTree", fields: [parentId], references: [id])
   children         Location[]                 @relation("LocationTree")
   type             LocationType               @relation(fields: [typeId], references: [id])
   warehouse        Warehouse?                 @relation(fields: [warehouseId], references: [id])
+
+  @@index([parentId])
+  @@index([warehouseId])
+  @@index([typeId])
+  @@index([path])
 }
 
 model Category {
@@ -257,30 +274,31 @@ model InventoryCount {
 }
 
 model InventoryItem {
-  id                 String         @id @default(uuid())
+  id                 String           @id @default(uuid())
   countId            String
   productId          String?
   name               String
   categoryId         String?
   brandId            String?
   vehicleModelId     String?
-  goodQuantity       Int            @default(0)
-  badQuantity        Int            @default(0)
+  goodQuantity       Int              @default(0)
+  badQuantity        Int              @default(0)
   image              String?
   note               String?
   voiceText          String?
   voiceConfidence    Float?
+  reviewStatus       ItemReviewStatus @default(CONFIRMED)
   recognizedName     String?
   recognizedBrand    String?
   recognizedCategory String?
   voiceSessionId     String?
-  createdAt          DateTime       @default(now())
-  brand              Brand?         @relation(fields: [brandId], references: [id])
-  category           Category?      @relation(fields: [categoryId], references: [id])
-  count              InventoryCount @relation(fields: [countId], references: [id])
-  product            Product?       @relation(fields: [productId], references: [id])
-  vehicleModel       VehicleModel?  @relation(fields: [vehicleModelId], references: [id])
-  voiceSession       VoiceSession?  @relation(fields: [voiceSessionId], references: [id])
+  createdAt          DateTime         @default(now())
+  brand              Brand?           @relation(fields: [brandId], references: [id])
+  category           Category?        @relation(fields: [categoryId], references: [id])
+  count              InventoryCount   @relation(fields: [countId], references: [id])
+  product            Product?         @relation(fields: [productId], references: [id])
+  vehicleModel       VehicleModel?    @relation(fields: [vehicleModelId], references: [id])
+  voiceSession       VoiceSession?    @relation(fields: [voiceSessionId], references: [id])
   barcodes           ItemBarcode[]
 }
 
@@ -346,14 +364,6 @@ enum Role {
   STAFF
 }
 
-enum LocationLevel {
-  WAREHOUSE
-  ZONE
-  RACK
-  SHELF
-  BIN
-}
-
 enum BarcodeType {
   INTERNAL
   FACTORY
@@ -385,6 +395,11 @@ enum BarcodeStatus {
   UNKNOWN
 }
 
+enum ItemReviewStatus {
+  CONFIRMED
+  NEEDS_REVIEW
+  NEEDS_CORRECTION
+}
 
 enum ImportRowStatus {
   READY
@@ -395,44 +410,73 @@ enum ImportRowStatus {
   FAILED
 }
 
-
 model ImportJob {
-  id          String       @id @default(uuid())
+  id          String      @id @default(uuid())
   fileName    String?
-  status      String       @default("PENDING")
-  totalRows   Int          @default(0)
-  successRows Int          @default(0)
-  failedRows  Int          @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  status      String      @default("PENDING")
+  totalRows   Int         @default(0)
+  successRows Int         @default(0)
+  failedRows  Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   rows        ImportRow[]
 }
 
-
 model ImportRow {
-  id                String           @id @default(uuid())
-  jobId             String
-  rowNumber         Int
+  id        String @id @default(uuid())
+  jobId     String
+  rowNumber Int
 
-  productName       String?
-  brandName         String?
-  vehicleModelName  String?
-  partNumber        String?
-  unit              String?
+  productName      String?
+  brandName        String?
+  vehicleModelName String?
+  partNumber       String?
+  unit             String?
 
-  purchasePrice     Float?
-  salePrice         Float?
-  wholesalePrice    Float?
+  purchasePrice  Float?
+  salePrice      Float?
+  wholesalePrice Float?
 
-  matchedBrandId    String?
-  matchedCatalogId  String?
-  matchedVehicleId  String?
+  matchedBrandId   String?
+  matchedCatalogId String?
+  matchedVehicleId String?
 
-  rawData           Json?
-  status            ImportRowStatus @default(READY)
-  error             String?
+  rawData Json?
+  status  ImportRowStatus @default(READY)
+  error   String?
 
-  createdAt         DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  job               ImportJob @relation(fields:[jobId], references:[id], onDelete:Cascade)
+  job ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model PrintJob {
+  id     String @id @default(uuid())
+  type   String
+  status String @default("PENDING")
+
+  totalItems   Int @default(0)
+  printedItems Int @default(0)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id])
+
+  items PrintJobItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PrintJobItem {
+  id String @id @default(uuid())
+
+  jobId String
+  job   PrintJob @relation(fields: [jobId], references: [id])
+
+  locationId String?
+  location   Location? @relation(fields: [locationId], references: [id])
+
+  status String @default("PENDING")
+
+  createdAt DateTime @default(now())
 }

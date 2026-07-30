@@ -15,6 +15,8 @@ export interface ContextResult {
 
   vehicleFamily:string|null;
 
+  vehicleModel:string|null;
+
   vehicleVariant:string|null;
 
   engine:string|null;
@@ -148,6 +150,13 @@ export class ContextResolutionStage {
       vehicleFamily:
         data.vehicleFamily ??
         data.product?.vehicleModel?.name ??
+        null,
+
+
+
+      // فقط از متن صریح کارگر؛ از روی محصول حدس زده نمی‌شود
+      vehicleModel:
+        data.vehicleModel ??
         null,
 
 

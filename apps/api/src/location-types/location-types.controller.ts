@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query } from '@nestjs/common';
 import { LocationTypesService } from './location-types.service';
 import { CreateLocationTypeDto } from './dto/create-location-type.dto';
 
@@ -7,8 +7,8 @@ export class LocationTypesController {
   constructor(private readonly service: LocationTypesService) {}
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query('warehouseId') warehouseId?: string) {
+    return this.service.findAll(warehouseId);
   }
 
   @Post()

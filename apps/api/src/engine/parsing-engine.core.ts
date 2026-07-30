@@ -219,6 +219,10 @@ export class ParsingEngineCore {
           context.vehicleFamily ?? null,
 
 
+        vehicleModel:
+          context.vehicleModel ?? null,
+
+
         vehicleVariant:
           context.vehicleVariant ?? null,
 
