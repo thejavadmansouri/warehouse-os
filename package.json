@@ -5,6 +5,10 @@
     "apps/*",
     "packages/*"
   ],
+  "packageManager": "npm@11.16.0",
+  "prisma": {
+    "schema": "apps/api/prisma/schema.prisma"
+  },
   "scripts": {
     "dev:api": "npm run start:dev --workspace=@warehouse-os/api",
     "dev:web": "npm run dev --workspace=@warehouse-os/web",
