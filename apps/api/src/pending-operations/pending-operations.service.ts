@@ -1,0 +1,195 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { ParsingEngineService } from '../engine/parsing-engine.service';
+import { ProductMatcherService } from '../inventory/product-matcher.service';
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { SyncOperationItemDto } from './dto/sync-operations.dto';
+
+@Injectable()
+export class PendingOperationsService {
+  constructor(
+    private prisma: PrismaService,
+    private parsingEngine: ParsingEngineService,
+    private productMatcher: ProductMatcherService,
+    private inventoryOperation: InventoryOperationService,
+  ) {}
+
+  /**
+   * Batch upload from the worker app. Each op is deduped by clientRequestId
+   * (idempotent), the raw transcript is parsed + matched server-side, and it lands
+   * as PENDING — never touching stock. A manager approves later.
+   */
+  async sync(operations: SyncOperationItemDto[], workerId?: string) {
+    const results: { clientRequestId: string; id: string; status: string }[] = [];
+
+    for (const op of operations) {
+      const existing = await this.prisma.pendingOperation.findUnique({
+        where: { clientRequestId: op.clientRequestId },
+      });
+      if (existing) {
+        results.push({
+          clientRequestId: op.clientRequestId,
+          id: existing.id,
+          status: existing.status,
+        });
+        continue;
+      }
+
+      const location = await this.prisma.location.findUnique({
+        where: { barcode: op.locationBarcode },
+      });
+
+      let parsedPayload: any = null;
+      let productId: string | null = op.productId ?? null;
+      let quantity = op.quantity ?? 1;
+      let unit: string | null = op.unit ?? null;
+
+      if (op.voiceText) {
+        const engineResult = this.parsingEngine.parse(op.voiceText);
+        const parsed = engineResult.data;
+        const unknownTokens = engineResult.explanation.unknownTokens ?? [];
+
+        const [partCatalogId, vehicleModelIds, brandId] = await Promise.all([
+          this.productMatcher.findPartCatalogIdByName(parsed.productName),
+          this.productMatcher.findVehicleModelIdsByName(
+            parsed.vehicleModel ?? parsed.vehicleFamily,
+          ),
+          this.productMatcher.findBrandIdByName(parsed.brand),
+        ]);
+
+        const match = await this.productMatcher.match({
+          partCatalogId,
+          partName: parsed.productName,
+          vehicleModelIds,
+          vehicleName: parsed.vehicleModel ?? parsed.vehicleFamily,
+          brandId,
+          brandName: parsed.brand,
+          keywordTokens: unknownTokens,
+          modelIsExplicit: !!parsed.vehicleModel,
+        });
+
+        const suggestions = (match.suggestions ?? []).map((s: any) => ({
+          id: s.product.id,
+          name: s.product.name,
+          confidence: s.confidence,
+        }));
+
+        // Store a best-guess for the manager to confirm; never final until approved.
+        if (!productId && match.best) productId = match.best.product.id;
+
+        parsedPayload = { parsed, suggestions };
+        if (!op.quantity && parsed.quantity) quantity = parsed.quantity;
+        if (!unit && (parsed as any).unit) unit = (parsed as any).unit;
+      }
+
+      const created = await this.prisma.pendingOperation.create({
+        data: {
+          clientRequestId: op.clientRequestId,
+          type: op.type ?? 'IN',
+          locationBarcode: op.locationBarcode,
+          voiceText: op.voiceText ?? null,
+          parsed: parsedPayload ?? undefined,
+          quantity,
+          unit,
+          warehouseId: location?.warehouseId ?? null,
+          locationId: location?.id ?? null,
+          productId,
+          workerId: workerId ?? null,
+          deviceCreatedAt: op.deviceCreatedAt ? new Date(op.deviceCreatedAt) : null,
+        },
+      });
+
+      results.push({
+        clientRequestId: op.clientRequestId,
+        id: created.id,
+        status: created.status,
+      });
+    }
+
+    return { synced: results.length, results };
+  }
+
+  /** Manager review queue for a warehouse (or all). */
+  async listPending(warehouseId?: string) {
+    return this.prisma.pendingOperation.findMany({
+      where: {
+        status: 'PENDING',
+        ...(warehouseId ? { warehouseId } : {}),
+      },
+      include: {
+        location: true,
+        product: { include: { brand: true } },
+        worker: { select: { id: true, username: true, fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  /**
+   * Manager approval = the commit. Writes stock through the single ledger path
+   * (InventoryOperationService.execute) with source WORKER_VOICE. The manager may
+   * override the product/quantity before approving.
+   */
+  async approve(
+    id: string,
+    reviewerId?: string,
+    override?: { productId?: string; quantity?: number },
+  ) {
+    const op = await this.prisma.pendingOperation.findUnique({ where: { id } });
+    if (!op) throw new NotFoundException('عملیات پیدا نشد');
+    if (op.status === 'APPROVED') return op; // idempotent
+    if (op.status === 'REJECTED') {
+      throw new BadRequestException('این عملیات قبلاً رد شده است');
+    }
+
+    const productId = override?.productId ?? op.productId;
+    if (!productId) {
+      throw new BadRequestException('قبل از تأیید، محصول را مشخص کنید');
+    }
+    if (!op.locationId) {
+      throw new BadRequestException('موقعیت این عملیات نامعتبر است');
+    }
+    const quantity = override?.quantity ?? op.quantity;
+
+    await this.inventoryOperation.execute({
+      type: 'IN',
+      productId,
+      locationId: op.locationId,
+      quantity,
+      source: 'WORKER_VOICE',
+      userId: reviewerId,
+      note: op.voiceText || 'تأیید مدیر برای عملیات صوتی کارگر',
+    });
+
+    return this.prisma.pendingOperation.update({
+      where: { id },
+      data: {
+        status: 'APPROVED',
+        productId,
+        quantity,
+        reviewedById: reviewerId ?? null,
+        reviewedAt: new Date(),
+      },
+    });
+  }
+
+  async reject(id: string, reviewerId?: string, reviewNote?: string) {
+    const op = await this.prisma.pendingOperation.findUnique({ where: { id } });
+    if (!op) throw new NotFoundException('عملیات پیدا نشد');
+    if (op.status !== 'PENDING') return op;
+
+    return this.prisma.pendingOperation.update({
+      where: { id },
+      data: {
+        status: 'REJECTED',
+        reviewedById: reviewerId ?? null,
+        reviewedAt: new Date(),
+        reviewNote: reviewNote ?? null,
+      },
+    });
+  }
+}

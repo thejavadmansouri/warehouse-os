@@ -29,6 +29,7 @@ import { CategoriesModule } from './categories/categories.module';
 import { SuppliersModule } from './suppliers/suppliers.module';
 import { LabelsModule } from './labels/labels.module';
 import { PrintJobsModule } from './print-jobs/print-jobs.module';
+import { PendingOperationsModule } from './pending-operations/pending-operations.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ LocationBuilderModule,
     SuppliersModule,
     LabelsModule,
     PrintJobsModule,
+    PendingOperationsModule,
   ],
   controllers: [
     AppController,
