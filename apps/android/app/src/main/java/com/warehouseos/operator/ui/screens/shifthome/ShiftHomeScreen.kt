@@ -49,6 +49,7 @@ fun ShiftHomeScreen(
 ) {
     val sessionId by viewModel.sessionId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
+    val pendingCount by viewModel.pendingCount.collectAsState()
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -71,6 +72,11 @@ fun ShiftHomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
+            if (pendingCount > 0) {
+                TextButton(onClick = viewModel::syncNow) {
+                    Text("$pendingCount مورد در انتظار همگام‌سازی — لمس برای ارسال")
+                }
+            }
             if (sessionId == null) {
                 NoSessionContent(
                     isStarting = uiState.isStarting,
