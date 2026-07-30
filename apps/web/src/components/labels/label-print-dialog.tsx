@@ -180,9 +180,9 @@ export function LabelPrintDialog({
   const enabled = open && stableIds.length > 0;
 
   // طبق بخش الف سند افزونه — GET /labels/location/:id یا GET /labels/product/:id
-  const singleQ = useQuery({
+  const singleQ = useQuery<LocationLabel | ProductLabel>({
     queryKey: ["label", mode, "single", stableIds[0] ?? "__none__"],
-    queryFn: () =>
+    queryFn: (): Promise<LocationLabel | ProductLabel> =>
       mode === "location"
         ? getLocationLabel(stableIds[0]!)
         : getProductLabel(stableIds[0]!),
@@ -191,9 +191,9 @@ export function LabelPrintDialog({
   });
 
   // طبق بخش الف سند افزونه — POST /labels/location/bulk یا POST /labels/product/bulk
-  const bulkQ = useQuery({
+  const bulkQ = useQuery<Array<LocationLabel | ProductLabel>>({
     queryKey: ["label", mode, "bulk", stableIds.join(",")],
-    queryFn: () =>
+    queryFn: (): Promise<Array<LocationLabel | ProductLabel>> =>
       mode === "location"
         ? bulkLocationLabels(stableIds)
         : bulkProductLabels(stableIds),
@@ -211,7 +211,7 @@ export function LabelPrintDialog({
   const locationLabels: LocationLabel[] = !enabled
     ? []
     : isBulk
-      ? (bulkQ.data ?? [])
+      ? ((bulkQ.data ?? []) as LocationLabel[])
       : singleQ.data
         ? [singleQ.data as LocationLabel]
         : [];
@@ -219,7 +219,7 @@ export function LabelPrintDialog({
   const productLabels: ProductLabel[] = !enabled
     ? []
     : isBulk
-      ? (bulkQ.data ?? [])
+      ? ((bulkQ.data ?? []) as ProductLabel[])
       : singleQ.data
         ? [singleQ.data as ProductLabel]
         : [];

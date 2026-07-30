@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { useParams } from "next/navigation";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 import {
   ClipboardList,
   AlertCircle,
@@ -18,7 +23,10 @@ import {
   finishInventoryCount,
   getInventoryCount,
 } from "@/lib/api";
-import type { CreateInventoryCountItemDto } from "@/lib/types";
+import type {
+  CreateInventoryCountItemDto,
+  InventoryCount,
+} from "@/lib/types";
 import { ApiException } from "@/lib/api-error-messages";
 import { useAuthStore } from "@/lib/auth-store";
 import { useToast } from "@/hooks/use-toast";
@@ -484,7 +492,7 @@ export default function InventoryCountDetailPage() {
 function CountView({
   countQ,
 }: {
-  countQ: ReturnType<typeof useQuery>;
+  countQ: UseQueryResult<InventoryCount>;
 }) {
   const data = countQ.data;
   if (!data) return null;

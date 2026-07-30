@@ -106,7 +106,11 @@ export default function VehicleModelsPage() {
     handleSubmit,
     reset,
     formState: { errors },
-  } = useForm<VehicleModelFormValues>({
+  } = useForm<
+    z.input<typeof vehicleModelSchema>,
+    unknown,
+    z.output<typeof vehicleModelSchema>
+  >({
     resolver: zodResolver(vehicleModelSchema),
     defaultValues: {
       name: "",

@@ -174,7 +174,11 @@ export function ProductFormDialog({
     [isEdit, initial, defaults]
   );
 
-  const form = useForm<FormValues>({
+  const form = useForm<
+    z.input<typeof productSchema>,
+    unknown,
+    z.output<typeof productSchema>
+  >({
     resolver: zodResolver(productSchema),
     defaultValues: defaults,
     values: editValues,
@@ -256,9 +260,12 @@ export function ProductFormDialog({
 
   const loading = createM.isPending || updateM.isPending;
 
-  // کمک‌کننده برای فیلدهای عددی — رشته خالی → undefined، در غیر این صورت عدد
+  // کمک‌کننده برای فیلدهای عددی — رشته خالی → undefined، در غیر این صورت عدد.
+  // فیلد از نوع ورودی فرم است (z.input) که مقادیر عددی در آن قبل از preprocess
+  // به‌صورت unknown‌اند؛ پس همان نوع را می‌پذیریم نه خروجی نهایی.
+  type FormInput = z.input<typeof productSchema>;
   const numberFieldProps = (
-    field: ControllerRenderProps<FormValues, keyof FormValues>
+    field: ControllerRenderProps<FormInput, keyof FormInput>
   ) => ({
     type: "number" as const,
     value: (field.value as number | undefined) ?? "",
