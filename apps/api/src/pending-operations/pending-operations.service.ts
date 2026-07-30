@@ -124,6 +124,12 @@ export class PendingOperationsService {
         location: { include: { warehouse: true } },
         product: { include: { brand: true, barcodes: true } },
         worker: { select: { id: true, username: true, fullName: true } },
+        // Photo bytes are served only via the authenticated /uploads/photo/:id
+        // endpoint — expose ids, never the raw storage path.
+        assets: {
+          select: { id: true, mimeType: true, createdAt: true },
+          orderBy: { createdAt: 'asc' },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -174,8 +180,9 @@ export class PendingOperationsService {
       return this.prisma.pendingOperation.findUnique({ where: { id } });
     }
 
+    let committedLogId: string | null = null;
     try {
-      await this.inventoryOperation.execute({
+      const result = await this.inventoryOperation.execute({
         type: 'IN',
         productId,
         locationId: op.locationId,
@@ -184,6 +191,8 @@ export class PendingOperationsService {
         userId: reviewerId,
         note: op.voiceText || 'تأیید مدیر برای عملیات صوتی کارگر',
       });
+      committedLogId =
+        (result as { inventoryLogId?: string } | null)?.inventoryLogId ?? null;
     } catch (error) {
       // Commit failed — release the claim so it can be retried, don't leave it
       // stuck as APPROVED-without-stock.
@@ -192,6 +201,22 @@ export class PendingOperationsService {
         data: { status: 'PENDING', reviewedById: null, reviewedAt: null },
       });
       throw error;
+    }
+
+    // Back-link the ledger row, and move any worker photos captured against the
+    // pending op onto the committed InventoryLog so the chain
+    // InventoryLog -> Asset -> storage object holds after approval.
+    if (committedLogId) {
+      await this.prisma.$transaction([
+        this.prisma.pendingOperation.update({
+          where: { id },
+          data: { committedLogId },
+        }),
+        this.prisma.asset.updateMany({
+          where: { pendingOperationId: id },
+          data: { inventoryLogId: committedLogId },
+        }),
+      ]);
     }
 
     return this.prisma.pendingOperation.findUnique({ where: { id } });
