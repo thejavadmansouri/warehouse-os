@@ -121,8 +121,8 @@ export class PendingOperationsService {
         ...(warehouseId ? { warehouseId } : {}),
       },
       include: {
-        location: true,
-        product: { include: { brand: true } },
+        location: { include: { warehouse: true } },
+        product: { include: { brand: true, barcodes: true } },
         worker: { select: { id: true, username: true, fullName: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -155,18 +155,11 @@ export class PendingOperationsService {
     }
     const quantity = override?.quantity ?? op.quantity;
 
-    await this.inventoryOperation.execute({
-      type: 'IN',
-      productId,
-      locationId: op.locationId,
-      quantity,
-      source: 'WORKER_VOICE',
-      userId: reviewerId,
-      note: op.voiceText || 'تأیید مدیر برای عملیات صوتی کارگر',
-    });
-
-    return this.prisma.pendingOperation.update({
-      where: { id },
+    // Idempotency under concurrency: atomically flip PENDING -> APPROVED. Only the
+    // request that wins the flip (count === 1) commits stock — a double-click or
+    // replayed request finds count === 0 and returns without adding stock again.
+    const claim = await this.prisma.pendingOperation.updateMany({
+      where: { id, status: 'PENDING' },
       data: {
         status: 'APPROVED',
         productId,
@@ -175,6 +168,33 @@ export class PendingOperationsService {
         reviewedAt: new Date(),
       },
     });
+
+    if (claim.count === 0) {
+      // Someone already approved it — do NOT execute the operation again.
+      return this.prisma.pendingOperation.findUnique({ where: { id } });
+    }
+
+    try {
+      await this.inventoryOperation.execute({
+        type: 'IN',
+        productId,
+        locationId: op.locationId,
+        quantity,
+        source: 'WORKER_VOICE',
+        userId: reviewerId,
+        note: op.voiceText || 'تأیید مدیر برای عملیات صوتی کارگر',
+      });
+    } catch (error) {
+      // Commit failed — release the claim so it can be retried, don't leave it
+      // stuck as APPROVED-without-stock.
+      await this.prisma.pendingOperation.update({
+        where: { id },
+        data: { status: 'PENDING', reviewedById: null, reviewedAt: null },
+      });
+      throw error;
+    }
+
+    return this.prisma.pendingOperation.findUnique({ where: { id } });
   }
 
   async reject(id: string, reviewerId?: string, reviewNote?: string) {
