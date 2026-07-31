@@ -41,6 +41,15 @@ class ShiftHomeViewModel @Inject constructor(
     val fullName: String
         get() = authRepository.cachedUser()?.fullName.orEmpty()
 
+    /** Authenticated user's role, mapped to a Persian label (empty if unknown). */
+    val roleLabel: String
+        get() = when (authRepository.cachedUser()?.role) {
+            "ADMIN" -> "مدیر کل"
+            "MANAGER" -> "مدیر انبار"
+            "STAFF" -> "اپراتور انبار"
+            else -> ""
+        }
+
     /** Active shift session id, or null when no shift is running. */
     val sessionId: StateFlow<String?> = sessionRepository.sessionId
 

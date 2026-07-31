@@ -520,3 +520,39 @@ export interface PendingOperation {
   worker?: { id: string; username: string; fullName?: string } | null;
 }
 
+export interface ProductCreationRequest {
+  id: string;
+  status: string; // PENDING | APPROVED | REJECTED
+  name: string;
+  brandName?: string | null;
+  categoryId?: string | null;
+  vehicles: string[];
+  quantity: number;
+  unit: string;
+  notes?: string | null;
+  voiceText?: string | null;
+  locationBarcode?: string | null;
+  reviewNote?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+  category?: { id: string; name: string } | null;
+  location?: {
+    id: string;
+    name: string;
+    path?: string | null;
+    warehouse?: { id: string; name: string } | null;
+  } | null;
+  worker?: { id: string; username: string; fullName?: string } | null;
+  reviewedBy?: { id: string; username: string; fullName?: string } | null;
+  createdProduct?: { id: string; name: string; sku: string } | null;
+}
+
+export interface ApproveProductRequestDto {
+  name?: string;
+  brandName?: string;
+  categoryId?: string;
+  vehicles?: string[];
+  quantity?: number;
+  unit?: string;
+}
+

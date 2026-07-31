@@ -13,6 +13,13 @@ interface SpeechToTextProvider {
     val capabilities: SttCapabilities
 
     /**
+     * Optional warm-up: pre-create/bind the engine so the first [transcribe] starts
+     * listening immediately. Safe to call repeatedly; must be called on the main
+     * thread. No-op by default.
+     */
+    fun prewarm() {}
+
+    /**
      * Starts one push-to-talk recognition and emits [SttEvent]s until a final
      * result or error. Cancelling the collecting coroutine stops recognition and
      * releases the engine.

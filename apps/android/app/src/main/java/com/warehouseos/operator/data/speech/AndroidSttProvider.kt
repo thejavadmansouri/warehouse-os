@@ -33,14 +33,29 @@ class AndroidSttProvider @Inject constructor(
         biasable = false,
     )
 
+    // Reused across utterances: creating/binding the recognition service is the
+    // slow part, so we create it once (on the main thread) and keep it warm rather
+    // than create/destroy per tap. Never touched off the main thread.
+    private var recognizer: SpeechRecognizer? = null
+
+    private fun ensureRecognizer(): SpeechRecognizer? {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) return null
+        return recognizer ?: SpeechRecognizer.createSpeechRecognizer(context).also { recognizer = it }
+    }
+
+    /** Pre-bind the engine when the voice screen opens so the first tap is instant. */
+    override fun prewarm() {
+        runCatching { ensureRecognizer() }
+    }
+
     override fun transcribe(config: SttConfig): Flow<SttEvent> = callbackFlow {
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+        val recognizer = ensureRecognizer()
+        if (recognizer == null) {
             trySend(SttEvent.Error(SttError.UNAVAILABLE))
             close()
             return@callbackFlow
         }
 
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
         val listener = object : RecognitionListener {
             override fun onPartialResults(partialResults: Bundle) {
                 firstResult(partialResults)?.let { trySend(SttEvent.Partial(it)) }
@@ -77,8 +92,8 @@ class AndroidSttProvider @Inject constructor(
         recognizer.startListening(intent)
 
         awaitClose {
-            recognizer.stopListening()
-            recognizer.destroy()
+            // Cancel (not destroy) so the engine stays warm for the next utterance.
+            runCatching { recognizer.cancel() }
         }
     }
 

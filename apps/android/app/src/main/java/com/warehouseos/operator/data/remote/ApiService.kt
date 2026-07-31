@@ -8,7 +8,9 @@ import com.warehouseos.operator.data.remote.dto.CountVoiceResponse
 import com.warehouseos.operator.data.remote.dto.LocationDto
 import com.warehouseos.operator.data.remote.dto.LoginRequest
 import com.warehouseos.operator.data.remote.dto.LoginResponse
+import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
 import com.warehouseos.operator.data.remote.dto.ProductDto
+import com.warehouseos.operator.data.remote.dto.ProductRequestResult
 import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
@@ -64,6 +66,10 @@ interface ApiService {
     // ---- Product search ----
     @GET("products/search")
     suspend fun searchProducts(@Query("q") query: String): List<ProductDto>
+
+    // ---- New-product request (worker → manager review) ----
+    @POST("product-requests")
+    suspend fun createProductRequest(@Body body: CreateProductRequestBody): ProductRequestResult
 
     // ---- Inventory count ----
     @POST("mobile/count/start")

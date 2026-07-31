@@ -1,25 +1,25 @@
 package com.warehouseos.operator.ui.screens.shifthome
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Checklist
+import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -28,15 +28,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.warehouseos.operator.R
+import com.warehouseos.operator.ui.components.BannerType
+import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.PrimaryButton
+import com.warehouseos.operator.ui.components.SecondaryButton
+import com.warehouseos.operator.ui.components.StatusBanner
 
 /**
- * Shift home (Epic 4). No active session -> a single "start shift" button;
- * active session -> stock-in / count actions plus "start new shift". Logout is
- * confirmed and clears both the shift session and the encrypted auth session.
- * Visuals are intentionally basic — feature completion first.
+ * Shift home — the operator hub. No active session → a single "start shift"
+ * action; active session → large stock-in / count actions. A pending-sync banner
+ * surfaces queued offline work. Logout is confirmed and clears both sessions.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,12 +61,15 @@ fun ShiftHomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(viewModel.fullName.ifBlank { "شیفت کاری" }) },
+                title = { Text(stringResource(R.string.customer_name)) },
                 actions = {
                     IconButton(onClick = { showLogoutConfirm = true }) {
                         Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "خروج")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
         },
     ) { padding ->
@@ -68,30 +77,55 @@ fun ShiftHomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+                .padding(Dimens.screenPadding),
         ) {
-            if (pendingCount > 0) {
-                TextButton(onClick = viewModel::syncNow) {
-                    Text("$pendingCount مورد در انتظار همگام‌سازی — لمس برای ارسال")
+            if (viewModel.fullName.isNotBlank()) {
+                Text(
+                    text = "سلام، ${viewModel.fullName}",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                if (viewModel.roleLabel.isNotBlank()) {
+                    Text(
+                        text = viewModel.roleLabel,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
                 }
+                androidx.compose.foundation.layout.Spacer(Modifier.padding(top = Dimens.gap))
             }
-            if (sessionId == null) {
-                NoSessionContent(
-                    isStarting = uiState.isStarting,
-                    error = uiState.error,
-                    onStartShift = viewModel::startShift,
+            if (pendingCount > 0) {
+                StatusBanner(
+                    text = "$pendingCount مورد در انتظار همگام‌سازی — برای ارسال لمس کنید",
+                    type = BannerType.Warning,
+                    icon = Icons.Filled.CloudUpload,
+                    onClick = viewModel::syncNow,
+                    modifier = Modifier.padding(bottom = Dimens.gap),
                 )
-            } else {
-                ActiveSessionContent(
-                    sessionId = sessionId!!,
-                    isStarting = uiState.isStarting,
-                    onStockIn = onStockIn,
-                    onCount = onCount,
-                    onSettings = onSettings,
-                    onNewShift = viewModel::startShift,
-                )
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
+            ) {
+                if (sessionId == null) {
+                    NoSessionContent(
+                        isStarting = uiState.isStarting,
+                        error = uiState.error,
+                        onStartShift = viewModel::startShift,
+                    )
+                } else {
+                    ActiveSessionContent(
+                        isStarting = uiState.isStarting,
+                        onStockIn = onStockIn,
+                        onCount = onCount,
+                        onSettings = onSettings,
+                        onNewShift = viewModel::startShift,
+                    )
+                }
             }
         }
     }
@@ -122,83 +156,73 @@ private fun NoSessionContent(
     onStartShift: () -> Unit,
 ) {
     Text(
-        text = "برای شروع کار، شیفت جدید را باز کنید",
-        style = MaterialTheme.typography.bodyLarge,
+        text = "شیفت کاری خود را آغاز کنید",
+        style = MaterialTheme.typography.headlineSmall,
         textAlign = TextAlign.Center,
-        modifier = Modifier.padding(bottom = 24.dp),
     )
-    Button(
+    Text(
+        text = "برای شروع ثبت کالا، ابتدا یک شیفت جدید باز کنید",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = Dimens.gapSmall, bottom = Dimens.gapLarge),
+    )
+    PrimaryButton(
+        text = "شروع شیفت",
         onClick = onStartShift,
-        enabled = !isStarting,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp),
-    ) {
-        if (isStarting) {
-            CircularProgressIndicator(
-                modifier = Modifier.height(24.dp),
-                color = MaterialTheme.colorScheme.onPrimary,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            Text("شروع شیفت", style = MaterialTheme.typography.titleLarge)
-        }
-    }
+        loading = isStarting,
+        icon = Icons.Filled.Add,
+    )
     if (error != null) {
-        Text(
+        StatusBanner(
             text = error,
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.error,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 16.dp),
+            type = BannerType.Error,
+            modifier = Modifier.padding(top = Dimens.gap),
         )
     }
 }
 
 @Composable
 private fun ActiveSessionContent(
-    sessionId: String,
     isStarting: Boolean,
     onStockIn: () -> Unit,
     onCount: () -> Unit,
     onSettings: () -> Unit,
     onNewShift: () -> Unit,
 ) {
-    Button(
+    StatusBanner(
+        text = "شیفت فعال است — آماده‌ی ثبت کالا",
+        type = BannerType.Success,
+        modifier = Modifier.padding(bottom = Dimens.gapLarge),
+    )
+
+    PrimaryButton(
+        text = "ثبت ورود کالا",
         onClick = onStockIn,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(96.dp),
-    ) { Text("ثبت ورود کالا", style = MaterialTheme.typography.titleLarge) }
-
-    Button(
+        icon = Icons.Filled.Add,
+        height = Dimens.hugeActionHeight,
+    )
+    SecondaryButton(
+        text = "انبارگردانی",
         onClick = onCount,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(96.dp)
-            .padding(top = 16.dp),
-    ) { Text("انبارگردانی", style = MaterialTheme.typography.titleLarge) }
+        icon = Icons.Filled.Checklist,
+        height = Dimens.hugeActionHeight,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
 
-    OutlinedButton(
+    SecondaryButton(
+        text = "شروع شیفت جدید",
         onClick = onNewShift,
         enabled = !isStarting,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(top = 16.dp),
-    ) { Text("شروع شیفت جدید") }
-
+        modifier = Modifier.padding(top = Dimens.gapLarge),
+    )
     TextButton(
         onClick = onSettings,
-        modifier = Modifier.fillMaxWidth(),
-    ) { Text("تنظیمات") }
-
-    Text(
-        text = "شناسه شیفت: ${sessionId.take(8)}",
-        style = MaterialTheme.typography.bodyLarge,
-        textAlign = TextAlign.Center,
-        modifier = Modifier.padding(top = 16.dp),
-    )
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Dimens.gapSmall),
+    ) {
+        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
+        Text("تنظیمات")
+    }
 }

@@ -104,6 +104,12 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: ClipboardCheck,
         roles: ["ADMIN", "MANAGER"],
       },
+      {
+        title: "درخواست‌های افزودن کالا",
+        href: "/admin/product-requests",
+        icon: ClipboardCheck,
+        roles: ["ADMIN", "MANAGER"],
+      },
     ],
   },
   {

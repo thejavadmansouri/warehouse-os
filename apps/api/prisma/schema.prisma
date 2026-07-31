@@ -24,6 +24,8 @@ model User {
   printJobs       PrintJob[]
   pendingCaptured PendingOperation[] @relation("PendingWorker")
   pendingReviewed PendingOperation[] @relation("PendingReviewer")
+  productRequestsMade     ProductCreationRequest[] @relation("ProductRequestWorker")
+  productRequestsReviewed ProductCreationRequest[] @relation("ProductRequestReviewer")
 }
 
 model Warehouse {
@@ -77,6 +79,7 @@ model Location {
   type             LocationType               @relation(fields: [typeId], references: [id])
   warehouse        Warehouse?                 @relation(fields: [warehouseId], references: [id])
   pendingOps       PendingOperation[]
+  productRequests  ProductCreationRequest[]
 
   @@index([parentId])
   @@index([warehouseId])
@@ -91,6 +94,7 @@ model Category {
   createdAt      DateTime        @default(now())
   inventoryItems InventoryItem[]
   products       Product[]
+  productRequests ProductCreationRequest[]
 }
 
 model Brand {
@@ -170,6 +174,7 @@ model Product {
   prices          ProductPrice[]
   voiceRecords    VoiceRecord[]
   pendingOps      PendingOperation[]
+  createdFromRequests ProductCreationRequest[] @relation("ProductRequestCreated")
 }
 
 model ProductBarcode {
@@ -530,4 +535,41 @@ model PendingOperation {
 
   @@index([warehouseId, status])
   @@index([status])
+}
+
+/// Worker-submitted request to add a product that isn't in the catalog yet.
+/// Master data stays controlled: the worker requests, a manager reviews/edits and
+/// approves. Approval creates the real Product and applies stock through the
+/// existing InventoryOperationService — never an ad-hoc write.
+model ProductCreationRequest {
+  id               String    @id @default(uuid())
+  status           String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  name             String
+  brandName        String? // free text; resolved/created as a Brand on approval
+  categoryId       String?
+  vehicles         String[]  @default([]) // requested compatible vehicle names (multi)
+  quantity         Int       @default(1)
+  unit             String    @default("عدد")
+  notes            String?
+  voiceText        String? // original transcript, if raised from voice
+  locationBarcode  String?
+  warehouseId      String?
+  locationId       String?
+  sessionId        String?
+  workerId         String?
+  reviewedById     String?
+  reviewedAt       DateTime?
+  reviewNote       String? // rejection reason / manager note
+  createdProductId String? // product created on approval (audit link)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  category       Category? @relation(fields: [categoryId], references: [id])
+  location       Location? @relation(fields: [locationId], references: [id])
+  worker         User?     @relation("ProductRequestWorker", fields: [workerId], references: [id])
+  reviewedBy     User?     @relation("ProductRequestReviewer", fields: [reviewedById], references: [id])
+  createdProduct Product?  @relation("ProductRequestCreated", fields: [createdProductId], references: [id])
+
+  @@index([status])
+  @@index([warehouseId, status])
 }

@@ -2,4 +2,12 @@
 <!-- Default (fallback) strings. The Persian set in values-fa is the primary locale. -->
 <resources>
     <string name="app_name">Warehouse Operator</string>
+
+    <!-- White-label business identity. Override per customer via a build flavor or
+         resource overlay — do NOT hardcode a customer name in Kotlin UI. -->
+    <string name="customer_name">یدکی صادقی</string>
+
+    <!-- Login footer / product branding. -->
+    <string name="login_copyright">تمام حقوق محفوظ است</string>
+    <string name="login_author">طراحی و ساخته شده توسط MANS</string>
 </resources>
