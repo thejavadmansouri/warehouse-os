@@ -11,6 +11,10 @@ const WEIGHT = {
   PART_ID_MATCH: 100,
   PART_NAME_MATCH: 80,
   PART_ALIAS_MATCH: 70,
+  // نام قطعهٔ گفته‌شده مستقیماً در نام خود محصول دیده شد — سیگنال تمایزدهندهٔ اصلی.
+  // (قبلاً partName فقط با PartCatalog مقایسه می‌شد، نه با نام محصول → محصول درست
+  // امتیاز قطعه نمی‌گرفت و فقط با خودرو رقابت می‌کرد.)
+  PART_NAME_IN_PRODUCT: 45, // به‌ازای هر توکن، حداکثر ۳ توکن
   PART_TOKEN_FALLBACK: 25, // فقط وقتی هیچ partCatalogId شناسایی نشده
 
   VEHICLE_ID_MATCH: 70,
@@ -274,13 +278,41 @@ export class ProductMatcherService {
       }
     }
 
-    // فقط اگر هیچ partCatalog شناسایی نشد، به‌عنوان fallback ضعیف از توکن‌های خام نام استفاده کن
+    // توکن‌های نام قطعهٔ گفته‌شده (برای امتیاز قطعه و نیز تشخیص موقعیت جلو/عقب).
+    const partNameTokens = input.partName
+      ? norm(input.partName)
+          .split(/\s+/)
+          .filter((t) => t.length >= MIN_TOKEN_LENGTH && !STOPWORDS.has(t))
+      : [];
+
+    // 1b) نام قطعهٔ گفته‌شده مستقیماً در نام خود محصول — قوی‌ترین سیگنال تمایز بین
+    // محصولاتی که همگی برای یک خودرو هستند (سوپرموتور سمند vs واشر ... سمند).
+    // موقعیت/سمت هویت قطعه نیست و از اعتبار قطعه کنار گذاشته می‌شود.
+    {
+      const hits = partNameTokens.filter(
+        (t) => !POSITION_WORDS.has(t) && !SIDE_WORDS.has(t) && name.includes(t),
+      );
+      if (hits.length) {
+        partMatched = true;
+        score += Math.min(hits.length, 3) * WEIGHT.PART_NAME_IN_PRODUCT;
+        reasons.push(`part name in product name: ${hits.join(', ')}`);
+      }
+    }
+
+    // اگر قطعه از partCatalog شناسایی نشد، از توکن‌های محتوایی گفتار استفاده کن.
+    // این توکن‌ها قبلاً از عدد/واحد/برند/خودرو/stopword پاک شده‌اند، پس هیت‌شدن
+    // آن‌ها در «نام محصول» یک سیگنال واقعی قطعه است (نه صرفاً score خام) — همین
+    // است که محصول درست را از محصولی که فقط با خودرو مشترک است جدا می‌کند.
     if (!partMatched) {
-      for (const token of tokens) {
-        if (name.includes(token)) {
-          score += WEIGHT.PART_TOKEN_FALLBACK;
-          reasons.push(`weak keyword match in name: ${token}`);
-        }
+      // موقعیت/سمت (جلو/عقب/چپ/راست) هویت قطعه نیستند — منطق جداگانه دارند و
+      // نباید اعتبار قطعه بدهند («کمک فنر جلو» نباید برای «لنت جلو» قطعه‌مچ شود).
+      const nameTokenHits = tokens.filter(
+        (t) => !POSITION_WORDS.has(t) && !SIDE_WORDS.has(t) && name.includes(t),
+      );
+      if (nameTokenHits.length) {
+        partMatched = true;
+        score += Math.min(nameTokenHits.length, 3) * WEIGHT.PART_TOKEN_FALLBACK;
+        reasons.push(`keyword(s) matched in product name: ${nameTokenHits.join(', ')}`);
       }
     }
 
@@ -346,10 +378,15 @@ export class ProductMatcherService {
     // کلمات موقعیت معمولاً داخل نام محصول‌اند (مثل «لنت ترمز جلو ...»). تطابق را
     // تقویت و تناقض (جلو در برابر عقب) را قویاً جریمه می‌کنیم — بدون رد قطعی،
     // چون داده‌ها همیشه این فیلد را ندارند.
+    // نیت موقعیت/سمت هم از توکن‌های آزاد و هم از داخل نام قطعهٔ گفته‌شده می‌آید
+    // («لنت ترمز جلو» → جلو)، تا تناقض جلو/عقب حتی وقتی داخل partName است اعمال شود.
+    const positionIntent = new Set(
+      [...tokens, ...partNameTokens].filter(
+        (t) => POSITION_WORDS.has(t) || SIDE_WORDS.has(t),
+      ),
+    );
     let positionContradiction = false;
-    for (const token of tokens) {
-      if (!POSITION_WORDS.has(token) && !SIDE_WORDS.has(token)) continue;
-
+    for (const token of positionIntent) {
       if (name.includes(token)) {
         score += POSITION_MATCH_SCORE;
         reasons.push(`position/side matched: ${token}`);
