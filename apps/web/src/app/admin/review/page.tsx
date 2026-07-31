@@ -129,12 +129,20 @@ export default function ReviewPage() {
   }
 
   function productBarcode(op: PendingOperation): string {
+    // Prefer a human-meaningful code; internalBarcode is a UUID, so use it last.
     return (
-      op.product?.internalBarcode ??
       op.product?.sku ??
       op.product?.barcodes?.[0]?.barcode ??
+      op.product?.internalBarcode ??
       "—"
     );
+  }
+
+  function statusFa(s: string): string {
+    return s === "APPROVED" ? "تأیید شده" : s === "REJECTED" ? "رد شده" : "در انتظار بررسی";
+  }
+  function typeFa(t: string): string {
+    return t === "IN" ? "ورود کالا" : t === "COUNT" ? "شمارش" : t;
   }
 
   return (
@@ -182,7 +190,7 @@ export default function ReviewPage() {
                   <CardTitle className="text-base">
                     {op.location?.warehouse?.name ?? "انبار نامشخص"}
                   </CardTitle>
-                  <Badge variant="secondary">{op.status}</Badge>
+                  <Badge variant="secondary">{statusFa(op.status)}</Badge>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -190,7 +198,7 @@ export default function ReviewPage() {
                       {op.worker?.fullName || op.worker?.username || "—"}
                     </Field>
                     <Field label="زمان ثبت">{formatDateTime(op.createdAt)}</Field>
-                    <Field label="نوع عملیات">{op.type}</Field>
+                    <Field label="نوع عملیات">{typeFa(op.type)}</Field>
                     <Field label="موقعیت">
                       {op.location?.path || op.location?.name || op.locationBarcode}
                     </Field>
