@@ -39,8 +39,30 @@ architecture, speculative features. Only ensure the architecture doesn't *block*
 7. **Warehouse-scoped photo authorization** — needs a `UserWarehouse` model + `warehouseIds` in the JWT
      (applies to the existing unscoped review queue too). Retrieval is currently authenticated + role-gated only.
 8. **Proper Prisma migration baseline for production** — the dev DB has pre-existing drift (`PendingOperation`,
-     `Asset` photo columns, and more were applied via `db push`, never migrated). Author a clean migration
+     `Asset` photo columns, `ProductCreationRequest`, the `pg_trgm` extension + `idx_product_*_trgm`
+     indexes, and more were applied via `db push` / raw SQL, never migrated). Author a clean migration
      baseline before the on-prem Windows deploy. Never `migrate reset` the dev DB (63k locations seeded).
+9. **Product-matching refinements — DEFERRED to AFTER the 10k import (user decision):**
+   - Fold trigram `similarity` into the confidence % (today it's flag-based → correct matches cluster at 85%;
+     ranking #1 is correct but the number is coarse).
+   - Build a real regression corpus (`spoken phrase → expected SKU`) + an `alias/mishearing` list for the
+     spell-correction dictionary. Run it against `/inventory/voice/preview`.
+   - At ~100k products add a **GiST** trigram index for index-ordered KNN (`similarity()` currently seq-scans;
+     fine ≤10k).
+
+---
+
+## IMPORT READINESS — get the 10k data right (this is the real matcher lever)
+
+The matcher is now solid on real data (5/5 realistic phrases rank #1). Its accuracy at 10k depends on the
+**data**, not more tuning. Before/at import (`/admin/imports`, Excel):
+- **Unique `sku` per row**, dedupe. Product `name` should read like the worker speaks it (part first).
+- **Consistent brand + vehicle names**, and populate **aliases** — especially common **STT mishearings**
+  and family/trim spellings (e.g. «ال 90 / ال۹۰ / L90 / تندر 90») so `findVehicleModelIdsByName`'s
+  family-prefix expansion resolves them.
+- **Populate `partCatalog`** with real part types (+ aliases) — the spell-corrector snaps misheard tokens
+  to it *before* matching; it's only as good as this vocabulary.
+- Voice UX is **shortlist-and-tap** (needSelection), not perfect auto-confirm — design/data around that.
 
 ---
 
