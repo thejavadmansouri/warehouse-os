@@ -138,6 +138,8 @@ export interface Location {
   warehouseId?: string | null;
   code?: string | null;
   barcode?: string | null;
+  path?: string | null;
+  depth?: number;
   createdAt?: string;
   type?: LocationType | null;
   parent?: { id: string; name: string } | null;

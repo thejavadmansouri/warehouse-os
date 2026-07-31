@@ -160,9 +160,12 @@ export function getMe(): Promise<T.AuthMeResponse> {
 // ۶.۳. محصولات
 // =====================================================
 
-// طبق بخش ۶.۳ — GET /products (آرایه خام، بدون صفحه‌بندی)
+// GET /products — سرور پاسخ صفحه‌بندی‌شده { data, meta } می‌دهد؛ آرایه‌ی محصولات را
+// استخراج می‌کنیم و در برابر هر دو شکل (آرایه‌ی خام یا wrapped) مقاوم می‌مانیم.
 export function getProducts(): Promise<T.Product[]> {
-  return apiFetch<T.Product[]>("/products");
+  return apiFetch<T.Product[] | { data?: T.Product[] }>("/products").then((r) =>
+    Array.isArray(r) ? r : (r.data ?? [])
+  );
 }
 
 // طبق بخش ۶.۳ — GET /products/search?q=
