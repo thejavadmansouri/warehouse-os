@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 
 /**
@@ -60,7 +59,7 @@ const ANTONYM: Record<string, string> = {
 };
 const POSITION_MATCH_SCORE = 20;
 const POSITION_CONTRADICT_SCORE = -40;
-const CONFIDENCE_POSITION_PENALTY = 25;
+const CONFIDENCE_POSITION_PENALTY = 40;
 
 // نرمال‌سازی یکسان با موتور پارس؛ تا نام‌های دیتابیس و توکن‌های گفتار برابر مقایسه شوند
 function norm(text?: string | null) {
@@ -98,19 +97,27 @@ export class ProductMatcherService {
   async findVehicleModelIdsByName(name: string | null): Promise<string[]> {
     if (!name) return [];
 
-    // هر ورودی خانواده (مثل "پژو 405") می‌تواند به چند تریم واقعی
-    // (GLX, SLX, ...) نگاشته شود؛ همهٔ آن‌ها را برمی‌گردانیم، نه فقط اولین match.
-    const vehicles = await this.prisma.vehicleModel.findMany({
+    // هر ورودی خانواده (مثل «پژو 405» یا «ال 90») می‌تواند به چند تریم واقعی
+    // (GLX، E2، ...) نگاشته شود. ابتدا مطابقت مستقیم، سپس گسترش به کل خانواده
+    // بر اساس پیشوند نام — تا محصولی که به تریم «تندر 90 E2» وصل است وقتی کارگر
+    // «ال 90» می‌گوید به‌اشتباه به‌عنوان «خودروی دیگر» رد نشود.
+    const direct = await this.prisma.vehicleModel.findMany({
       where: {
         OR: [
           { name: { contains: name, mode: 'insensitive' } },
           { aliases: { has: name } },
         ],
       },
+      select: { id: true, name: true },
+    });
+    if (!direct.length) return [];
+
+    const family = await this.prisma.vehicleModel.findMany({
+      where: { OR: direct.map((v) => ({ name: { startsWith: v.name } })) },
       select: { id: true },
     });
 
-    return vehicles.map((v) => v.id);
+    return Array.from(new Set([...direct.map((v) => v.id), ...family.map((v) => v.id)]));
   }
 
   async findBrandIdByName(name: string | null) {
@@ -153,11 +160,20 @@ export class ProductMatcherService {
       .filter((x: string) => x.length >= MIN_TOKEN_LENGTH)
       .filter((x: string) => !STOPWORDS.has(x));
 
+    // متن جستجوی معنایی = واژه‌های محتوایی گفتار (قطعه + خودرو + برند + توکن‌ها).
+    // این متن با trigram در Postgres رتبه‌بندی می‌شود تا کاندیدهای واقعاً مرتبط
+    // برگردند — نه یک برش کور از ۱۰۰ ردیف اول.
+    const queryText = norm(
+      [input.partName, input.vehicleName, input.brandName, ...tokens]
+        .filter((x): x is string => !!x && `${x}`.trim().length > 0)
+        .join(' '),
+    );
+
     const candidates = await this.fetchCandidates(
       input.partCatalogId ?? null,
       input.vehicleModelIds ?? [],
       input.brandId ?? null,
-      tokens,
+      queryText,
     );
 
     if (!candidates.length) {
@@ -207,32 +223,69 @@ export class ProductMatcherService {
     };
   }
 
+  /**
+   * بازیابی کاندیدها در خود Postgres رتبه‌بندی می‌شود (trigram روی نام محصول) به‌جای
+   * یک OR گسترده + برش کور `take(100)` که محصول درست را قبل از امتیازدهی حذف می‌کرد.
+   * کاندیدها = بالاترین شباهتِ نامِ محصول به متن گفتار، به‌علاوهٔ همهٔ محصولاتِ منطبق
+   * با سیگنال‌های ساخت‌یافته (partCatalog/خودرو/برند). سپس در JS (وزن‌های دامنه:
+   * تناقض خودرو، جلو/عقب، سمت) دوباره امتیاز داده می‌شوند.
+   * مقیاس: در ۱۰k ردیف seq-scanِ word_similarity سریع است؛ برای ۱۰۰k یک ایندکس
+   * GiST + عملگر `<%` با set_limit اضافه می‌شود.
+   */
   private async fetchCandidates(
     partCatalogId: string | null,
     vehicleModelIds: string[],
     brandId: string | null,
-    tokens: string[],
+    queryText: string,
   ) {
-    const or: Prisma.ProductWhereInput[] = [];
-
-    // سیگنال‌های ساخت‌یافته (ID) اولویت دارند و pool کاندیدها را دقیق‌تر می‌کنند
-    if (partCatalogId) or.push({ partCatalogId });
-    if (vehicleModelIds.length) or.push({ vehicleModelId: { in: vehicleModelIds } });
-    if (brandId) or.push({ brandId });
-
-    for (const token of tokens) {
-      or.push({ name: { contains: token, mode: 'insensitive' } });
-      or.push({ description: { contains: token, mode: 'insensitive' } });
-      or.push({ partNumber: { contains: token, mode: 'insensitive' } });
+    const hasQuery = queryText.trim().length > 0;
+    if (!hasQuery && !partCatalogId && !vehicleModelIds.length && !brandId) {
+      return [];
     }
 
-    // اگر هیچ سیگنالی نداریم، به‌جای برگرداندن کل جدول محصولات، چیزی برنگردان
-    if (!or.length) return [];
+    const params: unknown[] = [];
+    const ors: string[] = [];
+    let simExpr = '0';
 
+    if (hasQuery) {
+      params.push(queryText); // $1 — reused in WHERE and ORDER BY
+      // similarity (whole-string) — نه word_similarity: توکن‌های پرتکرار مثل «ال 90»
+      // باعث اشباع word_similarity به ۱.۰ برای محصولات نامرتبط می‌شدند.
+      simExpr = `similarity(name, $1)`;
+      ors.push(`${simExpr} > 0.15`);
+    }
+    if (partCatalogId) {
+      params.push(partCatalogId);
+      ors.push(`"partCatalogId" = $${params.length}`);
+    }
+    if (brandId) {
+      params.push(brandId);
+      ors.push(`"brandId" = $${params.length}`);
+    }
+    if (vehicleModelIds.length) {
+      const placeholders = vehicleModelIds.map((id) => {
+        params.push(id);
+        return `$${params.length}`;
+      });
+      ors.push(`"vehicleModelId" IN (${placeholders.join(', ')})`);
+    }
+
+    params.push(MAX_CANDIDATES);
+    const limitPlaceholder = `$${params.length}`;
+
+    const sql =
+      `SELECT id FROM "Product" ` +
+      `WHERE "deletedAt" IS NULL AND "isActive" = true AND (${ors.join(' OR ')}) ` +
+      `ORDER BY ${simExpr} DESC LIMIT ${limitPlaceholder}`;
+
+    const rows = await this.prisma.$queryRawUnsafe<{ id: string }[]>(sql, ...params);
+    const ids = rows.map((r) => r.id);
+    if (!ids.length) return [];
+
+    // ترتیب نهایی مهم نیست؛ scoreCandidate دوباره رتبه‌بندی می‌کند.
     return this.prisma.product.findMany({
-      where: { deletedAt: null, isActive: true, OR: or },
+      where: { id: { in: ids } },
       include: { brand: true, vehicleModel: true, partCatalog: true },
-      take: MAX_CANDIDATES,
     });
   }
 
