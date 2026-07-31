@@ -1,32 +1,46 @@
 # Next Task — Warehouse OS
 
-**As of:** 2026-07-30 · Read `docs/AI_HANDOFF.md` first. Stage 3 is verified and running,
-but **everything is uncommitted** and the repo has a package-manager landmine.
+**As of:** 2026-07-30 · Read `docs/AI_HANDOFF.md` first.
+
+## CURRENT DIRECTION (2026-07-30): UI/UX polish + scope freeze
+
+Priority pivoted to making the product **usable and testable**, not adding features:
+1. **Android app UI/UX + performance** — polish the primary warehouse-worker flow
+   (Login → Start Shift → Scan → Speak → interpreted result → Confirm → success →
+   straight to next item). Fast, clear, large touch targets, clear feedback, good
+   loading/empty/error/success states.
+2. **Web Admin panel UI/UX** — complete/polish existing views (dashboard, warehouses,
+   locations, products, inventory, **review/pending ops**, users, sessions): loading/
+   empty/error states, tables, filters, search, pagination, confirm dialogs, approve/
+   reject, product override. Make it feel production-ready.
+3. **Design-system consistency** — Android and Web should feel like one product
+   (colors, typography, spacing, status indicators, buttons, cards, forms, terminology).
+
+**Acceptance:** a worker can Login → Start Shift → Scan → Speak → see result → Confirm →
+clear success → continue, smoothly; the admin panel feels complete for managing/reviewing.
+
+### Scope freeze — DO NOT implement now
+Advanced Voice Counting, Count→Outbox, photo capture/upload/sync/storage/retrieval,
+photo confirmation flow, `UserWarehouse` authorization, JWT redesign, new backend
+architecture, speculative features. Only ensure the architecture doesn't *block* these later.
 
 ---
 
-## PRIMARY next task: commit the verified state (work-loss risk)
+## Deferred / future work (record, do not implement now)
 
-All of Stage 2 (Android outbox), Stage 3 (web review page), and the `apps/web`
-build recovery are **uncommitted**. This is verified, working code — commit it
-before anything else.
-
-Suggested split (branch `feat/android-operator-epic0`, do NOT push unless asked):
-1. **Android offline outbox (Stage 2):**
-   `apps/android/.../data/local/`, `data/remote/dto/SyncDto.kt`, `data/repository/OutboxRepository.kt`,
-   `data/sync/`, + edited `ApiService.kt`, `DatabaseModule.kt`, `ShiftHome{Screen,ViewModel}.kt`,
-   `VoiceEntryViewModel.kt`, `AndroidManifest.xml`.
-2. **Backend approve hardening:** `apps/api/src/pending-operations/pending-operations.service.ts`.
-3. **Web manager review + build recovery (Stage 3):** `apps/web/src/app/admin/review/`,
-   the 8 restored `components/ui/*.tsx`, `lib/{api,nav,types}.ts`, `tsconfig.json`, and the
-   typed pages (`inventory-count`, `location-types`, `vehicle-models`, `product-form-dialog`,
-   `label-print-dialog`).
-   - **Decide** whether to commit the new root `bun.lock` (tied to the PM problem below —
-     ideally resolve that first, then commit the right lockfile).
-4. **Docs + seed helper:** `docs/{AI_HANDOFF,TEST_STATUS,NEXT_TASK}.md` and
-   `apps/api/prisma/seed-pending.ts` (reusable review-queue seed).
-
-Before committing: run the guardrail below so the committed state actually builds.
+1. **Advanced Voice Counting Engine** (Android) — count-specific voice workflow, conversational counting, confirmation logic.
+2. **Count flow → Outbox convergence** — route the count flow through the offline outbox (currently only voice stock-in is offline-first).
+3. **Photo capture** (Android) — `ImageCapture` composable, preview/retake/use, on-device compression.
+4. **Photo upload** — two-phase op→photo sync, multipart client, `OutboxPhoto` Room table + DAO.
+5. **Photo synchronization** — WorkManager phase-2 drain, retry, local-file cleanup.
+6. **Photo storage/retrieval UI** — "Add a photo?" flow (Android); [View photo] preview (web review).
+   - *Backend groundwork already exists and is FROZEN* (commit `113a891`): `Asset` schema, upload/retrieve
+     endpoints, approve re-link. Do not expand it; it compiles and is tested but has no client UI.
+7. **Warehouse-scoped photo authorization** — needs a `UserWarehouse` model + `warehouseIds` in the JWT
+     (applies to the existing unscoped review queue too). Retrieval is currently authenticated + role-gated only.
+8. **Proper Prisma migration baseline for production** — the dev DB has pre-existing drift (`PendingOperation`,
+     `Asset` photo columns, and more were applied via `db push`, never migrated). Author a clean migration
+     baseline before the on-prem Windows deploy. Never `migrate reset` the dev DB (63k locations seeded).
 
 ---
 

@@ -30,6 +30,7 @@ import { SuppliersModule } from './suppliers/suppliers.module';
 import { LabelsModule } from './labels/labels.module';
 import { PrintJobsModule } from './print-jobs/print-jobs.module';
 import { PendingOperationsModule } from './pending-operations/pending-operations.module';
+import { ProductRequestsModule } from './product-requests/product-requests.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ LocationBuilderModule,
     LabelsModule,
     PrintJobsModule,
     PendingOperationsModule,
+    ProductRequestsModule,
   ],
   controllers: [
     AppController,

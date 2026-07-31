@@ -1,16 +1,21 @@
 package com.warehouseos.operator.ui.screens.login
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Warehouse
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -18,12 +23,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -31,11 +36,16 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.warehouseos.operator.R
+import com.warehouseos.operator.ui.components.BannerType
+import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.PrimaryButton
+import com.warehouseos.operator.ui.components.StatusBanner
 
 /**
- * Operator login (Epic 3). Persian UI, large touch targets for floor use.
- * Distinguishes wrong credentials, no-network, and access-denied via the
- * ViewModel's [LoginUiState.error]. Navigates on [LoginUiState.loggedIn].
+ * Operator login. Persian, large touch targets. The backend server URL is edited
+ * here (before auth) so a new device can be pointed at the on-prem server without
+ * digging into settings. Footer carries the product/brand line.
  */
 @Composable
 fun LoginScreen(
@@ -52,21 +62,31 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
+            .verticalScroll(rememberScrollState())
+            .imePadding()
+            .padding(Dimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
     ) {
-        Text(
-            text = "ورود اپراتور انبار",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center,
+        Icon(
+            Icons.Filled.Warehouse,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .padding(top = Dimens.gapLarge)
+                .size(56.dp),
         )
         Text(
-            text = "برای شروع، وارد حساب کاربری خود شوید",
-            style = MaterialTheme.typography.bodyLarge,
+            text = stringResource(R.string.customer_name),
+            style = MaterialTheme.typography.headlineMedium,
             textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 8.dp, bottom = 32.dp),
+            modifier = Modifier.padding(top = Dimens.gap),
+        )
+        Text(
+            text = "ورود به سیستم",
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = Dimens.gapSmall, bottom = Dimens.gapLarge),
         )
 
         OutlinedTextField(
@@ -92,53 +112,72 @@ fun LoginScreen(
             },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password,
-                imeAction = ImeAction.Done,
+                imeAction = ImeAction.Next,
             ),
-            keyboardActions = KeyboardActions(onDone = { viewModel.login() }),
             trailingIcon = {
-                Text(
-                    text = if (passwordVisible) "پنهان" else "نمایش",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .padding(end = 12.dp)
-                        .clickable { passwordVisible = !passwordVisible },
-                )
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = if (passwordVisible) "پنهان کردن رمز" else "نمایش رمز",
+                    )
+                }
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 16.dp),
+                .padding(top = Dimens.fieldSpacing),
+        )
+
+        OutlinedTextField(
+            value = state.serverUrl,
+            onValueChange = viewModel::onServerUrlChange,
+            label = { Text("آدرس سرور") },
+            placeholder = { Text("http://10.141.233.130:3000") },
+            singleLine = true,
+            enabled = !state.isSubmitting,
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Uri,
+                imeAction = ImeAction.Done,
+            ),
+            keyboardActions = KeyboardActions(onDone = { viewModel.login() }),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Dimens.fieldSpacing),
         )
 
         if (state.error != null) {
-            Text(
+            StatusBanner(
                 text = state.error!!,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 16.dp),
+                type = BannerType.Error,
+                modifier = Modifier.padding(top = Dimens.gapLarge),
             )
         }
 
-        Button(
+        PrimaryButton(
+            text = "ورود",
             onClick = viewModel::login,
             enabled = state.canSubmit,
+            loading = state.isSubmitting,
+            modifier = Modifier.padding(top = Dimens.gapLarge),
+        )
+
+        // Subtle footer — scrolls with content, so it never fights the keyboard.
+        Text(
+            text = stringResource(R.string.login_copyright),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(top = 24.dp),
-        ) {
-            if (state.isSubmitting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.height(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp,
-                )
-            } else {
-                Text("ورود", style = MaterialTheme.typography.labelLarge)
-            }
-        }
+                .padding(top = Dimens.gapLarge * 2),
+        )
+        Text(
+            text = stringResource(R.string.login_author),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = Dimens.gap),
+        )
     }
 }

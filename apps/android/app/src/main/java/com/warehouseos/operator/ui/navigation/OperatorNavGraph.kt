@@ -10,6 +10,7 @@ import androidx.navigation.navArgument
 import com.warehouseos.operator.data.repository.StartupDestination
 import com.warehouseos.operator.ui.screens.count.CountScreen
 import com.warehouseos.operator.ui.screens.login.LoginScreen
+import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
@@ -82,6 +83,33 @@ fun OperatorNavGraph(
             VoiceEntryScreen(
                 onBack = { navController.popBackStack() },
                 onScanNext = {
+                    navController.navigate(Routes.SCAN) {
+                        popUpTo(Routes.SHIFT_HOME)
+                    }
+                },
+                onRequestNewProduct = { p ->
+                    navController.navigate(
+                        Routes.newProduct(p.barcode, p.name, p.brand, p.vehicle, p.qty, p.unit, p.voice),
+                    )
+                },
+            )
+        }
+
+        composable(
+            route = Routes.NEW_PRODUCT_ROUTE,
+            arguments = listOf(
+                navArgument(Routes.ARG_BARCODE) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_NAME) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_BRAND) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_VEHICLE) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_QTY) { type = NavType.StringType; defaultValue = "1" },
+                navArgument(Routes.ARG_UNIT) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_VOICE) { type = NavType.StringType; defaultValue = "" },
+            ),
+        ) {
+            NewProductRequestScreen(
+                onBack = { navController.popBackStack() },
+                onDone = {
                     navController.navigate(Routes.SCAN) {
                         popUpTo(Routes.SHIFT_HOME)
                     }

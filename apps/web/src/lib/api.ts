@@ -711,3 +711,36 @@ export function rejectPendingOperation(
     body,
   });
 }
+
+// ---- Product creation requests (worker → manager approval) ----
+export function getCategories(): Promise<T.Category[]> {
+  return apiFetch<T.Category[]>("/categories");
+}
+
+export function getProductRequests(
+  status?: string
+): Promise<T.ProductCreationRequest[]> {
+  const qs = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+  return apiFetch<T.ProductCreationRequest[]>(`/product-requests${qs}`);
+}
+
+// POST /product-requests/:id/approve — creates the Product + applies stock (server-side)
+export function approveProductRequest(
+  id: string,
+  body: T.ApproveProductRequestDto = {}
+): Promise<unknown> {
+  return apiFetch(`/product-requests/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+    body,
+  });
+}
+
+export function rejectProductRequest(
+  id: string,
+  body: { reviewNote?: string } = {}
+): Promise<unknown> {
+  return apiFetch(`/product-requests/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    body,
+  });
+}

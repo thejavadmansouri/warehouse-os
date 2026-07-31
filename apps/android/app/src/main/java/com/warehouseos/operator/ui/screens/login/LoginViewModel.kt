@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.repository.AuthRepository
+import com.warehouseos.operator.data.settings.SettingsStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +16,7 @@ import javax.inject.Inject
 data class LoginUiState(
     val username: String = "",
     val password: String = "",
+    val serverUrl: String = "",
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val loggedIn: Boolean = false,
@@ -26,14 +28,21 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val settings: SettingsStore,
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(LoginUiState())
+    private val _state = MutableStateFlow(LoginUiState(serverUrl = settings.baseUrl()))
     val state: StateFlow<LoginUiState> = _state.asStateFlow()
 
     fun onUsernameChange(value: String) = _state.update { it.copy(username = value, error = null) }
 
     fun onPasswordChange(value: String) = _state.update { it.copy(password = value, error = null) }
+
+    /** Persisted immediately so the OkHttp interceptor uses it on the next request. */
+    fun onServerUrlChange(value: String) {
+        settings.setBaseUrl(value)
+        _state.update { it.copy(serverUrl = value, error = null) }
+    }
 
     fun login() {
         val current = _state.value

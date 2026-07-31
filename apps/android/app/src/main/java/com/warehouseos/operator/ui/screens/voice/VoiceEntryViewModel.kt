@@ -26,7 +26,7 @@ import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
-enum class VoicePhase { INPUT, PREVIEWING, CONFIRM, SELECT, SUBMITTING, SUCCESS }
+enum class VoicePhase { INPUT, PREVIEWING, CONFIRM, SELECT, NOT_FOUND, SUBMITTING, SUCCESS }
 
 data class ProductChoice(val id: String, val name: String, val sku: String?)
 
@@ -43,6 +43,10 @@ data class VoiceUiState(
     val searchResults: List<ProductChoice> = emptyList(),
     val successText: String? = null,
     val error: String? = null,
+    // Parsed voice fields, kept so a "new product request" can be pre-filled.
+    val recognizedName: String = "",
+    val recognizedBrand: String = "",
+    val recognizedVehicle: String = "",
 )
 
 /**
@@ -128,17 +132,37 @@ class VoiceEntryViewModel @Inject constructor(
     private fun applyPreview(dto: VoiceResponseDto) {
         val qty = dto.extractQuantity()
         val unit = dto.extractUnit()
+        // Retain parsed fields for a possible new-product request prefill.
+        _uiState.update {
+            it.copy(
+                recognizedName = dto.extractProductName(),
+                recognizedBrand = dto.extractBrand(),
+                recognizedVehicle = dto.extractVehicle(),
+            )
+        }
         when {
             dto.success && dto.needConfirm == true && dto.product != null -> {
-                pendingProductId = dto.product.id
-                _uiState.update {
-                    it.copy(
-                        phase = VoicePhase.CONFIRM,
-                        proposalName = dto.product.name,
-                        quantity = qty,
-                        unit = unit,
-                        error = null,
-                    )
+                // Guard against confidently showing an unrelated product: if the
+                // best match is weak, treat it as "not found" instead of a proposal.
+                val confidence = dto.suggestions
+                    ?.firstOrNull { it.product?.id == dto.product.id }?.confidence
+                    ?: dto.suggestions?.firstOrNull()?.confidence
+                if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
+                    pendingProductId = null
+                    _uiState.update {
+                        it.copy(phase = VoicePhase.NOT_FOUND, quantity = qty, unit = unit, error = null)
+                    }
+                } else {
+                    pendingProductId = dto.product.id
+                    _uiState.update {
+                        it.copy(
+                            phase = VoicePhase.CONFIRM,
+                            proposalName = dto.product.name,
+                            quantity = qty,
+                            unit = unit,
+                            error = null,
+                        )
+                    }
                 }
             }
 
@@ -246,11 +270,38 @@ class VoiceEntryViewModel @Inject constructor(
         _uiState.value = VoiceUiState()
     }
 
+    /** Warm the speech engine when the screen opens so the first tap is instant. */
+    fun prewarmMic() = speech.prewarm()
+
+    /** From NOT_FOUND: fall back to manual product search (keeps the shelf). */
+    fun searchManually() {
+        pendingProductId = null
+        _uiState.update {
+            it.copy(
+                phase = VoicePhase.SELECT,
+                selectionMessage = "کالای موردنظر را جستجو کنید",
+                choices = emptyList(),
+                searchResults = emptyList(),
+                error = null,
+            )
+        }
+    }
+
     private fun VoiceResponseDto.extractQuantity(): Int =
         quantity ?: parsed?.get("quantity")?.jsonPrimitive?.intOrNull ?: 1
 
     private fun VoiceResponseDto.extractUnit(): String? =
         parsed?.get("unit")?.jsonPrimitive?.contentOrNull
+
+    private fun VoiceResponseDto.extractProductName(): String =
+        parsed?.get("productName")?.jsonPrimitive?.contentOrNull.orEmpty()
+
+    private fun VoiceResponseDto.extractBrand(): String =
+        parsed?.get("brand")?.jsonPrimitive?.contentOrNull.orEmpty()
+
+    private fun VoiceResponseDto.extractVehicle(): String =
+        (parsed?.get("vehicleModel") ?: parsed?.get("vehicleFamily"))
+            ?.jsonPrimitive?.contentOrNull.orEmpty()
 
     private fun messageFor(kind: SttError): String = when (kind) {
         SttError.NO_PERMISSION -> "دسترسی به میکروفون داده نشده است"
@@ -264,5 +315,10 @@ class VoiceEntryViewModel @Inject constructor(
         listenJob?.cancel()
         searchJob?.cancel()
         super.onCleared()
+    }
+
+    private companion object {
+        // Below this backend confidence (0–100), don't present a single proposal.
+        const val CONFIDENCE_THRESHOLD = 60.0
     }
 }

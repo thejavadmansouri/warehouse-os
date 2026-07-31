@@ -3,9 +3,9 @@ package com.warehouseos.operator.ui.screens.voice
 import android.Manifest
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -16,9 +16,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.QrCodeScanner
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.HorizontalDivider
@@ -26,13 +27,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,27 +41,57 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.warehouseos.operator.ui.components.BannerType
+import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.PrimaryButton
+import com.warehouseos.operator.ui.components.SecondaryButton
+import com.warehouseos.operator.ui.components.StatusBanner
+import com.warehouseos.operator.ui.navigation.NewProductPrefill
 
 /**
- * Voice stock-in (propose → confirm). Speaks/types → backend preview proposes a
- * product (no commit) → worker confirms → commit. Basic visuals; feature-complete
- * flow including the ambiguous-match selection + manual search path.
+ * Voice stock-in (propose → confirm). Speak/type → backend proposes a product
+ * (no commit) → worker confirms → queued for manager approval. The status strip
+ * keeps the worker oriented: Speak → Processing → Result → Confirm → Done.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun VoiceEntryScreen(
     onBack: () -> Unit,
     onScanNext: () -> Unit,
+    onRequestNewProduct: (NewProductPrefill) -> Unit,
     viewModel: VoiceEntryViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val micPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    val haptic = LocalHapticFeedback.current
+
+    fun prefill(nameOverride: String?) = NewProductPrefill(
+        barcode = viewModel.barcode,
+        name = (nameOverride?.takeIf { it.isNotBlank() }
+            ?: state.recognizedName.ifBlank { state.transcript }),
+        brand = state.recognizedBrand,
+        vehicle = state.recognizedVehicle,
+        qty = state.quantity,
+        unit = state.unit ?: "عدد",
+        voice = state.transcript,
+    )
+
+    // Warm the speech engine as soon as the screen opens → the first mic tap is instant.
+    LaunchedEffect(Unit) { viewModel.prewarmMic() }
+
+    LaunchedEffect(state.phase) {
+        if (state.phase == VoicePhase.SUCCESS) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -71,6 +102,9 @@ fun VoiceEntryScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "بازگشت")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
         },
     ) { padding ->
@@ -78,16 +112,12 @@ fun VoiceEntryScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(24.dp)
+                .padding(Dimens.screenPadding)
                 .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(
-                text = "قفسه: ${viewModel.barcode}",
-                style = MaterialTheme.typography.titleLarge,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth(),
-            )
+            ShelfHeader(barcode = viewModel.barcode)
+            PhaseStrip(phase = state.phase, modifier = Modifier.padding(top = Dimens.gap, bottom = Dimens.gapLarge))
 
             when (state.phase) {
                 VoicePhase.INPUT -> InputPhase(
@@ -100,7 +130,7 @@ fun VoiceEntryScreen(
                     onPreview = viewModel::runPreview,
                 )
 
-                VoicePhase.PREVIEWING -> LoadingBlock("در حال بررسی…")
+                VoicePhase.PREVIEWING -> LoadingBlock("در حال بررسی گفته‌ی شما…")
 
                 VoicePhase.CONFIRM -> ConfirmPhase(
                     state = state,
@@ -113,9 +143,17 @@ fun VoiceEntryScreen(
                     onSearch = viewModel::onSearchQuery,
                     onPick = viewModel::selectChoice,
                     onCancel = viewModel::cancelToInput,
+                    onAddNew = { q -> onRequestNewProduct(prefill(q)) },
                 )
 
-                VoicePhase.SUBMITTING -> LoadingBlock("در حال ثبت…")
+                VoicePhase.NOT_FOUND -> NotFoundPhase(
+                    state = state,
+                    onManualSearch = viewModel::searchManually,
+                    onRetry = viewModel::cancelToInput,
+                    onAddNew = { onRequestNewProduct(prefill(null)) },
+                )
+
+                VoicePhase.SUBMITTING -> LoadingBlock("در حال ثبت در صف…")
 
                 VoicePhase.SUCCESS -> SuccessPhase(
                     state = state,
@@ -128,18 +166,51 @@ fun VoiceEntryScreen(
             }
 
             if (state.error != null && state.phase != VoicePhase.PREVIEWING) {
-                Text(
+                StatusBanner(
                     text = state.error!!,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp),
+                    type = BannerType.Error,
+                    modifier = Modifier.padding(top = Dimens.gapLarge),
                 )
             }
         }
     }
+}
+
+@Composable
+private fun ShelfHeader(barcode: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+    ) {
+        Icon(
+            Icons.Filled.QrCodeScanner,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(24.dp),
+        )
+        Text(
+            text = "قفسه: $barcode",
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(start = 8.dp),
+        )
+    }
+}
+
+/** Constant orientation: which step of Speak → Process → Confirm → Done we're on. */
+@Composable
+private fun PhaseStrip(phase: VoicePhase, modifier: Modifier = Modifier) {
+    val (label, type) = when (phase) {
+        VoicePhase.INPUT -> "بگویید یا تایپ کنید" to BannerType.Info
+        VoicePhase.PREVIEWING -> "در حال پردازش…" to BannerType.Info
+        VoicePhase.CONFIRM -> "بررسی و تأیید کنید" to BannerType.Warning
+        VoicePhase.SELECT -> "محصول را انتخاب کنید" to BannerType.Warning
+        VoicePhase.NOT_FOUND -> "کالا با اطمینان پیدا نشد" to BannerType.Error
+        VoicePhase.SUBMITTING -> "در حال ثبت…" to BannerType.Info
+        VoicePhase.SUCCESS -> "ثبت شد" to BannerType.Success
+    }
+    StatusBanner(text = label, type = type, modifier = modifier)
 }
 
 @Composable
@@ -155,7 +226,7 @@ private fun InputPhase(
     Text(
         text = "نام کالا و تعداد را بگویید",
         style = MaterialTheme.typography.bodyLarge,
-        modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
+        modifier = Modifier.padding(bottom = Dimens.gap),
     )
 
     FilledIconButton(
@@ -178,6 +249,18 @@ private fun InputPhase(
         )
     }
 
+    Text(
+        text = when {
+            state.isListening -> "در حال شنیدن — برای توقف لمس کنید"
+            micGranted -> "برای صحبت، دکمه را لمس کنید"
+            else -> "برای استفاده از میکروفون، دسترسی را بدهید"
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
+        modifier = Modifier.padding(top = Dimens.gapSmall),
+    )
+
     if (state.isListening && state.partialText.isNotBlank()) {
         Text(
             text = state.partialText,
@@ -186,27 +269,25 @@ private fun InputPhase(
             textAlign = TextAlign.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(top = 12.dp),
+                .padding(top = Dimens.gap),
         )
     }
 
     OutlinedTextField(
         value = state.transcript,
         onValueChange = onTranscriptChange,
-        label = { Text("متن (قابل ویرایش) یا وارد کردن دستی") },
+        label = { Text("متن (قابل ویرایش) یا ورود دستی") },
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp),
+            .padding(top = Dimens.gapLarge),
     )
 
-    Button(
+    PrimaryButton(
+        text = "بررسی و ادامه",
         onClick = onPreview,
         enabled = state.transcript.isNotBlank(),
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(top = 12.dp),
-    ) { Text("بررسی و ادامه") }
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
 }
 
 @Composable
@@ -215,47 +296,61 @@ private fun ConfirmPhase(
     onConfirm: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    Text(
-        text = "گفته‌ی شما: ${state.transcript}",
-        style = MaterialTheme.typography.bodyLarge,
-        textAlign = TextAlign.Center,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 12.dp),
-    )
+    RecognizedText(transcript = state.transcript)
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp),
+            .padding(top = Dimens.gap),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(Dimens.cardPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text(state.proposalName, style = MaterialTheme.typography.headlineMedium, textAlign = TextAlign.Center)
             Text(
-                text = "تعداد: ${state.quantity}${state.unit?.let { " $it" } ?: ""}",
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(top = 8.dp),
+                text = state.proposalName,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
             )
+            HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.gap))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+            ) {
+                LabeledValue(label = "تعداد", value = state.quantity.toString())
+                LabeledValue(label = "واحد", value = state.unit ?: "—")
+            }
         }
     }
-    Button(
+    PrimaryButton(
+        text = "تأیید و ثبت",
         onClick = onConfirm,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(top = 16.dp),
-    ) { Text("تأیید و ثبت") }
-    OutlinedButton(
+        icon = Icons.Filled.CheckCircle,
+        modifier = Modifier.padding(top = Dimens.gapLarge),
+    )
+    SecondaryButton(
+        text = "لغو",
         onClick = onCancel,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(top = 8.dp),
-    ) { Text("لغو") }
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
+}
+
+@Composable
+private fun LabeledValue(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleLarge,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
 }
 
 @Composable
@@ -264,6 +359,7 @@ private fun SelectPhase(
     onSearch: (String) -> Unit,
     onPick: (ProductChoice) -> Unit,
     onCancel: () -> Unit,
+    onAddNew: (String) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
 
@@ -273,13 +369,13 @@ private fun SelectPhase(
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp, bottom = 8.dp),
+            .padding(bottom = Dimens.gap),
     )
 
     state.choices.forEach { choice -> ChoiceButton(choice, onPick) }
 
-    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-    Text("جستجوی محصول", style = MaterialTheme.typography.bodyLarge)
+    HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.gapLarge))
+    Text("جستجوی محصول", style = MaterialTheme.typography.titleMedium)
     OutlinedTextField(
         value = query,
         onValueChange = {
@@ -290,29 +386,89 @@ private fun SelectPhase(
         singleLine = true,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 8.dp),
+            .padding(top = Dimens.gapSmall),
+    )
+    PrimaryButton(
+        text = "جستجوی کالا",
+        onClick = { onSearch(query) },
+        enabled = query.isNotBlank(),
+        icon = Icons.Filled.Search,
+        modifier = Modifier.padding(top = Dimens.gapSmall),
     )
     state.searchResults.forEach { choice -> ChoiceButton(choice, onPick) }
 
-    OutlinedButton(
+    SecondaryButton(
+        text = "+ درخواست افزودن کالای جدید",
+        onClick = { onAddNew(query) },
+        modifier = Modifier.padding(top = Dimens.gapLarge),
+    )
+    SecondaryButton(
+        text = "لغو",
         onClick = onCancel,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
+}
+
+@Composable
+private fun RecognizedText(transcript: String) {
+    if (transcript.isBlank()) return
+    Text(
+        text = "متن تشخیص داده‌شده",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Text(
+        text = "«$transcript»",
+        style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier
             .fillMaxWidth()
-            .height(56.dp)
-            .padding(top = 16.dp),
-    ) { Text("لغو") }
+            .padding(top = 2.dp),
+    )
+}
+
+@Composable
+private fun NotFoundPhase(
+    state: VoiceUiState,
+    onManualSearch: () -> Unit,
+    onRetry: () -> Unit,
+    onAddNew: () -> Unit,
+) {
+    Text(
+        text = "کالای موردنظر با اطمینان کافی پیدا نشد.",
+        style = MaterialTheme.typography.titleMedium,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = Dimens.gap),
+    )
+    RecognizedText(transcript = state.transcript)
+    PrimaryButton(
+        text = "جستجوی دستی کالا",
+        onClick = onManualSearch,
+        icon = Icons.Filled.Search,
+        modifier = Modifier.padding(top = Dimens.gapLarge),
+    )
+    SecondaryButton(
+        text = "تلاش مجدد با صدا",
+        onClick = onRetry,
+        icon = Icons.Filled.Mic,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
+    SecondaryButton(
+        text = "+ درخواست افزودن کالای جدید",
+        onClick = onAddNew,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
 }
 
 @Composable
 private fun ChoiceButton(choice: ProductChoice, onPick: (ProductChoice) -> Unit) {
-    Button(
+    SecondaryButton(
+        text = choice.name + (choice.sku?.let { " ($it)" } ?: ""),
         onClick = { onPick(choice) },
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 8.dp),
-    ) {
-        Text(choice.name + (choice.sku?.let { " ($it)" } ?: ""))
-    }
+        modifier = Modifier.padding(top = Dimens.gapSmall),
+    )
 }
 
 @Composable
@@ -324,10 +480,10 @@ private fun SuccessPhase(
     Icon(
         imageVector = Icons.Filled.CheckCircle,
         contentDescription = null,
-        tint = MaterialTheme.colorScheme.primary,
+        tint = MaterialTheme.colorScheme.tertiary,
         modifier = Modifier
-            .padding(top = 24.dp)
-            .size(72.dp),
+            .padding(top = Dimens.gap)
+            .size(80.dp),
     )
     Text(
         text = state.successText ?: "ثبت شد",
@@ -335,34 +491,29 @@ private fun SuccessPhase(
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 16.dp),
+            .padding(top = Dimens.gap),
     )
-    Button(
+    PrimaryButton(
+        text = "کالای بعدی",
         onClick = onNextItem,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(72.dp)
-            .padding(top = 24.dp),
-    ) { Text("کالای بعدی", style = MaterialTheme.typography.titleLarge) }
-    OutlinedButton(
+        icon = Icons.Filled.Mic,
+        height = Dimens.hugeActionHeight,
+        modifier = Modifier.padding(top = Dimens.gapLarge),
+    )
+    SecondaryButton(
+        text = "اسکن قفسه بعدی",
         onClick = onScanNext,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .padding(top = 12.dp),
-    ) { Text("اسکن قفسه بعدی") }
+        icon = Icons.Filled.QrCodeScanner,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
 }
 
 @Composable
 private fun LoadingBlock(label: String) {
-    Column(
+    com.warehouseos.operator.ui.components.LoadingState(
+        label = label,
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = 48.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator()
-        Text(text = label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(top = 16.dp))
-    }
+    )
 }

@@ -4,26 +4,24 @@ import android.Manifest
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,12 +39,14 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
+import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.PrimaryButton
+import com.warehouseos.operator.ui.components.SecondaryButton
 
 /**
  * Location scan screen (Epic 5). Camera barcode/QR scanning via [BarcodeScanner],
  * with a camera-permission flow and an always-available manual-entry fallback so
- * the operator is never blocked. On detection it just returns the raw barcode via
- * [onScanned] — no lookup or business logic here.
+ * the operator is never blocked. On detection it returns the raw barcode.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -74,6 +74,9 @@ fun ScanScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "بازگشت")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
             )
         },
     ) { padding ->
@@ -81,7 +84,7 @@ fun ScanScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp),
+                .padding(Dimens.screenPadding),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             if (cameraPermission.status.isGranted) {
@@ -89,13 +92,18 @@ fun ScanScreen(
                     text = "بارکد قفسه را مقابل دوربین بگیرید",
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(bottom = 12.dp),
+                    modifier = Modifier.padding(bottom = Dimens.gap),
                 )
                 BarcodeScanner(
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(3f / 4f)
-                        .clip(RoundedCornerShape(12.dp)),
+                        .clip(RoundedCornerShape(Dimens.corner))
+                        .border(
+                            width = 3.dp,
+                            color = MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(Dimens.corner),
+                        ),
                     onBarcodeDetected = reportBarcode,
                 )
             } else {
@@ -107,16 +115,14 @@ fun ScanScreen(
                     },
                     style = MaterialTheme.typography.bodyLarge,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(vertical = 24.dp),
+                    modifier = Modifier.padding(vertical = Dimens.gapLarge),
                 )
-                Button(
+                PrimaryButton(
+                    text = "اجازه دسترسی به دوربین",
                     onClick = { cameraPermission.launchPermissionRequest() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                ) { Text("اجازه دسترسی به دوربین") }
-
-                OutlinedButton(
+                )
+                SecondaryButton(
+                    text = "باز کردن تنظیمات",
                     onClick = {
                         context.startActivity(
                             Intent(
@@ -125,18 +131,15 @@ fun ScanScreen(
                             ),
                         )
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp)
-                        .padding(top = 12.dp),
-                ) { Text("باز کردن تنظیمات") }
+                    modifier = Modifier.padding(top = Dimens.gap),
+                )
             }
 
             // Manual-entry fallback — always available.
             Text(
                 text = "یا وارد کردن دستی بارکد",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(top = 24.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(top = Dimens.gapLarge, bottom = Dimens.gapSmall),
             )
             OutlinedTextField(
                 value = manualBarcode,
@@ -145,14 +148,12 @@ fun ScanScreen(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            Button(
+            PrimaryButton(
+                text = "تأیید",
                 onClick = { reportBarcode(manualBarcode.trim()) },
                 enabled = manualBarcode.isNotBlank(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp)
-                    .padding(top = 12.dp),
-            ) { Text("تأیید") }
+                modifier = Modifier.padding(top = Dimens.gap),
+            )
         }
     }
 }
