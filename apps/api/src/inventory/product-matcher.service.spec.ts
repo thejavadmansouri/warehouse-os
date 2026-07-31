@@ -20,7 +20,14 @@ function product(over: Record<string, unknown>) {
 
 describe('ProductMatcherService.match ranking', () => {
   let service: ProductMatcherService;
-  const prisma = { product: { findMany: jest.fn() } };
+  const prisma = { product: { findMany: jest.fn() }, $queryRawUnsafe: jest.fn() };
+
+  // Retrieval now ranks in Postgres ($queryRawUnsafe → ids), then hydrates via
+  // findMany. Mock both from one candidate list.
+  function mockCandidates(list: Array<{ id: string }>) {
+    prisma.$queryRawUnsafe.mockResolvedValue(list.map((p) => ({ id: p.id })));
+    prisma.product.findMany.mockResolvedValue(list);
+  }
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -47,7 +54,7 @@ describe('ProductMatcherService.match ranking', () => {
       vehicleModelId: 'v-samand',
       vehicleModel: { name: 'سمند', aliases: [] },
     });
-    prisma.product.findMany.mockResolvedValue([wrong, correct]); // wrong first on purpose
+    mockCandidates([wrong, correct]);
 
     const res = await service.match({
       partName: 'سوپرموتور',
@@ -79,7 +86,7 @@ describe('ProductMatcherService.match ranking', () => {
       vehicleModelId: 'v-pride',
       vehicleModel: { name: 'پراید', aliases: [] },
     });
-    prisma.product.findMany.mockResolvedValue([shock, lent]);
+    mockCandidates([shock, lent]);
 
     const res = await service.match({
       partName: 'لنت ترمز جلو',
@@ -98,7 +105,7 @@ describe('ProductMatcherService.match ranking', () => {
   it('does not surface an unrelated product as a confident match', async () => {
     // «پنج تا تسمه تایم ۲۰۶» with only an unrelated pump in the DB.
     const unrelated = product({ id: 'pump', name: 'پمپ هیدرولیک فرمان' });
-    prisma.product.findMany.mockResolvedValue([unrelated]);
+    mockCandidates([unrelated]);
 
     const res = await service.match({
       partName: 'تسمه تایم',
