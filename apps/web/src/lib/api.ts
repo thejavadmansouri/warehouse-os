@@ -1139,3 +1139,78 @@ export function updateBackupConfig(
 export function runBackup(trigger: "MANUAL" | "ON_CLOSE" = "MANUAL"): Promise<BackupRun> {
   return apiFetch<BackupRun>("/backups/run", { method: "POST", body: { trigger } });
 }
+
+// =====================================================
+// دریافت وجه از بدهکار
+// =====================================================
+
+export function createReceipt(body: {
+  idempotencyKey?: string;
+  customerId: string;
+  amount: number;
+  method: T.PaymentMethod;
+  note?: string;
+  cheque?: T.ChequeInput;
+}): Promise<T.Receipt> {
+  return apiFetch<T.Receipt>("/sales/receipts", { method: "POST", body });
+}
+
+export function getReceipts(p: { customerId?: string; page?: number; limit?: number } = {}) {
+  return apiFetch<{ data: T.Receipt[]; meta: T.ReportMeta }>(
+    `/sales/receipts?${reportQs(p)}`
+  );
+}
+
+export function getReceipt(id: string): Promise<T.Receipt> {
+  return apiFetch<T.Receipt>(`/sales/receipts/${encodeURIComponent(id)}`);
+}
+
+// =====================================================
+// پیش‌فاکتور
+// =====================================================
+
+export function createQuotation(body: {
+  warehouseId: string;
+  customerId?: string | null;
+  discount?: number;
+  note?: string;
+  validForMinutes: number;
+  lines: { productId: string; locationId?: string; quantity: number; unitPrice: number }[];
+}): Promise<T.Quotation> {
+  return apiFetch<T.Quotation>("/sales/quotations", { method: "POST", body });
+}
+
+export function getQuotations(p: {
+  status?: string;
+  customerId?: string;
+  page?: number;
+  limit?: number;
+} = {}) {
+  return apiFetch<{ data: T.Quotation[]; meta: T.ReportMeta }>(
+    `/sales/quotations?${reportQs(p)}`
+  );
+}
+
+export function getQuotation(id: string): Promise<T.Quotation> {
+  return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}`);
+}
+
+export function convertQuotation(id: string): Promise<T.Invoice> {
+  return apiFetch<T.Invoice>(`/sales/quotations/${encodeURIComponent(id)}/convert`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+export function extendQuotation(id: string, validForMinutes: number): Promise<T.Quotation> {
+  return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}/extend`, {
+    method: "POST",
+    body: { validForMinutes },
+  });
+}
+
+export function cancelQuotation(id: string): Promise<T.Quotation> {
+  return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+  });
+}
