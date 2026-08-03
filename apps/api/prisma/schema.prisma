@@ -961,6 +961,60 @@ enum QuotationStatus {
   CANCELLED
 }
 
+/// تنظیمات بک‌آپ. تک‌ردیفی است (id ثابت "singleton").
+///
+/// ⚠️ مسیر ذخیره روی **سروری** است که پستگرس آنجاست، نه روی سیستم مدیر.
+/// اگر مدیر از راه دور وصل باشد، باید مسیری بدهد که سرور بتواند در آن بنویسد
+/// (مثلاً یک درایو شبکه‌ای که برای سرویس سرور در دسترس است).
+model BackupConfig {
+  id              String   @id @default("singleton")
+  enabled         Boolean  @default(true)
+  /// پوشه‌ی مقصد روی سرور. خالی یعنی پوشه‌ی پیش‌فرض کنار برنامه.
+  destination     String   @default("")
+  /// ساعت اجرای روزانه به وقت محلی — ۰ تا ۲۳.
+  hour            Int      @default(23)
+  minute          Int      @default(0)
+  /// چند فایل نگه داشته شود؛ قدیمی‌ترها خودکار حذف می‌شوند.
+  keepCount       Int      @default(14)
+  /// اگر از این تعداد ساعت بیشتر از آخرین بک‌آپ گذشته باشد، هنگام بستن
+  /// برنامه به مدیر یادآوری می‌شود.
+  remindAfterHours Int     @default(12)
+  updatedAt       DateTime @updatedAt
+
+  runs BackupRun[]
+}
+
+/// سابقه‌ی هر اجرای بک‌آپ.
+///
+/// بک‌آپی که بازیابی‌اش تست نشده بک‌آپ نیست: بعد از هر دامپ، آرشیو با
+/// `pg_restore --list` خوانده می‌شود تا مطمئن شویم فایل سالم است و خالی نیست.
+/// نتیجه در `verified` ثبت می‌شود.
+model BackupRun {
+  id         String       @id @default(uuid())
+  configId   String?
+  status     BackupStatus @default(RUNNING)
+  /// دستی یا زمان‌بندی‌شده یا «پیش از بستن برنامه»
+  trigger    String       @default("MANUAL")
+  filePath   String?
+  sizeBytes  BigInt?
+  verified   Boolean      @default(false)
+  error      String?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+  startedById String?
+
+  config BackupConfig? @relation(fields: [configId], references: [id])
+
+  @@index([status, startedAt])
+  @@index([startedAt])
+}
+
+enum BackupStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 enum ChequeStatus {
   IN_HAND // نزد ما، سررسید نشده
   DEPOSITED // به بانک ارائه شده

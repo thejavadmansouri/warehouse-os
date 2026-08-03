@@ -7,6 +7,7 @@ import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import { AdminTopbar } from "@/components/layout/admin-topbar";
 import { LoadingState } from "@/components/states";
 import { cn } from "@/lib/utils";
+import { BackupCloseGuard } from "@/components/backup-close-guard";
 
 export default function AdminLayout({
   children,
@@ -55,6 +56,8 @@ export default function AdminLayout({
           onToggleCollapse={() => setCollapsed((c) => !c)}
         />
         <main className="flex-1 p-4 sm:p-6">{children}</main>
+        {/* در مرورگر بی‌اثر است؛ فقط داخل قاب دسکتاپ فعال می‌شود. */}
+        <BackupCloseGuard />
       </div>
     </div>
   );

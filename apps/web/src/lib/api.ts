@@ -1084,3 +1084,58 @@ export async function downloadReportExcel(
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+// =====================================================
+// بک‌آپ
+// =====================================================
+
+export interface BackupConfig {
+  id: string;
+  enabled: boolean;
+  destination: string;
+  hour: number;
+  minute: number;
+  keepCount: number;
+  remindAfterHours: number;
+}
+
+export interface BackupStatus {
+  lastSuccessAt: string | null;
+  lastFilePath: string | null;
+  lastVerified: boolean;
+  hoursSinceLastBackup: number | null;
+  /** سرور تصمیم می‌گیرد یادآوری لازم است یا نه، نه کلاینت. */
+  shouldRemind: boolean;
+  isRunning: boolean;
+  config: BackupConfig;
+}
+
+export interface BackupRun {
+  id: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED";
+  trigger: string;
+  filePath: string | null;
+  sizeBytes: number | null;
+  verified: boolean;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+export function getBackupStatus(): Promise<BackupStatus> {
+  return apiFetch<BackupStatus>("/backups/status");
+}
+
+export function getBackupHistory(limit = 30): Promise<BackupRun[]> {
+  return apiFetch<BackupRun[]>(`/backups/history?limit=${limit}`);
+}
+
+export function updateBackupConfig(
+  dto: Partial<Omit<BackupConfig, "id">>
+): Promise<BackupConfig> {
+  return apiFetch<BackupConfig>("/backups/config", { method: "PUT", body: dto });
+}
+
+export function runBackup(trigger: "MANUAL" | "ON_CLOSE" = "MANUAL"): Promise<BackupRun> {
+  return apiFetch<BackupRun>("/backups/run", { method: "POST", body: { trigger } });
+}
