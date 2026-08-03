@@ -340,10 +340,18 @@ export class ProductsService {
 
   async update(id:string, dto:any){
 
-    // فقط فیلدهای مستقیم روی Product رو آپدیت می‌کنیم.
-    // تغییر بارکد/عکس/قیمت باید از endpointهای مخصوص خودشون
-    // (barcode / uploads / prices) انجام بشه، چون این‌ها روی
-    // جدول‌های جدا (ProductBarcode / Asset / ProductPrice) هستن.
+    // بارکد و عکس از endpointهای خودشان عوض می‌شوند.
+    // قیمت اما همین‌جا پذیرفته می‌شود: فرم محصول فیلد قیمت دارد و آن را
+    // می‌فرستد، و اگر اینجا بی‌صدا دور ریخته شود کاربر «ذخیره شد» می‌بیند
+    // در حالی که هیچ قیمتی ثبت نشده.
+    if (
+      dto.purchasePrice != null ||
+      dto.salePrice != null ||
+      dto.wholesalePrice != null
+    ) {
+      await this.setPrice(id, dto);
+    }
+
     const {
       name,
       sku,
@@ -408,6 +416,63 @@ export class ProductsService {
 
 
 
+
+
+  /**
+   * ثبت قیمت جدید برای یک کالا.
+   *
+   * ProductPrice جدول تاریخچه است: قیمت قبلی به‌روزرسانی نمی‌شود، ردیف تازه
+   * اضافه می‌شود. این عمدی است — سود هر فاکتور از قیمت خرید **لحظه‌ی فروش**
+   * حساب می‌شود، پس اگر تاریخچه را بازنویسی کنیم سود فاکتورهای قدیمی غلط
+   * می‌شود.
+   *
+   * اگر هیچ مقداری نسبت به آخرین قیمت عوض نشده باشد، ردیف تکراری ساخته
+   * نمی‌شود؛ وگرنه هر بار ویرایش کالا تاریخچه را پر از نویز می‌کند.
+   */
+  async setPrice(
+    productId: string,
+    dto: { purchasePrice?: number | null; salePrice?: number | null; wholesalePrice?: number | null },
+  ) {
+    const product = await this.prisma.product.findUnique({
+      where: { id: productId },
+      select: { id: true },
+    });
+
+    if (!product) throw new NotFoundException('کالا پیدا نشد');
+
+    const latest = await this.prisma.productPrice.findFirst({
+      where: { productId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // مقدارِ نداده‌شده یعنی «عوض نکن»، نه «صفر کن».
+    const next = {
+      purchasePrice: dto.purchasePrice ?? latest?.purchasePrice ?? null,
+      salePrice: dto.salePrice ?? latest?.salePrice ?? null,
+      wholesalePrice: dto.wholesalePrice ?? latest?.wholesalePrice ?? null,
+    };
+
+    const unchanged =
+      latest &&
+      latest.purchasePrice === next.purchasePrice &&
+      latest.salePrice === next.salePrice &&
+      latest.wholesalePrice === next.wholesalePrice;
+
+    if (unchanged) return latest;
+
+    return this.prisma.productPrice.create({
+      data: { productId, ...next },
+    });
+  }
+
+
+  /** تاریخچه‌ی قیمت یک کالا، جدیدترین اول. */
+  priceHistory(productId: string) {
+    return this.prisma.productPrice.findMany({
+      where: { productId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 
 
   async remove(id:string){

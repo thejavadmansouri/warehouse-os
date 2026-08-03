@@ -95,6 +95,26 @@ export class ProductsController {
   }
 
 
+  // ثبت قیمت جدید. ردیف تازه در تاریخچه می‌سازد، قیمت قبلی را بازنویسی نمی‌کند.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post(':id/prices')
+  setPrice(
+    @Param('id') id: string,
+    @Body() dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number },
+  ){
+    return this.productsService.setPrice(id, dto);
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get(':id/prices')
+  priceHistory(
+    @Param('id') id: string,
+  ){
+    return this.productsService.priceHistory(id);
+  }
+
+
   @Patch(':id')
   @Roles(Role.ADMIN, Role.MANAGER)
   update(
