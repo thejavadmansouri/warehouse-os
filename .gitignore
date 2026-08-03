@@ -14,3 +14,7 @@ coverage/
 
 # Runtime-generated storage (uploaded images, generated label PNGs)
 apps/api/storage/
+
+# دامپ‌های دیتابیس — داده‌ی واقعی است و در گیت جایی ندارد
+backup/*.dump
+backup/*.sql
