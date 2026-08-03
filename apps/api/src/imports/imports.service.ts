@@ -8,6 +8,7 @@ import { ImportRowStatus } from '@prisma/client';
 import { ConfirmImportDto } from './dto/confirm-import.dto';
 import * as XLSX from 'xlsx';
 import { StringMatcher } from './utils/string-matcher.util';
+import { buildSearchTokens } from '../products/search-tokens';
 
 @Injectable()
 export class ImportsService {
@@ -219,6 +220,11 @@ export class ImportsService {
             name: row.productName ?? 'بدون نام',
             sku: generatedSku,
             partNumber: row.partNumber,
+            searchTokens: buildSearchTokens(
+              row.productName ?? 'بدون نام',
+              generatedSku,
+              row.partNumber,
+            ),
             unit: row.unit || 'عدد',
             partCatalogId: catalogId,
             brandId: brandId,

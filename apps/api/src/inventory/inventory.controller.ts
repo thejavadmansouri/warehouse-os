@@ -47,8 +47,13 @@ export class InventoryController {
   // موجودی کل
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Get('current-stock')
-  getCurrentStock(){
-    return this.service.getStock();
+  getCurrentStock(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ){
+    const p = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limit ?? '50', 10) || 50));
+    return this.service.getStock(p, l);
   }
 
 
@@ -183,8 +188,22 @@ export class InventoryController {
 
 
 
-  // خروج کالا
-  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  // اسکن بارکد برای فروش: کالا + موجودی در یک درخواست
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('sale/resolve/:barcode')
+  resolveForSale(@Param('barcode') barcode: string) {
+    return this.service.resolveForSale(barcode);
+  }
+
+  // موجودیِ یک کالا به تفکیک مکان (برای صفحه‌ی فروش)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('product/:productId/stock')
+  productStock(@Param('productId') productId: string) {
+    return this.service.stockByProduct(productId);
+  }
+
+  // خروج/فروش کالا — مدیر/ادمین/فروشنده (کاهش موجودی = حرکت پولی)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('out')
   out(
     @Body() dto:any,

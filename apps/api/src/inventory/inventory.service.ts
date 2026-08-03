@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 
@@ -62,6 +62,8 @@ export class InventoryService {
 
       quantity:dto.quantity,
 
+      unitPrice:dto.unitPrice,
+
       note:dto.note,
 
       userId:dto.userId,
@@ -70,6 +72,69 @@ export class InventoryService {
 
     });
 
+  }
+
+
+
+  // اسکن بارکد برای فروش: کالا را از بارکد/SKU/شماره‌فنی/بارکد داخلی پیدا کن و
+  // موجودی‌اش را در یک درخواست برگردان (یک round-trip → فروش سریع پشت پیشخوان).
+  async resolveForSale(rawBarcode: string) {
+    const code = (rawBarcode || '').trim();
+    if (!code) {
+      throw new NotFoundException({ error: 'NOT_FOUND', message: 'بارکد خالی است' });
+    }
+
+    const product = await this.prisma.product.findFirst({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [
+          { barcodes: { some: { barcode: code } } },
+          { internalBarcode: code },
+          { sku: code },
+          { partNumber: code },
+        ],
+      },
+      include: { prices: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+
+    if (!product) {
+      throw new NotFoundException({
+        error: 'PRODUCT_NOT_FOUND',
+        message: 'کالایی با این بارکد پیدا نشد',
+      });
+    }
+
+    const stock = await this.stockByProduct(product.id);
+
+    return {
+      product: {
+        id: product.id,
+        name: product.name,
+        sku: product.sku,
+        unit: product.unit,
+        salePrice: product.prices?.[0]?.salePrice ?? null,
+      },
+      stock,
+    };
+  }
+
+  // موجودیِ یک کالا به تفکیک مکان — برای صفحه‌ی فروش اپ: «این کالا کجا و چند تا موجوده».
+  // فقط مکان‌هایی که موجودیِ مثبت دارند (یعنی ثبت و لیبل خورده‌اند) قابل فروش‌اند.
+  async stockByProduct(productId:string){
+    const rows = await this.prisma.inventory.findMany({
+      where:{ productId, quantity:{ gt:0 } },
+      include:{ location:true },
+      orderBy:{ quantity:'desc' },
+    });
+    return rows.map((r)=>({
+      locationId: r.locationId,
+      locationName: r.location?.name ?? '',
+      locationCode: r.location?.code ?? '',
+      locationBarcode: r.location?.barcode ?? '',
+      locationPath: r.location?.path ?? '',
+      quantity: r.quantity,
+    }));
   }
 
 
