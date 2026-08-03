@@ -2,10 +2,15 @@ mod config;
 mod printer;
 
 use config::{load_config, normalize_server_url, save_config, AppConfig};
+use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
-    AppHandle, Manager, WebviewUrl, WebviewWindowBuilder,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
+
+/// وقتی صفحه اجازه‌ی بستن داد، دفعه‌ی بعد جلوی بسته شدن گرفته نمی‌شود.
+/// بدون این، حلقه‌ی بی‌پایان می‌شد: بستن → جلوگیری → بستن → …
+static CLOSE_APPROVED: AtomicBool = AtomicBool::new(false);
 
 /// اسکریپتی که پیش از بارگذاری صفحه تزریق می‌شود.
 ///
@@ -83,6 +88,15 @@ fn toggle_fullscreen(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// صفحه پس از تصمیم کاربر (بک‌آپ گرفت یا بی‌خیال شد) این را صدا می‌زند.
+#[tauri::command]
+fn approve_close(app: AppHandle) {
+    CLOSE_APPROVED.store(true, Ordering::SeqCst);
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.close();
+    }
+}
+
 #[tauri::command]
 fn open_settings(app: AppHandle) -> Result<(), String> {
     open_setup_window(&app).map_err(|e| format!("باز کردن تنظیمات ناموفق بود: {e}"))
@@ -93,7 +107,7 @@ fn open_main_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
         .parse()
         .unwrap_or_else(|_| "http://localhost:3001".parse().unwrap());
 
-    WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
         .title("Warehouse OS — فروش")
         .inner_size(1280.0, 800.0)
         .min_inner_size(1024.0, 700.0)
@@ -101,6 +115,26 @@ fn open_main_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
         .resizable(true)
         .initialization_script(KEY_HANDLER)
         .build()?;
+
+    // پیش از بستن، از صفحه بپرس آیا بک‌آپ لازم است.
+    //
+    // چرا از صفحه و نه از خود Rust: توکن ورود فقط در صفحه‌ی وب هست، پس تنها
+    // آنجاست که می‌شود وضعیت بک‌آپ را از سرور پرسید. Rust بستن را نگه می‌دارد
+    // و تصمیم را به صفحه می‌سپارد.
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            if CLOSE_APPROVED.load(Ordering::SeqCst) {
+                return; // کاربر قبلاً تصمیم گرفته؛ بگذار بسته شود
+            }
+            api.prevent_close();
+            if let Some(win) = handle.get_webview_window("main") {
+                // اگر صفحه به هر دلیل پاسخ ندهد، کاربر در بن‌بست نمی‌ماند:
+                // از منو می‌تواند خارج شود و emit شکست‌خورده نادیده گرفته می‌شود.
+                let _ = win.emit("app-close-requested", ());
+            }
+        }
+    });
 
     Ok(())
 }
@@ -167,6 +201,7 @@ pub fn run() {
             set_printer_name,
             toggle_fullscreen,
             open_settings,
+            approve_close,
             printer::list_printers,
             printer::print_receipt,
             printer::test_print,

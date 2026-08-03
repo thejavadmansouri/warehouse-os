@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
 import { join } from 'path';
 import { AppController } from './app.controller';
@@ -35,9 +36,11 @@ import { ProductRequestsModule } from './product-requests/product-requests.modul
 import { SalesModule } from './sales/sales.module';
 import { PickTasksModule } from './pick-tasks/pick-tasks.module';
 import { ReportsModule } from './reports/reports.module';
+import { BackupsModule } from './backups/backups.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'storage'),
       serveRoot: '/storage',
@@ -71,6 +74,7 @@ LocationBuilderModule,
     SalesModule,
     PickTasksModule,
     ReportsModule,
+    BackupsModule,
   ],
   controllers: [
     AppController,
