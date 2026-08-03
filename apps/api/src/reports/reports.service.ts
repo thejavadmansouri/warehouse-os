@@ -4,6 +4,14 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 
+/**
+ * منطقه‌ی زمانی گزارش‌ها.
+ *
+ * تاریخ‌ها UTC ذخیره می‌شوند ولی «روز» برای کاربر یعنی روز تهران. هر تجمیع
+ * روزانه‌ای باید از این استفاده کند، وگرنه فروشِ بامداد روی روز قبل می‌افتد.
+ */
+const REPORT_TZ = process.env.REPORT_TIMEZONE ?? 'Asia/Tehran';
+
 export interface RangeQuery {
   startDate?: string;
   endDate?: string;
@@ -65,10 +73,15 @@ export class ReportsService {
         take: limit,
       }),
       // تجمیع روزانه در خود دیتابیس — کشیدن همه‌ی ردیف‌ها به Node اشتباه است.
+      //
+      // مرز روز باید به وقت تهران باشد، نه UTC. تاریخ‌ها UTC ذخیره می‌شوند و
+      // تهران +۳:۳۰ است؛ اگر مستقیم روی UTC گروه‌بندی کنیم، فروشِ بین نیمه‌شب
+      // تا ۳:۳۰ بامداد روی ستون روز قبل می‌نشیند.
       this.prisma.$queryRaw<{ day: Date; amount: bigint; count: bigint }[]>`
-        SELECT date_trunc('day', "createdAt") AS day,
-               SUM("total")::bigint          AS amount,
-               COUNT(*)::bigint              AS count
+        SELECT date_trunc('day', "createdAt" AT TIME ZONE 'UTC' AT TIME ZONE ${REPORT_TZ})
+                 AS day,
+               SUM("total")::bigint AS amount,
+               COUNT(*)::bigint     AS count
         FROM "SaleInvoice"
         WHERE "status" = 'CONFIRMED'
           AND "createdAt" BETWEEN ${start} AND ${end}
@@ -271,10 +284,12 @@ export class ReportsService {
           ? { status: 'BOUNCED' }
           : { status: { in: ['IN_HAND', 'DEPOSITED'] } }; // سررسید پیش‌رو
 
-    const [rows, total, sum] = await Promise.all([
+    const [rows, total, fromPayments, fromReceipts] = await Promise.all([
       this.prisma.cheque.findMany({
         where,
         include: {
+          // چک یا بابت فاکتور است یا بابت تسویه‌ی بدهی قبلی — هر دو باید
+          // در این گزارش دیده شوند، وگرنه چک‌های تسویه نامرئی می‌مانند.
           payment: {
             select: {
               amount: true,
@@ -284,6 +299,13 @@ export class ReportsService {
                   customer: { select: { firstName: true, lastName: true } },
                 },
               },
+            },
+          },
+          receipt: {
+            select: {
+              number: true,
+              amount: true,
+              customer: { select: { firstName: true, lastName: true } },
             },
           },
         },
@@ -296,10 +318,20 @@ export class ReportsService {
         where: { cheque: { is: where } },
         _sum: { amount: true },
       }),
+      this.prisma.receipt.aggregate({
+        where: { cheque: { is: where } },
+        _sum: { amount: true },
+      }),
     ]);
 
+    const fullName = (c?: { firstName: string; lastName: string | null } | null) =>
+      c ? [c.firstName, c.lastName].filter(Boolean).join(' ') : null;
+
     return {
-      summary: { totalCount: total, totalAmount: sum._sum.amount ?? 0 },
+      summary: {
+        totalCount: total,
+        totalAmount: (fromPayments._sum.amount ?? 0) + (fromReceipts._sum.amount ?? 0),
+      },
       cheques: {
         data: rows.map((c) => ({
           id: c.id,
@@ -307,15 +339,15 @@ export class ReportsService {
           bankName: c.bankName,
           holderName:
             c.holderName ??
-            (c.payment.invoice.customer
-              ? [c.payment.invoice.customer.firstName, c.payment.invoice.customer.lastName]
-                  .filter(Boolean)
-                  .join(' ')
-              : null),
-          amount: c.payment.amount,
+            fullName(c.payment?.invoice.customer) ??
+            fullName(c.receipt?.customer),
+          amount: c.payment?.amount ?? c.receipt?.amount ?? 0,
           dueDate: c.dueDate,
           status: c.status,
-          invoiceNumber: c.payment.invoice.number,
+          /** منبع چک: فروش یا تسویه‌ی بدهی. */
+          source: c.payment ? 'INVOICE' : 'RECEIPT',
+          invoiceNumber: c.payment?.invoice.number ?? null,
+          receiptNumber: c.receipt?.number ?? null,
         })),
         meta: meta(total, page, limit),
       },
