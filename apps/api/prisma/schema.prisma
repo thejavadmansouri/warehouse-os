@@ -28,6 +28,8 @@ model User {
   productRequestsReviewed ProductCreationRequest[] @relation("ProductRequestReviewer")
   saleInvoices            SaleInvoice[]           @relation("InvoiceSeller")
   saleInvoicesCancelled   SaleInvoice[]           @relation("InvoiceCanceller")
+  receiptsTaken           Receipt[]               @relation("ReceiptTaker")
+  quotations              Quotation[]             @relation("QuotationSeller")
   pickTasksRequested      PickTask[]              @relation("PickRequester")
   pickTasksAssigned       PickTask[]              @relation("PickAssignee")
   pickTasksPicked         PickTask[]              @relation("PickPicker")
@@ -45,6 +47,7 @@ model Warehouse {
   locationTypes LocationType[]
   saleInvoices  SaleInvoice[]
   pickTasks     PickTask[]
+  quotations    Quotation[]
 }
 
 model LocationType {
@@ -190,6 +193,7 @@ model Product {
   createdFromRequests ProductCreationRequest[] @relation("ProductRequestCreated")
   vehicles        ProductVehicle[]
   pickTasks       PickTask[]
+  quotationLines  QuotationLine[]
 
   @@index([searchTokens], type: Gin)
 }
@@ -636,9 +640,11 @@ model Customer {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  phones   CustomerPhone[]
-  invoices SaleInvoice[]
-  messages SmsMessage[]
+  phones     CustomerPhone[]
+  invoices   SaleInvoice[]
+  messages   SmsMessage[]
+  receipts   Receipt[]
+  quotations Quotation[]
 
   @@index([searchName])
   @@index([lastName])
@@ -792,6 +798,7 @@ model SaleInvoice {
   cancelledBy User?          @relation("InvoiceCanceller", fields: [cancelledById], references: [id])
   lines       InventoryLog[]
   payments    Payment[]
+  allocations ReceiptAllocation[]
 
   @@index([warehouseId, createdAt])
   @@index([customerId])
@@ -828,11 +835,14 @@ enum PaymentMethod {
   CREDIT // نسیه (ثبت بدهی، بدون دریافت وجه)
 }
 
-/// جزئیات چک دریافتی. چرخه‌ی کامل چک (خرج کردن، چک برگشتی، تسویه) در فاز ۶
-/// تکمیل می‌شود؛ اینجا فقط ثبت و وضعیت پایه نگه داشته می‌شود.
+/// جزئیات چک دریافتی.
+///
+/// چک یا بابت یک فاکتور است (paymentId) یا بابت تسویه‌ی بدهی قبلی (receiptId).
+/// دقیقاً یکی از این دو باید پر باشد — سرویس این را کنترل می‌کند.
 model Cheque {
   id         String       @id @default(uuid())
-  paymentId  String       @unique
+  paymentId  String?      @unique
+  receiptId  String?      @unique
   number     String // شماره چک
   bankName   String?
   branch     String?
@@ -844,10 +854,111 @@ model Cheque {
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
 
-  payment Payment @relation(fields: [paymentId], references: [id])
+  payment Payment? @relation(fields: [paymentId], references: [id])
+  receipt Receipt? @relation(fields: [receiptId], references: [id])
 
   @@index([status, dueDate])
   @@index([number])
+}
+
+/// دریافت وجه از مشتری بابت بدهی قبلی.
+///
+/// بدون این، فروش نسیه یک‌طرفه بود: بدهی ثبت می‌شد ولی هیچ‌جا نمی‌شد ثبت کرد
+/// که مشتری بعداً پول آورده. گزارش بدهکاران فقط بالا می‌رفت.
+model Receipt {
+  id         String        @id @default(uuid())
+  number     Int           @unique @default(autoincrement())
+  customerId String
+  userId     String? // دریافت‌کننده
+  amount     Int // تومان
+  method     PaymentMethod // نقد / کارت / چک — نسیه اینجا بی‌معناست
+  note       String?
+  /// کلید یکتای کلاینت؛ ارسال دوباره رسید تکراری نمی‌سازد.
+  idempotencyKey String?  @unique
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  customer    Customer            @relation(fields: [customerId], references: [id])
+  user        User?               @relation("ReceiptTaker", fields: [userId], references: [id])
+  cheque      Cheque?
+  allocations ReceiptAllocation[]
+
+  @@index([customerId, createdAt])
+}
+
+/// تخصیص یک رسید به فاکتورهای بدهکار.
+///
+/// یک رسید می‌تواند چند فاکتور را تسویه کند (قدیمی‌ترین اول). این جدول نشان
+/// می‌دهد کدام بخش از پول بابت کدام فاکتور بوده — بدون آن، «مانده‌ی مشتری»
+/// عددی می‌شد که هیچ‌کس نمی‌توانست ازش دفاع کند.
+model ReceiptAllocation {
+  id        String   @id @default(uuid())
+  receiptId String
+  invoiceId String
+  amount    Int
+  createdAt DateTime @default(now())
+
+  receipt Receipt     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  invoice SaleInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([receiptId])
+  @@index([invoiceId])
+}
+
+/// پیش‌فاکتور — مشتری قیمت می‌گیرد ولی نمی‌خرد.
+///
+/// عمداً جدول جدا دارد و **هیچ حرکتی در موجودی ثبت نمی‌کند**. ردیف‌های فاکتور
+/// واقعی در این سیستم همان رکوردهای لجرند؛ اگر پیش‌فاکتور از همان مسیر می‌رفت،
+/// صرفِ قیمت گرفتن انبار را خالی می‌کرد.
+model Quotation {
+  id          String          @id @default(uuid())
+  number      Int             @unique @default(autoincrement())
+  customerId  String?
+  warehouseId String
+  userId      String?
+  subtotal    Int             @default(0)
+  discount    Int             @default(0)
+  total       Int             @default(0)
+  /// تا چه زمانی معتبر است. فروشنده هنگام ساخت تعیین می‌کند (۱ ساعت، ۲۴ ساعت، …).
+  validUntil  DateTime
+  status      QuotationStatus @default(ACTIVE)
+  note        String?
+  /// اگر به فاکتور واقعی تبدیل شد، اینجا وصل می‌شود.
+  convertedInvoiceId String?  @unique
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  customer  Customer?       @relation(fields: [customerId], references: [id])
+  warehouse Warehouse       @relation(fields: [warehouseId], references: [id])
+  user      User?           @relation("QuotationSeller", fields: [userId], references: [id])
+  lines     QuotationLine[]
+
+  @@index([warehouseId, createdAt])
+  @@index([customerId])
+  @@index([status, validUntil])
+}
+
+model QuotationLine {
+  id          String  @id @default(uuid())
+  quotationId String
+  productId   String
+  /// مکان اختیاری است: هنگام قیمت دادن هنوز لازم نیست قفسه مشخص باشد.
+  /// در لحظه‌ی تبدیل به فاکتور، موجودی و مکان دوباره بررسی می‌شود.
+  locationId  String?
+  quantity    Int
+  unitPrice   Int
+  discount    Int     @default(0)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id])
+
+  @@index([quotationId])
+}
+
+enum QuotationStatus {
+  ACTIVE
+  CONVERTED // به فاکتور واقعی تبدیل شد
+  CANCELLED
 }
 
 enum ChequeStatus {
