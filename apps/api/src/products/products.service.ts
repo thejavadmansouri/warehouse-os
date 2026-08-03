@@ -462,9 +462,17 @@ export class ProductsService {
       where.inventories = { some: { quantity: { gt: 0 } } };
     }
 
+    // بازه روی **ورود کالا به انبار** است، نه تاریخ تعریف کالا.
+    // کالاها معمولاً موقع ایمپورت کاتالوگ ساخته شده‌اند؛ چیزی که امروز اتفاق
+    // افتاده ثبت موجودی توسط کارگر است. فیلتر روی createdAt کالا باعث می‌شد
+    // صفِ «امروز» همیشه خالی باشد.
     if (q.since) {
       const d = new Date(q.since);
-      if (!isNaN(d.getTime())) where.createdAt = { gte: d };
+      if (!isNaN(d.getTime())) {
+        where.inventoryLogs = {
+          some: { action: { in: ['IN', 'RETURN'] }, createdAt: { gte: d } },
+        };
+      }
     }
 
     const [data, total] = await this.prisma.$transaction([

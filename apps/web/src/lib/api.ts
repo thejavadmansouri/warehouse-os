@@ -1214,3 +1214,28 @@ export function cancelQuotation(id: string): Promise<T.Quotation> {
     method: "POST",
   });
 }
+
+// =====================================================
+// صف چاپ لیبل + تنظیمات پیش‌فرض
+// =====================================================
+
+export function getPendingLabels(p: {
+  onlyWithStock?: boolean;
+  since?: string;
+  page?: number;
+  limit?: number;
+} = {}) {
+  return apiFetch<{ data: T.PendingLabelProduct[]; meta: T.ReportMeta }>(
+    `/products/labels/pending?${reportQs(p)}`
+  );
+}
+
+export function getLabelSettings(): Promise<T.LabelSettings> {
+  return apiFetch<T.LabelSettings>("/labels/settings");
+}
+
+export function updateLabelSettings(
+  body: Partial<T.LabelSettings>
+): Promise<T.LabelSettings> {
+  return apiFetch<T.LabelSettings>("/labels/settings", { method: "PUT", body });
+}

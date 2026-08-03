@@ -20,6 +20,7 @@ import {
   HandCoins,
   FileClock,
   DatabaseBackup,
+  Tags,
 } from "lucide-react";
 
 export interface NavItem {
@@ -91,6 +92,12 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/admin/vehicle-models",
         icon: Car,
         roles: "ALL",
+      },
+      {
+        title: "لیبل‌های در انتظار",
+        href: "/admin/labels",
+        icon: Tags,
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "کاتالوگ قطعات",

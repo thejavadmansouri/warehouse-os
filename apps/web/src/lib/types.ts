@@ -985,3 +985,28 @@ export interface BackupRun {
   startedAt: string;
   finishedAt: string | null;
 }
+
+// =====================================================
+// صف چاپ لیبل
+// =====================================================
+
+export interface PendingLabelProduct {
+  id: string;
+  name: string;
+  sku: string;
+  unit: string;
+  brandName: string | null;
+  createdAt: string;
+  stock: number;
+}
+
+export interface LabelSettings {
+  id: string;
+  columns: number;
+  widthMm: number;
+  heightMm: number;
+  gapMm: number;
+  showName: boolean;
+  showBarcodeText: boolean;
+  cropMarks: boolean;
+}
