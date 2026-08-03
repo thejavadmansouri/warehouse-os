@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import {
-  getProducts,
+  getProductsPaged,
   searchProducts,
   exportProductsCsv,
   deleteProduct,
@@ -83,10 +83,18 @@ export default function ProductsListPage() {
 
   const hasQuery = debouncedQ.length > 0;
 
-  // طبق بخش ۶.۳ — GET /products (بدون جستجو)
+  // صفحه‌بندی مرور کل کاتالوگ (فقط وقتی جستجو نیست)
+  const PAGE_SIZE = 50;
+  const [page, setPage] = React.useState(1);
+  // با تغییر/شروع جستجو به صفحه‌ی ۱ برگرد
+  React.useEffect(() => {
+    setPage(1);
+  }, [debouncedQ]);
+
+  // GET /products?page=&limit= (بدون جستجو) — صفحه‌بندی‌شده با meta
   const productsQ = useQuery({
-    queryKey: ["products"],
-    queryFn: () => getProducts(),
+    queryKey: ["products", "page", page],
+    queryFn: () => getProductsPaged(page, PAGE_SIZE),
     enabled: !hasQuery,
   });
 
@@ -99,7 +107,9 @@ export default function ProductsListPage() {
 
   // ایمن‌سازی کامل داده‌ها برای جلوگیری از ارور iterable
   const searchResults = Array.isArray(searchQ.data) ? searchQ.data : [];
-  const productsResults = Array.isArray(productsQ.data) ? productsQ.data : [];
+  const productsResults = Array.isArray(productsQ.data?.data) ? productsQ.data!.data : [];
+  const totalCount = hasQuery ? searchResults.length : (productsQ.data?.meta.total ?? 0);
+  const lastPage = productsQ.data?.meta.lastPage ?? 1;
 
   const rawProducts: Product[] = hasQuery ? searchResults : productsResults;
 
@@ -442,11 +452,11 @@ export default function ProductsListPage() {
                           <img
                             src={assetUrl(p.image)}
                             alt={p.name}
-                            className="h-9 w-9 rounded-full border object-cover"
+                            className="h-10 w-10 rounded-full border object-cover"
                           />
                         ) : (
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full border bg-muted text-muted-foreground">
-                            <Package className="h-4 w-4" />
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full border bg-muted text-muted-foreground">
+                            <Package className="h-5 w-5" />
                           </div>
                         )}
                       </Link>
@@ -454,7 +464,7 @@ export default function ProductsListPage() {
                     <TableCell>
                       <Link
                         href={`/admin/products/${encodeURIComponent(p.id)}`}
-                        className="font-medium hover:text-accent hover:underline"
+                        className="text-[15px] font-semibold hover:text-accent hover:underline"
                       >
                         {p.name}
                       </Link>
@@ -478,12 +488,17 @@ export default function ProductsListPage() {
                     <TableCell className="text-muted-foreground">
                       {p.vehicleModel?.name ?? "—"}
                     </TableCell>
-                    <TableCell className="text-end font-medium tabular-nums">
-                      {formatPrice(p.salePrice)}
+                    <TableCell className="text-end">
+                      <span
+                        dir="ltr"
+                        className="inline-block text-xl font-bold tabular-nums tracking-tight"
+                      >
+                        {formatPrice(p.salePrice)}
+                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       {p.isActive ? (
-                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                        <Badge className="bg-emerald-100 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-400">
                           فعال
                         </Badge>
                       ) : (
@@ -501,24 +516,24 @@ export default function ProductsListPage() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8"
+                            className="h-9 w-9"
                             onClick={() => openEdit(p)}
                             aria-label="ویرایش"
                             title="ویرایش"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <Pencil className="h-5 w-5" />
                           </Button>
                         ) : null}
                         {canDelete ? (
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            className="h-9 w-9 text-destructive hover:bg-destructive/10 hover:text-destructive"
                             onClick={() => setDeleteTarget(p)}
                             aria-label="حذف"
                             title="حذف"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-5 w-5" />
                           </Button>
                         ) : null}
                       </div>
@@ -530,18 +545,42 @@ export default function ProductsListPage() {
           </div>
         )}
 
-        {/* فوتر جدول */}
+        {/* فوتر جدول + صفحه‌بندی */}
         {!isLoading && !isError && products.length > 0 ? (
-          <div className="flex flex-col items-center justify-between gap-2 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row">
+          <div className="flex flex-col items-center justify-between gap-3 border-t px-4 py-3 text-sm text-muted-foreground sm:flex-row">
             <p>
               {hasQuery
                 ? `${products.length} نتیجه برای «${debouncedQ}»`
-                : `${products.length} محصول`}
+                : `مجموع ${totalCount.toLocaleString("fa-IR")} محصول`}
             </p>
-            <p className="text-xs">
-              برای دیدن جزئیات روی هر محصول کلیک کنید
-              <ArrowLeft className="ms-1 inline h-3 w-3" />
-            </p>
+            {!hasQuery && lastPage > 1 ? (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1 || productsQ.isFetching}
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                >
+                  قبلی
+                </Button>
+                <span className="text-xs">
+                  صفحه {page.toLocaleString("fa-IR")} از {lastPage.toLocaleString("fa-IR")}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= lastPage || productsQ.isFetching}
+                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
+                >
+                  بعدی
+                </Button>
+              </div>
+            ) : (
+              <p className="text-xs">
+                برای دیدن جزئیات روی هر محصول کلیک کنید
+                <ArrowLeft className="ms-1 inline h-3 w-3" />
+              </p>
+            )}
           </div>
         ) : null}
       </div>

@@ -58,20 +58,22 @@ function StatCard({
   return (
     <Card className="shadow-sm">
       <CardContent className="flex items-center gap-4 p-5">
-        <div className="rounded-xl bg-primary/10 p-3 text-primary">
-          <Icon className="h-6 w-6" />
+        <div className="rounded-2xl bg-primary/10 p-3.5 text-primary">
+          <Icon className="h-8 w-8" />
         </div>
         <div className="min-w-0">
-          <p className="text-sm text-muted-foreground">{title}</p>
+          <p className="text-xs font-medium text-muted-foreground">{title}</p>
           {loading ? (
-            <div className="mt-1 h-7 w-20 animate-pulse rounded bg-muted" />
+            <div className="mt-1 h-10 w-24 animate-pulse rounded bg-muted" />
           ) : error ? (
-            <p className="mt-1 text-lg font-bold text-destructive">—</p>
+            <p className="mt-1 text-3xl font-bold text-destructive">—</p>
           ) : (
-            <p className="mt-0.5 text-2xl font-bold">{value}</p>
+            <p className="mt-0.5 text-4xl font-bold tracking-tight tabular-nums">
+              {value}
+            </p>
           )}
           {hint ? (
-            <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+            <p className="mt-1 text-xs text-muted-foreground">{hint}</p>
           ) : null}
         </div>
       </CardContent>
@@ -194,12 +196,12 @@ export default function DashboardPage() {
                       <linearGradient id="actGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop
                           offset="5%"
-                          stopColor="oklch(0.68 0.19 44)"
+                          stopColor="oklch(0.55 0.19 254)"
                           stopOpacity={0.4}
                         />
                         <stop
                           offset="95%"
-                          stopColor="oklch(0.68 0.19 44)"
+                          stopColor="oklch(0.55 0.19 254)"
                           stopOpacity={0}
                         />
                       </linearGradient>
@@ -221,14 +223,14 @@ export default function DashboardPage() {
                     <Tooltip
                       contentStyle={{
                         borderRadius: 8,
-                        border: "1px solid oklch(0.92 0.008 250)",
+                        border: "1px solid oklch(0.925 0.007 252)",
                         fontSize: 12,
                       }}
                     />
                     <Area
                       type="monotone"
                       dataKey="count"
-                      stroke="oklch(0.68 0.19 44)"
+                      stroke="oklch(0.55 0.19 254)"
                       strokeWidth={2}
                       fill="url(#actGrad)"
                     />

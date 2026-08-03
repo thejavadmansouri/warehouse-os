@@ -17,9 +17,13 @@ import {
   getProductLabel,
   bulkLocationLabels,
   bulkProductLabels,
+  printProductLabelsPdf,
+  printAllStockLabelsPdf,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import type { LocationLabel, ProductLabel } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 import {
   Dialog,
@@ -153,11 +157,29 @@ function ProductLabelCard({
   );
 }
 
+// اندازه‌های لیبل محصول (میلی‌متر) — با PDF سمت سرور
+const PRODUCT_SIZES = [
+  { value: "50x30", label: "۵۰ × ۳۰ میلی‌متر", w: 50, h: 30, cols: 3 },
+  { value: "40x25", label: "۴۰ × ۲۵ میلی‌متر", w: 40, h: 25, cols: 4 },
+  { value: "38x21", label: "۳۸ × ۲۱ میلی‌متر (رول)", w: 38, h: 21, cols: 5 },
+  { value: "60x40", label: "۶۰ × ۴۰ میلی‌متر", w: 60, h: 40, cols: 3 },
+  { value: "70x50", label: "۷۰ × ۵۰ میلی‌متر", w: 70, h: 50, cols: 2 },
+] as const;
+
 export interface LabelPrintDialogProps {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   mode: LabelMode;
   ids: string[];
+  /** تعداد کپیِ پیش‌فرض (مثلاً از نتیجه‌ی انبارگردانی) — فقط mode=product */
+  defaultCopies?: number;
+  /**
+   * حالت موجودی: چاپ به‌تعدادِ هر ردیف. اگر داده شود، به‌جای «تعداد کپیِ یکسان»
+   * هر کالا به تعداد quantity خودش چاپ می‌شود (چاپ از موجودیِ واردشده).
+   */
+  items?: { productId: string; quantity: number }[];
+  /** چاپ لیبلِ کل موجودیِ واردشده (هر کالا به تعداد مجموع موجودی‌اش). */
+  allStock?: boolean;
 }
 
 export function LabelPrintDialog({
@@ -165,10 +187,31 @@ export function LabelPrintDialog({
   onOpenChange,
   mode,
   ids,
+  defaultCopies = 1,
+  items,
+  allStock = false,
 }: LabelPrintDialogProps) {
+  const isAllStock = mode === "product" && allStock;
+  const perItem = mode === "product" && !!items && items.length > 0;
+  const itemsTotal = perItem ? items!.reduce((s, i) => s + (i.quantity || 0), 0) : 0;
   const [sizeKey, setSizeKey] = React.useState<string>("5x3");
   const sizePreset: SizePreset =
     SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[0];
+
+  // ---- تنظیمات چاپِ محصول (PDF سمت سرور) ----
+  const [copies, setCopies] = React.useState<number>(defaultCopies);
+  const [prodSizeKey, setProdSizeKey] = React.useState<string>("50x30");
+  const [showName, setShowName] = React.useState(true);
+  const [showBarcodeText, setShowBarcodeText] = React.useState(true);
+  const [cropMarks, setCropMarks] = React.useState(true);
+  const [printing, setPrinting] = React.useState(false);
+  const [printErr, setPrintErr] = React.useState<string | null>(null);
+  const prodSize =
+    PRODUCT_SIZES.find((s) => s.value === prodSizeKey) ?? PRODUCT_SIZES[0];
+
+  React.useEffect(() => {
+    if (open) setCopies(defaultCopies);
+  }, [open, defaultCopies]);
 
   // حذف تکراری و خالی — همیشه آرایه‌ی پایدار
   const stableIds = React.useMemo(
@@ -230,6 +273,41 @@ export function LabelPrintDialog({
   const handlePrint = () => {
     if (typeof window !== "undefined") {
       window.print();
+    }
+  };
+
+  // چاپ باکیفیتِ محصول: PDF سمت سرور با تنظیمات → باز شدن در تب جدید
+  const handlePdfPrint = async () => {
+    setPrintErr(null);
+    setPrinting(true);
+    try {
+      const printOpts = {
+        columns: prodSize.cols,
+        widthMm: prodSize.w,
+        heightMm: prodSize.h,
+        showName,
+        showBarcodeText,
+        cropMarks,
+      };
+      if (isAllStock) {
+        // کل موجودیِ واردشده — سرور خودش جمع می‌زند
+        await printAllStockLabelsPdf(printOpts);
+      } else {
+        // حالت موجودیِ انتخابی: هر کالا به تعداد خودش. وگرنه: تعداد کپیِ یکسان.
+        const printItems = perItem
+          ? items!.map((i) => ({ productId: i.productId, quantity: i.quantity }))
+          : stableIds.map((id) => ({
+              productId: id,
+              quantity: Math.max(1, Math.min(500, Math.floor(copies) || 1)),
+            }));
+        await printProductLabelsPdf(printItems, printOpts);
+      }
+    } catch (e) {
+      setPrintErr(
+        e instanceof ApiException ? e.message : "ساخت PDF لیبل ناموفق بود"
+      );
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -322,12 +400,101 @@ export function LabelPrintDialog({
           ) : null}
         </div>
 
+        {/* تنظیمات چاپِ محصول (PDF باکیفیت سمت سرور) */}
+        {mode === "product" ? (
+          <div className="no-print grid gap-3 rounded-lg border bg-muted/30 p-3 sm:grid-cols-2">
+            {isAllStock ? (
+              <div className="flex items-center gap-2 sm:col-span-2">
+                <Badge variant="secondary">کل موجودیِ واردشده</Badge>
+                <span className="text-xs text-muted-foreground">
+                  هر کالا به تعداد مجموع موجودی‌اش چاپ می‌شود
+                </span>
+              </div>
+            ) : perItem ? (
+              <div className="flex items-center gap-2 sm:col-span-2">
+                <Badge variant="secondary">به تعداد موجودیِ هر ردیف</Badge>
+                <span className="text-xs text-muted-foreground">
+                  {items!.length} کالا — مجموع {itemsTotal} لیبل
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="w-24 shrink-0 text-xs text-muted-foreground">
+                  تعداد کپی هر کالا
+                </span>
+                <Input
+                  type="number"
+                  min={1}
+                  value={copies}
+                  onChange={(e) =>
+                    setCopies(Math.max(1, parseInt(e.target.value, 10) || 1))
+                  }
+                  className="h-8 w-24"
+                />
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <span className="w-24 shrink-0 text-xs text-muted-foreground">
+                اندازه لیبل
+              </span>
+              <Select dir="rtl" value={prodSizeKey} onValueChange={setProdSizeKey}>
+                <SelectTrigger size="sm" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRODUCT_SIZES.map((s) => (
+                    <SelectItem key={s.value} value={s.value}>
+                      {s.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={showName}
+                onCheckedChange={(v) => setShowName(Boolean(v))}
+              />
+              نمایش نام کالا
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={showBarcodeText}
+                onCheckedChange={(v) => setShowBarcodeText(Boolean(v))}
+              />
+              نمایش کد زیر بارکد
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={cropMarks}
+                onCheckedChange={(v) => setCropMarks(Boolean(v))}
+              />
+              خط برش دور لیبل
+            </label>
+            <div className="text-xs text-muted-foreground sm:col-span-2">
+              {isAllStock
+                ? "بارکد = کد کالا (SKU)"
+                : perItem
+                  ? `مجموع ${itemsTotal} لیبل — بارکد = کد کالا (SKU)`
+                  : `مجموع ${stableIds.length * copies} لیبل (${stableIds.length} کالا × ${copies}) — بارکد = کد کالا (SKU)`}
+            </div>
+            {printErr ? (
+              <div className="text-xs text-destructive sm:col-span-2">{printErr}</div>
+            ) : null}
+          </div>
+        ) : null}
+
         {/*
           ناحیه‌ی چاپ: اگر لیبل داریم، این ناحیه در چاپ نمایش داده می‌شود.
           در حالت loading/error/empty، کلاس no-print می‌گیرد تا چاپ خالی نداشته باشیم.
         */}
-        <div className={hasLabels ? "label-print-area" : "no-print"}>
-          {isLoading ? (
+        <div className={hasLabels && !isAllStock ? "label-print-area" : "no-print"}>
+          {isAllStock ? (
+            <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+              با زدن «چاپ PDF»، لیبلِ همه‌ی کالاهایی که موجودی دارند (هر کدام به
+              تعداد مجموع موجودی‌اش) ساخته و در تب جدید باز می‌شود.
+            </div>
+          ) : isLoading ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
               {Array.from({ length: stableIds.length || 3 }).map((_, i) => (
                 <Skeleton
@@ -377,17 +544,31 @@ export function LabelPrintDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             بستن
           </Button>
-          <Button
-            onClick={handlePrint}
-            disabled={isLoading || isError || !hasLabels}
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Printer className="h-4 w-4" />
-            )}
-            چاپ
-          </Button>
+          {mode === "product" ? (
+            <Button
+              onClick={handlePdfPrint}
+              disabled={printing || (!isAllStock && stableIds.length === 0)}
+            >
+              {printing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="h-4 w-4" />
+              )}
+              چاپ PDF (کیفیت بالا)
+            </Button>
+          ) : (
+            <Button
+              onClick={handlePrint}
+              disabled={isLoading || isError || !hasLabels}
+            >
+              {isLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Printer className="h-4 w-4" />
+              )}
+              چاپ
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

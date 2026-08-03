@@ -1,27 +1,22 @@
 "use client";
 
-// صفحه‌ی انواع موقعیت — طبق بخش ۶.۶ سند
-// نمایش جدولی انواع موقعیت + ایجاد نوع جدید با ۵ سطح مجاز (WAREHOUSE, ZONE, RACK, SHELF, BIN)
+// صفحه‌ی انواع موقعیت
+// نمایش جدولی انواع موقعیت (هر انبار سطوح خودش را دارد) + ایجاد نوع جدید.
+// مدل واقعی بک‌اند: هر LocationType به یک انبار تعلق دارد و با name + depth
+// (عدد عمق، نه یک enum ثابت) تعریف می‌شود — طبق Prisma schema و location-types.service.
 
 import * as React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, type ControllerRenderProps } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Layers, Plus } from "lucide-react";
 import {
-  Layers,
-  Plus,
-  Warehouse,
-  LayoutGrid,
-  BookOpen,
-  Package,
-} from "lucide-react";
-// طبق بخش ۶.۶ سند — endpointهای انواع موقعیت
-import { getLocationTypes, createLocationType } from "@/lib/api";
-import type {
-  LocationLevel,
-  CreateLocationTypeDto,
-} from "@/lib/types";
+  getLocationTypes,
+  createLocationType,
+  getWarehouses,
+} from "@/lib/api";
+import type { CreateLocationTypeDto } from "@/lib/types";
 import { useToast } from "@/hooks/use-toast";
 import { ApiException } from "@/lib/api-error-messages";
 import { LoadingState, EmptyState, ErrorState } from "@/components/states";
@@ -69,73 +64,14 @@ import {
 } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
 
-// ۵ مقدار مجاز level — طبق بخش ۶.۶ سند (هیچ مقدار دیگری نباید ارسال شود)
-const LEVEL_OPTIONS: {
-  value: LocationLevel;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  badgeClass: string;
-}[] = [
-  {
-    value: "WAREHOUSE",
-    label: "انبار",
-    icon: Warehouse,
-    badgeClass:
-      "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
-  },
-  {
-    value: "ZONE",
-    label: "منطقه",
-    icon: LayoutGrid,
-    badgeClass:
-      "bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-400",
-  },
-  {
-    value: "RACK",
-    label: "قفسه",
-    icon: BookOpen,
-    badgeClass: "bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400",
-  },
-  {
-    value: "SHELF",
-    label: "طبقه",
-    icon: Layers,
-    badgeClass:
-      "bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400",
-  },
-  {
-    value: "BIN",
-    label: "جایگاه",
-    icon: Package,
-    badgeClass:
-      "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-400",
-  },
-];
-
-function getLevelOption(level?: string | null) {
-  return LEVEL_OPTIONS.find((o) => o.value === level);
-}
-
-// فرم — طبق POST /location-types (بخش ۶.۶)
-const LEVEL_VALUES: LocationLevel[] = [
-  "WAREHOUSE",
-  "ZONE",
-  "RACK",
-  "SHELF",
-  "BIN",
-];
 const formSchema = z.object({
+  warehouseId: z.string().min(1, "انتخاب انبار الزامی است"),
   name: z.string().min(1, "نام نوع موقعیت الزامی است"),
-  level: z
-    .string()
-    .min(1, "انتخاب سطح الزامی است")
-    .refine(
-      (v): v is LocationLevel =>
-        LEVEL_VALUES.includes(v as LocationLevel),
-      "سطح انتخاب‌شده نامعتبر است"
-    ),
+  depth: z.coerce
+    .number({ message: "عمق باید عدد باشد" })
+    .int("عمق باید عدد صحیح باشد")
+    .min(0, "عمق نمی‌تواند منفی باشد"),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -154,11 +90,20 @@ export default function LocationTypesPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
+  const [warehouseFilter, setWarehouseFilter] = React.useState<string>("all");
 
-  // طبق بخش ۶.۶ سند — کلید کوئری: ["location-types"]
+  const warehousesQ = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: () => getWarehouses(),
+  });
+  const warehouses = warehousesQ.data ?? [];
+  const warehouseName = (id: string) =>
+    warehouses.find((w) => w.id === id)?.name ?? id;
+
   const typesQ = useQuery({
-    queryKey: ["location-types"],
-    queryFn: () => getLocationTypes(),
+    queryKey: ["location-types", warehouseFilter],
+    queryFn: () =>
+      getLocationTypes(warehouseFilter === "all" ? undefined : warehouseFilter),
   });
 
   const form = useForm<
@@ -167,12 +112,31 @@ export default function LocationTypesPage() {
     z.output<typeof formSchema>
   >({
     resolver: zodResolver(formSchema),
-    defaultValues: { name: "", level: undefined },
+    defaultValues: { warehouseId: "", name: "", depth: 0 },
+  });
+
+  // کمک‌کننده برای فیلد عددی — رشته خالی → undefined، در غیر این صورت عدد.
+  type FormInput = z.input<typeof formSchema>;
+  const depthFieldProps = (
+    field: ControllerRenderProps<FormInput, "depth">
+  ) => ({
+    type: "number" as const,
+    value: (field.value as number | undefined) ?? "",
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => {
+      const v = e.target.value;
+      field.onChange(v === "" ? undefined : Number(v));
+    },
   });
 
   React.useEffect(() => {
-    if (open) form.reset({ name: "", level: undefined });
-  }, [open, form]);
+    if (open) {
+      form.reset({
+        warehouseId: warehouseFilter !== "all" ? warehouseFilter : "",
+        name: "",
+        depth: 0,
+      });
+    }
+  }, [open, form, warehouseFilter]);
 
   const createMutation = useMutation({
     mutationFn: (dto: CreateLocationTypeDto) => createLocationType(dto),
@@ -189,10 +153,10 @@ export default function LocationTypesPage() {
   });
 
   const onSubmit = (values: FormValues) => {
-    // فقط یکی از ۵ مقدار مجاز ارسال می‌شود
     createMutation.mutate({
+      warehouseId: values.warehouseId,
       name: values.name,
-      level: values.level as LocationLevel,
+      depth: values.depth,
     });
   };
 
@@ -200,10 +164,10 @@ export default function LocationTypesPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="انواع موقعیت"
-        description="مدیریت طبقه‌بندی موقعیت‌ها بر اساس سطح (انبار، منطقه، قفسه، طبقه، جایگاه)"
+        description="تعریف سطوح موقعیت هر انبار (مثلاً طبقه، ردیف، ستون، باکس) با ترتیب عمق"
         icon={Layers}
         actions={
-          <Button onClick={() => setOpen(true)}>
+          <Button onClick={() => setOpen(true)} disabled={warehouses.length === 0}>
             <Plus className="h-4 w-4" />
             نوع جدید
           </Button>
@@ -211,12 +175,35 @@ export default function LocationTypesPage() {
       />
 
       <Card className="shadow-sm">
-        <CardHeader className="flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex-row items-center justify-between space-y-0 gap-3">
           <CardTitle className="text-base">فهرست انواع موقعیت</CardTitle>
-          <Badge variant="secondary">{typesQ.data?.length ?? 0} نوع</Badge>
+          <div className="flex items-center gap-2">
+            {warehouses.length > 0 ? (
+              <Select value={warehouseFilter} onValueChange={setWarehouseFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="همه‌ی انبارها" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">همه‌ی انبارها</SelectItem>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+            <Badge variant="secondary">{typesQ.data?.length ?? 0} نوع</Badge>
+          </div>
         </CardHeader>
         <CardContent>
-          {typesQ.isLoading ? (
+          {warehousesQ.isSuccess && warehouses.length === 0 ? (
+            <EmptyState
+              title="هیچ انباری ثبت نشده"
+              description="برای ساخت نوع موقعیت، ابتدا باید حداقل یک انبار در سیستم وجود داشته باشد."
+              icon={Layers}
+            />
+          ) : typesQ.isLoading ? (
             <TableSkeleton />
           ) : typesQ.isError ? (
             <ErrorState
@@ -226,7 +213,7 @@ export default function LocationTypesPage() {
           ) : !typesQ.data?.length ? (
             <EmptyState
               title="نوع موقعیتی ثبت نشده"
-              description="برای شروع یک نوع با سطح مشخص بسازید."
+              description="برای شروع یک نوع با عمق مشخص بسازید."
               icon={Layers}
               action={
                 <Button size="sm" onClick={() => setOpen(true)}>
@@ -239,38 +226,33 @@ export default function LocationTypesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[40%]">نام</TableHead>
-                  <TableHead>سطح</TableHead>
+                  <TableHead className="w-[35%]">نام</TableHead>
+                  <TableHead>عمق</TableHead>
+                  {warehouseFilter === "all" ? <TableHead>انبار</TableHead> : null}
                   <TableHead>تاریخ ایجاد</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {typesQ.data.map((t) => {
-                  const opt = getLevelOption(t.level);
-                  const Icon = opt?.icon ?? Layers;
-                  return (
+                {[...typesQ.data]
+                  .sort((a, b) => a.depth - b.depth)
+                  .map((t) => (
                     <TableRow key={t.id}>
                       <TableCell className="font-medium">{t.name}</TableCell>
                       <TableCell>
-                        {opt ? (
-                          <Badge
-                            className={cn("gap-1 text-[11px]", opt.badgeClass)}
-                          >
-                            <Icon className="h-3 w-3" />
-                            {opt.label}
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">
-                            {t.level}
-                          </span>
-                        )}
+                        <Badge variant="outline" className="font-mono">
+                          {t.depth}
+                        </Badge>
                       </TableCell>
+                      {warehouseFilter === "all" ? (
+                        <TableCell className="text-sm text-muted-foreground">
+                          {warehouseName(t.warehouseId)}
+                        </TableCell>
+                      ) : null}
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(t.createdAt)}
                       </TableCell>
                     </TableRow>
-                  );
-                })}
+                  ))}
               </TableBody>
             </Table>
           )}
@@ -283,7 +265,8 @@ export default function LocationTypesPage() {
           <DialogHeader>
             <DialogTitle>نوع موقعیت جدید</DialogTitle>
             <DialogDescription>
-              یک نوع جدید برای موقعیت‌ها با سطح مشخص بسازید.
+              یک سطح جدید برای موقعیت‌های یک انبار مشخص بسازید — مثلاً «طبقه» با
+              عمق ۰، «ردیف» با عمق ۱، «ستون» با عمق ۲، «باکس» با عمق ۳.
             </DialogDescription>
           </DialogHeader>
           <Form {...form}>
@@ -293,15 +276,41 @@ export default function LocationTypesPage() {
             >
               <FormField
                 control={form.control}
+                name="warehouseId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>انبار</FormLabel>
+                    <Select
+                      dir="rtl"
+                      value={field.value}
+                      onValueChange={field.onChange}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="انبار را انتخاب کنید..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {warehouses.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>
+                            {w.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="name"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>نام نوع</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="مثلاً: انبار اصلی، منطقه شمال، قفسه A1..."
-                        {...field}
-                      />
+                      <Input placeholder="مثلاً: طبقه، ردیف، ستون، باکس" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -310,36 +319,16 @@ export default function LocationTypesPage() {
 
               <FormField
                 control={form.control}
-                name="level"
+                name="depth"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>سطح</FormLabel>
-                    <Select
-                      dir="rtl"
-                      value={field.value}
-                      onValueChange={field.onChange}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="سطح را انتخاب کنید..." />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {LEVEL_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>
-                            <span className="flex items-center gap-2">
-                              <o.icon className="h-4 w-4" />
-                              {o.label}
-                              <span className="text-xs text-muted-foreground">
-                                ({o.value})
-                              </span>
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormLabel>عمق</FormLabel>
+                    <FormControl>
+                      <Input min={0} step={1} {...depthFieldProps(field)} />
+                    </FormControl>
                     <FormDescription>
-                      ۵ سطح مجاز: انبار، منطقه، قفسه، طبقه، جایگاه
+                      ترتیب سطح در سلسله‌مراتب زیر انبار — ۰ بالاترین سطح
+                      (نزدیک‌تر به انبار)، هر سطح پایین‌تر عدد بزرگ‌تر می‌گیرد.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

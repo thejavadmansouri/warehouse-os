@@ -51,12 +51,13 @@ import {
 import { ROLE_LABELS } from "@/lib/format";
 import type { User, Role, CreateUserDto } from "@/lib/types";
 
-const ROLE_OPTIONS: Role[] = ["ADMIN", "MANAGER", "STAFF"];
+const ROLE_OPTIONS: Role[] = ["ADMIN", "MANAGER", "STAFF", "SALES"];
 
 const ROLE_BADGE_CLASS: Record<Role, string> = {
   ADMIN: "bg-rose-100 text-rose-700",
   MANAGER: "bg-amber-100 text-amber-700",
   STAFF: "bg-emerald-100 text-emerald-700",
+  SALES: "bg-sky-100 text-sky-700",
 };
 
 export default function UsersPage() {
