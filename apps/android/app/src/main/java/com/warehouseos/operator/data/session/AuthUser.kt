@@ -13,7 +13,12 @@ data class AuthUser(
     val isAllowedOperator: Boolean
         get() = role in ALLOWED_ROLES
 
+    /** نقش‌هایی که اجازه‌ی فروش (کاهش موجودی) دارند. */
+    val canSell: Boolean
+        get() = role in SALES_ROLES
+
     companion object {
-        val ALLOWED_ROLES = setOf("ADMIN", "MANAGER", "STAFF")
+        val ALLOWED_ROLES = setOf("ADMIN", "MANAGER", "STAFF", "SALES")
+        val SALES_ROLES = setOf("ADMIN", "MANAGER", "SALES")
     }
 }

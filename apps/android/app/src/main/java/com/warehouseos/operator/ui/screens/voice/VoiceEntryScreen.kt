@@ -75,8 +75,11 @@ fun VoiceEntryScreen(
 
     fun prefill(nameOverride: String?) = NewProductPrefill(
         barcode = viewModel.barcode,
-        name = (nameOverride?.takeIf { it.isNotBlank() }
-            ?: state.recognizedName.ifBlank { state.transcript }),
+        // Never fall back to the raw transcript here — it still has the quantity
+        // phrase in it (e.g. "۱۷۳ تا لنت پراید") and would duplicate the qty field
+        // below. The full transcript is preserved separately via `voice` for the
+        // manager to read, so leaving this blank when recognition fails is safe.
+        name = nameOverride?.takeIf { it.isNotBlank() } ?: state.recognizedName,
         brand = state.recognizedBrand,
         vehicle = state.recognizedVehicle,
         qty = state.quantity,
@@ -187,7 +190,7 @@ private fun ShelfHeader(barcode: String) {
             Icons.Filled.QrCodeScanner,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp),
+            modifier = Modifier.size(Dimens.icon),
         )
         Text(
             text = "قفسه: $barcode",
@@ -234,7 +237,7 @@ private fun InputPhase(
             if (!micGranted) onRequestMic()
             else if (state.isListening) onStop() else onStart()
         },
-        modifier = Modifier.size(120.dp),
+        modifier = Modifier.size(132.dp),
         shape = CircleShape,
         colors = if (state.isListening) {
             IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -245,7 +248,7 @@ private fun InputPhase(
         Icon(
             imageVector = if (state.isListening) Icons.Filled.MicOff else Icons.Filled.Mic,
             contentDescription = if (state.isListening) "توقف" else "شروع ضبط",
-            modifier = Modifier.size(52.dp),
+            modifier = Modifier.size(Dimens.iconHuge),
         )
     }
 
@@ -311,7 +314,7 @@ private fun ConfirmPhase(
         ) {
             Text(
                 text = state.proposalName,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 textAlign = TextAlign.Center,
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.gap))
@@ -319,7 +322,11 @@ private fun ConfirmPhase(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
             ) {
-                LabeledValue(label = "تعداد", value = state.quantity.toString())
+                LabeledValue(
+                    label = "تعداد",
+                    value = state.quantity.toString(),
+                    style = MaterialTheme.typography.displayMedium,
+                )
                 LabeledValue(label = "واحد", value = state.unit ?: "—")
             }
         }
@@ -338,7 +345,11 @@ private fun ConfirmPhase(
 }
 
 @Composable
-private fun LabeledValue(label: String, value: String) {
+private fun LabeledValue(
+    label: String,
+    value: String,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleLarge,
+) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
             text = label,
@@ -347,7 +358,7 @@ private fun LabeledValue(label: String, value: String) {
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.titleLarge,
+            style = style,
             modifier = Modifier.padding(top = 4.dp),
         )
     }
@@ -483,7 +494,7 @@ private fun SuccessPhase(
         tint = MaterialTheme.colorScheme.tertiary,
         modifier = Modifier
             .padding(top = Dimens.gap)
-            .size(80.dp),
+            .size(96.dp),
     )
     Text(
         text = state.successText ?: "ثبت شد",

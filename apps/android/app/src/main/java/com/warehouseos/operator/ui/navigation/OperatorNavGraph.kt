@@ -10,7 +10,9 @@ import androidx.navigation.navArgument
 import com.warehouseos.operator.data.repository.StartupDestination
 import com.warehouseos.operator.ui.screens.count.CountScreen
 import com.warehouseos.operator.ui.screens.login.LoginScreen
+import com.warehouseos.operator.ui.screens.locate.LocateScreen
 import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
+import com.warehouseos.operator.ui.screens.sales.SalesScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
@@ -60,12 +62,26 @@ fun OperatorNavGraph(
             ShiftHomeScreen(
                 onStockIn = { navController.navigate(Routes.SCAN) },
                 onCount = { navController.navigate(Routes.COUNT) },
+                onSell = { navController.navigate(Routes.SALES) },
+                onLocate = { navController.navigate(Routes.LOCATE) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
                 },
+            )
+        }
+
+        composable(Routes.SALES) {
+            SalesScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.LOCATE) {
+            LocateScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 

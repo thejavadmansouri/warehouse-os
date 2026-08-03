@@ -4,12 +4,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -49,6 +52,8 @@ import com.warehouseos.operator.ui.components.StatusBanner
 fun ShiftHomeScreen(
     onStockIn: () -> Unit,
     onCount: () -> Unit,
+    onSell: () -> Unit,
+    onLocate: () -> Unit,
     onSettings: () -> Unit,
     onLogout: () -> Unit,
     viewModel: ShiftHomeViewModel = hiltViewModel(),
@@ -63,8 +68,19 @@ fun ShiftHomeScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.customer_name)) },
                 actions = {
+                    IconButton(onClick = onSettings) {
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = "تنظیمات",
+                            modifier = Modifier.size(Dimens.icon),
+                        )
+                    }
                     IconButton(onClick = { showLogoutConfirm = true }) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "خروج")
+                        Icon(
+                            Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = "خروج",
+                            modifier = Modifier.size(Dimens.icon),
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -82,7 +98,7 @@ fun ShiftHomeScreen(
             if (viewModel.fullName.isNotBlank()) {
                 Text(
                     text = "سلام، ${viewModel.fullName}",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
                 if (viewModel.roleLabel.isNotBlank()) {
                     Text(
@@ -122,7 +138,8 @@ fun ShiftHomeScreen(
                         isStarting = uiState.isStarting,
                         onStockIn = onStockIn,
                         onCount = onCount,
-                        onSettings = onSettings,
+                        onSell = if (viewModel.isManager) onSell else null,
+                        onLocate = onLocate,
                         onNewShift = viewModel::startShift,
                     )
                 }
@@ -187,7 +204,8 @@ private fun ActiveSessionContent(
     isStarting: Boolean,
     onStockIn: () -> Unit,
     onCount: () -> Unit,
-    onSettings: () -> Unit,
+    onSell: (() -> Unit)?,
+    onLocate: () -> Unit,
     onNewShift: () -> Unit,
 ) {
     StatusBanner(
@@ -209,6 +227,25 @@ private fun ActiveSessionContent(
         height = Dimens.hugeActionHeight,
         modifier = Modifier.padding(top = Dimens.gap),
     )
+    // فروش — فقط مدیر/ادمین (کاهش موجودی)
+    if (onSell != null) {
+        SecondaryButton(
+            text = "فروش کالا",
+            onClick = onSell,
+            icon = Icons.Filled.ShoppingCart,
+            height = Dimens.hugeActionHeight,
+            modifier = Modifier.padding(top = Dimens.gap),
+        )
+    }
+
+    // یافتن کالا — برای همه‌ی نقش‌ها (پیداکردن آدرسِ دقیق، فقط خواندنی)
+    SecondaryButton(
+        text = "یافتن کالا",
+        onClick = onLocate,
+        icon = Icons.Filled.Search,
+        height = Dimens.hugeActionHeight,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
 
     SecondaryButton(
         text = "شروع شیفت جدید",
@@ -216,13 +253,4 @@ private fun ActiveSessionContent(
         enabled = !isStarting,
         modifier = Modifier.padding(top = Dimens.gapLarge),
     )
-    TextButton(
-        onClick = onSettings,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = Dimens.gapSmall),
-    ) {
-        Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.padding(end = 8.dp))
-        Text("تنظیمات")
-    }
 }

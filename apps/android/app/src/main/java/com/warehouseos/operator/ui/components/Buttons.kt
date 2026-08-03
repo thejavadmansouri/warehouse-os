@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
@@ -51,7 +52,7 @@ fun PrimaryButton(
                 horizontalArrangement = Arrangement.Center,
             ) {
                 if (icon != null) {
-                    Icon(icon, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Icon(icon, contentDescription = null, modifier = Modifier.size(Dimens.icon))
                 }
                 Text(
                     text = text,
@@ -78,19 +79,20 @@ fun SecondaryButton(
         enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
-            .height(height),
+            .heightIn(min = height),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center,
         ) {
             if (icon != null) {
-                Icon(icon, contentDescription = null, modifier = Modifier.size(22.dp))
+                Icon(icon, contentDescription = null, modifier = Modifier.size(Dimens.iconSmall))
             }
             Text(
                 text = text,
                 style = MaterialTheme.typography.titleMedium,
                 modifier = if (icon != null) Modifier.padding(start = 10.dp) else Modifier,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
     }

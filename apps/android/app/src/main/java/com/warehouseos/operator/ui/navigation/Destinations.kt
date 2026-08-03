@@ -24,6 +24,8 @@ object Routes {
     const val SHIFT_HOME = "shift_home"
     const val SCAN = "scan"
     const val COUNT = "count"
+    const val SALES = "sales"
+    const val LOCATE = "locate"
     const val SETTINGS = "settings"
 
     // Voice entry receives the scanned barcode as a path argument (Epic 5 → 6).

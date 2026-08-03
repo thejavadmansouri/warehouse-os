@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.warehouseos.operator.ui.components.Dimens
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -207,7 +208,7 @@ private fun ColumnScope.CountingPhase(
     ) {
         FilledIconButton(
             onClick = { if (state.isListening) onStop() else onStart() },
-            modifier = Modifier.size(96.dp),
+            modifier = Modifier.size(112.dp),
             shape = CircleShape,
             colors = if (state.isListening) {
                 IconButtonDefaults.filledIconButtonColors(containerColor = MaterialTheme.colorScheme.error)
@@ -218,7 +219,7 @@ private fun ColumnScope.CountingPhase(
             Icon(
                 imageVector = if (state.isListening) Icons.Filled.MicOff else Icons.Filled.Mic,
                 contentDescription = if (state.isListening) "توقف" else "شروع ضبط",
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(Dimens.iconHuge),
             )
         }
         if (state.isSubmitting) {

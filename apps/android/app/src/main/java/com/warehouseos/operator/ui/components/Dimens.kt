@@ -15,6 +15,12 @@ object Dimens {
     val primaryActionHeight = 64.dp
     val hugeActionHeight = 88.dp
 
-    val corner = 16.dp
-    val cornerSmall = 12.dp
+    val corner = 20.dp
+    val cornerSmall = 14.dp
+
+    /** آیکن‌ها عمداً بزرگ‌اند — اپراتور از فاصله‌ی بازو نگاه می‌کند. */
+    val iconSmall = 22.dp
+    val icon = 28.dp
+    val iconLarge = 36.dp
+    val iconHuge = 52.dp
 }

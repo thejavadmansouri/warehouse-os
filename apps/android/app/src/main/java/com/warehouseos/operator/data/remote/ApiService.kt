@@ -5,6 +5,7 @@ import com.warehouseos.operator.data.remote.dto.CountStartRequest
 import com.warehouseos.operator.data.remote.dto.CountStartResponse
 import com.warehouseos.operator.data.remote.dto.CountVoiceRequest
 import com.warehouseos.operator.data.remote.dto.CountVoiceResponse
+import com.warehouseos.operator.data.remote.dto.LocateResultDto
 import com.warehouseos.operator.data.remote.dto.LocationDto
 import com.warehouseos.operator.data.remote.dto.LoginRequest
 import com.warehouseos.operator.data.remote.dto.LoginResponse
@@ -13,6 +14,10 @@ import com.warehouseos.operator.data.remote.dto.ProductDto
 import com.warehouseos.operator.data.remote.dto.ProductRequestResult
 import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
+import com.warehouseos.operator.data.remote.dto.SaleResolveDto
+import com.warehouseos.operator.data.remote.dto.SellRequest
+import com.warehouseos.operator.data.remote.dto.SellResponse
+import com.warehouseos.operator.data.remote.dto.StockLocationDto
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsResponse
 import com.warehouseos.operator.data.remote.dto.VoiceConfirmRequest
@@ -66,6 +71,23 @@ interface ApiService {
     // ---- Product search ----
     @GET("products/search")
     suspend fun searchProducts(@Query("q") query: String): List<ProductDto>
+
+    // «یافتن کالا» — سرچ + آدرس دقیقِ موجودی (همه‌ی نقش‌ها)
+    @GET("products/locate")
+    suspend fun locateProducts(@Query("q") query: String): List<LocateResultDto>
+
+    // ---- Sales (manager / salesperson) ----
+    // اسکن بارکد → کالا + موجودی در یک درخواست (فروش سریع پشت پیشخوان).
+    @GET("inventory/sale/resolve/{barcode}")
+    suspend fun resolveForSale(@Path("barcode") barcode: String): SaleResolveDto
+
+    // موجودیِ یک کالا به تفکیک مکان — برای انتخاب مکانِ فروش.
+    @GET("inventory/product/{productId}/stock")
+    suspend fun productStock(@Path("productId") productId: String): List<StockLocationDto>
+
+    // فروش = کاهش موجودی (SALE). بک‌اند اتمیک چک می‌کند و از فروش بیش از موجودی جلوگیری می‌کند.
+    @POST("inventory/out")
+    suspend fun sell(@Body body: SellRequest): SellResponse
 
     // ---- New-product request (worker → manager review) ----
     @POST("product-requests")
