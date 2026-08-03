@@ -246,6 +246,7 @@ export class ProductMatcherService {
     const params: unknown[] = [];
     const ors: string[] = [];
     let simExpr = '0';
+    let tokenHitExpr = '0';
 
     if (hasQuery) {
       params.push(queryText); // $1 — reused in WHERE and ORDER BY
@@ -253,6 +254,21 @@ export class ProductMatcherService {
       // باعث اشباع word_similarity به ۱.۰ برای محصولات نامرتبط می‌شدند.
       simExpr = `similarity(name, $1)`;
       ors.push(`${simExpr} > 0.15`);
+
+      // بازیابی توکنی (مستقل از ترتیب): محصولاتی که کلمات گفتار در نامشان هست هم
+      // کاندید شوند — لازم است چون کاتالوگ واردشده رابطهٔ partCatalog/خودرو/برند ندارد
+      // و اطلاعات قطعه/خودرو داخل خود «نام» است. بدون این، similarity کل‌رشته آنها را رد می‌کند.
+      const words = queryText
+        .split(/\s+/)
+        .filter((w) => w.length >= MIN_TOKEN_LENGTH);
+      const hitParts: string[] = [];
+      for (const w of words) {
+        params.push(`%${w}%`);
+        const ph = `$${params.length}`;
+        ors.push(`name ILIKE ${ph}`);
+        hitParts.push(`(CASE WHEN name ILIKE ${ph} THEN 1 ELSE 0 END)`);
+      }
+      if (hitParts.length) tokenHitExpr = hitParts.join(' + ');
     }
     if (partCatalogId) {
       params.push(partCatalogId);
@@ -273,10 +289,11 @@ export class ProductMatcherService {
     params.push(MAX_CANDIDATES);
     const limitPlaceholder = `$${params.length}`;
 
+    // ترتیب برای برشِ LIMIT مهم است (نه رتبهٔ نهایی): بیشترین هم‌پوشانی توکن، بعد similarity.
     const sql =
       `SELECT id FROM "Product" ` +
       `WHERE "deletedAt" IS NULL AND "isActive" = true AND (${ors.join(' OR ')}) ` +
-      `ORDER BY ${simExpr} DESC LIMIT ${limitPlaceholder}`;
+      `ORDER BY (${tokenHitExpr}) DESC, ${simExpr} DESC LIMIT ${limitPlaceholder}`;
 
     const rows = await this.prisma.$queryRawUnsafe<{ id: string }[]>(sql, ...params);
     const ids = rows.map((r) => r.id);
@@ -338,12 +355,28 @@ export class ProductMatcherService {
           .filter((t) => t.length >= MIN_TOKEN_LENGTH && !STOPWORDS.has(t))
       : [];
 
+    /**
+     * «بدون X» یعنی محصول دقیقاً فاقد X است — نباید برای X امتیاز قطعه بگیرد.
+     * بدون این، «سیلندر ترمز جلو راست پراید بدون لنت» برای گفتارِ «لنت جلو پراید»
+     * بالاتر از خودِ لنت‌ها می‌نشیند (در bench-matcher دیده شد).
+     */
+    const negated = new Set<string>();
+    {
+      // پرانتز/اسلش هم جداکننده‌اند: «پراید سایپا(بدون لنت)» وگرنه «بدون» چسبیده
+      // به کلمهٔ قبلی می‌ماند و نفی تشخیص داده نمی‌شود.
+      const nameWords = name.split(/[\s()\/,،.\-]+/).filter(Boolean);
+      for (let i = 0; i < nameWords.length - 1; i++) {
+        if (nameWords[i] === 'بدون') negated.add(nameWords[i + 1]);
+      }
+    }
+    const hitsName = (t: string) => !negated.has(t) && name.includes(t);
+
     // 1b) نام قطعهٔ گفته‌شده مستقیماً در نام خود محصول — قوی‌ترین سیگنال تمایز بین
     // محصولاتی که همگی برای یک خودرو هستند (سوپرموتور سمند vs واشر ... سمند).
     // موقعیت/سمت هویت قطعه نیست و از اعتبار قطعه کنار گذاشته می‌شود.
     {
       const hits = partNameTokens.filter(
-        (t) => !POSITION_WORDS.has(t) && !SIDE_WORDS.has(t) && name.includes(t),
+        (t) => !POSITION_WORDS.has(t) && !SIDE_WORDS.has(t) && hitsName(t),
       );
       if (hits.length) {
         partMatched = true;
@@ -360,7 +393,7 @@ export class ProductMatcherService {
       // موقعیت/سمت (جلو/عقب/چپ/راست) هویت قطعه نیستند — منطق جداگانه دارند و
       // نباید اعتبار قطعه بدهند («کمک فنر جلو» نباید برای «لنت جلو» قطعه‌مچ شود).
       const nameTokenHits = tokens.filter(
-        (t) => !POSITION_WORDS.has(t) && !SIDE_WORDS.has(t) && name.includes(t),
+        (t) => !POSITION_WORDS.has(t) && !SIDE_WORDS.has(t) && hitsName(t),
       );
       if (nameTokenHits.length) {
         partMatched = true;
@@ -396,6 +429,20 @@ export class ProductMatcherService {
         score += WEIGHT.VEHICLE_ALIAS_MATCH;
         vehicleMatched = true;
         reasons.push(`vehicle matched by alias`);
+      }
+    }
+
+    // Fallback خودرو بر پایهٔ نام محصول: کاتالوگ واردشده رابطهٔ vehicleModel ندارد و
+    // نام خودرو داخل خود «نام محصول» است. اگر واژهٔ خودروی گفته‌شده در نام محصول باشد،
+    // امتیاز خودرو بده تا محصولاتِ همان خودرو (پراید) بالاتر از خودروهای دیگر (سمند/ریوو) بیایند.
+    if (!vehicleMatched && input.vehicleName) {
+      const vehicleWords = norm(input.vehicleName)
+        .split(/\s+/)
+        .filter((w) => w.length >= MIN_TOKEN_LENGTH && !STOPWORDS.has(w));
+      if (vehicleWords.some((w) => name.includes(w))) {
+        score += WEIGHT.VEHICLE_NAME_MATCH;
+        vehicleMatched = true;
+        reasons.push('vehicle matched in product name');
       }
     }
 

@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { buildSearchTokens } from '../products/search-tokens';
 import {
   ApproveProductRequestDto,
   CreateProductRequestDto,
@@ -160,6 +161,7 @@ export class ProductRequestsService {
         data: {
           name,
           sku,
+          searchTokens: buildSearchTokens(name, sku, null),
           unit,
           brandId,
           categoryId,

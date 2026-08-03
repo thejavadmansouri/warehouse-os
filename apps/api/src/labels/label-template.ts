@@ -40,6 +40,8 @@ function loadJsBarcodeSource(): string {
 
 export interface LabelData {
 
+  id: string;
+
   code: string;
 
   barcode: string;
@@ -52,6 +54,11 @@ export interface LabelData {
 
   qrCode: string;
 
+}
+
+export interface ProductLabelData {
+  name: string;
+  barcode: string;
 }
 
 
@@ -465,5 +472,121 @@ ${BARCODE_SCRIPT}
 
 </html>
 
+`;
+}
+
+export interface ProductSheetOptions {
+  columns?: number;      // تعداد ستون در هر ردیف
+  copies?: number;       // چند کپی از هر لیبل (پیش‌فرض ۱)
+  widthMm?: number;      // عرض هر لیبل
+  heightMm?: number;     // ارتفاع هر لیبل
+  gapMm?: number;        // فاصله‌ی بین لیبل‌ها
+  showName?: boolean;    // نمایش نام کالا
+  showBarcodeText?: boolean; // نمایش متن کد زیر بارکد
+  cropMarks?: boolean;   // خط‌چین دور هر لیبل (برای برش)
+}
+
+function escapeHtml(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function productLabelBlock(
+  l: ProductLabelData,
+  barcodeHeightMm: number,
+  showName: boolean,
+  showText: boolean,
+): string {
+  // ارتفاع بارکد را با ارتفاع لیبل مقیاس می‌دهیم تا در سایزهای مختلف تمیز بماند.
+  const bh = Math.round(barcodeHeightMm * 3.78); // mm → px تقریبی برای JsBarcode
+  return `
+<div class="label">
+  ${showName ? `<div class="product-name">${escapeHtml(l.name)}</div>` : ''}
+  <svg class="barcode" jsbarcode-value="${escapeHtml(l.barcode)}"
+    jsbarcode-height="${bh}" jsbarcode-width="1.6" jsbarcode-margin="0"></svg>
+  ${showText ? `<div class="barcode-text">${escapeHtml(l.barcode)}</div>` : ''}
+</div>
+`;
+}
+
+export function buildProductSheetLabelHtml(
+  labels: ProductLabelData[],
+  opts: ProductSheetOptions = {},
+): string {
+  const columns = Math.max(1, Math.min(6, opts.columns ?? 3));
+  const copies = Math.max(1, Math.min(500, opts.copies ?? 1));
+  const w = Math.max(20, opts.widthMm ?? 50);
+  const h = Math.max(15, opts.heightMm ?? 30);
+  const gap = opts.gapMm ?? 4;
+  const showName = opts.showName ?? true;
+  const showText = opts.showBarcodeText ?? true;
+  const border = (opts.cropMarks ?? true) ? '1px dashed #bbb' : 'none';
+  const barcodeH = Math.max(6, Math.round(h * (showName ? 0.34 : 0.5)));
+  const nameSize = h <= 25 ? 8 : 10;
+
+  // هر لیبل × تعداد کپی → صاف می‌شود
+  const expanded = labels.flatMap((l) => Array.from({ length: copies }, () => l));
+  const cards = expanded
+    .map((l) => productLabelBlock(l, barcodeH, showName, showText))
+    .join('\n');
+
+  return `
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="utf-8"/>
+<style>
+@page { size: A4; margin: 6mm; }
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: ${FONT_STACK}; background: white; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(${columns}, ${w}mm);
+  gap: ${gap}mm;
+  justify-content: center;
+}
+.label {
+  width: ${w}mm;
+  height: ${h}mm;
+  border: ${border};
+  border-radius: 1.5mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5mm;
+  overflow: hidden;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.product-name {
+  font-size: ${nameSize}pt;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.25;
+  max-height: ${Math.round(h * 0.4)}mm;
+  overflow: hidden;
+}
+.barcode { width: 96%; margin-top: 1mm; }
+.barcode-text {
+  font-size: 7pt;
+  margin-top: 0.5mm;
+  direction: ltr;
+  letter-spacing: 0.5px;
+  font-family: monospace;
+}
+</style>
+</head>
+<body>
+<div class="grid">
+${cards}
+</div>
+<script>${loadJsBarcodeSource()}</script>
+<script>${BARCODE_SCRIPT}</script>
+</body>
+</html>
 `;
 }

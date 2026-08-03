@@ -29,17 +29,32 @@ export class ProductsController {
 
   @Get()
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
-  findAll() {
-    return this.productsService.findAll();
+  findAll(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(200, Math.max(1, parseInt(limit ?? '50', 10) || 50));
+    return this.productsService.findAll(pageNum, limitNum, search?.trim() || undefined);
   }
 
 
   @Get('search')
-  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
   search(
     @Query('q') q: string
   ) {
     return this.productsService.search(q);
+  }
+
+  // «یافتن کالا» — سرچ + آدرس دقیقِ موجودی (همه‌ی نقش‌ها)
+  @Get('locate')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
+  locate(
+    @Query('q') q: string
+  ) {
+    return this.productsService.searchWithStock(q);
   }
 
 

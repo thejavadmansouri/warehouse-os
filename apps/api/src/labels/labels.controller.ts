@@ -104,6 +104,38 @@ export class LabelsController {
 
 
 
+  // چاپ لیبلِ کل موجودیِ واردشده (هر کالا به تعداد مجموع موجودی‌اش)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Post('stock/print')
+  async printAllStockPdf(
+    @Body()
+    dto: {
+      columns?: number;
+      widthMm?: number;
+      heightMm?: number;
+      gapMm?: number;
+      showName?: boolean;
+      showBarcodeText?: boolean;
+      cropMarks?: boolean;
+    },
+    @Res() res: Response,
+  ) {
+    const buffer = await this.service.stockLabelsPdf({
+      columns: dto.columns,
+      widthMm: dto.widthMm,
+      heightMm: dto.heightMm,
+      gapMm: dto.gapMm,
+      showName: dto.showName,
+      showBarcodeText: dto.showBarcodeText,
+      cropMarks: dto.cropMarks,
+    });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="stock-labels.pdf"',
+    });
+    res.send(buffer);
+  }
+
   // چاپ گروهی انتخابی PDF
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('location/bulk/print')
@@ -309,6 +341,40 @@ export class LabelsController {
         'inline; filename="filtered-location-labels.pdf"',
     });
 
+
+    res.send(buffer);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Post('product/print')
+  async printProductLabelsPdf(
+    @Body()
+    dto: {
+      items: { productId: string; quantity: number }[];
+      columns?: number;
+      widthMm?: number;
+      heightMm?: number;
+      gapMm?: number;
+      showName?: boolean;
+      showBarcodeText?: boolean;
+      cropMarks?: boolean;
+    },
+    @Res() res: Response,
+  ) {
+    const buffer = await this.service.productLabelsPdf(dto.items ?? [], {
+      columns: dto.columns,
+      widthMm: dto.widthMm,
+      heightMm: dto.heightMm,
+      gapMm: dto.gapMm,
+      showName: dto.showName,
+      showBarcodeText: dto.showBarcodeText,
+      cropMarks: dto.cropMarks,
+    });
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="product-labels.pdf"',
+    });
 
     res.send(buffer);
   }

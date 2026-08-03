@@ -5,7 +5,10 @@ import { PrinterRenderService } from './printer-render.service';
 import {
   buildThermalLabelHtml,
   buildSheetLabelHtml,
+  buildProductSheetLabelHtml,
   LabelData,
+  ProductLabelData,
+  ProductSheetOptions,
 } from './label-template';
 
 @Injectable()
@@ -65,6 +68,7 @@ export class LabelsService {
     const path = await this.buildLocationPath(location);
 
     return {
+      id: location.id,
       code: location.code,
       barcode: location.barcode,
       name: location.name,
@@ -161,6 +165,7 @@ export class LabelsService {
 
     return this.printer.renderPdf(html);
   }
+
 
   // چاپ کل زیرمجموعه یک موقعیت
   async treeLocationLabelsPdf(
@@ -445,5 +450,52 @@ export class LabelsService {
 
 
     return this.printer.renderPdf(html);
+  }
+
+  // چاپ لیبل محصول به‌تعداد (هر آیتم: کالا + quantity کپی) با تنظیمات چاپ.
+  // بارکد = SKU (کد کوتاهِ حسابداری که فروشِ بارکدی هم با آن مطابقت می‌کند) نه
+  // internalBarcode طولانی و بد-اسکن. کپی‌ها اینجا با quantity ساخته می‌شوند، پس
+  // copies در options روی ۱ می‌ماند.
+  async productLabelsPdf(
+    items: { productId: string; quantity: number }[],
+    opts: ProductSheetOptions = {},
+  ): Promise<Buffer> {
+    const ids = items.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, sku: true },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    const labels: ProductLabelData[] = [];
+    for (const item of items) {
+      const p = byId.get(item.productId);
+      if (!p) continue;
+      const label: ProductLabelData = { name: p.name, barcode: p.sku };
+      const copies = Math.max(1, Math.min(500, Math.floor(item.quantity) || 1));
+      for (let i = 0; i < copies; i++) labels.push(label);
+    }
+
+    if (labels.length === 0) {
+      throw new NotFoundException('محصولی برای چاپ لیبل پیدا نشد');
+    }
+
+    const html = buildProductSheetLabelHtml(labels, { ...opts, copies: 1 });
+    return this.printer.renderPdf(html);
+  }
+
+  // چاپ لیبلِ «کل موجودیِ واردشده»: هر کالا به تعداد مجموع موجودی‌اش (جمعِ همه‌ی
+  // مکان‌ها) — برای لیبل‌زدن یک‌جای هرچیزی که تا حالا شمرده/وارد شده.
+  async stockLabelsPdf(opts: ProductSheetOptions = {}): Promise<Buffer> {
+    const grouped = await this.prisma.inventory.groupBy({
+      by: ['productId'],
+      where: { quantity: { gt: 0 } },
+      _sum: { quantity: true },
+    });
+    const items = grouped.map((g) => ({
+      productId: g.productId,
+      quantity: g._sum.quantity ?? 0,
+    }));
+    return this.productLabelsPdf(items, opts);
   }
 }
