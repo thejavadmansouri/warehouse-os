@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="brand_orange">#F57C00</color>
-    <color name="brand_blue">#1565C0</color>
-    <color name="surface_light">#FAFAFA</color>
-    <color name="ic_launcher_background">#1565C0</color>
+    <color name="brand_blue">#2563EB</color>
+    <color name="surface_light">#F8FAFC</color>
+    <color name="ic_launcher_background">#2563EB</color>
 </resources>
