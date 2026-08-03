@@ -1,11 +1,30 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class InventoryOperationService {
   constructor(private prisma: PrismaService) {}
 
-  async execute(dto: any): Promise<any> {
+  /**
+   * تک‌نقطه‌ی تغییر موجودی (قانون ۱).
+   *
+   * @param txClient اختیاری. اگر داده شود، عملیات داخل همان تراکنشِ صداکننده
+   *   اجرا می‌شود بجای اینکه خودش تراکنش جدید باز کند. برای عملیات چندردیفی
+   *   مثل فاکتور فروش لازم است: بدون آن هر ردیف تراکنش جداگانه دارد و اگر
+   *   ردیف چهارم موجودی کم بیاورد، سه ردیف اول از انبار کم شده باقی می‌مانند.
+   *
+   *   وقتی داده نشود رفتار دقیقاً مثل قبل است — همه‌ی صداکننده‌های موجود
+   *   (voice، count، transfer، pending-operations، product-requests و …)
+   *   بدون تغییر کار می‌کنند.
+   */
+  async execute(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
+
+    // وقتی تراکنش بیرونی داریم از همان استفاده کن، وگرنه تراکنش خودت را باز کن.
+    const db: Prisma.TransactionClient | PrismaService = txClient ?? this.prisma;
+
+    const runInTx = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> =>
+      txClient ? fn(txClient) : this.prisma.$transaction(fn);
 
     const {
       type,
@@ -15,14 +34,16 @@ export class InventoryOperationService {
       note,
       userId,
       sessionId,
-      voiceRecordId
+      voiceRecordId,
+      unitPrice,
+      invoiceId
     } = dto;
 
 
     if (sessionId) {
 
       const session =
-        await this.prisma.inventorySession.findUnique({
+        await db.inventorySession.findUnique({
           where:{
             id:sessionId
           }
@@ -73,7 +94,14 @@ export class InventoryOperationService {
 
       source,
 
-      note:note ?? null
+      note:note ?? null,
+
+      // قیمت واحد فقط برای فروش معنا دارد؛ برای بقیه‌ی حرکت‌ها null می‌ماند
+      unitPrice:
+        (type === 'SALE' && unitPrice != null) ? Number(unitPrice) : null,
+
+      // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال). برای بقیه null.
+      invoiceId: invoiceId ?? null
 
     };
 
@@ -81,12 +109,15 @@ export class InventoryOperationService {
 
 
     // =========================
-    // IN
+    // IN / RETURN
     // =========================
+    // RETURN همان افزایش موجودی است، فقط در لجر با action دیگری ثبت می‌شود.
+    // برای ابطال فاکتور استفاده می‌شود: ردیف فروش حذف نمی‌شود، یک حرکت جبرانی
+    // ثبت می‌شود تا لجر append-only بماند (قانون ۲).
 
-    if(type === 'IN'){
+    if(type === 'IN' || type === 'RETURN'){
 
-      return this.prisma.$transaction(async(tx)=>{
+      return runInTx(async(tx)=>{
 
 
         const updated =
@@ -123,7 +154,7 @@ export class InventoryOperationService {
             ...logBase,
             locationId,
             quantity,
-            action:'IN'
+            action: type === 'RETURN' ? 'RETURN' : 'IN'
           }
 
         });
@@ -151,7 +182,7 @@ export class InventoryOperationService {
     if(type === 'OUT' || type === 'SALE'){
 
 
-      return this.prisma.$transaction(async(tx)=>{
+      return runInTx(async(tx)=>{
 
 
         /*
@@ -287,7 +318,7 @@ export class InventoryOperationService {
 
 
       const result =
-        await this.prisma.$transaction(async(tx)=>{
+        await runInTx(async(tx)=>{
 
 
 
@@ -482,7 +513,7 @@ note:`TRANSFER IN <- ${locationId}`
 
 
 
-      return this.prisma.$transaction(async(tx)=>{
+      return runInTx(async(tx)=>{
 
 
         const inventory =
