@@ -1,0 +1,35 @@
+[package]
+name = "warehouse-seller"
+version = "0.1.0"
+description = "Warehouse OS — اپ فروشنده"
+authors = ["Warehouse OS"]
+edition = "2021"
+
+# main.rs فقط یک پوسته است و run() را از کتابخانه صدا می‌زند.
+# بدون این بخش، `warehouse_seller_lib::run()` در main.rs کامپایل نمی‌شود.
+[lib]
+name = "warehouse_seller_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["devtools"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# چاپ خام روی ویندوز از طریق winspool.
+# فقط روی ویندوز کامپایل می‌شود تا توسعه روی مک/لینوکس ممکن بماند.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Printing",
+  "Win32_System_Memory",
+] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
