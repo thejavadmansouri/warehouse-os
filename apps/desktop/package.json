@@ -1,0 +1,15 @@
+{
+  "name": "@warehouse-os/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "قاب دسکتاپ ویندوز برای اپ فروشنده — Tauri v2",
+  "scripts": {
+    "dev": "tauri dev",
+    "build": "tauri build",
+    "icons": "tauri icon ../web/public/logo.svg",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}
