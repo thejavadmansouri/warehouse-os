@@ -31,10 +31,21 @@ const MAX_CANDIDATES = 100;
 const MAX_SUGGESTIONS = 5;
 
 // اینها روی confidence (نه score خام) اعمال می‌شوند
-const AUTO_CONFIRM_MIN_CONFIDENCE = 90;
 const MIN_MARGIN_OVER_SECOND = 15;
 
+// حالت family-only («۴۰۵» بدون تیپ): سخت‌گیرانه‌تر، چون احتمال وجود چند تیپ
+// از همان قطعه بیشتر است.
+const MIN_MARGIN_FAMILY_ONLY = 25;
+
 const MIN_TOKEN_LENGTH = 2;
+
+// چقدر confidence می‌تواند بر اساس فاصلهٔ امتیاز خام از بهترین کاندید افت کند.
+// بزرگ‌تر = تفکیک تندتر بین گزینه‌ها.
+const RELATIVE_CONFIDENCE_SPREAD = 45;
+
+// وزن «چه نسبتی از نام محصول با گفتار توضیح داده شد». تفکیک‌کنندهٔ اصلی بین
+// محصولاتی است که همان توکن‌ها را دارند ولی یکی کلمات اضافهٔ بیشتری دارد.
+const NAME_COVERAGE_WEIGHT = 60;
 
 // کلماتی که معنای قطعه/برند/خودرو ندارند و نباید در matching شرکت کنند
 // (در حالت ایده‌آل پارسر باید اینها را به‌عنوان UNIT/NUMBER مصرف کند؛
@@ -180,11 +191,25 @@ export class ProductMatcherService {
       return { status: 'NONE', best: null, suggestions: [] };
     }
 
-    const ranked = candidates
+    const scoredAll = candidates
       .map((product) => this.scoreCandidate(product, input, tokens))
       // کاندیدهایی که صراحتاً با مدل خودروی ورودی تناقض دارند حذف می‌شوند
       // (نه فقط امتیاز کمتر — اصلاً وارد رقابت نمی‌شوند)
-      .filter((c) => !c.disqualified)
+      .filter((c) => !c.disqualified);
+
+    // confidence تا اینجا فقط از سه پرچم (قطعه/خودرو/برند) ساخته شده، پس همهٔ
+    // تطبیق‌های خوب روی یک عدد (معمولاً ۸۵) جمع می‌شوند و فاصلهٔ اول و دوم صفر
+    // می‌شود. نتیجه: شرط margin هرگز برقرار نمی‌شد و تأیید خودکار عملاً غیرممکن
+    // بود — کارگر برای هر قلم مجبور به یک تپ اضافه می‌شد، حتی وقتی هیچ ابهامی
+    // نبود.
+    //
+    // امتیاز خام (score) سیگنال ریز را دارد ولی دور ریخته می‌شد. اینجا آن را
+    // نسبت به بهترین کاندید وارد confidence می‌کنیم: بهترین، عدد پرچمی خودش را
+    // نگه می‌دارد و بقیه به نسبت فاصله‌شان پایین می‌آیند. معنی عدد بالا عوض
+    // نمی‌شود، فقط رتبه‌بندی معنا پیدا می‌کند.
+    this.applyRelativeConfidence(scoredAll);
+
+    const ranked = scoredAll
       // کاندیدهایی که فقط با نویز (مثل توکن‌های بی‌معنی) امتیاز گرفته‌اند
       // را نباید به کاربر پیشنهاد داد — بهتر است هیچ پیشنهادی نداشته باشیم
       .filter((c) => c.confidence >= MIN_SUGGESTION_CONFIDENCE)
@@ -200,13 +225,34 @@ export class ProductMatcherService {
     const hasVehicleInput = !!(input.vehicleModelIds?.length || input.vehicleName);
     const vehicleRequirementSatisfied = !hasVehicleInput ? true : best.vehicleMatched;
 
+    // در گفتار واقعی کارگر «۴۰۵» می‌گوید، نه «پژو ۴۰۵ GLX» — پس modelIsExplicit
+    // تقریباً هیچ‌وقت درست نیست. شرط کردنِ تأیید خودکار به آن یعنی هیچ‌وقت
+    // خودکار تأیید نشود، حتی وقتی یک تطبیق دقیق و بی‌رقیب داریم.
+    //
+    // به‌جای رد کردنِ کاملِ حالت family-only، آستانه را سخت‌تر می‌کنیم: باید
+    // برندهٔ روشنی وجود داشته باشد. اگر چند تیپ از همان قطعه باشند، امتیازشان
+    // نزدیک می‌شود و همین فاصله جلوی حدس زدن را می‌گیرد — که همان چیزی است
+    // که قانون قبلی می‌خواست تضمین کند.
+    const requiredMargin = input.modelIsExplicit
+      ? MIN_MARGIN_OVER_SECOND
+      : MIN_MARGIN_FAMILY_ONLY;
+
+    // آستانهٔ ثابت (۹۰) وقتی برند گفته نشده از نظر ریاضی دست‌نیافتنی است:
+    // برند ۱۵ امتیاز از confidence را می‌سازد، پس سقف بدون برند ۸۵ است.
+    // شرط ثابت یعنی «هیچ‌وقت خودکار تأیید نکن» — که همان حالت فعلی بود.
+    //
+    // به‌جای عدد ثابت، می‌سنجیم آیا این کاندید **هر چیزی را که کارگر واقعاً
+    // گفته** تطبیق داده یا نه. اگر برند نگفته، نبودِ برند نباید جریمه شود؛
+    // ابهامِ ناشی از آن با شرط margin گرفته می‌شود.
+    const brandWasSpoken = !!(input.brandId || input.brandName);
+    const maxAchievable =
+      45 + (hasVehicleInput ? 40 : 15) + (brandWasSpoken ? 15 : 0);
+
     const canAutoConfirm =
-      // مدل باید صریح باشد؛ در حالت family-only هرگز یک محصول را خودکار انتخاب نکن
-      !!input.modelIsExplicit &&
       best.partMatched &&
       vehicleRequirementSatisfied &&
-      best.confidence >= AUTO_CONFIRM_MIN_CONFIDENCE &&
-      (!second || best.confidence - second.confidence >= MIN_MARGIN_OVER_SECOND);
+      best.confidence >= maxAchievable &&
+      (!second || best.confidence - second.confidence >= requiredMargin);
 
     if (canAutoConfirm) {
       return {
@@ -499,6 +545,26 @@ export class ProductMatcherService {
       }
     }
 
+    // ---------- پوشش نام ----------
+    // بدون این، «اینه چپ پراید» و «اینه تاشو چپ پراید» امتیاز یکسان می‌گیرند،
+    // چون هر دو همان توکن‌های گفته‌شده را دارند و کلمهٔ اضافه هزینه‌ای ندارد.
+    // نتیجه: فاصلهٔ اول و دوم صفر می‌ماند و انتخاب همیشه به کارگر می‌افتد.
+    //
+    // اینجا می‌سنجیم چه نسبتی از نام محصول با گفتار توضیح داده شده. محصولی که
+    // نامش دقیقاً همان چیزی است که گفته شد، بر محصولی که کلمات اضافه دارد
+    // ترجیح داده می‌شود — بدون اینکه محصولات با نام بلند حذف شوند.
+    const spokenSet = new Set([...tokens, ...partNameTokens]);
+    const nameTokens = name.split(/\s+/).filter((t) => t.length >= MIN_TOKEN_LENGTH);
+
+    if (nameTokens.length && spokenSet.size) {
+      const covered = nameTokens.filter((t) => spokenSet.has(t)).length;
+      const coverage = covered / nameTokens.length;
+      if (covered > 0) {
+        score += Math.round(NAME_COVERAGE_WEIGHT * coverage);
+        reasons.push(`name coverage: ${covered}/${nameTokens.length}`);
+      }
+    }
+
     let confidence = disqualified
       ? 0
       : this.computeConfidence({
@@ -531,6 +597,29 @@ export class ProductMatcherService {
    * اگر کاربر مدل خودرو را گفته ولی match نشده، کاندید در scoreCandidate
    * قبلاً disqualified شده و اصلاً به این تابع با مقدار معنادار نمی‌رسد.
    */
+  /**
+   * پخش کردن confidence بر اساس امتیاز خام، نسبت به بهترین کاندید.
+   *
+   * بهترین کاندید عدد پرچمی خودش را کامل نگه می‌دارد؛ هر کاندید دیگر به نسبت
+   * فاصله‌اش از او جریمه می‌شود. با این کار فاصلهٔ اول و دوم دیگر صفر نیست و
+   * می‌شود تشخیص داد «یک برندهٔ روشن» داریم یا «چند گزینهٔ هم‌وزن».
+   */
+  private applyRelativeConfidence(list: ScoredCandidate[]) {
+    if (list.length < 2) return;
+
+    const bestScore = Math.max(...list.map((c) => c.score));
+    if (bestScore <= 0) return;
+
+    for (const c of list) {
+      const shortfall = 1 - c.score / bestScore; // ۰ برای بهترین، تا ۱
+      c.confidence = Math.max(
+        0,
+        Math.round(c.confidence - shortfall * RELATIVE_CONFIDENCE_SPREAD),
+      );
+    }
+  }
+
+
   private computeConfidence(f: {
     partMatched: boolean;
     vehicleMatched: boolean;
