@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   BookAudio,
   Layers,
+  ShoppingCart,
 } from "lucide-react";
 
 export interface NavItem {
@@ -34,6 +35,12 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: "اصلی",
     items: [
+      {
+        title: "صندوق فروش",
+        href: "/admin/pos",
+        icon: ShoppingCart,
+        roles: ["ADMIN", "MANAGER", "SALES"],
+      },
       {
         title: "داشبورد",
         href: "/admin",

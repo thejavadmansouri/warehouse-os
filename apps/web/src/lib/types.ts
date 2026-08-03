@@ -2,7 +2,7 @@
 // هر تایپ با کامنت بخش مربوطه نشانه‌گذاری شده.
 
 // طبق بخش ۴
-export type Role = "ADMIN" | "MANAGER" | "STAFF";
+export type Role = "ADMIN" | "MANAGER" | "STAFF" | "SALES";
 
 export interface User {
   id: string;
@@ -31,6 +31,8 @@ export interface ApiErrorBody {
   error: string;
   message?: string;
   available?: number;
+  /** فیلدهای اختصاصی هر خطا — مثلاً lineIndex در INSUFFICIENT_STOCK. */
+  [key: string]: unknown;
 }
 
 // طبق بخش ۶.۳ — محصولات
@@ -110,24 +112,47 @@ export interface CreateVehicleModelDto {
   systemType?: string;
 }
 
-// طبق بخش ۶.۶ — موقعیت‌ها
-export type LocationLevel =
-  | "WAREHOUSE"
-  | "ZONE"
-  | "RACK"
-  | "SHELF"
-  | "BIN";
+// طبق مدل واقعی بک‌اند (Prisma) — هر انبار سطوح موقعیت خودش را با یک نام
+// آزاد و یک عمق عددی (depth) تعریف می‌کند؛ enum سطح ثابت وجود ندارد.
+export interface Warehouse {
+  id: string;
+  name: string;
+  code: string;
+  isActive?: boolean;
+}
 
 export interface LocationType {
   id: string;
+  warehouseId: string;
   name: string;
-  level: LocationLevel;
+  depth: number;
   createdAt?: string;
 }
 
 export interface CreateLocationTypeDto {
+  warehouseId: string;
   name: string;
-  level: LocationLevel;
+  depth: number;
+}
+
+// طبق LocationBuilderService — تولید گروهی درخت موقعیت‌ها
+export interface GenerateLocationTreeLevel {
+  locationTypeId: string;
+  count: number;
+  naming?: "numeric" | "alpha";
+  prefix?: string;
+}
+
+export interface GenerateLocationTreeDto {
+  warehouseId: string;
+  parentId?: string;
+  levels: GenerateLocationTreeLevel[];
+}
+
+export interface GenerateLocationTreeResult {
+  createdCount: number;
+  skippedCount: number;
+  leafCount: number;
 }
 
 export interface Location {
@@ -140,9 +165,50 @@ export interface Location {
   barcode?: string | null;
   path?: string | null;
   depth?: number;
+  isActive?: boolean;
+  sortOrder?: number;
   createdAt?: string;
   type?: LocationType | null;
   parent?: { id: string; name: string } | null;
+  // findChildren برمی‌گرداند تا UI درخت بداند این گره فرزند دارد (فلش expand)
+  _count?: { children: number };
+}
+
+export interface CreateWarehouseDto {
+  name: string;
+  code: string;
+}
+
+export interface UpdateWarehouseDto {
+  name?: string;
+}
+
+// خروجی GET /locations/:id/subtree-stats — برای دیالوگ تأیید حذف
+export interface LocationSubtreeStats {
+  id: string;
+  name: string;
+  descendantCount: number;
+  totalCount: number;
+  hasHistory: boolean;
+  willDeactivate: boolean;
+}
+
+export interface DeleteLocationResult {
+  mode: "deleted" | "deactivated";
+  affected: number;
+  message: string;
+}
+
+export interface BulkDeleteLocationsResult {
+  deletedCount: number;
+  deactivatedCount: number;
+  message: string;
+}
+
+export interface DeleteWarehouseResult {
+  mode: "deleted" | "deactivated";
+  locationCount: number;
+  message: string;
 }
 
 export interface CreateLocationDto {
@@ -430,7 +496,6 @@ export interface LocationLabel {
   code: string;
   barcode: string;
   warehouseName: string | null;
-  path: { id: string; name: string }[];
   pathText: string;
   qrCode: string; // data:image/png;base64,...
 }
@@ -558,3 +623,151 @@ export interface ApproveProductRequestDto {
   unit?: string;
 }
 
+
+// =====================================================
+// فروش — فاکتور، مشتری، پرداخت، کار برداشت
+// =====================================================
+
+export type PaymentMethod = "CASH" | "CARD" | "CHEQUE" | "CREDIT";
+export type InvoiceStatus = "CONFIRMED" | "CANCELLED";
+export type PickTaskStatus = "PENDING" | "PICKED" | "CANCELLED";
+
+/** یک مکان با موجودی مثبت — فروش فقط از این مکان‌ها ممکن است. */
+export interface StockLocation {
+  locationId: string;
+  locationName: string;
+  locationCode: string;
+  locationBarcode: string;
+  locationPath: string;
+  quantity: number;
+}
+
+export interface SaleResolve {
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+    salePrice?: number | null;
+  };
+  stock: StockLocation[];
+}
+
+export interface CustomerPhone {
+  id: string;
+  phone: string;
+  label?: string | null;
+  isPrimary: boolean;
+}
+
+export interface Customer {
+  id: string;
+  firstName: string;
+  lastName?: string | null;
+  fullName: string;
+  note?: string | null;
+  smsOptOut?: boolean;
+  phones: CustomerPhone[];
+  summary?: { totalPurchased: number; totalDue: number };
+  invoices?: InvoiceListRow[];
+}
+
+export interface ChequeInput {
+  number: string;
+  bankName?: string;
+  branch?: string;
+  holderName?: string;
+  /** ISO — تبدیل شمسی سمت کلاینت انجام می‌شود */
+  dueDate: string;
+}
+
+export interface PaymentInput {
+  method: PaymentMethod;
+  amount: number;
+  note?: string;
+  cheque?: ChequeInput;
+}
+
+export interface InvoiceLineInput {
+  productId: string;
+  locationId: string;
+  quantity: number;
+  unitPrice: number;
+  discount?: number;
+}
+
+export interface CreateInvoiceDto {
+  idempotencyKey: string;
+  warehouseId: string;
+  customerId?: string | null;
+  customer?: { firstName: string; lastName?: string; phone?: string } | null;
+  discount?: number;
+  note?: string;
+  lines: InvoiceLineInput[];
+  payments?: PaymentInput[];
+}
+
+export interface Invoice {
+  id: string;
+  number: number;
+  subtotal: number;
+  discount: number;
+  total: number;
+  paidAmount: number;
+  dueAmount: number;
+  profit?: number | null;
+  status: InvoiceStatus;
+  note?: string | null;
+  cancelReason?: string | null;
+  createdAt: string;
+  customer?: Customer | null;
+  warehouse?: { id: string; name: string; code: string };
+  user?: { id: string; fullName: string } | null;
+  payments: {
+    id: string;
+    method: PaymentMethod;
+    amount: number;
+    note?: string | null;
+    cheque?: { number: string; bankName?: string | null; dueDate: string } | null;
+  }[];
+  lines: {
+    id: string;
+    quantity: number;
+    unitPrice?: number | null;
+    product: { id: string; name: string; sku?: string | null; unit?: string | null };
+    location: { id: string; name: string; code: string; path: string };
+  }[];
+}
+
+export interface InvoiceListRow {
+  id: string;
+  number: number;
+  total: number;
+  paidAmount: number;
+  dueAmount: number;
+  status: InvoiceStatus;
+  createdAt: string;
+}
+
+/** بدنه‌ی خطای ۴۰۹ کمبود موجودی — شماره‌ی ردیف را می‌دهد تا همان ردیف قرمز شود. */
+export interface InsufficientStockError {
+  error: "INSUFFICIENT_STOCK";
+  lineIndex: number;
+  productId: string;
+  locationId: string;
+  requested: number;
+  available: number;
+  message: string;
+}
+
+export interface PickTask {
+  id: string;
+  quantity: number;
+  status: PickTaskStatus;
+  note?: string | null;
+  createdAt: string;
+  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  location: { id: string; name: string; code: string; barcode: string; path: string };
+  requestedBy?: { id: string; fullName: string } | null;
+  pickedBy?: { id: string; fullName: string } | null;
+}
