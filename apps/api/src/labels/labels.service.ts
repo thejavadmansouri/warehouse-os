@@ -79,6 +79,33 @@ export class LabelsService {
     };
   }
 
+  /** تنظیمات پیش‌فرض چاپ لیبل (تک‌ردیفی). */
+  async getSettings() {
+    const existing = await this.prisma.labelSettings.findUnique({
+      where: { id: 'singleton' },
+    });
+    if (existing) return existing;
+    return this.prisma.labelSettings.create({ data: { id: 'singleton' } });
+  }
+
+
+  async updateSettings(dto: {
+    columns?: number;
+    widthMm?: number;
+    heightMm?: number;
+    gapMm?: number;
+    showName?: boolean;
+    showBarcodeText?: boolean;
+    cropMarks?: boolean;
+  }) {
+    await this.getSettings();
+    return this.prisma.labelSettings.update({
+      where: { id: 'singleton' },
+      data: dto,
+    });
+  }
+
+
   async productLabel(id: string) {
     const product = await this.prisma.product.findUnique({
       where: { id },

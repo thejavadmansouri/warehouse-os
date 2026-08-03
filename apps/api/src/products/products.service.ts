@@ -391,6 +391,16 @@ export class ProductsService {
       );
     }
 
+    // روی لیبل فقط نام و کد چاپ می‌شود و کد عوض نمی‌شود؛ پس تنها تغییرِ نام
+    // لیبل چاپ‌شده را باطل می‌کند. با پاک کردن این فیلد، کالا خودبه‌خود به
+    // صف چاپ برمی‌گردد. تغییر قیمت عمداً بی‌اثر است.
+    const nameChanged =
+      name !== undefined &&
+      name !== (await this.prisma.product.findUnique({
+        where: { id },
+        select: { name: true },
+      }))?.name;
+
     return this.prisma.product.update({
 
       where:{
@@ -412,6 +422,7 @@ export class ProductsService {
         supplierId,
         isActive,
         ...(searchTokens ? { searchTokens } : {}),
+        ...(nameChanged ? { labelPrintedAt: null } : {}),
       }
 
     });
@@ -421,6 +432,86 @@ export class ProductsService {
 
 
 
+
+
+  /**
+   * کالاهایی که هنوز لیبل نخورده‌اند.
+   *
+   * این همان سؤالی است که بعد از ورود کالا توسط کارگر پرسیده می‌شود:
+   * «چه چیزهایی مانده که لیبل بخورد؟» بدون این، یا دوباره چاپ می‌شود
+   * (کاغذ و وقت هدر) یا بعضی کالاها بی‌لیبل می‌مانند و در انبارگردانی گیر
+   * می‌کنند.
+   */
+  async pendingLabels(q: {
+    onlyWithStock?: boolean;
+    since?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const page = Math.max(1, Number(q.page) || 1);
+    const limit = Math.min(500, Math.max(1, Number(q.limit) || 50));
+
+    const where: Prisma.ProductWhereInput = {
+      deletedAt: null,
+      isActive: true,
+      labelPrintedAt: null,
+    };
+
+    // معمولاً فقط کالایی که واقعاً وارد انبار شده لیبل لازم دارد.
+    if (q.onlyWithStock) {
+      where.inventories = { some: { quantity: { gt: 0 } } };
+    }
+
+    if (q.since) {
+      const d = new Date(q.since);
+      if (!isNaN(d.getTime())) where.createdAt = { gte: d };
+    }
+
+    const [data, total] = await this.prisma.$transaction([
+      this.prisma.product.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          unit: true,
+          createdAt: true,
+          brand: { select: { name: true } },
+          inventories: { select: { quantity: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      data: data.map((p) => ({
+        id: p.id,
+        name: p.name,
+        sku: p.sku,
+        unit: p.unit,
+        brandName: p.brand?.name ?? null,
+        createdAt: p.createdAt,
+        stock: p.inventories.reduce((s, i) => s + i.quantity, 0),
+      })),
+      meta: { total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) },
+    };
+  }
+
+
+  /** ثبت اینکه لیبل این کالاها چاپ شد — از صف خارج می‌شوند. */
+  async markLabelsPrinted(productIds: string[]) {
+    if (!productIds?.length) return { updated: 0 };
+
+    const res = await this.prisma.product.updateMany({
+      where: { id: { in: productIds } },
+      data: { labelPrintedAt: new Date() },
+    });
+
+    return { updated: res.count };
+  }
 
 
   /**

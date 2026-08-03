@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Param,
   Body,
   Query,
@@ -15,6 +16,7 @@ import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 
 import { LabelsService } from './labels.service';
+import { ProductsService } from '../products/products.service';
 
 
 @Controller('labels')
@@ -22,6 +24,7 @@ export class LabelsController {
 
   constructor(
     private readonly service: LabelsService,
+    private readonly products: ProductsService,
   ) {}
 
 
@@ -346,6 +349,28 @@ export class LabelsController {
   }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Get('settings')
+  getSettings() {
+    return this.service.getSettings();
+  }
+
+
+  @Put('settings')
+  updateSettings(
+    @Body() dto: {
+      columns?: number;
+      widthMm?: number;
+      heightMm?: number;
+      gapMm?: number;
+      showName?: boolean;
+      showBarcodeText?: boolean;
+      cropMarks?: boolean;
+    },
+  ){
+    return this.service.updateSettings(dto);
+  }
+
+
   @Post('product/print')
   async printProductLabelsPdf(
     @Body()
@@ -361,15 +386,25 @@ export class LabelsController {
     },
     @Res() res: Response,
   ) {
+    // هر مقداری که کلاینت نفرستاده از تنظیمات ذخیره‌شده‌ی مدیر پر می‌شود،
+    // تا لازم نباشد هر بار ابعاد لیبل دوباره انتخاب شود.
+    const saved = await this.service.getSettings();
+
     const buffer = await this.service.productLabelsPdf(dto.items ?? [], {
-      columns: dto.columns,
-      widthMm: dto.widthMm,
-      heightMm: dto.heightMm,
-      gapMm: dto.gapMm,
-      showName: dto.showName,
-      showBarcodeText: dto.showBarcodeText,
-      cropMarks: dto.cropMarks,
+      columns: dto.columns ?? saved.columns,
+      widthMm: dto.widthMm ?? saved.widthMm,
+      heightMm: dto.heightMm ?? saved.heightMm,
+      gapMm: dto.gapMm ?? saved.gapMm,
+      showName: dto.showName ?? saved.showName,
+      showBarcodeText: dto.showBarcodeText ?? saved.showBarcodeText,
+      cropMarks: dto.cropMarks ?? saved.cropMarks,
     });
+
+    // تولید PDF یعنی چاپ شد. اگر منتظر تأیید دستی بمانیم، کسی یادش می‌رود
+    // و صف هیچ‌وقت خالی نمی‌شود. چاپ دوباره همیشه ممکن است.
+    await this.products.markLabelsPrinted(
+      (dto.items ?? []).map((i) => i.productId),
+    );
 
     res.set({
       'Content-Type': 'application/pdf',

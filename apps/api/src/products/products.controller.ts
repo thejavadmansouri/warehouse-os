@@ -95,6 +95,33 @@ export class ProductsController {
   }
 
 
+  // کالاهایی که هنوز لیبل نخورده‌اند — صف چاپ روزانه.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('labels/pending')
+  pendingLabels(
+    @Query('onlyWithStock') onlyWithStock?: string,
+    @Query('since') since?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ){
+    return this.productsService.pendingLabels({
+      onlyWithStock: onlyWithStock === 'true',
+      since,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+    });
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('labels/mark-printed')
+  markLabelsPrinted(
+    @Body() body: { productIds: string[] },
+  ){
+    return this.productsService.markLabelsPrinted(body?.productIds ?? []);
+  }
+
+
   // ثبت قیمت جدید. ردیف تازه در تاریخچه می‌سازد، قیمت قبلی را بازنویسی نمی‌کند.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post(':id/prices')
