@@ -14,6 +14,7 @@ import { ProductsModule } from './products/products.module';
 import { LocationBuilderModule } from './location-builder/location-builder.module';
 import { LocationsModule } from './locations/locations.module';
 import { LocationTypesModule } from './location-types/location-types.module';
+import { WarehousesModule } from './warehouses/warehouses.module';
 import { InventoryModule } from './inventory/inventory.module';
 import { VehicleModelsModule } from './vehicle-models/vehicle-models.module';
 import { BrandsModule } from './brands/brands.module';
@@ -31,6 +32,8 @@ import { LabelsModule } from './labels/labels.module';
 import { PrintJobsModule } from './print-jobs/print-jobs.module';
 import { PendingOperationsModule } from './pending-operations/pending-operations.module';
 import { ProductRequestsModule } from './product-requests/product-requests.module';
+import { SalesModule } from './sales/sales.module';
+import { PickTasksModule } from './pick-tasks/pick-tasks.module';
 
 @Module({
   imports: [
@@ -45,6 +48,7 @@ import { ProductRequestsModule } from './product-requests/product-requests.modul
     ProductsModule,
     LocationsModule,
     LocationTypesModule,
+    WarehousesModule,
 LocationBuilderModule,
     InventoryModule,
     VehicleModelsModule,
@@ -63,6 +67,8 @@ LocationBuilderModule,
     PrintJobsModule,
     PendingOperationsModule,
     ProductRequestsModule,
+    SalesModule,
+    PickTasksModule,
   ],
   controllers: [
     AppController,
