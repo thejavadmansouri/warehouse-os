@@ -771,3 +771,132 @@ export interface PickTask {
   requestedBy?: { id: string; fullName: string } | null;
   pickedBy?: { id: string; fullName: string } | null;
 }
+
+// =====================================================
+// گزارش‌ها — دقیقاً مطابق آنچه سرور برمی‌گرداند
+// =====================================================
+
+export interface ReportMeta {
+  total: number;
+  page: number;
+  limit: number;
+  lastPage: number;
+}
+
+export interface PeriodicSalesReport {
+  summary: { totalAmount: number; invoiceCount: number; averageInvoiceAmount: number };
+  /** تاریخ ISO است؛ برچسب شمسی سمت کلاینت ساخته می‌شود. */
+  chartData: { date: string; amount: number; count: number }[];
+  invoices: {
+    data: {
+      id: string;
+      number: number;
+      createdAt: string;
+      customerName: string | null;
+      sellerName: string | null;
+      amount: number;
+      itemCount: number;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
+export interface PeriodicProfitReport {
+  summary: {
+    totalRevenue: number;
+    totalCost: number;
+    grossProfit: number;
+    profitMarginPercent: number;
+  };
+  /** بهای تفکیکی از آخرین قیمت خرید می‌آید، نه قیمت لحظه‌ی فروش. */
+  costIsApproximate: boolean;
+  items: {
+    data: {
+      productId: string;
+      productName: string;
+      sku: string;
+      quantitySold: number;
+      totalRevenue: number;
+      totalCost: number;
+      profit: number;
+      marginPercent: number;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
+export interface DebtorsReport {
+  summary: { totalDebtors: number; totalCreditBalance: number };
+  debtors: {
+    data: {
+      customerId: string;
+      customerName: string;
+      phone: string | null;
+      creditBalance: number;
+      lastInvoiceAt: string;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
+export interface ChequesReport {
+  summary: { totalCount: number; totalAmount: number };
+  cheques: {
+    data: {
+      id: string;
+      number: string;
+      bankName: string | null;
+      holderName: string | null;
+      amount: number;
+      dueDate: string;
+      status: string;
+      invoiceNumber: number;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
+export interface ProductPerformanceReport {
+  products: {
+    data: {
+      productId: string;
+      productName: string;
+      sku: string;
+      currentStock: number;
+      quantitySold: number;
+      totalSalesAmount: number;
+      lastSoldAt: string | null;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
+export interface LowStockReport {
+  summary: { totalLowStockItems: number };
+  items: {
+    data: {
+      productId: string;
+      productName: string;
+      sku: string;
+      currentStock: number;
+      minStock: number;
+      shortage: number;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
+export interface SellerPerformanceReport {
+  sellers: {
+    data: {
+      sellerId: string;
+      sellerName: string;
+      totalInvoices: number;
+      totalSalesAmount: number;
+      totalProfit: number;
+      averageInvoiceAmount: number;
+      cancelledInvoicesCount: number;
+    }[];
+    meta: ReportMeta;
+  };
+}

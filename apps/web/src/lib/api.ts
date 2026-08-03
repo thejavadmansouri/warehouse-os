@@ -1003,3 +1003,84 @@ export function getPickTasks(params: {
   for (const [k, v] of Object.entries(params)) if (v) qs.set(k, String(v));
   return apiFetch<T.PickTask[]>(`/pick-tasks?${qs.toString()}`);
 }
+
+// =====================================================
+// گزارش‌ها
+// =====================================================
+
+export interface ReportRange {
+  startDate: string;
+  endDate: string;
+  page?: number;
+  limit?: number;
+}
+
+function reportQs(params: object): string {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  return qs.toString();
+}
+
+export function getPeriodicSales(p: ReportRange) {
+  return apiFetch<T.PeriodicSalesReport>(`/reports/periodic-sales?${reportQs(p)}`);
+}
+
+export function getPeriodicProfit(p: ReportRange) {
+  return apiFetch<T.PeriodicProfitReport>(`/reports/periodic-profit?${reportQs(p)}`);
+}
+
+export function getDebtors(p: { page?: number; limit?: number }) {
+  return apiFetch<T.DebtorsReport>(`/reports/debtors?${reportQs(p)}`);
+}
+
+export function getChequesReport(p: { status?: string; page?: number; limit?: number }) {
+  return apiFetch<T.ChequesReport>(`/reports/cheques?${reportQs(p)}`);
+}
+
+export function getProductPerformance(p: ReportRange & { type?: string }) {
+  return apiFetch<T.ProductPerformanceReport>(`/reports/product-performance?${reportQs(p)}`);
+}
+
+export function getLowStock(p: { page?: number; limit?: number }) {
+  return apiFetch<T.LowStockReport>(`/reports/low-stock?${reportQs(p)}`);
+}
+
+export function getSellerPerformance(p: ReportRange) {
+  return apiFetch<T.SellerPerformanceReport>(`/reports/seller-performance?${reportQs(p)}`);
+}
+
+/**
+ * دانلود خروجی اکسل هر گزارش.
+ * توکن باید دستی ضمیمه شود چون این مسیر از apiFetch رد نمی‌شود (پاسخ باینری است).
+ */
+export async function downloadReportExcel(
+  endpoint: string,
+  params: Record<string, unknown>,
+  fileName: string
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const qs = reportQs({ ...params, format: "excel" });
+
+  const res = await fetch(`${API_URL}${endpoint}?${qs}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!res.ok) {
+    throw new ApiException(res.status, {
+      error: "EXPORT_FAILED",
+      message: "گرفتن خروجی اکسل ناموفق بود",
+    });
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${fileName}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
