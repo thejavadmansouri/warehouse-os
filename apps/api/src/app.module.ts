@@ -34,6 +34,7 @@ import { PendingOperationsModule } from './pending-operations/pending-operations
 import { ProductRequestsModule } from './product-requests/product-requests.module';
 import { SalesModule } from './sales/sales.module';
 import { PickTasksModule } from './pick-tasks/pick-tasks.module';
+import { ReportsModule } from './reports/reports.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ LocationBuilderModule,
     ProductRequestsModule,
     SalesModule,
     PickTasksModule,
+    ReportsModule,
   ],
   controllers: [
     AppController,
