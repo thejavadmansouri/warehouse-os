@@ -6,6 +6,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { buildSearchTokens } from '../products/search-tokens';
+import { nextSku } from '../products/sku.util';
 import {
   ApproveProductRequestDto,
   CreateProductRequestDto,
@@ -153,9 +154,10 @@ export class ProductRequestsService {
           })
         : null;
 
-      const sku = `REQ-${Date.now().toString(36)}-${Math.random()
-        .toString(36)
-        .slice(2, 6)}`.toUpperCase();
+      // کد کالا = کد حسابداری، عددی و از همان دنباله‌ی کاتالوگ.
+      // قبلاً یک کد موقتِ حروف‌دار (REQ-…) ساخته می‌شد که نه در حسابداری
+      // معنا داشت و نه به‌عنوان بارکد قابل چاپ بود.
+      const sku = await nextSku(this.prisma);
 
       const product = await this.prisma.product.create({
         data: {

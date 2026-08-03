@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { PrinterRenderService } from './printer-render.service';
+import { isNumericSku } from '../products/sku.util';
 import {
   buildThermalLabelHtml,
   buildSheetLabelHtml,
@@ -97,8 +98,15 @@ export class LabelsService {
       sku: product.sku,
       brandName: product.brand?.name ?? null,
       vehicleModelName: product.vehicleModel?.name ?? null,
-      barcode: product.internalBarcode,
-      qrCode: await this.qr(product.internalBarcode),
+      // بارکد چاپی = کد حسابداری (SKU). قبلاً internalBarcode چاپ می‌شد که یک
+      // UUID سی‌وشش‌کاراکتری است: روی لیبل قطعه جا نمی‌شود، کند خوانده می‌شود،
+      // و اگر لیبل خط بخورد کسی نمی‌تواند دستی تایپش کند.
+      // اگر کالا کد عددی نداشته باشد (کدهای موقت قدیمی)، به internalBarcode
+      // برمی‌گردیم تا لیبل بدون بارکد چاپ نشود.
+      barcode: isNumericSku(product.sku) ? product.sku : product.internalBarcode,
+      qrCode: await this.qr(
+        isNumericSku(product.sku) ? product.sku : product.internalBarcode,
+      ),
     };
   }
 
