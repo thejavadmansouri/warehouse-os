@@ -168,6 +168,20 @@ export function getProducts(): Promise<T.Product[]> {
   );
 }
 
+// GET /products?page=&limit= — نسخه‌ی صفحه‌بندی‌شده با meta (برای مرور کل کاتالوگ)
+export function getProductsPaged(
+  page = 1,
+  limit = 50
+): Promise<{ data: T.Product[]; meta: { total: number; page: number; lastPage: number } }> {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
+  return apiFetch<{ data?: T.Product[]; meta?: { total: number; page: number; lastPage: number } }>(
+    `/products?${qs.toString()}`
+  ).then((r) => ({
+    data: r.data ?? [],
+    meta: r.meta ?? { total: (r.data ?? []).length, page, lastPage: 1 },
+  }));
+}
+
 // طبق بخش ۶.۳ — GET /products/search?q=
 // سرور پاسخ صفحه‌بندی‌شده { data, meta } برمی‌گرداند؛ اینجا آرایه‌ی محصولات را
 // استخراج می‌کنیم و در برابر هر دو شکل (آرایه‌ی خام یا wrapped) مقاوم می‌مانیم.
@@ -215,6 +229,74 @@ export async function exportProductsCsv(): Promise<void> {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+}
+
+// POST /labels/product/print — تولید PDF لیبل محصول (کیفیت بالا، سمت سرور) و
+// بازکردنش در تب جدید برای چاپ. items: هر کالا با تعداد کپی. opts: تنظیمات چاپ.
+export interface ProductLabelPrintOptions {
+  columns?: number;
+  widthMm?: number;
+  heightMm?: number;
+  gapMm?: number;
+  showName?: boolean;
+  showBarcodeText?: boolean;
+  cropMarks?: boolean;
+}
+export async function printProductLabelsPdf(
+  items: { productId: string; quantity: number }[],
+  opts: ProductLabelPrintOptions = {}
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(`${API_URL}/labels/product/print`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify({ items, ...opts }),
+  });
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  // در تب جدید باز شود تا کاربر از نمایشگر PDF چاپ بگیرد (چاپِ ثابت و باکیفیت).
+  window.open(url, "_blank");
+  // مهلت بده تب باز شود، بعد آزاد کن
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+// POST /labels/stock/print — چاپ PDF لیبلِ کل موجودیِ واردشده (هر کالا به تعداد
+// مجموع موجودی‌اش) و بازکردن در تب جدید.
+export async function printAllStockLabelsPdf(
+  opts: ProductLabelPrintOptions = {}
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(`${API_URL}/labels/stock/print`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // طبق بخش ۶.۳ — POST /products
@@ -295,12 +377,16 @@ export function getLocations(): Promise<T.Location[]> {
   return apiFetch<T.Location[]>("/locations");
 }
 
-// طبق بخش ۶.۶ — GET /locations/children?parentId=
+// طبق بخش ۶.۶ — GET /locations/children?parentId=&warehouseId=
 export function getLocationChildren(
-  parentId?: string
+  parentId?: string,
+  warehouseId?: string
 ): Promise<T.Location[]> {
-  const qs = parentId ? `?parentId=${encodeURIComponent(parentId)}` : "";
-  return apiFetch<T.Location[]>(`/locations/children${qs}`);
+  const p = new URLSearchParams();
+  if (parentId) p.set("parentId", parentId);
+  if (warehouseId) p.set("warehouseId", warehouseId);
+  const qs = p.toString();
+  return apiFetch<T.Location[]>(`/locations/children${qs ? `?${qs}` : ""}`);
 }
 
 // طبق بخش ۶.۶ — GET /locations/:id/path
@@ -326,9 +412,74 @@ export function createLocation(
   return apiFetch<T.Location>("/locations", { method: "POST", body: dto });
 }
 
-// طبق بخش ۶.۶ — GET /location-types
-export function getLocationTypes(): Promise<T.LocationType[]> {
-  return apiFetch<T.LocationType[]>("/location-types");
+// GET /warehouses
+export function getWarehouses(): Promise<T.Warehouse[]> {
+  return apiFetch<T.Warehouse[]>("/warehouses");
+}
+
+// POST /warehouses (ADMIN/MANAGER)
+export function createWarehouse(
+  dto: T.CreateWarehouseDto
+): Promise<T.Warehouse> {
+  return apiFetch<T.Warehouse>("/warehouses", { method: "POST", body: dto });
+}
+
+// PATCH /warehouses/:id (ADMIN/MANAGER)
+export function updateWarehouse(
+  id: string,
+  dto: T.UpdateWarehouseDto
+): Promise<T.Warehouse> {
+  return apiFetch<T.Warehouse>(`/warehouses/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: dto,
+  });
+}
+
+// DELETE /warehouses/:id (ADMIN/MANAGER) — انبار دارای موقعیت فقط غیرفعال می‌شود
+export function deleteWarehouse(
+  id: string
+): Promise<T.DeleteWarehouseResult> {
+  return apiFetch<T.DeleteWarehouseResult>(
+    `/warehouses/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
+  );
+}
+
+// GET /locations/:id/subtree-stats — برای دیالوگ تأیید حذف
+export function getLocationSubtreeStats(
+  id: string
+): Promise<T.LocationSubtreeStats> {
+  return apiFetch<T.LocationSubtreeStats>(
+    `/locations/${encodeURIComponent(id)}/subtree-stats`
+  );
+}
+
+// DELETE /locations/:id (ADMIN/MANAGER) — حذف هوشمند (خالی→حذف، دارای سابقه→غیرفعال)
+export function deleteLocation(id: string): Promise<T.DeleteLocationResult> {
+  return apiFetch<T.DeleteLocationResult>(
+    `/locations/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
+  );
+}
+
+// POST /locations/bulk-delete (ADMIN/MANAGER)
+export function bulkDeleteLocations(
+  ids: string[]
+): Promise<T.BulkDeleteLocationsResult> {
+  return apiFetch<T.BulkDeleteLocationsResult>("/locations/bulk-delete", {
+    method: "POST",
+    body: { ids },
+  });
+}
+
+// طبق بخش ۶.۶ — GET /location-types?warehouseId=
+export function getLocationTypes(
+  warehouseId?: string
+): Promise<T.LocationType[]> {
+  const qs = warehouseId
+    ? `?warehouseId=${encodeURIComponent(warehouseId)}`
+    : "";
+  return apiFetch<T.LocationType[]>(`/location-types${qs}`);
 }
 
 // طبق بخش ۶.۶ — POST /location-types
@@ -336,6 +487,16 @@ export function createLocationType(
   dto: T.CreateLocationTypeDto
 ): Promise<T.LocationType> {
   return apiFetch<T.LocationType>("/location-types", {
+    method: "POST",
+    body: dto,
+  });
+}
+
+// POST /location-builder/generate — ساخت گروهی درخت موقعیت‌ها
+export function generateLocationTree(
+  dto: T.GenerateLocationTreeDto
+): Promise<T.GenerateLocationTreeResult> {
+  return apiFetch<T.GenerateLocationTreeResult>("/location-builder/generate", {
     method: "POST",
     body: dto,
   });
@@ -746,4 +907,99 @@ export function rejectProductRequest(
     method: "POST",
     body,
   });
+}
+
+// =====================================================
+// فروش — فاکتور، مشتری، کار برداشت
+// =====================================================
+
+// GET /inventory/sale/resolve/:barcode — کالا + مکان‌های دارای موجودی، در یک درخواست
+export function resolveForSale(barcode: string): Promise<T.SaleResolve> {
+  return apiFetch<T.SaleResolve>(
+    `/inventory/sale/resolve/${encodeURIComponent(barcode.trim())}`
+  );
+}
+
+// GET /inventory/product/:id/stock — فقط مکان‌هایی که موجودی مثبت دارند
+export function getProductStock(productId: string): Promise<T.StockLocation[]> {
+  return apiFetch<T.StockLocation[]>(
+    `/inventory/product/${encodeURIComponent(productId)}/stock`
+  );
+}
+
+// POST /sales/invoices — ثبت فاکتور چندردیفی. اتمیک: یا همه یا هیچ.
+export function createInvoice(dto: T.CreateInvoiceDto): Promise<T.Invoice> {
+  return apiFetch<T.Invoice>("/sales/invoices", { method: "POST", body: dto });
+}
+
+export function getInvoice(id: string): Promise<T.Invoice> {
+  return apiFetch<T.Invoice>(`/sales/invoices/${encodeURIComponent(id)}`);
+}
+
+export function getInvoices(params: {
+  warehouseId?: string;
+  customerId?: string;
+  q?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+} = {}): Promise<{ data: T.Invoice[]; meta: { total: number; page: number; pageSize: number; pageCount: number } }> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  return apiFetch(`/sales/invoices?${qs.toString()}`);
+}
+
+export function cancelInvoice(id: string, reason: string): Promise<T.Invoice> {
+  return apiFetch<T.Invoice>(`/sales/invoices/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+// GET /sales/customers — q روی نام، فامیل و شماره‌ی ناقص کار می‌کند
+export function searchCustomers(
+  q: string,
+  pageSize = 20
+): Promise<T.Customer[]> {
+  const qs = new URLSearchParams({ pageSize: String(pageSize) });
+  if (q) qs.set("q", q);
+  return apiFetch<{ data: T.Customer[] }>(`/sales/customers?${qs.toString()}`).then(
+    (r) => r.data ?? []
+  );
+}
+
+export function getCustomer(id: string): Promise<T.Customer> {
+  return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}`);
+}
+
+// فقط firstName الزامی است — ثبت مشتری بدون شماره باید ممکن باشد
+export function createCustomer(body: {
+  firstName: string;
+  lastName?: string;
+  note?: string;
+  phones?: { phone: string; label?: string; isPrimary?: boolean }[];
+}): Promise<T.Customer> {
+  return apiFetch<T.Customer>("/sales/customers", { method: "POST", body });
+}
+
+// POST /pick-tasks — ارسال لوکیشن کالا به گوشی کارگر
+export function createPickTasks(body: {
+  warehouseId: string;
+  invoiceId?: string | null;
+  lines: { productId: string; locationId: string; quantity: number; note?: string }[];
+}): Promise<T.PickTask[]> {
+  return apiFetch<T.PickTask[]>("/pick-tasks", { method: "POST", body });
+}
+
+export function getPickTasks(params: {
+  status?: T.PickTaskStatus;
+  warehouseId?: string;
+} = {}): Promise<T.PickTask[]> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, String(v));
+  return apiFetch<T.PickTask[]>(`/pick-tasks?${qs.toString()}`);
 }
