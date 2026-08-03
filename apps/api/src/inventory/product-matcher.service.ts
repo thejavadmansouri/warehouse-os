@@ -37,6 +37,24 @@ const MIN_MARGIN_OVER_SECOND = 15;
 // از همان قطعه بیشتر است.
 const MIN_MARGIN_FAMILY_ONLY = 25;
 
+/**
+ * تأیید خودکار فعلاً خاموش است.
+ *
+ * سنجش روی ۱۰۰ محصول واقعی (۶۰۰ جست‌وجو، اسکریپت در docs/voice-benchmark.md):
+ * از ۷ موردی که خودکار تأیید شد، فقط ۵ مورد درست بود — دقت ۷۱٪. یکی از
+ * غلط‌ها حتی با اطمینان ۱۰۰ ثبت شد:
+ *
+ *   گفته شد: «شیلنگ بالارادیات کوئیک ساینا S پولاسا»
+ *   ثبت شد : «مجموعه شیلنگ هیدرولیک قوی تیباساینا کوئیک پولاسا»
+ *
+ * یک تپ اضافه چند ثانیه هزینه دارد؛ یک ثبت خودکارِ اشتباه موجودی را خراب
+ * می‌کند و تا انبارگردانی بعدی کشف نمی‌شود — و در این فاصله فروش و گزارش
+ * را هم غلط می‌کند. تا وقتی دقت به ۹۵٪+ نرسد، پرسیدن ارزان‌تر است.
+ *
+ * برای روشن کردن دوباره: این را true کن و سنجش را دوباره اجرا کن.
+ */
+const AUTO_CONFIRM_ENABLED = false;
+
 const MIN_TOKEN_LENGTH = 2;
 
 // چقدر confidence می‌تواند بر اساس فاصلهٔ امتیاز خام از بهترین کاندید افت کند.
@@ -249,6 +267,7 @@ export class ProductMatcherService {
       45 + (hasVehicleInput ? 40 : 15) + (brandWasSpoken ? 15 : 0);
 
     const canAutoConfirm =
+      AUTO_CONFIRM_ENABLED &&
       best.partMatched &&
       vehicleRequirementSatisfied &&
       best.confidence >= maxAchievable &&

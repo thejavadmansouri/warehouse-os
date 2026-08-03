@@ -60,6 +60,19 @@ architecture, speculative features. Only ensure the architecture doesn't *block*
 
 ---
 
+## اپ اندروید — به‌روزرسانی لازم دارد (۱۴۰۵/۰۵/۱۲)
+
+بک‌اند جلو افتاده و اپ کارگر عقب مانده. سه چیز:
+
+1. **کار برداشت** — `pick-tasks` ساخته و تست شده، ولی اپ اصلاً صدایش نمی‌زند.
+   یعنی فروشنده لوکیشن را می‌فرستد و هیچ‌وقت روی گوشی کارگر ظاهر نمی‌شود.
+2. **صفحهٔ «کارهای من»** — کارگر نمی‌بیند چه ثبت کرده، مدیر چه چیزی را تأیید یا
+   **رد** کرده و چرا. بدون بازخوردِ رد شدن، همان اشتباه تکرار می‌شود.
+3. **تأیید خودکار خاموش شد** — اپ باید همیشه فهرست پیشنهاد را نشان بدهد و
+   مسیر «تأیید بی‌سؤال» را فرض نکند.
+
+---
+
 ## Deferred / future work (record, do not implement now)
 
 1. **Advanced Voice Counting Engine** (Android) — count-specific voice workflow, conversational counting, confirmation logic.
