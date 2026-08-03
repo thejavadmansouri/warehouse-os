@@ -173,6 +173,13 @@ model Product {
   /// pg_trgm روی متن فارسی در این محیط کار نمی‌کند (show_trgm خالی برمی‌گرداند)،
   /// بنابراین جستجو به‌جای ترای‌گرام روی این آرایه با ایندکس GIN انجام می‌شود.
   searchTokens    String[]         @default([])
+  /// آخرین باری که لیبل این کالا چاپ شده.
+  ///
+  /// null یعنی «هنوز لیبل نخورده» و کالا در صف چاپ می‌ماند. چون روی لیبل
+  /// فقط نام و کد چاپ می‌شود و کد هرگز عوض نمی‌شود، تنها تغییرِ نام لیبل را
+  /// باطل می‌کند — در آن حالت این فیلد پاک می‌شود و کالا خودش به صف برمی‌گردد.
+  /// تغییر قیمت عمداً بی‌اثر است، چون قیمت روی لیبل نیست.
+  labelPrintedAt  DateTime?
   deletedAt       DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -196,6 +203,7 @@ model Product {
   quotationLines  QuotationLine[]
 
   @@index([searchTokens], type: Gin)
+  @@index([labelPrintedAt])
 }
 
 /// یک قطعه معمولاً روی چند خودرو می‌نشیند («دسته موتور زیر باطری 206 و سمند ملی»).
@@ -1007,6 +1015,26 @@ model BackupRun {
 
   @@index([status, startedAt])
   @@index([startedAt])
+}
+
+/// تنظیمات پیش‌فرض چاپ لیبل. تک‌ردیفی (id ثابت "singleton").
+///
+/// بدون این، مدیر هر بار باید ابعاد لیبل و تعداد ستون را دوباره انتخاب کند —
+/// وقتی روزی چند بار چاپ می‌گیری، همین یک اصطکاک واقعی است.
+model LabelSettings {
+  id              String   @id @default("singleton")
+  /// چند لیبل در هر ردیف روی کاغذ
+  columns         Int      @default(4)
+  widthMm         Int      @default(50)
+  heightMm        Int      @default(30)
+  gapMm           Int      @default(2)
+  /// نام کالا زیر بارکد چاپ شود
+  showName        Boolean  @default(true)
+  /// عدد کد زیر خطوط بارکد چاپ شود
+  showBarcodeText Boolean  @default(true)
+  /// خط‌های برش برای کاغذ A4 معمولی
+  cropMarks       Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
 }
 
 enum BackupStatus {
