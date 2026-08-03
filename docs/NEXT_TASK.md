@@ -2,7 +2,41 @@
 
 **As of:** 2026-07-30 · Read `docs/AI_HANDOFF.md` first.
 
-## CURRENT DIRECTION (2026-07-30): UI/UX polish + scope freeze
+## CURRENT DIRECTION (2026-08-03): فروش + اپ ویندوز فروشنده
+
+جهت پروژه عوض شد. تصمیم‌های قطعی‌شده با کاربر:
+
+- **حسابداری نوشته نمی‌شود.** مشتری از نرم‌افزار پارسیان استفاده می‌کند؛ اتصال زنده هم
+  فعلاً نه. به‌جایش پایان هر روز، بعد از بک‌آپ، خروجی اکسل با **قالب قابل تغییر** تولید
+  می‌شود (قالب «داده» است نه «کد»، تا تغییر ستون‌ها کدنویسی نخواهد).
+- **اپ فروشنده = همان `apps/web` داخل قاب Tauri**، نه اپ جدا. تنها دلیل واقعی دسکتاپ
+  بودن، دسترسی به فیش‌پرینتر ESC/POS است.
+- **کارتخوان بانکی وصل نمی‌شود** — پروتکل بسته است و به مجوز/SDK بانک نیاز دارد.
+  فقط نوع پرداخت (نقد/کارت/چک/نسیه) ثبت می‌شود.
+- **امانی فعلاً نه** (کاربر پذیرفت که مهاجرت بعدی گران است).
+- **رنگ اصلی آبی `#2563EB` قفل شد.** واحد پول **تومان**.
+- سیستم طراحی مشترک: `docs/DESIGN_SYSTEM.md`
+- پرامپت‌های واگذاری به مدل‌های دیگر: `docs/AI_TASK_PROMPTS.md`
+
+### فازها
+0. **انبارگردانی ۳۳ هزار قلم** — پیش‌نیاز قطعی فروش، کار انسانی، موازی با بقیه.
+1. ~~قاب Tauri~~ — **کد نوشته شد** (`apps/desktop`)، ولی روی ویندوز کامپایل نشده.
+2. ~~پل فیش‌پرینتر~~ — winspool RAW پیاده شد، همان‌جا. نیاز به تست روی سخت‌افزار واقعی.
+3. صفحه‌ی POS کیبوردی
+4. ~~سرویس فاکتور~~ — **DONE 2026-08-03**
+5. ورود کالا و لیبل (جریان پیوسته)
+6. حساب مشتری + گزارش سود
+7. خروجی اکسل با قالب قابل تغییر
+
+### بدهی‌های شناخته‌شده
+- **`ProductPrice` مشکوک است:** بعضی ردیف‌ها قیمت خرید > قیمت فروش دارند (نمونه:
+  شیشه بالابر پراید، خرید ۳٬۷۰۰٬۰۰۰ / فروش ۱۸۰٬۰۰۰). احتمالاً بخشی ریال و بخشی تومان
+  وارد شده. **پیش از اتکا به گزارش سود باید پاک‌سازی شود.**
+- `users.service.spec.ts` از قبل خراب است (PrismaService را به ماژول تست نمی‌دهد).
+
+---
+
+## جهت قبلی (2026-07-30): UI/UX polish + scope freeze
 
 Priority pivoted to making the product **usable and testable**, not adding features:
 1. **Android app UI/UX + performance** — polish the primary warehouse-worker flow
@@ -38,10 +72,15 @@ architecture, speculative features. Only ensure the architecture doesn't *block*
      endpoints, approve re-link. Do not expand it; it compiles and is tested but has no client UI.
 7. **Warehouse-scoped photo authorization** — needs a `UserWarehouse` model + `warehouseIds` in the JWT
      (applies to the existing unscoped review queue too). Retrieval is currently authenticated + role-gated only.
-8. **Proper Prisma migration baseline for production** — the dev DB has pre-existing drift (`PendingOperation`,
-     `Asset` photo columns, `ProductCreationRequest`, the `pg_trgm` extension + `idx_product_*_trgm`
-     indexes, and more were applied via `db push` / raw SQL, never migrated). Author a clean migration
-     baseline before the on-prem Windows deploy. Never `migrate reset` the dev DB (63k locations seeded).
+8. ~~**Proper Prisma migration baseline for production**~~ — **DONE 2026-08-03.**
+     `20260803090000_baseline_catchup` captures the drifted state (`PendingOperation`, `Asset` photo
+     columns, `ProductCreationRequest`, `Location.path/depth`, `Role.SALES`, `InventoryLog.unitPrice`,
+     `PrintJob*`, `pg_trgm`, …) and was marked applied on dev via `migrate resolve` — no SQL ran against
+     the seeded data. **Verified:** replaying the full history onto an empty DB yields a schema identical
+     to `schema.prisma` (`migrate diff` = empty), and `migrate dev` no longer offers a reset.
+     Two fixes were needed in the generated SQL: `CREATE EXTENSION IF NOT EXISTS pg_trgm` (Prisma does not
+     manage extensions) and stripping `ASC` from the `Product.searchTokens` GIN index (invalid in Postgres).
+     The rule still stands: **never `migrate reset` the dev DB** (63k locations, 33.5k products).
 9. **Product-matching refinements — DEFERRED to AFTER the 10k import (user decision):**
    - Fold trigram `similarity` into the confidence % (today it's flag-based → correct matches cluster at 85%;
      ranking #1 is correct but the number is coarse).
