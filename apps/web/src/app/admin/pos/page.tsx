@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiException } from "@/lib/api-error-messages";
-import { Trash2, Send, User, Percent, CreditCard, Search } from "lucide-react";
+import { Trash2, Send, User, Percent, CreditCard, Search, FileClock } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createInvoice,
   createPickTasks,
+  createQuotation,
   getProductStock,
   getWarehouses,
   resolveForSale,
@@ -28,6 +29,7 @@ import { LocationPicker } from "./_components/location-picker";
 import { CustomerPicker } from "./_components/customer-picker";
 import { PaymentDialog } from "./_components/payment-dialog";
 import { ProductSearch } from "./_components/product-search";
+import { QuotationDialog } from "./_components/quotation-dialog";
 
 /** حداقل چیزی که برای افزودن یک ردیف لازم است — هم از resolve می‌آید هم از جست‌وجو. */
 type PickableProduct = {
@@ -76,6 +78,7 @@ export default function PosPage() {
   const [showCustomer, setShowCustomer] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [showQuotation, setShowQuotation] = useState(false);
 
   const scanRef = useRef<HTMLInputElement>(null);
 
@@ -264,6 +267,37 @@ export default function PosPage() {
     },
   });
 
+  /**
+   * F8 — همین سبد را به‌عنوان پیش‌فاکتور ثبت کن.
+   * موجودی دست نمی‌خورد؛ فقط قیمت برای مدت مشخصی نگه داشته می‌شود.
+   */
+  const saveQuotation = useMutation({
+    mutationFn: (validForMinutes: number) =>
+      createQuotation({
+        warehouseId,
+        customerId: customer?.id ?? null,
+        discount: invoiceDiscount || undefined,
+        validForMinutes,
+        lines: lines.map((l) => ({
+          productId: l.productId,
+          locationId: l.locationId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+        })),
+      }),
+    onSuccess: (q) => {
+      toast.success(`پیش‌فاکتور ${toFa(q.number)} ثبت شد — ${toman(q.total)}`);
+      setLines([]);
+      setCustomer(null);
+      setInvoiceDiscount(0);
+      setShowQuotation(false);
+      invalidateIdem();
+      focusScan();
+    },
+    onError: () => toast.error("ثبت پیش‌فاکتور ناموفق بود"),
+  });
+
+
   /** F9 — ارسال لوکیشن ردیف‌ها به گوشی کارگر. */
   const sendToWorker = useMutation({
     mutationFn: () =>
@@ -284,7 +318,8 @@ export default function PosPage() {
 
   // ---------- میانبرها ----------
 
-  const anyDialogOpen = !!pickerStock || showCustomer || showPayment || showSearch;
+  const anyDialogOpen =
+    !!pickerStock || showCustomer || showPayment || showSearch || showQuotation;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -293,6 +328,7 @@ export default function PosPage() {
         setShowCustomer(false);
         setShowPayment(false);
         setShowSearch(false);
+        setShowQuotation(false);
         focusScan();
         return;
       }
@@ -319,6 +355,10 @@ export default function PosPage() {
         case "F7":
           e.preventDefault();
           if (lines.length) setShowPayment(true);
+          break;
+        case "F8":
+          e.preventDefault();
+          if (lines.length) setShowQuotation(true);
           break;
         case "F9":
           e.preventDefault();
@@ -542,6 +582,18 @@ export default function PosPage() {
             <Button
               variant="outline"
               className="h-11 justify-between"
+              disabled={!lines.length || saveQuotation.isPending}
+              onClick={() => setShowQuotation(true)}
+            >
+              <span className="flex items-center gap-2">
+                <FileClock className="size-4" /> پیش‌فاکتور
+              </span>
+              <Key>F8</Key>
+            </Button>
+
+            <Button
+              variant="outline"
+              className="h-11 justify-between"
               disabled={!lines.length}
               onClick={() => setShowPayment(true)}
             >
@@ -586,6 +638,16 @@ export default function PosPage() {
         open={showSearch}
         onPick={(p) => pickProduct.mutate(p)}
         onClose={() => { setShowSearch(false); focusScan(); }}
+      />
+
+      <QuotationDialog
+        open={showQuotation}
+        total={total}
+        lineCount={lines.length}
+        customerName={customer?.fullName ?? null}
+        pending={saveQuotation.isPending}
+        onConfirm={(m) => saveQuotation.mutate(m)}
+        onClose={() => { setShowQuotation(false); focusScan(); }}
       />
 
       <PaymentDialog

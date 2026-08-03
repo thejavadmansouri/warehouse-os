@@ -17,6 +17,9 @@ import {
   Layers,
   ShoppingCart,
   BarChart3,
+  HandCoins,
+  FileClock,
+  DatabaseBackup,
 } from "lucide-react";
 
 export interface NavItem {
@@ -40,6 +43,18 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "صندوق فروش",
         href: "/admin/pos",
         icon: ShoppingCart,
+        roles: ["ADMIN", "MANAGER", "SALES"],
+      },
+      {
+        title: "پیش‌فاکتورها",
+        href: "/admin/quotations",
+        icon: FileClock,
+        roles: ["ADMIN", "MANAGER", "SALES"],
+      },
+      {
+        title: "دریافت وجه",
+        href: "/admin/receipts",
+        icon: HandCoins,
         roles: ["ADMIN", "MANAGER", "SALES"],
       },
       {
@@ -157,6 +172,12 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/admin/imports",
         icon: FileSpreadsheet,
         roles: "ALL",
+      },
+      {
+        title: "پشتیبان‌گیری",
+        href: "/admin/backups",
+        icon: DatabaseBackup,
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "کاربران",

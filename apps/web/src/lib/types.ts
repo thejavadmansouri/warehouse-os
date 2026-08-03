@@ -900,3 +900,88 @@ export interface SellerPerformanceReport {
     meta: ReportMeta;
   };
 }
+
+// =====================================================
+// دریافت وجه، پیش‌فاکتور، بک‌آپ
+// =====================================================
+
+export interface ReceiptAllocation {
+  id: string;
+  amount: number;
+  invoice: { id: string; number: number; total: number };
+}
+
+export interface Receipt {
+  id: string;
+  number: number;
+  amount: number;
+  method: PaymentMethod;
+  note?: string | null;
+  createdAt: string;
+  customerName: string;
+  customer?: { id: string; firstName: string; lastName?: string | null };
+  user?: { fullName: string } | null;
+  cheque?: { number: string; dueDate: string; status: string } | null;
+  allocations?: ReceiptAllocation[];
+}
+
+export type QuotationStatus = "ACTIVE" | "CONVERTED" | "CANCELLED";
+
+export interface Quotation {
+  id: string;
+  number: number;
+  subtotal: number;
+  discount: number;
+  total: number;
+  validUntil: string;
+  status: QuotationStatus;
+  /** «منقضی» وضعیت ذخیره‌شده نیست؛ سرور آن را از تاریخ حساب می‌کند. */
+  displayStatus: QuotationStatus | "EXPIRED";
+  isExpired: boolean;
+  remainingMinutes: number;
+  customerName: string | null;
+  note?: string | null;
+  convertedInvoiceId?: string | null;
+  createdAt: string;
+  user?: { fullName: string } | null;
+  _count?: { lines: number };
+  lines?: {
+    id: string;
+    quantity: number;
+    unitPrice: number;
+    discount: number;
+    product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  }[];
+}
+
+export interface BackupConfig {
+  id: string;
+  enabled: boolean;
+  destination: string;
+  hour: number;
+  minute: number;
+  keepCount: number;
+  remindAfterHours: number;
+}
+
+export interface BackupStatus {
+  lastSuccessAt: string | null;
+  lastFilePath: string | null;
+  lastVerified: boolean;
+  hoursSinceLastBackup: number | null;
+  shouldRemind: boolean;
+  isRunning: boolean;
+  config: BackupConfig;
+}
+
+export interface BackupRun {
+  id: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED";
+  trigger: string;
+  filePath: string | null;
+  sizeBytes: number | null;
+  verified: boolean;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
