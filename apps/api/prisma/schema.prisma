@@ -26,6 +26,11 @@ model User {
   pendingReviewed PendingOperation[] @relation("PendingReviewer")
   productRequestsMade     ProductCreationRequest[] @relation("ProductRequestWorker")
   productRequestsReviewed ProductCreationRequest[] @relation("ProductRequestReviewer")
+  saleInvoices            SaleInvoice[]           @relation("InvoiceSeller")
+  saleInvoicesCancelled   SaleInvoice[]           @relation("InvoiceCanceller")
+  pickTasksRequested      PickTask[]              @relation("PickRequester")
+  pickTasksAssigned       PickTask[]              @relation("PickAssignee")
+  pickTasksPicked         PickTask[]              @relation("PickPicker")
 }
 
 model Warehouse {
@@ -38,6 +43,8 @@ model Warehouse {
   sessions      InventorySession[]
   locations     Location[]
   locationTypes LocationType[]
+  saleInvoices  SaleInvoice[]
+  pickTasks     PickTask[]
 }
 
 model LocationType {
@@ -80,6 +87,7 @@ model Location {
   warehouse        Warehouse?                 @relation(fields: [warehouseId], references: [id])
   pendingOps       PendingOperation[]
   productRequests  ProductCreationRequest[]
+  pickTasks        PickTask[]
 
   @@index([parentId])
   @@index([warehouseId])
@@ -126,6 +134,7 @@ model VehicleModel {
   createdAt      DateTime        @default(now())
   inventoryItems InventoryItem[]
   products       Product[]
+  productLinks   ProductVehicle[]
 
   @@unique([name, startYear, endYear])
 }
@@ -157,6 +166,10 @@ model Product {
   vehicleModelId  String?
   supplierId      String?
   isActive        Boolean          @default(true)
+  /// توکن‌های نرمال‌شده‌ی نام + SKU + شماره فنی، برای جستجوی ایندکس‌دار.
+  /// pg_trgm روی متن فارسی در این محیط کار نمی‌کند (show_trgm خالی برمی‌گرداند)،
+  /// بنابراین جستجو به‌جای ترای‌گرام روی این آرایه با ایندکس GIN انجام می‌شود.
+  searchTokens    String[]         @default([])
   deletedAt       DateTime?
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -175,6 +188,23 @@ model Product {
   voiceRecords    VoiceRecord[]
   pendingOps      PendingOperation[]
   createdFromRequests ProductCreationRequest[] @relation("ProductRequestCreated")
+  vehicles        ProductVehicle[]
+  pickTasks       PickTask[]
+
+  @@index([searchTokens], type: Gin)
+}
+
+/// یک قطعه معمولاً روی چند خودرو می‌نشیند («دسته موتور زیر باطری 206 و سمند ملی»).
+/// `Product.vehicleModelId` خودروی اصلی است؛ این جدول همه‌ی سازگاری‌ها را نگه می‌دارد.
+model ProductVehicle {
+  productId      String
+  vehicleModelId String
+  createdAt      DateTime     @default(now())
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  vehicleModel   VehicleModel @relation(fields: [vehicleModelId], references: [id], onDelete: Cascade)
+
+  @@id([productId, vehicleModelId])
+  @@index([vehicleModelId])
 }
 
 model ProductBarcode {
@@ -186,6 +216,10 @@ model ProductBarcode {
   product   Product     @relation(fields: [productId], references: [id])
 }
 
+/// قیمت‌ها به **تومان** و به صورت عدد صحیح ذخیره می‌شوند (بدون اعشار).
+/// ⚠️ داده‌ی ایمپورت‌شده‌ی فعلی از این نظر بررسی نشده — بعضی ردیف‌ها قیمت خریدشان
+/// از قیمت فروش بیشتر است، که یعنی احتمالاً بعضی ردیف‌ها ریال وارد شده‌اند.
+/// پیش از اتکا به گزارش سود باید پاک‌سازی شود.
 model ProductPrice {
   id             String   @id @default(uuid())
   productId      String
@@ -242,6 +276,10 @@ model InventoryLog {
   userId        String?
   sessionId     String?
   voiceRecordId String?
+  unitPrice     Int?              // قیمت واحد فروش (فقط برای SALE) — تومان؛ null برای بقیه حرکت‌ها
+  // فاکتور فروش چندردیفی: ردیف‌های فاکتور همین رکوردهای لجر هستند، نه یک جدول جدا.
+  // بنابراین جمع فاکتور هیچ‌وقت با حرکت واقعی موجودی اختلاف پیدا نمی‌کند.
+  invoiceId     String?
   createdAt     DateTime          @default(now())
   source        String            @default("MANUAL")
   assets        Asset[]
@@ -250,6 +288,9 @@ model InventoryLog {
   session       InventorySession? @relation(fields: [sessionId], references: [id])
   user          User?             @relation(fields: [userId], references: [id])
   voiceRecord   VoiceRecord?      @relation(fields: [voiceRecordId], references: [id])
+  invoice       SaleInvoice?      @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
 }
 
 model InventorySession {
@@ -382,6 +423,7 @@ enum Role {
   ADMIN
   MANAGER
   STAFF
+  SALES
 }
 
 enum BarcodeType {
@@ -572,4 +614,245 @@ model ProductCreationRequest {
 
   @@index([status])
   @@index([warehouseId, status])
+}
+
+/// مشتری فروش. کل مشتری اختیاری است — فروش نقدیِ گذری نباید پشت وارد کردن
+/// نام گیر کند.
+///
+/// هویت مشتری «نام و نام خانوادگی» است، نه شماره تلفن: باید بشود مشتری را
+/// بدون هیچ شماره‌ای ثبت کرد. شماره‌ها جدا نگه داشته می‌شوند چون یک نفر
+/// می‌تواند موبایل و تلفن ثابت داشته باشد.
+model Customer {
+  id        String   @id @default(uuid())
+  firstName String
+  lastName  String?
+  /// نام کامل نرمال‌شده برای جست‌وجو. از firstName/lastName ساخته می‌شود و
+  /// منبع مستقلِ حقیقت نیست — فقط ایندکس جست‌وجو.
+  searchName String  @default("")
+  note      String?
+  /// مشتری گفته پیامک نمی‌خواهم — از ارسال گروهی حذف می‌شود.
+  smsOptOut Boolean  @default(false)
+  isActive  Boolean  @default(true) // Soft Delete (قانون ۵)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  phones   CustomerPhone[]
+  invoices SaleInvoice[]
+  messages SmsMessage[]
+
+  @@index([searchName])
+  @@index([lastName])
+}
+
+/// بانک شماره. شماره به فرم نرمال ذخیره می‌شود (ارقام انگلیسی، بدون فاصله و
+/// خط تیره، +98 → 0) و در همان فرم یکتاست، تا یک نفر دو رکورد نشود و دو بار
+/// پیامک نگیرد.
+model CustomerPhone {
+  id         String   @id @default(uuid())
+  customerId String
+  phone      String   @unique // فرم نرمال‌شده — نه چیزی که کاربر تایپ کرده
+  label      String? // موبایل / ثابت / محل کار
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+/// قالب پیامک با متغیر — مثل قالب خروجی اکسل، «داده» است نه «کد»، تا متن را
+/// بدون تغییر برنامه عوض کنی. متغیرها: {نام} {شماره_فاکتور} {مبلغ} {مانده}
+model SmsTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique // invoice_created | debt_reminder | ...
+  title     String
+  body      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages SmsMessage[]
+}
+
+/// صف پیامک. پیامک اول اینجا ثبت می‌شود و بعد فرستاده می‌شود، نه برعکس —
+/// پس وقتی پنل پیامکی وصل شد فقط یک فرستنده به این صف اضافه می‌شود و بقیه‌ی
+/// سیستم دست نمی‌خورد. تا آن موقع پیامک‌ها QUEUED می‌مانند و چیزی گم نمی‌شود.
+model SmsMessage {
+  id         String    @id @default(uuid())
+  customerId String?
+  templateId String?
+  phone      String // فرم نرمال‌شده در لحظه‌ی ثبت
+  body       String // متن نهایی پس از جای‌گذاری متغیرها
+  status     SmsStatus @default(QUEUED)
+  provider   String? // نام پنل، وقتی وصل شد
+  providerId String? // شناسه‌ی پیام نزد پنل، برای پیگیری
+  error      String?
+  sentAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  customer Customer?    @relation(fields: [customerId], references: [id])
+  template SmsTemplate? @relation(fields: [templateId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([customerId])
+}
+
+enum SmsStatus {
+  QUEUED
+  SENT
+  FAILED
+  CANCELLED
+}
+
+/// «کار برداشت» — فروشنده پشت پیشخوان لوکیشن دقیق کالا را برای کارگر انبار
+/// می‌فرستد تا برود و بیاورد.
+///
+/// این مدل عمداً **هیچ تغییری در موجودی نمی‌دهد**: فقط یک تابلوی کار است.
+/// کسر موجودی همچنان فقط هنگام ثبت فاکتور و از مسیر
+/// InventoryOperationService انجام می‌شود (قانون ۱). اگر کارگر جنس را بیاورد
+/// ولی فروش نهایی نشود، هیچ عدد اشتباهی در انبار ثبت نشده است.
+model PickTask {
+  id          String         @id @default(uuid())
+  warehouseId String
+  productId   String
+  locationId  String
+  quantity    Int
+  status      PickTaskStatus @default(PENDING)
+  note        String?
+
+  /// فاکتوری که این برداشت برایش است — اختیاری، چون ممکن است هنوز فاکتور
+  /// ساخته نشده باشد (مشتری هنوز دارد انتخاب می‌کند).
+  invoiceId String?
+
+  requestedById String? // فروشنده
+  /// اگر خالی باشد یعنی «هر کارگری که آزاد است». تخصیص به فرد خاص اختیاری است.
+  assignedToId String?
+  pickedById   String?
+  pickedAt     DateTime?
+  cancelReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+  product     Product   @relation(fields: [productId], references: [id])
+  location    Location  @relation(fields: [locationId], references: [id])
+  requestedBy User?     @relation("PickRequester", fields: [requestedById], references: [id])
+  assignedTo  User?     @relation("PickAssignee", fields: [assignedToId], references: [id])
+  pickedBy    User?     @relation("PickPicker", fields: [pickedById], references: [id])
+
+  @@index([warehouseId, status, createdAt])
+  @@index([assignedToId, status])
+  @@index([invoiceId])
+}
+
+enum PickTaskStatus {
+  PENDING // فرستاده شد، کارگر هنوز ندیده/تأیید نکرده
+  PICKED // کارگر «آوردم» زد
+  CANCELLED
+}
+
+/// فاکتور فروش چندردیفی.
+/// ردیف‌های فاکتور جدول جدا ندارند: هر ردیف یک InventoryLog با action=SALE و
+/// invoiceId همین فاکتور است. پس موجودی و فاکتور از یک منبع واحد می‌آیند و
+/// امکان ناهماهنگی بین «جمع فاکتور» و «حرکت واقعی انبار» وجود ندارد (قانون ۱ و ۲).
+///
+/// ابطال فاکتور هیچ‌وقت ردیف لجر را حذف نمی‌کند؛ حرکت‌های RETURN جبرانی ثبت
+/// می‌شوند و وضعیت به CANCELLED تغییر می‌کند (لجر append-only است).
+model SaleInvoice {
+  id           String        @id @default(uuid())
+  number       Int           @unique @default(autoincrement()) // شماره‌ی خوانا برای کاربر
+  /// کلید یکتای کلاینت. ارسال دوباره (retry شبکه یا صف آفلاین) فاکتور تکراری
+  /// نمی‌سازد؛ یکتایی در سطح دیتابیس تضمین می‌شود، نه فقط در کد.
+  idempotencyKey String?     @unique
+  customerId   String?
+  warehouseId  String
+  userId       String? // فروشنده
+  subtotal     Int           @default(0) // جمع ردیف‌ها پیش از تخفیف
+  discount     Int           @default(0) // تخفیف کل فاکتور (تومان)
+  total        Int           @default(0) // مبلغ نهایی = subtotal - discount
+  paidAmount   Int           @default(0) // جمع پرداخت‌های ثبت‌شده
+  dueAmount    Int           @default(0) // مانده = total - paidAmount (نسیه)
+  /// سود فاکتور، در همان لحظه‌ی فروش از ProductPrice.purchasePrice محاسبه و
+  /// ذخیره می‌شود. اگر بعداً محاسبه شود غلط درمی‌آید، چون قیمت خرید تغییر می‌کند.
+  /// null یعنی قیمت خرید در زمان فروش موجود نبوده.
+  profit       Int?
+  status       InvoiceStatus @default(CONFIRMED)
+  note         String?
+  cancelReason String?
+  cancelledAt  DateTime?
+  cancelledById String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  customer    Customer?      @relation(fields: [customerId], references: [id])
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
+  user        User?          @relation("InvoiceSeller", fields: [userId], references: [id])
+  cancelledBy User?          @relation("InvoiceCanceller", fields: [cancelledById], references: [id])
+  lines       InventoryLog[]
+  payments    Payment[]
+
+  @@index([warehouseId, createdAt])
+  @@index([customerId])
+  @@index([status])
+}
+
+enum InvoiceStatus {
+  CONFIRMED
+  CANCELLED
+}
+
+/// یک پرداخت روی یک فاکتور. چون هر فاکتور می‌تواند چند سطر پرداخت داشته باشد،
+/// تسویه‌ی ترکیبی (مثلاً نصف نقد + نصف چک) بدون فیلد جداگانه پشتیبانی می‌شود.
+/// نسیه = فاکتوری که مجموع پرداخت‌هایش از total کمتر است (dueAmount > 0).
+model Payment {
+  id        String        @id @default(uuid())
+  invoiceId String
+  method    PaymentMethod
+  amount    Int // تومان
+  note      String?
+  createdAt DateTime      @default(now())
+
+  invoice SaleInvoice @relation(fields: [invoiceId], references: [id])
+  cheque  Cheque?
+
+  @@index([invoiceId])
+  @@index([method])
+}
+
+enum PaymentMethod {
+  CASH // نقد
+  CARD // کارتخوان
+  CHEQUE // چک
+  CREDIT // نسیه (ثبت بدهی، بدون دریافت وجه)
+}
+
+/// جزئیات چک دریافتی. چرخه‌ی کامل چک (خرج کردن، چک برگشتی، تسویه) در فاز ۶
+/// تکمیل می‌شود؛ اینجا فقط ثبت و وضعیت پایه نگه داشته می‌شود.
+model Cheque {
+  id         String       @id @default(uuid())
+  paymentId  String       @unique
+  number     String // شماره چک
+  bankName   String?
+  branch     String?
+  holderName String? // صاحب حساب، اگر با مشتری فرق دارد
+  dueDate    DateTime // تاریخ سررسید
+  status     ChequeStatus @default(IN_HAND)
+  settledAt  DateTime?
+  note       String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+
+  @@index([status, dueDate])
+  @@index([number])
+}
+
+enum ChequeStatus {
+  IN_HAND // نزد ما، سررسید نشده
+  DEPOSITED // به بانک ارائه شده
+  CASHED // وصول شد
+  BOUNCED // برگشت خورد
 }
