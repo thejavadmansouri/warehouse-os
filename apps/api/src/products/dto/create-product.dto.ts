@@ -5,8 +5,14 @@ export class CreateProductDto {
   @IsString()
   name: string;
 
+  /**
+   * کد کالا = کد حسابداری. اگر داده نشود، سیستم عدد بعدی دنباله را می‌دهد،
+   * چون همین عدد روی لیبل به‌صورت بارکد چاپ می‌شود و کالای بی‌کد قابل
+   * برچسب‌زدن نیست.
+   */
+  @IsOptional()
   @IsString()
-  sku: string;
+  sku?: string;
 
   @IsOptional()
   @IsString()

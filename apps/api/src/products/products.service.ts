@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { buildSearchTokens, tokenizeQuery } from './search-tokens';
+import { nextSku } from './sku.util';
 
 
 @Injectable()
@@ -207,10 +208,14 @@ export class ProductsService {
 
 
 
-  create(dto:any){
+  async create(dto:any){
 
-
-
+    // کد کالا = کد حسابداری و همان چیزی که روی لیبل بارکد می‌شود.
+    // اگر داده نشده باشد، عدد بعدیِ دنباله تخصیص می‌یابد تا هیچ کالایی
+    // بدون کد قابل چاپ نماند.
+    const sku: string = dto.sku?.trim()
+      ? String(dto.sku).trim()
+      : await nextSku(this.prisma);
 
 
 
@@ -244,7 +249,7 @@ export class ProductsService {
         name:dto.name,
 
 
-        sku:dto.sku,
+        sku,
 
 
         partNumber:dto.partNumber,
@@ -252,7 +257,7 @@ export class ProductsService {
 
         // بدون این، کالای تازه‌ساخته‌شده در جستجو پیدا نمی‌شود (جستجو روی
         // searchTokens است، نه روی name).
-        searchTokens: buildSearchTokens(dto.name, dto.sku, dto.partNumber),
+        searchTokens: buildSearchTokens(dto.name, sku, dto.partNumber),
 
 
         description:dto.description,
