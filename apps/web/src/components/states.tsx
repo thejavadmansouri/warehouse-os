@@ -19,7 +19,7 @@ export function LoadingState({
         className
       )}
     >
-      <Loader2 className="h-6 w-6 animate-spin text-accent" />
+      <Loader2 className="h-8 w-8 animate-spin text-accent" />
       <p className="text-sm">{label}</p>
     </div>
   );
@@ -45,8 +45,8 @@ export function EmptyState({
         className
       )}
     >
-      <div className="rounded-full bg-muted p-3">
-        <Icon className="h-6 w-6 text-muted-foreground" />
+      <div className="rounded-full bg-muted p-4">
+        <Icon className="h-8 w-8 text-muted-foreground" />
       </div>
       <div>
         <p className="font-medium">{title}</p>
@@ -75,8 +75,8 @@ export function ErrorState({
         className
       )}
     >
-      <div className="rounded-full bg-destructive/10 p-3">
-        <AlertTriangle className="h-6 w-6 text-destructive" />
+      <div className="rounded-full bg-destructive/10 p-4">
+        <AlertTriangle className="h-8 w-8 text-destructive" />
       </div>
       <p className="max-w-md text-sm text-destructive">{message}</p>
       {onRetry ? (

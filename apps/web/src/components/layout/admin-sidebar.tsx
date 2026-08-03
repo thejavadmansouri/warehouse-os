@@ -37,7 +37,7 @@ function NavLink({
           : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
       )}
     >
-      <Icon className="h-[18px] w-[18px] shrink-0" />
+      <Icon className="h-5 w-5 shrink-0" />
       {!collapsed ? <span className="truncate">{item.title}</span> : null}
     </Link>
   );
@@ -68,8 +68,8 @@ export function AdminSidebar({
           collapsed && "justify-center px-2"
         )}
       >
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-foreground shadow-sm">
-          <Wrench className="h-5 w-5" />
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-accent text-accent-foreground shadow-sm">
+          <Wrench className="h-6 w-6" />
         </div>
         {!collapsed ? (
           <div className="min-w-0">

@@ -8,7 +8,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import { LoadingState } from "@/components/states";
 import { WorkerSessionProvider } from "./_context/worker-session";
 
-const ALLOWED_ROLES = ["ADMIN", "MANAGER", "STAFF"] as const;
+const ALLOWED_ROLES: readonly string[] = ["ADMIN", "MANAGER", "STAFF"];
 
 export default function WorkerLayout({
   children,

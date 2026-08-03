@@ -25,12 +25,12 @@ export function PageHeader({
     >
       <div className="flex items-start gap-3">
         {Icon ? (
-          <div className="mt-0.5 rounded-lg bg-primary/10 p-2 text-primary">
-            <Icon className="h-5 w-5" />
+          <div className="mt-0.5 rounded-xl bg-primary/10 p-2.5 text-primary">
+            <Icon className="h-7 w-7" />
           </div>
         ) : null}
         <div>
-          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+          <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             {title}
           </h1>
           {description ? (

@@ -52,6 +52,16 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function confidenceBadgeClass(confidence: number): string {
+  if (confidence >= 85) {
+    return "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400";
+  }
+  if (confidence >= 70) {
+    return "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400";
+  }
+  return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400";
+}
+
 export default function ReviewPage() {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -203,13 +213,33 @@ export default function ReviewPage() {
                       {op.location?.path || op.location?.name || op.locationBarcode}
                     </Field>
                     <Field label="تعداد">
-                      {formatNumber(op.quantity)}
-                      {op.unit ? ` ${op.unit}` : ""}
+                      <span
+                        dir="ltr"
+                        className="inline-block text-3xl font-bold tabular-nums tracking-tight"
+                      >
+                        {formatNumber(op.quantity)}
+                      </span>
+                      {op.unit ? (
+                        <span className="ms-1 text-sm text-muted-foreground">
+                          {op.unit}
+                        </span>
+                      ) : null}
                     </Field>
                     <Field label="اطمینان تشخیص">
-                      {confidence != null ? `${Math.round(confidence)}%` : "—"}
+                      {confidence != null ? (
+                        <span
+                          dir="ltr"
+                          className={`inline-block rounded-lg px-2 py-0.5 text-3xl font-bold tabular-nums tracking-tight ${confidenceBadgeClass(
+                            confidence
+                          )}`}
+                        >
+                          {Math.round(confidence)}%
+                        </span>
+                      ) : (
+                        "—"
+                      )}
                     </Field>
-                    <Field label="محصول match‌شده">
+                    <Field label="محصول تشخیص داده‌شده">
                       {productName ? (
                         <>
                           {productName}
@@ -238,7 +268,7 @@ export default function ReviewPage() {
 
                   <div className="space-y-1">
                     <div className="text-xs text-muted-foreground">
-                      تغییر محصول (در صورت اشتباه بودن match)
+                      تغییر محصول (در صورت اشتباه بودن تشخیص)
                     </div>
                     <ProductSearchSelect
                       value={override?.id ?? op.productId ?? undefined}

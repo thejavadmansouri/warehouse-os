@@ -9,7 +9,10 @@ import {
   AlertCircle,
   ArrowDownToLine,
   ArrowUpFromLine,
+  Printer,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { LabelPrintDialog } from "@/components/labels/label-print-dialog";
 
 import {
   getCurrentStock,
@@ -120,17 +123,80 @@ function CurrentStockTab() {
   const rows = stockQ.data?.data ?? [];
   const totalPages = meta?.totalPages ?? 1;
 
+  // انتخاب ردیف‌ها برای چاپ لیبل (کلید = productId-locationId)
+  const [selected, setSelected] = React.useState<
+    Map<string, { productId: string; quantity: number }>
+  >(new Map());
+  const rowKey = (r: (typeof rows)[number]) => `${r.productId}-${r.locationId}`;
+  const toggleRow = (r: (typeof rows)[number]) =>
+    setSelected((prev) => {
+      const n = new Map(prev);
+      const k = rowKey(r);
+      if (n.has(k)) n.delete(k);
+      else n.set(k, { productId: r.productId, quantity: r.quantity });
+      return n;
+    });
+  const visibleKeys = rows.map(rowKey);
+  const allSelected = visibleKeys.length > 0 && visibleKeys.every((k) => selected.has(k));
+  const someSelected = !allSelected && visibleKeys.some((k) => selected.has(k));
+  const toggleAll = (checked: boolean) =>
+    setSelected((prev) => {
+      const n = new Map(prev);
+      for (const r of rows) {
+        if (checked) n.set(rowKey(r), { productId: r.productId, quantity: r.quantity });
+        else n.delete(rowKey(r));
+      }
+      return n;
+    });
+
+  // دیالوگ چاپ: یا آیتم‌های انتخابی، یا کل موجودی
+  const [printOpen, setPrintOpen] = React.useState(false);
+  const [printItems, setPrintItems] = React.useState<
+    { productId: string; quantity: number }[]
+  >([]);
+  const [printAll, setPrintAll] = React.useState(false);
+
+  const openSelectedPrint = () => {
+    setPrintAll(false);
+    setPrintItems(Array.from(selected.values()));
+    setPrintOpen(true);
+  };
+  const openRowPrint = (r: (typeof rows)[number]) => {
+    setPrintAll(false);
+    setPrintItems([{ productId: r.productId, quantity: r.quantity }]);
+    setPrintOpen(true);
+  };
+  const openAllPrint = () => {
+    setPrintItems([]);
+    setPrintAll(true);
+    setPrintOpen(true);
+  };
+
   return (
     <Card className="shadow-sm">
-      <CardHeader>
-        <CardTitle className="text-base">لیست موجودی</CardTitle>
-        <CardDescription>
-          مجموع{" "}
-          <Badge variant="secondary" className="ms-1">
-            {formatNumber(meta?.total ?? 0)}
-          </Badge>{" "}
-          رکورد
-        </CardDescription>
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+        <div>
+          <CardTitle className="text-base">لیست موجودی</CardTitle>
+          <CardDescription>
+            مجموع{" "}
+            <Badge variant="secondary" className="ms-1">
+              {formatNumber(meta?.total ?? 0)}
+            </Badge>{" "}
+            رکورد
+          </CardDescription>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {selected.size > 0 ? (
+            <Button size="sm" onClick={openSelectedPrint}>
+              <Printer className="h-4 w-4" />
+              چاپ لیبل ({formatNumber(selected.size)})
+            </Button>
+          ) : null}
+          <Button size="sm" variant="outline" onClick={openAllPrint}>
+            <Printer className="h-4 w-4" />
+            چاپ لیبل کل موجودی
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {stockQ.isLoading ? (
@@ -152,14 +218,29 @@ function CurrentStockTab() {
               <Table>
                 <TableHeader>
                   <TableRow className="bg-muted/40">
-                    <TableHead className="w-[40%]">محصول</TableHead>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected ? true : someSelected ? "indeterminate" : false}
+                        onCheckedChange={(v) => toggleAll(Boolean(v))}
+                        aria-label="انتخاب همه"
+                      />
+                    </TableHead>
+                    <TableHead className="w-[38%]">محصول</TableHead>
                     <TableHead>موقعیت</TableHead>
                     <TableHead className="text-end">تعداد</TableHead>
+                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map((row) => (
                     <TableRow key={`${row.productId}-${row.locationId}`}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(`${row.productId}-${row.locationId}`)}
+                          onCheckedChange={() => toggleRow(row)}
+                          aria-label="انتخاب ردیف"
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex flex-col">
                           <span className="truncate">
@@ -183,18 +264,29 @@ function CurrentStockTab() {
                         </div>
                       </TableCell>
                       <TableCell className="text-end">
-                        <Badge
-                          variant={
-                            row.quantity > 0 ? "secondary" : "outline"
-                          }
-                          className={
+                        <span
+                          dir="ltr"
+                          className={`inline-block text-3xl font-bold tabular-nums tracking-tight ${
                             row.quantity > 0
-                              ? "bg-emerald-100 text-emerald-700"
-                              : "text-muted-foreground"
-                          }
+                              ? "text-foreground"
+                              : "text-muted-foreground/60"
+                          }`}
                         >
                           {formatNumber(row.quantity)}
-                        </Badge>
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        {row.quantity > 0 ? (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="size-9"
+                            title="چاپ لیبل به تعداد موجودی"
+                            onClick={() => openRowPrint(row)}
+                          >
+                            <Printer className="size-5" />
+                          </Button>
+                        ) : null}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -210,6 +302,15 @@ function CurrentStockTab() {
           </>
         )}
       </CardContent>
+
+      <LabelPrintDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        mode="product"
+        ids={printItems.map((i) => i.productId)}
+        items={printAll ? undefined : printItems}
+        allStock={printAll}
+      />
     </Card>
   );
 }
