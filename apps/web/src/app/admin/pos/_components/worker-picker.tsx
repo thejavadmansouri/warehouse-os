@@ -1,17 +1,20 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Users } from "lucide-react";
+import { MessageSquareText, Users } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { getWorkers } from "@/lib/api";
 
 /**
- * انتخاب کارگرِ گیرنده‌ی «ارسال به کارگر».
+ * انتخاب کارگرِ گیرنده‌ی «ارسال به کارگر» + پیام دلخواه.
  *
  * «هر کارگری» یعنی کار برای همه‌ی کارگرهای انبار دیده می‌شود و هر کدام آزاد
- * بود برمی‌دارد. انتخاب یک نفر خاص یعنی فقط او آن را می‌بیند.
+ * بود برمی‌دارد. انتخاب یک نفر خاص یعنی فقط او آن را می‌بیند. پیام اختیاری
+ * روی گوشی کارگر همان‌جا در نوتیفیکیشن (و زیر هر قلم) نمایش داده می‌شود.
  */
 export function WorkerPicker({
   open,
@@ -23,10 +26,15 @@ export function WorkerPicker({
   open: boolean;
   itemCount: number;
   pending: boolean;
-  onPick: (workerId: string | null) => void;
+  onPick: (workerId: string | null, note: string) => void;
   onClose: () => void;
 }) {
   const workers = useQuery({ queryKey: ["workers"], queryFn: getWorkers, enabled: open });
+  const [note, setNote] = useState("");
+
+  useEffect(() => {
+    if (!open) setNote("");
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -38,11 +46,22 @@ export function WorkerPicker({
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <MessageSquareText className="size-4" />
+            پیام برای کارگر (اختیاری)
+          </label>
+          <Input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            maxLength={200}
+            placeholder="مثلاً: پشت پیشخوان بگذارید"
+            className="h-10"
+          />
           <Button
             variant="outline"
             className="h-12 justify-start"
             disabled={pending}
-            onClick={() => onPick(null)}
+            onClick={() => onPick(null, note)}
           >
             <Users className="ms-2 size-4" />
             هر کارگری که آزاد است
@@ -71,7 +90,7 @@ export function WorkerPicker({
               <button
                 key={w.id}
                 disabled={pending}
-                onClick={() => onPick(w.id)}
+                onClick={() => onPick(w.id, note)}
                 className="rounded-lg border p-3 text-right hover:border-primary
                            hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary"
               >

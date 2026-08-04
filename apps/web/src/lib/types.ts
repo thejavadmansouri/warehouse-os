@@ -642,6 +642,29 @@ export interface StockLocation {
   quantity: number;
 }
 
+/** یک مکانِ موجودی‌دار در نتیجه‌ی جست‌وجوی زنده (شکل خروجی /products/locate). */
+export interface LocateLocation {
+  locationId: string;
+  name: string;
+  code: string;
+  path: string;
+  quantity: number;
+}
+
+/** GET /products/locate — کالا + خلاصه‌ی موجودی و آدرس قفسه، در یک درخواست. */
+export interface LocateResult {
+  id: string;
+  name: string;
+  sku: string;
+  unit: string | null;
+  partNumber: string | null;
+  salePrice: number | null;
+  brandName: string | null;
+  vehicleModelName: string | null;
+  totalStock: number;
+  locations: LocateLocation[];
+}
+
 export interface SaleResolve {
   product: {
     id: string;

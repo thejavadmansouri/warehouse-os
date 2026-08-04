@@ -192,6 +192,13 @@ export function searchProducts(q: string): Promise<T.Product[]> {
   ).then((r) => (Array.isArray(r) ? r : (r.data ?? [])));
 }
 
+// GET /products/locate?q= — جست‌وجو + خلاصه‌ی موجودی و آدرس قفسه در یک درخواست.
+// برای جست‌وجوی زنده‌ی صندوق فروش: هر نتیجه می‌گوید موجود است یا نه و کجا.
+export function locateProducts(q: string): Promise<T.LocateResult[]> {
+  const qs = new URLSearchParams({ q });
+  return apiFetch<T.LocateResult[]>(`/products/locate?${qs.toString()}`);
+}
+
 // طبق بخش ۶.۳ — GET /products/:id
 export function getProduct(id: string): Promise<T.Product> {
   return apiFetch<T.Product>(`/products/${encodeURIComponent(id)}`);
@@ -1182,7 +1189,14 @@ export function createQuotation(body: {
   discount?: number;
   note?: string;
   validForMinutes: number;
-  lines: { productId: string; locationId?: string; quantity: number; unitPrice: number }[];
+  lines: {
+    productId: string;
+    locationId?: string;
+    quantity: number;
+    unitPrice: number;
+    /** تخفیف ردیف به تومان — سرور آن را از جمع ردیف کم می‌کند. */
+    discount?: number;
+  }[];
 }): Promise<T.Quotation> {
   return apiFetch<T.Quotation>("/sales/quotations", { method: "POST", body });
 }

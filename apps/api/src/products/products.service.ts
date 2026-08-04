@@ -795,14 +795,16 @@ export class ProductsService {
   // (نام/کد/مسیرِ کامل + تعداد) و مجموع کل را ضمیمه می‌کند. برای مدیر/فروشنده/کارگر:
   // اسم را می‌زند → اگر موجود باشد، دقیقاً می‌گوید کجاست.
   async searchWithStock(query: string) {
-    const products = (await this.search(query)) as Array<{
+    const products = (await this.search(query)) as unknown as Array<{
       id: string;
       name: string;
       sku: string;
       unit: string | null;
       partNumber: string | null;
+      salePrice: number | null;
       brand?: { name: string } | null;
       vehicleModel?: { name: string } | null;
+      prices?: { salePrice: number | null }[];
     }>;
     if (products.length === 0) return [];
 
@@ -828,6 +830,8 @@ export class ProductsService {
         sku: p.sku,
         unit: p.unit,
         partNumber: p.partNumber,
+        // قیمت فروش تا صندوق بتواند مستقیم به سبد اضافه کند، بدون رفت‌وبرگشتِ جدا.
+        salePrice: p.salePrice ?? p.prices?.[0]?.salePrice ?? null,
         brandName: p.brand?.name ?? null,
         vehicleModelName: p.vehicleModel?.name ?? null,
         totalStock: rows.reduce((s, r) => s + r.quantity, 0),

@@ -4,7 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiException } from "@/lib/api-error-messages";
-import { Trash2, Send, User, Percent, CreditCard, Search, FileClock } from "lucide-react";
+import {
+  Trash2, Send, User, Percent, CreditCard, Search, FileClock, ReceiptText,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +14,6 @@ import {
   createInvoice,
   createPickTasks,
   createQuotation,
-  getProductStock,
   getWarehouses,
   resolveForSale,
 } from "@/lib/api";
@@ -20,17 +21,33 @@ import { money, parseNum, qty, toFa, toman } from "@/lib/format";
 import type {
   Customer,
   InsufficientStockError,
+  LocateResult,
   PaymentInput,
-  Product,
   StockLocation,
 } from "@/lib/types";
 
 import { LocationPicker } from "./_components/location-picker";
+import { CheckoutFlow } from "./_components/checkout-flow";
 import { CustomerPicker } from "./_components/customer-picker";
+import { DiscountField } from "./_components/discount-input";
+import {
+  LineItems,
+  lineDiscount,
+  lineGross,
+  lineNet,
+  type PosLine,
+} from "./_components/line-items";
 import { PaymentDialog } from "./_components/payment-dialog";
 import { ProductSearch } from "./_components/product-search";
 import { QuotationDialog } from "./_components/quotation-dialog";
+import { RecentInvoices } from "./_components/recent-invoices";
 import { WorkerPicker } from "./_components/worker-picker";
+import {
+  NO_DISCOUNT,
+  discountToToman,
+  tomanToPercent,
+  type DiscountInput as DiscountValue,
+} from "./_lib/discount";
 
 /** حداقل چیزی که برای افزودن یک ردیف لازم است — هم از resolve می‌آید هم از جست‌وجو. */
 type PickableProduct = {
@@ -40,17 +57,8 @@ type PickableProduct = {
   salePrice?: number | null;
 };
 
-interface Line {
-  key: string;
-  productId: string;
-  productName: string;
-  unit: string;
-  locationId: string;
-  locationPath: string;
-  available: number;
-  quantity: number;
-  unitPrice: number;
-}
+/** ردیف سبد — تعریف و ریاضی‌اش کنار خود جدول است تا یک منبع حقیقت باشد. */
+type Line = PosLine;
 
 /** برچسب میانبر روی خود دکمه — این چیزی است که سرعت را می‌سازد. */
 function Key({ children }: { children: string }) {
@@ -64,7 +72,9 @@ function Key({ children }: { children: string }) {
 export default function PosPage() {
   const [lines, setLines] = useState<Line[]>([]);
   const [customer, setCustomer] = useState<Customer | null>(null);
-  const [invoiceDiscount, setInvoiceDiscount] = useState(0);
+  const [invoiceDiscountInput, setInvoiceDiscountInput] =
+    useState<DiscountValue>(NO_DISCOUNT);
+  const [note, setNote] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [scan, setScan] = useState("");
   const [activeRow, setActiveRow] = useState(0);
@@ -81,8 +91,19 @@ export default function PosPage() {
   const [showSearch, setShowSearch] = useState(false);
   const [showQuotation, setShowQuotation] = useState(false);
   const [showWorkerPicker, setShowWorkerPicker] = useState(false);
+  const [showRecent, setShowRecent] = useState(false);
+  const [showCheckout, setShowCheckout] = useState(false);
+  /** تعداد اقلامی که همین الان قرار است به کارگر برود (سبد کامل یا یک کالای جست‌وجو). */
+  const [workerItemCount, setWorkerItemCount] = useState(0);
 
   const scanRef = useRef<HTMLInputElement>(null);
+  /**
+   * ردیف‌هایی که «ارسال به کارگر» می‌فرستد. یا کل سبد است (F9) یا یک کالای واحد
+   * از نتیجه‌ی جست‌وجو. جدا از mutationFn نگه داشته می‌شود چون آن فقط id کارگر می‌گیرد.
+   */
+  const workerLinesRef = useRef<
+    { productId: string; locationId: string; quantity: number }[]
+  >([]);
 
   /**
    * کلید یکتای ثبت.
@@ -106,11 +127,51 @@ export default function PosPage() {
     requestAnimationFrame(() => scanRef.current?.focus());
   }, []);
 
-  const subtotal = useMemo(
-    () => lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0),
+  /*
+   * ترتیب دقیقاً مثل سرور: اول تخفیف هر ردیف، بعد تخفیف کل فاکتور روی حاصل.
+   * (به `_lib/discount.ts` نگاه کن.) هر انحرافی اینجا یعنی عددِ روی صفحه با
+   * عددِ ثبت‌شده فرق کند.
+   */
+  const grossSubtotal = useMemo(
+    () => lines.reduce((s, l) => s + lineGross(l), 0),
     [lines]
   );
+  /** جمع تخفیف‌های ردیفی — فقط برای نمایش. */
+  const linesDiscountTotal = useMemo(
+    () => lines.reduce((s, l) => s + lineDiscount(l), 0),
+    [lines]
+  );
+  /** همان چیزی که سرور subtotal صدایش می‌کند: جمع ردیف‌ها **پس از** تخفیف ردیفی. */
+  const subtotal = grossSubtotal - linesDiscountTotal;
+  const invoiceDiscount = discountToToman(invoiceDiscountInput, subtotal);
   const total = Math.max(0, subtotal - invoiceDiscount);
+  /** تخفیف کل (ردیفی + فاکتوری) و درصد مؤثرش نسبت به مبلغ خام. */
+  const totalDiscount = linesDiscountTotal + invoiceDiscount;
+  const effectivePercent = tomanToPercent(totalDiscount, grossSubtotal);
+
+  /**
+   * ردیف‌های بی‌قیمت.
+   *
+   * تقریباً هیچ کالایی در دیتابیس ProductPrice ندارد، پس اگر جلویش گرفته نشود
+   * فروشنده به‌راحتی یک فاکتورِ صفر تومانی ثبت می‌کند و تازه بعداً می‌فهمد.
+   */
+  const zeroPriceCount = useMemo(
+    () => lines.filter((l) => l.unitPrice <= 0).length,
+    [lines]
+  );
+  const canCheckout = lines.length > 0 && zeroPriceCount === 0;
+
+  /** رفتن به تسویه — از Enterِ خانه‌ی خالیِ اسکن یا F2. */
+  const startCheckout = useCallback(() => {
+    if (!lines.length) return;
+    if (zeroPriceCount > 0) {
+      toast.error(
+        `${toFa(zeroPriceCount)} ردیف قیمت ندارد — قبل از ثبت قیمتشان را وارد کنید`
+      );
+      return;
+    }
+    setShowCheckout(true);
+  }, [lines.length, zeroPriceCount]);
 
   // ---------- افزودن ردیف ----------
 
@@ -149,6 +210,7 @@ export default function PosPage() {
             available: s.quantity,
             quantity: 1,
             unitPrice: p.salePrice ?? 0,
+            discount: NO_DISCOUNT,
           },
         ];
       });
@@ -178,20 +240,39 @@ export default function PosPage() {
     },
   });
 
-  /** انتخاب از جست‌وجو → گرفتن مکان‌های موجودی‌دار. */
-  const pickProduct = useMutation({
-    mutationFn: async (p: Product) => ({ p, stock: await getProductStock(p.id) }),
-    onSuccess: ({ p, stock }) => {
+  /**
+   * انتخاب از جست‌وجوی زنده → افزودن مستقیم به سبد.
+   *
+   * موجودی و مکان‌ها همراهِ نتیجه آمده‌اند (endpoint ترکیبی)، پس دیگر رفت‌وبرگشتِ
+   * جدا برای گرفتن موجودی لازم نیست.
+   */
+  const addFromLocate = useCallback(
+    (r: LocateResult) => {
       setShowSearch(false);
-      if (!stock.length) {
-        toast.error(`«${p.name}» در هیچ مکانی موجودی ندارد`);
+      if (r.totalStock <= 0 || r.locations.length === 0) {
+        toast.error(`«${r.name}» در هیچ مکانی موجودی ندارد`);
         focusScan();
         return;
       }
-      if (stock.length === 1) addLine(p, stock[0]);
-      else setPickerStock({ name: p.name, product: p, stock });
+      const product: PickableProduct = {
+        id: r.id,
+        name: r.name,
+        unit: r.unit,
+        salePrice: r.salePrice,
+      };
+      const stock: StockLocation[] = r.locations.map((l) => ({
+        locationId: l.locationId,
+        locationName: l.name,
+        locationCode: l.code,
+        locationBarcode: "",
+        locationPath: l.path,
+        quantity: l.quantity,
+      }));
+      if (stock.length === 1) addLine(product, stock[0]);
+      else setPickerStock({ name: r.name, product, stock });
     },
-  });
+    [addLine, focusScan]
+  );
 
   // ---------- ویرایش ردیف ----------
 
@@ -217,11 +298,14 @@ export default function PosPage() {
         warehouseId,
         customerId: customer?.id ?? null,
         discount: invoiceDiscount || undefined,
+        note: note.trim() || undefined,
         lines: lines.map((l) => ({
           productId: l.productId,
           locationId: l.locationId,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
+          // درصد فقط در UI زندگی می‌کند؛ سرور تومان می‌گیرد.
+          discount: lineDiscount(l) || undefined,
         })),
         payments,
       });
@@ -230,9 +314,11 @@ export default function PosPage() {
       toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${toman(inv.total)}`);
       setLines([]);
       setCustomer(null);
-      setInvoiceDiscount(0);
+      setInvoiceDiscountInput(NO_DISCOUNT);
+      setNote("");
       setErrorLine(null);
       setShowPayment(false);
+      setShowCheckout(false);
       idemRef.current = null;
       focusScan();
     },
@@ -254,6 +340,8 @@ export default function PosPage() {
         // سبد باید عوض شود، پس این دیگر همان فاکتور نیست.
         invalidateIdem();
         setShowPayment(false);
+        // برگرد به سبد تا فروشنده همان ردیفِ قرمز را ببیند.
+        setShowCheckout(false);
         return;
       }
 
@@ -261,6 +349,7 @@ export default function PosPage() {
         toast.error(err?.message ?? "ثبت فاکتور ناموفق بود");
         invalidateIdem();
         setShowPayment(false);
+        setShowCheckout(false);
         return;
       }
 
@@ -279,19 +368,22 @@ export default function PosPage() {
         warehouseId,
         customerId: customer?.id ?? null,
         discount: invoiceDiscount || undefined,
+        note: note.trim() || undefined,
         validForMinutes,
         lines: lines.map((l) => ({
           productId: l.productId,
           locationId: l.locationId,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
+          discount: lineDiscount(l) || undefined,
         })),
       }),
     onSuccess: (q) => {
       toast.success(`پیش‌فاکتور ${toFa(q.number)} ثبت شد — ${toman(q.total)}`);
       setLines([]);
       setCustomer(null);
-      setInvoiceDiscount(0);
+      setInvoiceDiscountInput(NO_DISCOUNT);
+      setNote("");
       setShowQuotation(false);
       invalidateIdem();
       focusScan();
@@ -300,16 +392,15 @@ export default function PosPage() {
   });
 
 
-  /** F9 — ارسال لوکیشن ردیف‌ها به گوشی کارگر (به یک کارگر مشخص یا همه). */
+  /** ارسال لوکیشن ردیف‌ها به گوشی کارگر (به یک کارگر مشخص یا همه) + پیام اختیاری. */
   const sendToWorker = useMutation({
-    mutationFn: (assignedToId: string | null) =>
+    mutationFn: (args: { assignedToId: string | null; note?: string }) =>
       createPickTasks({
         warehouseId,
-        assignedToId,
-        lines: lines.map((l) => ({
-          productId: l.productId,
-          locationId: l.locationId,
-          quantity: l.quantity,
+        assignedToId: args.assignedToId,
+        lines: workerLinesRef.current.map((l) => ({
+          ...l,
+          note: args.note?.trim() || undefined,
         })),
       }),
     onSuccess: (tasks) => {
@@ -320,10 +411,38 @@ export default function PosPage() {
     onError: () => toast.error("ارسال به کارگر ناموفق بود"),
   });
 
+  /** F9 — کل سبد را برای کارگر بفرست. */
+  const openWorkerForCart = useCallback(() => {
+    if (!lines.length) return;
+    workerLinesRef.current = lines.map((l) => ({
+      productId: l.productId,
+      locationId: l.locationId,
+      quantity: l.quantity,
+    }));
+    setWorkerItemCount(lines.length);
+    setShowWorkerPicker(true);
+  }, [lines]);
+
+  /** از نتیجه‌ی جست‌وجو → همان یک کالا را (از پرموجودی‌ترین مکان) برای کارگر بفرست. */
+  const openWorkerForResult = useCallback(
+    (r: LocateResult) => {
+      const loc = r.locations[0];
+      if (!loc) return;
+      setShowSearch(false);
+      workerLinesRef.current = [
+        { productId: r.id, locationId: loc.locationId, quantity: 1 },
+      ];
+      setWorkerItemCount(1);
+      setShowWorkerPicker(true);
+    },
+    []
+  );
+
   // ---------- میانبرها ----------
 
   const anyDialogOpen =
-    !!pickerStock || showCustomer || showPayment || showSearch || showQuotation || showWorkerPicker;
+    !!pickerStock || showCustomer || showPayment || showSearch || showQuotation ||
+    showWorkerPicker || showRecent || showCheckout;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -334,6 +453,9 @@ export default function PosPage() {
         setShowSearch(false);
         setShowQuotation(false);
         setShowWorkerPicker(false);
+        setShowRecent(false);
+        // CheckoutFlow خودش Esc را مدیریت می‌کند (گام دوم → گام اول)، پس اینجا
+        // بسته نمی‌شود؛ وگرنه یک Esc کل تسویه را می‌بندد.
         focusScan();
         return;
       }
@@ -343,7 +465,7 @@ export default function PosPage() {
       switch (e.key) {
         case "F2":
           e.preventDefault();
-          if (lines.length && !submit.isPending) submit.mutate(undefined);
+          if (!submit.isPending) startCheckout();
           break;
         case "F3":
           e.preventDefault();
@@ -367,7 +489,11 @@ export default function PosPage() {
           break;
         case "F9":
           e.preventDefault();
-          if (lines.length) setShowWorkerPicker(true);
+          openWorkerForCart();
+          break;
+        case "F10":
+          e.preventDefault();
+          setShowRecent(true);
           break;
         case "ArrowDown":
           if (lines.length) {
@@ -410,12 +536,21 @@ export default function PosPage() {
             value={scan}
             onChange={(e) => setScan(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && scan.trim()) {
-                e.preventDefault();
+              if (e.key !== "Enter") return;
+              e.preventDefault();
+              // بارکد در خانه → کالا را اضافه کن و منتظر بعدی بمان.
+              if (scan.trim()) {
                 onScan.mutate(scan.trim());
+                return;
               }
+              // خانه خالی و سبد پُر → یعنی «تمام شد، برو تسویه».
+              startCheckout();
             }}
-            placeholder="بارکد کالا را اسکن کنید…"
+            placeholder={
+              lines.length
+                ? "بارکد بعدی… یا Enter برای تسویه"
+                : "بارکد کالا را اسکن کنید…"
+            }
             className="h-11 pe-10 text-base"
           />
         </div>
@@ -433,90 +568,35 @@ export default function PosPage() {
         <Button variant="outline" className="h-11" onClick={() => setShowSearch(true)}>
           جست‌وجوی کالا <Key>F3</Key>
         </Button>
+
+        <Button variant="outline" className="h-11" onClick={() => setShowRecent(true)}>
+          <ReceiptText className="size-4" />
+          فاکتورهای امروز <Key>F10</Key>
+        </Button>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3">
         {/* ردیف‌های فاکتور */}
         <div className="flex min-w-0 flex-1 flex-col rounded-lg border bg-card">
-          {lines.length === 0 ? (
-            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-              <p className="text-muted-foreground">
-                برای شروع، بارکد کالا را اسکن کنید
-              </p>
-              <p className="text-sm text-muted-foreground">
-                یا با <kbd className="rounded border px-1.5 py-0.5 text-xs">F3</kbd> جست‌وجو کنید
-              </p>
-            </div>
-          ) : (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted/60 backdrop-blur">
-                  <tr className="text-muted-foreground">
-                    <th className="p-2 text-start font-medium">کالا</th>
-                    <th className="w-28 p-2 text-start font-medium">تعداد</th>
-                    <th className="w-36 p-2 text-start font-medium">قیمت واحد</th>
-                    <th className="w-32 p-2 text-start font-medium">جمع</th>
-                    <th className="w-10 p-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l, i) => (
-                    <tr
-                      key={l.key}
-                      onClick={() => setActiveRow(i)}
-                      className={`border-t border-e-2 transition-colors ${
-                        errorLine === i
-                          ? "border-e-destructive bg-destructive/10"
-                          : activeRow === i
-                            ? "border-e-primary bg-primary/5"
-                            : "border-e-transparent"
-                      }`}
-                    >
-                      <td className="p-2">
-                        <div className="truncate font-medium">{l.productName}</div>
-                        <div className="truncate text-xs text-muted-foreground">
-                          {l.locationPath} · موجودی {qty(l.available)}
-                          {errorLine === i && (
-                            <span className="ms-2 text-destructive">موجودی کافی نیست</span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-2">
-                        <Input
-                          dir="ltr"
-                          className="h-9 text-left tabular-nums"
-                          value={toFa(l.quantity)}
-                          onChange={(e) => {
-                            const v = Math.max(1, parseNum(e.target.value));
-                            patchLine(i, { quantity: v });
-                          }}
-                        />
-                      </td>
-                      <td className="p-2">
-                        <Input
-                          dir="ltr"
-                          className="h-9 text-left tabular-nums"
-                          value={l.unitPrice ? money(l.unitPrice) : ""}
-                          onChange={(e) => patchLine(i, { unitPrice: parseNum(e.target.value) })}
-                        />
-                      </td>
-                      <td className="p-2 tabular-nums">{money(l.quantity * l.unitPrice)}</td>
-                      <td className="p-2">
-                        <Button variant="ghost" size="icon" onClick={() => removeLine(i)}>
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <LineItems
+            lines={lines}
+            activeRow={activeRow}
+            errorLine={errorLine}
+            onActivate={setActiveRow}
+            onPatch={patchLine}
+            onRemove={removeLine}
+          />
         </div>
 
-        {/* ستون مشتری و جمع */}
-        <div className="flex w-80 shrink-0 flex-col gap-3">
-          <div className="rounded-lg border bg-card p-3">
+        {/*
+          ستون مشتری و جمع.
+          کارت‌ها اسکرول می‌شوند و دکمه‌ها ثابت پایین می‌مانند — قبلاً همه در یک
+          ستون بودند و وقتی محتوا بلند می‌شد (هشدار قیمت، خلاصه‌ی تخفیف، توضیح)
+          از پایین سرریز می‌کرد و روی نوار کلیدها می‌افتاد.
+        */}
+        <div className="flex min-h-0 w-80 shrink-0 flex-col gap-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          <div className="shrink-0 rounded-lg border bg-card p-3">
             <div className="mb-2 flex items-center justify-between">
               <span className="text-sm font-semibold">مشتری</span>
               <Button variant="ghost" size="sm" onClick={() => setShowCustomer(true)}>
@@ -541,41 +621,67 @@ export default function PosPage() {
             )}
           </div>
 
-          <div className="rounded-lg border bg-card p-3">
+          <div className="shrink-0 rounded-lg border bg-card p-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">جمع اقلام</span>
-              <span className="tabular-nums">{money(subtotal)}</span>
+              <span className="tabular-nums">{money(grossSubtotal)}</span>
             </div>
 
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <span className="flex items-center gap-1 text-sm text-muted-foreground">
-                <Percent className="size-3.5" /> تخفیف <Key>F6</Key>
+            {linesDiscountTotal > 0 && (
+              <div className="mt-1 flex justify-between text-sm">
+                <span className="text-muted-foreground">تخفیف ردیف‌ها</span>
+                <span className="tabular-nums text-emerald-600">
+                  − {money(linesDiscountTotal)}
+                </span>
+              </div>
+            )}
+
+            <div className="mt-2 flex items-start justify-between gap-2">
+              <span className="flex items-center gap-1 pt-2 text-sm text-muted-foreground">
+                <Percent className="size-3.5" /> تخفیف فاکتور <Key>F6</Key>
               </span>
-              <Input
+              <DiscountField
                 id="invoice-discount"
-                dir="ltr"
-                className="h-9 w-32 text-left tabular-nums"
-                value={invoiceDiscount ? money(invoiceDiscount) : ""}
-                onChange={(e) => {
+                value={invoiceDiscountInput}
+                base={subtotal}
+                onChange={(d) => {
                   invalidateIdem();
-                  setInvoiceDiscount(Math.min(parseNum(e.target.value), subtotal));
+                  setInvoiceDiscountInput(d);
                 }}
               />
             </div>
+
+            {totalDiscount > 0 && (
+              <div className="mt-2 flex justify-between border-t pt-2 text-xs text-muted-foreground">
+                <span>مجموع تخفیف</span>
+                <span className="tabular-nums">
+                  {money(totalDiscount)} ({toFa(effectivePercent)}٪)
+                </span>
+              </div>
+            )}
 
             <div className="mt-3 flex items-baseline justify-between border-t pt-3">
               <span className="font-semibold">مبلغ نهایی</span>
               <span className="text-xl font-bold tabular-nums">{money(total)}</span>
             </div>
             <p className="text-end text-xs text-muted-foreground">تومان</p>
+
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              maxLength={300}
+              placeholder="توضیح روی فاکتور (اختیاری)"
+              className="mt-3 h-9 text-sm"
+            />
+          </div>
           </div>
 
-          <div className="mt-auto flex flex-col gap-2">
+          <div className="flex shrink-0 flex-col gap-2">
             <Button
               variant="outline"
               className="h-11 justify-between"
               disabled={!lines.length || sendToWorker.isPending}
-              onClick={() => setShowWorkerPicker(true)}
+              onClick={openWorkerForCart}
             >
               <span className="flex items-center gap-2">
                 <Send className="size-4" />
@@ -608,16 +714,51 @@ export default function PosPage() {
               <Key>F7</Key>
             </Button>
 
+            {zeroPriceCount > 0 && (
+              <p className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-500">
+                {toFa(zeroPriceCount)} ردیف قیمت ندارد. تا قیمتشان وارد نشود فاکتور ثبت نمی‌شود.
+              </p>
+            )}
+
             <Button
               className="h-14 justify-between text-base"
-              disabled={!lines.length || submit.isPending}
-              onClick={() => submit.mutate(undefined)}
+              disabled={!canCheckout || submit.isPending}
+              onClick={startCheckout}
             >
-              <span>{submit.isPending ? "در حال ثبت…" : "ثبت فاکتور نقدی"}</span>
+              <span>{submit.isPending ? "در حال ثبت…" : "تسویه و ثبت فاکتور"}</span>
               <Key>F2</Key>
             </Button>
           </div>
         </div>
+      </div>
+
+      {/*
+        نوار کلیدها — در صندوق‌های فروش واقعی این نوار همیشه پایین صفحه است تا
+        فروشنده‌ی تازه‌کار هم بدون آموزش با کیبورد کار کند.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+        {(
+          [
+            ["Enter", "بارکد / تسویه"],
+            ["F2", "تسویه"],
+            ["F3", "جست‌وجو"],
+            ["F4", "مشتری"],
+            ["F6", "تخفیف"],
+            ["F7", "پرداخت ترکیبی"],
+            ["F8", "پیش‌فاکتور"],
+            ["F9", "ارسال به کارگر"],
+            ["F10", "فاکتورهای امروز"],
+            ["↑↓", "انتخاب ردیف"],
+            ["Delete", "حذف"],
+          ] as const
+        ).map(([k, label]) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <kbd className="rounded border bg-background px-1.5 py-0.5 font-sans text-[11px]">
+              {k}
+            </kbd>
+            {label}
+          </span>
+        ))}
       </div>
 
       {/* دیالوگ‌ها */}
@@ -641,15 +782,16 @@ export default function PosPage() {
 
       <ProductSearch
         open={showSearch}
-        onPick={(p) => pickProduct.mutate(p)}
+        onPick={addFromLocate}
+        onSendToWorker={openWorkerForResult}
         onClose={() => { setShowSearch(false); focusScan(); }}
       />
 
       <WorkerPicker
         open={showWorkerPicker}
-        itemCount={lines.length}
+        itemCount={workerItemCount}
         pending={sendToWorker.isPending}
-        onPick={(id) => sendToWorker.mutate(id)}
+        onPick={(id, note) => sendToWorker.mutate({ assignedToId: id, note })}
         onClose={() => { setShowWorkerPicker(false); focusScan(); }}
       />
 
@@ -661,6 +803,24 @@ export default function PosPage() {
         pending={saveQuotation.isPending}
         onConfirm={(m) => saveQuotation.mutate(m)}
         onClose={() => { setShowQuotation(false); focusScan(); }}
+      />
+
+      <CheckoutFlow
+        open={showCheckout}
+        total={total}
+        lineCount={lines.length}
+        customer={customer}
+        pending={submit.isPending}
+        onCustomerChange={(c) => { setCustomer(c); invalidateIdem(); }}
+        onSubmit={(payments) => submit.mutate(payments)}
+        onOpenFullPayment={() => { setShowCheckout(false); setShowPayment(true); }}
+        onClose={() => { setShowCheckout(false); focusScan(); }}
+      />
+
+      <RecentInvoices
+        open={showRecent}
+        warehouseId={warehouseId}
+        onClose={() => { setShowRecent(false); focusScan(); }}
       />
 
       <PaymentDialog
