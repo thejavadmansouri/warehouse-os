@@ -507,6 +507,9 @@ model ImportRow {
   partNumber       String?
   unit             String?
 
+  /// بارکد کارخانه‌ایِ خامِ اکسل — هنگام تأیید ایمپورت به ProductBarcode می‌رود.
+  factoryBarcode String?
+
   purchasePrice  Float?
   salePrice      Float?
   wholesalePrice Float?

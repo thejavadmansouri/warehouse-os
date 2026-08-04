@@ -7,6 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ImportRowStatus } from '@prisma/client';
 import { ConfirmImportDto } from './dto/confirm-import.dto';
 import * as XLSX from 'xlsx';
+import { randomUUID } from 'crypto';
 import { StringMatcher } from './utils/string-matcher.util';
 import { buildSearchTokens } from '../products/search-tokens';
 
@@ -64,6 +65,13 @@ export class ImportsService {
       const brandName = String(row['brand'] || row['برند'] || '').trim();
       const vehicleName = String(row['vehicleModel'] || row['خودرو'] || '').trim();
       const partNumber = row['partNumber'] || row['شماره فنی'] ? String(row['partNumber'] || row['شماره فنی']).trim() : null;
+      // بارکد کارخانه — چند نامِ رایجِ ستون پشتیبانی می‌شود. عددِ اکسل ممکن است
+      // به‌صورت علمی (E+13) آمده باشد؛ در آن صورت round می‌کنیم تا رقم‌ها نریزند.
+      const rawBarcode = row['factoryBarcode'] ?? row['بارکد'] ?? row['barcode'] ?? null;
+      const factoryBarcode =
+        rawBarcode === null || rawBarcode === undefined || String(rawBarcode).trim() === ''
+          ? null
+          : normalizeBarcodeCell(rawBarcode);
       const unit = String(row['unit'] || row['واحد'] || 'عدد').trim();
 
       const purchasePrice = this.parsePrice(row['purchasePrice'] ?? row['قیمت خرید']);
@@ -99,6 +107,7 @@ export class ImportsService {
         brandName: brandName || null,
         vehicleModelName: vehicleName || null,
         partNumber: partNumber || null,
+        factoryBarcode,
         unit: unit || 'عدد',
         purchasePrice: purchasePrice !== null ? purchasePrice : 0,
         salePrice: salePrice !== null ? salePrice : 0,
@@ -144,8 +153,34 @@ export class ImportsService {
       throw new NotFoundException('شناسه ایمپورت یافت نشد.');
     }
 
-    return await this.prisma.$transaction(async (tx) => {
+    // شناسه‌ی یکتای همین اجرا — پایه‌ی بارکدهای داخلی. با Date.now() تنها، دو
+    // ایمپورت در یک میلی‌ثانیه بارکد یکسان می‌ساختند و به unique constraint می‌خوردند.
+    const runToken = randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+
+    return await this.prisma.$transaction(
+      async (tx) => {
       let createdProductsCount = 0;
+
+      // بارکدها یکتای‌اند؛ اگر یک بارکد کارخانه تکراری باشد (در همین دسته یا در
+      // دیتابیس)، نباید کل ایمپورت را خراب کند — فقط ردیفِ FACTORYِ تکراری را
+      // نمی‌سازیم، خود کالا همچنان ایمپورت می‌شود.
+      //
+      // فقط بارکدهای همین دسته را می‌پرسیم، نه کل جدول: خواندن هر ۳۳هزار ردیف
+      // داخل تراکنش، بودجه‌ی زمانی را همان اول می‌سوزاند.
+      const candidateBarcodes = job.rows
+        .map((r) => r.factoryBarcode)
+        .filter((b): b is string => !!b);
+      const existingBarcodes = new Set(
+        candidateBarcodes.length === 0
+          ? []
+          : (
+              await tx.productBarcode.findMany({
+                where: { barcode: { in: candidateBarcodes } },
+                select: { barcode: true },
+              })
+            ).map((b) => b.barcode),
+      );
+      const seenInBatch = new Set<string>();
 
       for (const row of job.rows) {
         if (row.status === ImportRowStatus.COMPLETED) {
@@ -215,10 +250,29 @@ export class ImportsService {
 
         const generatedSku = `SKU-${Date.now()}-${row.rowNumber}`;
 
+        // بارکد داخلی (چاپ لیبل) — مقدارش مشخص است تا همین‌جا رکورد بارکد هم ساخته شود.
+        // runToken + rowNumber در سطح کل دیتابیس یکتاست.
+        const internalBarcode = `WOS${runToken}${row.rowNumber}`;
+
+        // بارکدها باید توی ProductBarcode هم باشند، وگرنه اسکنر فروشنده بارکد
+        // کارخانه را پیدا نمی‌کند (resolveForSale از همین جدول می‌خواند).
+        const barcodesToCreate: { barcode: string; type: 'INTERNAL' | 'FACTORY' }[] = [
+          { barcode: internalBarcode, type: 'INTERNAL' },
+        ];
+        if (
+          row.factoryBarcode &&
+          !existingBarcodes.has(row.factoryBarcode) &&
+          !seenInBatch.has(row.factoryBarcode)
+        ) {
+          barcodesToCreate.push({ barcode: row.factoryBarcode, type: 'FACTORY' });
+          seenInBatch.add(row.factoryBarcode);
+        }
+
         await tx.product.create({
           data: {
             name: row.productName ?? 'بدون نام',
             sku: generatedSku,
+            internalBarcode,
             partNumber: row.partNumber,
             searchTokens: buildSearchTokens(
               row.productName ?? 'بدون نام',
@@ -229,6 +283,7 @@ export class ImportsService {
             partCatalogId: catalogId,
             brandId: brandId,
             vehicleModelId: vehicleId,
+            barcodes: { create: barcodesToCreate },
             prices: {
               create: {
                 purchasePrice: row.purchasePrice,
@@ -252,6 +307,37 @@ export class ImportsService {
         message: 'عملیات ایمپورت با موفقیت تایید و اعمال شد.',
         createdProducts: createdProductsCount,
       };
-    });
+      },
+      {
+        // هر ردیف چند کوئری دارد و یک اکسل واقعی هزاران ردیف است؛ با سقف پیش‌فرضِ
+        // ۵ ثانیه‌ی Prisma، هر ایمپورتِ اندازه‌واقعی وسط کار rollback می‌شد.
+        maxWait: 30_000,
+        timeout: 30 * 60_000,
+      },
+    );
   }
+}
+
+/**
+ * عددِ بارکدِ اکسل را به رشته‌ی کامل تبدیل می‌کند.
+ *
+ * اکسل اعداد بلند را به‌صورت علمی (مثل 1.23457E+13) ذخیره می‌کند و وقتی با
+ * String() تبدیل شوند رقم‌های آخر می‌ریزند. برای بارکدها باید عددِ کاملِ ۱۳-۱۴
+ * رقمی حفظ شود؛ اگر عددِ شناور است round + حذف اعشار می‌کنیم.
+ */
+function normalizeBarcodeCell(value: unknown): string {
+  if (typeof value === 'number') {
+    return Number.isInteger(value) ? String(value) : String(Math.round(value));
+  }
+
+  const text = String(value).trim();
+
+  // اکسل گاهی خودِ رشته را علمی می‌دهد («1.23457E+13»). String() اینجا کمکی
+  // نمی‌کند، پس باید به عدد برگردانده و کامل نوشته شود.
+  if (/^\d+(\.\d+)?[eE][+-]?\d+$/.test(text)) {
+    const parsed = Number(text);
+    if (Number.isFinite(parsed)) return BigInt(Math.round(parsed)).toString();
+  }
+
+  return text;
 }
