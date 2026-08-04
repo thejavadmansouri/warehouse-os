@@ -1,6 +1,7 @@
 // پیکربندی ناوبری سایدبار — طبق پیوست نقش‌های مجاز هر endpoint
 import type { Role } from "./types";
 import {
+  BadgeDollarSign,
   LayoutDashboard,
   Package,
   Tag,
@@ -80,6 +81,13 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/admin/products",
         icon: Package,
         roles: ["ADMIN", "MANAGER", "STAFF"],
+      },
+      {
+        // قیمت‌گذاری فقط برای مدیر — انباردار نباید قیمت بگذارد.
+        title: "قیمت‌گذاری",
+        href: "/admin/pricing",
+        icon: BadgeDollarSign,
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "برندها",

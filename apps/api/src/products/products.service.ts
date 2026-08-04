@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { buildSearchTokens, tokenizeQuery } from './search-tokens';
 import { nextSku } from './sku.util';
+import { BulkPriceDto } from './dto/bulk-price.dto';
 
 
 @Injectable()
@@ -18,7 +19,8 @@ export class ProductsService {
   async findAll(
     page:number = 1,
     limit:number = 50,
-    search?:string
+    search?:string,
+    brandId?:string
   ){
 
     const skip=(page-1)*limit;
@@ -27,6 +29,12 @@ export class ProductsService {
     const where:any = {
       deletedAt:null
     };
+
+
+    // فیلتر برند برای صفحه‌ی قیمت‌گذاری: «همه‌ی کالاهای این برند».
+    if(brandId){
+      where.brandId = brandId;
+    }
 
 
     if(search){
@@ -103,6 +111,15 @@ export class ProductsService {
           barcodes:true,
 
           assets:true,
+
+          // آخرین قیمت — صفحه‌ی قیمت‌گذاری باید بدون درخواست جداگانه به‌ازای
+          // هر ردیف بداند قیمت فعلی چیست.
+          prices:{
+            orderBy:{
+              createdAt:'desc'
+            },
+            take:1
+          },
 
           inventories:{
             include:{
@@ -576,6 +593,166 @@ export class ProductsService {
       where: { productId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+
+  /**
+   * قیمت‌گذاری دسته‌ای — انتخاب دستی، یک برند، یا نتیجه‌ی یک جست‌وجو.
+   *
+   * با ۳۳ هزار کالا، زدن تک‌تک از سمت کلاینت شدنی نیست؛ باید یک درخواست باشد.
+   *
+   * قواعدی که عمداً رعایت شده‌اند:
+   *  - تاریخچه حفظ می‌شود: مثل setPrice، ردیف تازه ساخته می‌شود نه بازنویسی.
+   *  - فیلدِ داده‌نشده یعنی «عوض نکن»، نه «صفر کن».
+   *  - کالایی که مبنای محاسبه ندارد (مثلاً قیمت خرید برای markup) رد می‌شود،
+   *    نه اینکه صفر بگیرد — قیمت صفر روی فاکتور یعنی جنس مجانی.
+   *  - dryRun هست چون این عملیات روی هزاران ردیف اثر می‌گذارد و باید بشود
+   *    قبلش دید چند تا.
+   */
+  async bulkSetPrice(dto: BulkPriceDto) {
+    const where = this.buildBulkPriceWhere(dto.select);
+    if (!where) {
+      throw new BadRequestException({
+        error: 'NO_SELECTION',
+        message: 'هیچ کالایی انتخاب نشده — برند، جست‌وجو یا فهرست کالا لازم است',
+      });
+    }
+
+    const { kind, percent } = dto.op;
+    if ((kind === 'percent' || kind === 'markup') && typeof percent !== 'number') {
+      throw new BadRequestException({
+        error: 'PERCENT_REQUIRED',
+        message: 'برای تغییر درصدی، درصد باید مشخص باشد',
+      });
+    }
+    if (kind === 'percent' && !dto.op.field) {
+      throw new BadRequestException({
+        error: 'FIELD_REQUIRED',
+        message: 'مشخص کنید درصد روی کدام قیمت اعمال شود',
+      });
+    }
+    if (
+      kind === 'set' &&
+      dto.op.purchasePrice === undefined &&
+      dto.op.salePrice === undefined &&
+      dto.op.wholesalePrice === undefined
+    ) {
+      throw new BadRequestException({
+        error: 'NO_VALUES',
+        message: 'حداقل یکی از قیمت‌ها باید داده شود',
+      });
+    }
+
+    const products = await this.prisma.product.findMany({
+      where,
+      select: {
+        id: true,
+        prices: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+
+    const matched = products.length;
+    if (dto.dryRun) return { matched, updated: 0, skipped: 0, dryRun: true };
+
+    const rows: {
+      productId: string;
+      purchasePrice: number | null;
+      salePrice: number | null;
+      wholesalePrice: number | null;
+    }[] = [];
+    let skipped = 0;
+
+    for (const p of products) {
+      const cur = p.prices[0];
+      const base = {
+        purchasePrice: cur?.purchasePrice ?? null,
+        salePrice: cur?.salePrice ?? null,
+        wholesalePrice: cur?.wholesalePrice ?? null,
+      };
+
+      const next = { ...base };
+
+      if (kind === 'set') {
+        if (dto.op.purchasePrice !== undefined) next.purchasePrice = dto.op.purchasePrice;
+        if (dto.op.salePrice !== undefined) next.salePrice = dto.op.salePrice;
+        if (dto.op.wholesalePrice !== undefined) next.wholesalePrice = dto.op.wholesalePrice;
+      } else if (kind === 'percent') {
+        const field = dto.op.field!;
+        const from = base[field];
+        if (from === null) {
+          skipped++;
+          continue;
+        }
+        next[field] = Math.max(0, Math.round(from * (1 + percent! / 100)));
+      } else {
+        // markup: فروش از روی خرید
+        if (base.purchasePrice === null) {
+          skipped++;
+          continue;
+        }
+        next.salePrice = Math.max(
+          0,
+          Math.round(base.purchasePrice * (1 + percent! / 100)),
+        );
+      }
+
+      const unchanged =
+        cur &&
+        cur.purchasePrice === next.purchasePrice &&
+        cur.salePrice === next.salePrice &&
+        cur.wholesalePrice === next.wholesalePrice;
+
+      if (unchanged) {
+        skipped++;
+        continue;
+      }
+
+      rows.push({ productId: p.id, ...next });
+    }
+
+    // تکه‌تکه، تا نه تراکنش طولانی شود نه حافظه.
+    const CHUNK = 2000;
+    for (let i = 0; i < rows.length; i += CHUNK) {
+      await this.prisma.productPrice.createMany({ data: rows.slice(i, i + CHUNK) });
+    }
+
+    return { matched, updated: rows.length, skipped, dryRun: false };
+  }
+
+
+  /** فیلترِ انتخاب. برگرداندن null یعنی «هیچ معیاری داده نشده». */
+  private buildBulkPriceWhere(sel: BulkPriceDto['select']): Prisma.ProductWhereInput | null {
+    const where: Prisma.ProductWhereInput = { deletedAt: null };
+    let hasCriteria = false;
+
+    if (sel.productIds?.length) {
+      where.id = { in: sel.productIds };
+      hasCriteria = true;
+    }
+    if (sel.brandId) {
+      where.brandId = sel.brandId;
+      hasCriteria = true;
+    }
+    if (sel.categoryId) {
+      where.categoryId = sel.categoryId;
+      hasCriteria = true;
+    }
+    if (sel.search?.trim()) {
+      const q = sel.search.trim();
+      where.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { sku: { contains: q, mode: 'insensitive' } },
+        { partNumber: { contains: q, mode: 'insensitive' } },
+      ];
+      hasCriteria = true;
+    }
+    // این یکی به‌تنهایی معیار نیست: «همه‌ی کالاهای بی‌قیمت» یعنی ۳۳ هزار ردیف،
+    // که تقریباً همیشه اشتباهِ کاربر است. فقط محدودکننده‌ی معیارهای دیگر است.
+    if (sel.onlyWithoutSalePrice) {
+      where.prices = { none: { salePrice: { not: null } } };
+    }
+
+    return hasCriteria ? where : null;
   }
 
 

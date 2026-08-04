@@ -171,9 +171,13 @@ export function getProducts(): Promise<T.Product[]> {
 // GET /products?page=&limit= — نسخه‌ی صفحه‌بندی‌شده با meta (برای مرور کل کاتالوگ)
 export function getProductsPaged(
   page = 1,
-  limit = 50
+  limit = 50,
+  search?: string,
+  brandId?: string
 ): Promise<{ data: T.Product[]; meta: { total: number; page: number; lastPage: number } }> {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (search) qs.set("search", search);
+  if (brandId) qs.set("brandId", brandId);
   return apiFetch<{ data?: T.Product[]; meta?: { total: number; page: number; lastPage: number } }>(
     `/products?${qs.toString()}`
   ).then((r) => ({
@@ -349,6 +353,31 @@ export function uploadProductImage(
 // طبق بخش ۶.۴ — GET /brands
 export function getBrands(): Promise<T.Brand[]> {
   return apiFetch<T.Brand[]>("/brands");
+}
+
+// POST /products/:id/prices — ثبت قیمت جدید. ردیف تازه در تاریخچه می‌سازد.
+// فیلدِ نفرستاده یعنی «عوض نکن»، نه «صفر کن».
+export function setProductPrice(
+  id: string,
+  dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number }
+): Promise<T.ProductPrice> {
+  return apiFetch<T.ProductPrice>(`/products/${encodeURIComponent(id)}/prices`, {
+    method: "POST",
+    body: dto,
+  });
+}
+
+/**
+ * POST /products/prices/bulk — قیمت‌گذاری دسته‌ای.
+ *
+ * `dryRun` فقط می‌شمارد چند کالا اثر می‌گیرند و چیزی نمی‌نویسد؛ روی هزاران
+ * ردیف، دیدنِ عدد قبل از اجرا تفاوت بین اصلاح و فاجعه است.
+ */
+export function bulkSetPrice(body: T.BulkPriceRequest): Promise<T.BulkPriceResult> {
+  return apiFetch<T.BulkPriceResult>("/products/prices/bulk", {
+    method: "POST",
+    body,
+  });
 }
 
 // طبق بخش ۶.۴ — POST /brands (فقط name ذخیره می‌شود)

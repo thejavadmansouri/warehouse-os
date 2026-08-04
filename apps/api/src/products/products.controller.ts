@@ -14,6 +14,7 @@ import type { Response } from 'express';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { BulkPriceDto } from './dto/bulk-price.dto';
 
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
@@ -33,10 +34,16 @@ export class ProductsController {
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('search') search?: string,
+    @Query('brandId') brandId?: string,
   ) {
     const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
     const limitNum = Math.min(200, Math.max(1, parseInt(limit ?? '50', 10) || 50));
-    return this.productsService.findAll(pageNum, limitNum, search?.trim() || undefined);
+    return this.productsService.findAll(
+      pageNum,
+      limitNum,
+      search?.trim() || undefined,
+      brandId?.trim() || undefined,
+    );
   }
 
 
@@ -130,6 +137,14 @@ export class ProductsController {
     @Body() dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number },
   ){
     return this.productsService.setPrice(id, dto);
+  }
+
+
+  /** قیمت‌گذاری دسته‌ای: انتخاب دستی، یک برند، یا نتیجه‌ی یک جست‌وجو. */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('prices/bulk')
+  bulkSetPrice(@Body() dto: BulkPriceDto) {
+    return this.productsService.bulkSetPrice(dto);
   }
 
 

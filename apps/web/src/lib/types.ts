@@ -62,6 +62,12 @@ export interface Product {
   brand?: { id: string; name: string } | null;
   category?: { id: string; name: string } | null;
   vehicleModel?: { id: string; name: string } | null;
+  /**
+   * تاریخچه‌ی قیمت، جدیدترین اول. سرور معمولاً فقط آخرین ردیف را می‌فرستد.
+   * قیمت واقعی اینجاست، نه در فیلدهای تختِ بالا — آن‌ها فقط ورودیِ فرم ساخت
+   * کالا هستند و در پاسخ‌ها پر نمی‌شوند.
+   */
+  prices?: ProductPrice[];
 }
 
 export interface CreateProductDto {
@@ -1039,4 +1045,58 @@ export interface Worker {
   id: string;
   fullName: string;
   username: string;
+}
+
+// ---------------------------------------------------------------------------
+// قیمت‌گذاری
+// ---------------------------------------------------------------------------
+
+/** یک ردیف تاریخچه‌ی قیمت. قیمت‌ها تومان و عدد صحیح‌اند. */
+export interface ProductPrice {
+  id: string;
+  productId: string;
+  purchasePrice: number | null;
+  salePrice: number | null;
+  wholesalePrice: number | null;
+  createdAt: string;
+}
+
+/** کدام کالاها قیمت بگیرند. بدون هیچ معیاری، سرور درخواست را رد می‌کند. */
+export interface BulkPriceSelect {
+  productIds?: string[];
+  brandId?: string;
+  categoryId?: string;
+  search?: string;
+  /** فقط کالاهایی که هنوز قیمت فروش ندارند — محدودکننده، نه معیارِ مستقل. */
+  onlyWithoutSalePrice?: boolean;
+}
+
+/**
+ * set     — مقدار مطلق روی فیلدهای داده‌شده
+ * percent — همان فیلد را درصدی کم/زیاد کن
+ * markup  — قیمت فروش = قیمت خرید × (۱ + درصد/۱۰۰)
+ */
+export interface BulkPriceOp {
+  kind: "set" | "percent" | "markup";
+  purchasePrice?: number;
+  salePrice?: number;
+  wholesalePrice?: number;
+  field?: "purchasePrice" | "salePrice" | "wholesalePrice";
+  percent?: number;
+}
+
+export interface BulkPriceRequest {
+  select: BulkPriceSelect;
+  op: BulkPriceOp;
+  dryRun?: boolean;
+}
+
+export interface BulkPriceResult {
+  /** چند کالا با این معیار پیدا شد. */
+  matched: number;
+  /** چند تا واقعاً قیمت جدید گرفتند. */
+  updated: number;
+  /** بی‌تغییر یا بدون مبنای محاسبه (مثلاً قیمت خرید نداشت). */
+  skipped: number;
+  dryRun: boolean;
 }
