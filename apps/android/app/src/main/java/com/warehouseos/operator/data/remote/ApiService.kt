@@ -14,6 +14,7 @@ import com.warehouseos.operator.data.remote.dto.ProductDto
 import com.warehouseos.operator.data.remote.dto.ProductRequestResult
 import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
 import com.warehouseos.operator.data.remote.dto.MyWorkResponse
+import com.warehouseos.operator.data.remote.dto.PickTaskDto
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
 import com.warehouseos.operator.data.remote.dto.SaleResolveDto
 import com.warehouseos.operator.data.remote.dto.SellRequest
@@ -89,6 +90,15 @@ interface ApiService {
     // فروش = کاهش موجودی (SALE). بک‌اند اتمیک چک می‌کند و از فروش بیش از موجودی جلوگیری می‌کند.
     @POST("inventory/out")
     suspend fun sell(@Body body: SellRequest): SellResponse
+
+    // ---- Pick tasks (worker picking queue) ----
+    // صف کارِ برداشتِ همین کارگر — آدرس قفسه + کالا + تعداد.
+    @GET("pick-tasks/mine")
+    suspend fun pickTasksMine(): List<PickTaskDto>
+
+    // «آوردم» — ادعای اتمیک؛ موجودی تغییر نمی‌کند.
+    @POST("pick-tasks/{id}/picked")
+    suspend fun pickTaskMarkPicked(@Path("id") id: String): PickTaskDto
 
     // ---- New-product request (worker → manager review) ----
     @POST("product-requests")
