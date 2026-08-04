@@ -1,3 +1,7 @@
+// باید اول همه باشد: ماژول‌های پایین‌تر هنگام import شدن به متغیرهای محیطی
+// (مثل JWT_SECRET) نیاز دارند، و در CommonJS ترتیب require همان ترتیب نوشتن است.
+import './load-env';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { WsAdapter } from '@nestjs/platform-ws';
