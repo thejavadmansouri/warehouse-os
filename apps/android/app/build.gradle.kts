@@ -34,6 +34,23 @@ android {
         debug {
             applicationIdSuffix = ".debug"
         }
+
+        // Optimised build the warehouse can actually install and judge speed on.
+        //
+        // A debug build runs Compose without R8 and with debuggable=true, which is
+        // several times slower than what the operator will really use — smoothness
+        // simply cannot be assessed on it. This build type is release-shaped (R8,
+        // resource shrinking, not debuggable) but keeps the .debug applicationId and
+        // the debug signing key so it installs side-by-side over adb.
+        //
+        // ⚠️ Not for distribution: a real deployment needs its own keystore.
+        create("bench") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".debug"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+        }
     }
 
     // dev/prod flavors carry the on-prem LAN backend URL as a BuildConfig field.

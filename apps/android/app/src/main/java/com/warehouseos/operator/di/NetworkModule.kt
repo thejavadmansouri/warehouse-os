@@ -41,9 +41,15 @@ object NetworkModule {
         baseUrlInterceptor: BaseUrlInterceptor,
         authInterceptor: AuthInterceptor,
     ): OkHttpClient {
+        // BASIC, not BODY. The pick-task watcher polls every few seconds, and BODY
+        // serialised every response payload into a log string on each poll — that
+        // allocation churn was driving a background GC every ~90s (100-190ms each)
+        // and showed up as dropped frames. BASIC still logs method, URL, status and
+        // duration, which is what is actually needed day to day.
+        // Flip to BODY temporarily when a payload genuinely needs inspecting.
         val logging = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
+                HttpLoggingInterceptor.Level.BASIC
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }
