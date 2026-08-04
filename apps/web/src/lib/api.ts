@@ -990,9 +990,16 @@ export function createCustomer(body: {
 export function createPickTasks(body: {
   warehouseId: string;
   invoiceId?: string | null;
+  /** null یا نبود = «هر کارگری»؛ مقدار = آن کارگر مشخص. */
+  assignedToId?: string | null;
   lines: { productId: string; locationId: string; quantity: number; note?: string }[];
 }): Promise<T.PickTask[]> {
   return apiFetch<T.PickTask[]>("/pick-tasks", { method: "POST", body });
+}
+
+/** فهرست کارگرها برای انتخاب گیرنده‌ی کار برداشت. */
+export function getWorkers(): Promise<T.Worker[]> {
+  return apiFetch<T.Worker[]>("/pick-tasks/workers");
 }
 
 export function getPickTasks(params: {

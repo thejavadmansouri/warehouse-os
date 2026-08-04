@@ -114,6 +114,51 @@ export class PendingOperationsService {
   }
 
   /** Manager review queue for a warehouse (or all). */
+  /**
+   * کارهای یک کارگر با تصمیم مدیر روی هرکدام.
+   *
+   * کارگر باید ببیند چه ثبت کرده، چند تا تأیید شده، و کدام رد شده و چرا —
+   * وگرنه همان اشتباه را تکرار می‌کند. پیش‌فرض: از ابتدای امروز.
+   */
+  async myWork(userId: string, since?: string) {
+    const from = since
+      ? new Date(since)
+      : new Date(new Date().setHours(0, 0, 0, 0));
+
+    const ops = await this.prisma.pendingOperation.findMany({
+      where: { workerId: userId, createdAt: { gte: isNaN(from.getTime()) ? undefined : from } },
+      include: {
+        product: { select: { name: true, sku: true } },
+        reviewedBy: { select: { fullName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+
+    const counts = { pending: 0, approved: 0, rejected: 0 };
+    for (const o of ops) {
+      if (o.status === 'APPROVED') counts.approved++;
+      else if (o.status === 'REJECTED') counts.rejected++;
+      else counts.pending++;
+    }
+
+    return {
+      summary: { total: ops.length, ...counts },
+      items: ops.map((o) => ({
+        id: o.id,
+        status: o.status,
+        productName: o.product?.name ?? null,
+        voiceText: o.voiceText,
+        quantity: o.quantity,
+        reviewNote: o.reviewNote,
+        reviewedByName: o.reviewedBy?.fullName ?? null,
+        createdAt: o.createdAt,
+        reviewedAt: o.reviewedAt,
+      })),
+    };
+  }
+
+
   async listPending(warehouseId?: string) {
     return this.prisma.pendingOperation.findMany({
       where: {

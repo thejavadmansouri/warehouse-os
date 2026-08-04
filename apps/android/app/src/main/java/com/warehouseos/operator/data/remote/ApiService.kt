@@ -13,6 +13,7 @@ import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
 import com.warehouseos.operator.data.remote.dto.ProductDto
 import com.warehouseos.operator.data.remote.dto.ProductRequestResult
 import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
+import com.warehouseos.operator.data.remote.dto.MyWorkResponse
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
 import com.warehouseos.operator.data.remote.dto.SaleResolveDto
 import com.warehouseos.operator.data.remote.dto.SellRequest
@@ -112,6 +113,10 @@ interface ApiService {
     // ---- Review ----
     @GET("mobile/review/pending")
     suspend fun pendingReview(): List<ReviewItemDto>
+
+    // کارهای من — کارگر کارهای خودش و تصمیم مدیر را می‌بیند.
+    @GET("mobile/my-work")
+    suspend fun myWork(): MyWorkResponse
 
     @POST("mobile/review/{itemId}/confirm")
     suspend fun confirmReview(

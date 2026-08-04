@@ -1010,3 +1010,10 @@ export interface LabelSettings {
   showBarcodeText: boolean;
   cropMarks: boolean;
 }
+
+
+export interface Worker {
+  id: string;
+  fullName: string;
+  username: string;
+}
