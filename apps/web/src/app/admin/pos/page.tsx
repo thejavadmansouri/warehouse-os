@@ -30,6 +30,7 @@ import { CustomerPicker } from "./_components/customer-picker";
 import { PaymentDialog } from "./_components/payment-dialog";
 import { ProductSearch } from "./_components/product-search";
 import { QuotationDialog } from "./_components/quotation-dialog";
+import { WorkerPicker } from "./_components/worker-picker";
 
 /** حداقل چیزی که برای افزودن یک ردیف لازم است — هم از resolve می‌آید هم از جست‌وجو. */
 type PickableProduct = {
@@ -79,6 +80,7 @@ export default function PosPage() {
   const [showPayment, setShowPayment] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   const [showQuotation, setShowQuotation] = useState(false);
+  const [showWorkerPicker, setShowWorkerPicker] = useState(false);
 
   const scanRef = useRef<HTMLInputElement>(null);
 
@@ -298,11 +300,12 @@ export default function PosPage() {
   });
 
 
-  /** F9 — ارسال لوکیشن ردیف‌ها به گوشی کارگر. */
+  /** F9 — ارسال لوکیشن ردیف‌ها به گوشی کارگر (به یک کارگر مشخص یا همه). */
   const sendToWorker = useMutation({
-    mutationFn: () =>
+    mutationFn: (assignedToId: string | null) =>
       createPickTasks({
         warehouseId,
+        assignedToId,
         lines: lines.map((l) => ({
           productId: l.productId,
           locationId: l.locationId,
@@ -310,7 +313,8 @@ export default function PosPage() {
         })),
       }),
     onSuccess: (tasks) => {
-      toast.success(`${toFa(tasks.length)} کالا برای کارگر انبار فرستاده شد`);
+      toast.success(`${toFa(tasks.length)} کالا برای کارگر فرستاده شد`);
+      setShowWorkerPicker(false);
       focusScan();
     },
     onError: () => toast.error("ارسال به کارگر ناموفق بود"),
@@ -319,7 +323,7 @@ export default function PosPage() {
   // ---------- میانبرها ----------
 
   const anyDialogOpen =
-    !!pickerStock || showCustomer || showPayment || showSearch || showQuotation;
+    !!pickerStock || showCustomer || showPayment || showSearch || showQuotation || showWorkerPicker;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -329,6 +333,7 @@ export default function PosPage() {
         setShowPayment(false);
         setShowSearch(false);
         setShowQuotation(false);
+        setShowWorkerPicker(false);
         focusScan();
         return;
       }
@@ -362,7 +367,7 @@ export default function PosPage() {
           break;
         case "F9":
           e.preventDefault();
-          if (lines.length && !sendToWorker.isPending) sendToWorker.mutate();
+          if (lines.length) setShowWorkerPicker(true);
           break;
         case "ArrowDown":
           if (lines.length) {
@@ -570,7 +575,7 @@ export default function PosPage() {
               variant="outline"
               className="h-11 justify-between"
               disabled={!lines.length || sendToWorker.isPending}
-              onClick={() => sendToWorker.mutate()}
+              onClick={() => setShowWorkerPicker(true)}
             >
               <span className="flex items-center gap-2">
                 <Send className="size-4" />
@@ -638,6 +643,14 @@ export default function PosPage() {
         open={showSearch}
         onPick={(p) => pickProduct.mutate(p)}
         onClose={() => { setShowSearch(false); focusScan(); }}
+      />
+
+      <WorkerPicker
+        open={showWorkerPicker}
+        itemCount={lines.length}
+        pending={sendToWorker.isPending}
+        onPick={(id) => sendToWorker.mutate(id)}
+        onClose={() => { setShowWorkerPicker(false); focusScan(); }}
       />
 
       <QuotationDialog

@@ -52,8 +52,9 @@ import com.warehouseos.operator.ui.components.StatusBanner
 fun ShiftHomeScreen(
     onStockIn: () -> Unit,
     onCount: () -> Unit,
-    onSell: () -> Unit,
+    onSell: (() -> Unit)? = null,
     onLocate: () -> Unit,
+    onMyWork: () -> Unit,
     onSettings: () -> Unit,
     onLogout: () -> Unit,
     viewModel: ShiftHomeViewModel = hiltViewModel(),
@@ -140,6 +141,7 @@ fun ShiftHomeScreen(
                         onCount = onCount,
                         onSell = if (viewModel.isManager) onSell else null,
                         onLocate = onLocate,
+                        onMyWork = onMyWork,
                         onNewShift = viewModel::startShift,
                     )
                 }
@@ -206,6 +208,7 @@ private fun ActiveSessionContent(
     onCount: () -> Unit,
     onSell: (() -> Unit)?,
     onLocate: () -> Unit,
+    onMyWork: () -> Unit,
     onNewShift: () -> Unit,
 ) {
     StatusBanner(
@@ -243,6 +246,15 @@ private fun ActiveSessionContent(
         text = "یافتن کالا",
         onClick = onLocate,
         icon = Icons.Filled.Search,
+        height = Dimens.hugeActionHeight,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
+
+    // کارهای من — کارگر می‌بیند چه ثبت کرده و مدیر چه تأیید/رد کرده.
+    SecondaryButton(
+        text = "کارهای من",
+        onClick = onMyWork,
+        icon = Icons.Filled.Checklist,
         height = Dimens.hugeActionHeight,
         modifier = Modifier.padding(top = Dimens.gap),
     )

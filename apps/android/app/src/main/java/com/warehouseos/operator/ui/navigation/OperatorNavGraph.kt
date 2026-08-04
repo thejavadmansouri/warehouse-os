@@ -12,6 +12,7 @@ import com.warehouseos.operator.ui.screens.count.CountScreen
 import com.warehouseos.operator.ui.screens.login.LoginScreen
 import com.warehouseos.operator.ui.screens.locate.LocateScreen
 import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
+import com.warehouseos.operator.ui.screens.mywork.MyWorkScreen
 import com.warehouseos.operator.ui.screens.sales.SalesScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
@@ -62,8 +63,8 @@ fun OperatorNavGraph(
             ShiftHomeScreen(
                 onStockIn = { navController.navigate(Routes.SCAN) },
                 onCount = { navController.navigate(Routes.COUNT) },
-                onSell = { navController.navigate(Routes.SALES) },
                 onLocate = { navController.navigate(Routes.LOCATE) },
+                onMyWork = { navController.navigate(Routes.MY_WORK) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {
@@ -81,6 +82,12 @@ fun OperatorNavGraph(
 
         composable(Routes.LOCATE) {
             LocateScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.MY_WORK) {
+            MyWorkScreen(
                 onBack = { navController.popBackStack() },
             )
         }

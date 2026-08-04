@@ -20,6 +20,14 @@ export class PickTasksController {
   constructor(private readonly service: PickTasksService) {}
 
 
+  // فهرست کارگرها برای انتخاب گیرنده — فروشنده/مدیر با اسم می‌فرستد.
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('workers')
+  workers(){
+    return this.service.listWorkers();
+  }
+
+
   // فروشنده لوکیشن کالا(ها) را برای کارگر می‌فرستد.
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post()

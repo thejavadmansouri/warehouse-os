@@ -15,6 +15,14 @@ export class PendingOperationsController {
     return this.service.sync(dto.operations, req.user?.userId);
   }
 
+  // «کارهای من» — کارگر کارهای خودش و تصمیم مدیر (تأیید/رد + دلیل) را می‌بیند.
+  // بدون این، کارگر فقط یک عدد «N در انتظار» می‌بیند و نمی‌داند مدیر چه کرده.
+  @Roles(Role.STAFF, Role.MANAGER, Role.ADMIN)
+  @Get('mobile/my-work')
+  myWork(@Query('since') since: string | undefined, @Req() req: any) {
+    return this.service.myWork(req.user?.userId, since);
+  }
+
   // Manager review queue (web admin).
   @Roles(Role.MANAGER, Role.ADMIN)
   @Get('manager/review/pending')
