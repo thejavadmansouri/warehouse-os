@@ -1216,10 +1216,20 @@ export function getQuotation(id: string): Promise<T.Quotation> {
   return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}`);
 }
 
-export function convertQuotation(id: string): Promise<T.Invoice> {
+/**
+ * تبدیل پیش‌فاکتور به فاکتور.
+ *
+ * `payments` باید فرستاده شود. سرور آن را به createInvoice پاس می‌دهد و اگر
+ * خالی برود فاکتور با `paidAmount = 0` ثبت می‌شود — یعنی هر تبدیل بی‌صدا یک
+ * بدهیِ تمام‌مبلغ می‌سازد، حتی برای فروشی که نقد تسویه شده.
+ */
+export function convertQuotation(
+  id: string,
+  payments?: T.PaymentInput[]
+): Promise<T.Invoice> {
   return apiFetch<T.Invoice>(`/sales/quotations/${encodeURIComponent(id)}/convert`, {
     method: "POST",
-    body: {},
+    body: { payments },
   });
 }
 
