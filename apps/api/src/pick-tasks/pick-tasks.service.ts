@@ -7,6 +7,7 @@ import {
 import { Prisma, PickTaskStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { PickTasksGateway } from './pick-tasks.gateway';
 
 
 export interface CreatePickTaskLine {
@@ -20,7 +21,10 @@ export interface CreatePickTaskLine {
 @Injectable()
 export class PickTasksService {
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private gateway: PickTasksGateway,
+  ) {}
 
 
   /**
@@ -89,7 +93,13 @@ export class PickTasksService {
       ),
     );
 
-    return this.findMany({ ids: created.map(c => c.id) });
+    const tasks = await this.findMany({ ids: created.map(c => c.id) });
+
+    // همان لحظه به گوشیِ کارگر push کن — تخصیص‌داده‌شده فقط برای همان کارگر،
+    // «هر کارگری» برای همه‌ی اتصال‌های زنده. اپ گوشی با این پیام فوراً زنگ می‌زند.
+    this.gateway.emitNewPickTasks(tasks, input.assignedToId);
+
+    return tasks;
   }
 
 
