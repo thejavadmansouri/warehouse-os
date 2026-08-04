@@ -2,6 +2,7 @@ package com.warehouseos.operator.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.warehouseos.operator.data.notifications.PickTaskWatcherController
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.repository.AuthRepository
 import com.warehouseos.operator.data.settings.SettingsStore
@@ -29,6 +30,7 @@ data class LoginUiState(
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val settings: SettingsStore,
+    private val watcher: PickTaskWatcherController,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState(serverUrl = settings.baseUrl()))
@@ -54,6 +56,8 @@ class LoginViewModel @Inject constructor(
                 is ApiResult.Success -> {
                     // Role gate (task 16): only operator roles may proceed.
                     if (result.data.isAllowedOperator) {
+                        // Start ringing for new pick tasks as soon as we're in.
+                        watcher.start()
                         _state.update { it.copy(isSubmitting = false, loggedIn = true) }
                     } else {
                         authRepository.logout()

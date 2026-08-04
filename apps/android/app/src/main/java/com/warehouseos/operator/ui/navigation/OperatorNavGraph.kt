@@ -1,9 +1,13 @@
 package com.warehouseos.operator.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
@@ -13,13 +17,15 @@ import com.warehouseos.operator.ui.screens.login.LoginScreen
 import com.warehouseos.operator.ui.screens.locate.LocateScreen
 import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
 import com.warehouseos.operator.ui.screens.mywork.MyWorkScreen
+import com.warehouseos.operator.ui.screens.picktasks.PickTasksScreen
 import com.warehouseos.operator.ui.screens.sales.SalesScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
 import com.warehouseos.operator.ui.screens.startup.StartupScreen
 import com.warehouseos.operator.ui.screens.voice.VoiceEntryScreen
-
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 /**
  * App navigation.
  *
@@ -30,7 +36,35 @@ import com.warehouseos.operator.ui.screens.voice.VoiceEntryScreen
 @Composable
 fun OperatorNavGraph(
     navController: NavHostController = rememberNavController(),
+    /** Set by a pick-task notification tap; opens the pick list when true. */
+    openPickTasks: StateFlow<Boolean> = MutableStateFlow(false),
+    /** Reset callback after the open request has been consumed. */
+    onPickTasksHandled: () -> Unit = {},
 ) {
+    val shouldOpenPick by openPickTasks.collectAsState()
+    val currentRoute = navController.currentBackStackEntryAsState().value?.destination?.route
+
+    /*
+     * Notification tap → open the queue.
+     *
+     * The route is part of the key on purpose. A cold start composes this while the
+     * NavHost is still on STARTUP; consuming the request there (as this used to) both
+     * failed to navigate and cleared the flag, so the tap did nothing and the worker
+     * landed on the home screen. Now the request is held until the app reaches a
+     * screen it can actually push onto, and this re-runs on every destination change.
+     */
+    LaunchedEffect(shouldOpenPick, currentRoute) {
+        if (!shouldOpenPick) return@LaunchedEffect
+        when (currentRoute) {
+            null, Routes.STARTUP, Routes.LOGIN -> return@LaunchedEffect
+            Routes.PICK_TASKS -> onPickTasksHandled()
+            else -> {
+                navController.navigate(Routes.PICK_TASKS)
+                onPickTasksHandled()
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
         startDestination = Routes.STARTUP,
@@ -42,6 +76,8 @@ fun OperatorNavGraph(
                         StartupDestination.LOGIN -> Routes.LOGIN
                         StartupDestination.SHIFT_HOME -> Routes.SHIFT_HOME
                     }
+                    // A pending notification request is picked up by the effect above
+                    // as soon as this lands on a real destination.
                     navController.navigate(target) {
                         popUpTo(Routes.STARTUP) { inclusive = true }
                     }
@@ -65,6 +101,7 @@ fun OperatorNavGraph(
                 onCount = { navController.navigate(Routes.COUNT) },
                 onLocate = { navController.navigate(Routes.LOCATE) },
                 onMyWork = { navController.navigate(Routes.MY_WORK) },
+                onPickTasks = { navController.navigate(Routes.PICK_TASKS) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {
@@ -88,6 +125,12 @@ fun OperatorNavGraph(
 
         composable(Routes.MY_WORK) {
             MyWorkScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.PICK_TASKS) {
+            PickTasksScreen(
                 onBack = { navController.popBackStack() },
             )
         }

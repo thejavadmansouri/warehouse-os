@@ -9,6 +9,16 @@
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
+    <!-- Pick-task alerts: heads-up notifications + sound + vibration (Epic 0). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Background polling while the worker is logged in (Android 14+ needs the type).
+         specialUse, not dataSync: dataSync is capped at 6h per day on Android 15 and
+         would be killed mid-shift (and crash the app if it ignored onTimeout). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Play the alert sound even when the phone is in Do-Not-Disturb. -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY" />
+
     <uses-feature android:name="android.hardware.camera.any" android:required="true" />
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 
@@ -28,6 +38,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.WarehouseOperator">
             <intent-filter>
@@ -38,6 +49,18 @@
 
         <!-- On-demand WorkManager init: remove the default initializer so our
              Hilt WorkerFactory (OperatorApplication.Configuration.Provider) is used. -->
+        <!-- Watches the worker pick queue and rings the phone on new tasks. -->
+        <service
+            android:name=".data.notifications.PickTaskWatcherService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the on-prem LAN pick-task channel open for the
+                    whole warehouse shift so the worker is alerted the moment a
+                    seller sends work. No FCM is reachable on this network." />
+        </service>
+
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"
