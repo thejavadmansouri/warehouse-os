@@ -11,6 +11,7 @@ import {
   ApproveProductRequestDto,
   CreateProductRequestDto,
 } from './dto/product-request.dto';
+import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ProductRequestsService {
@@ -159,10 +160,17 @@ export class ProductRequestsService {
       // معنا داشت و نه به‌عنوان بارکد قابل چاپ بود.
       const sku = await nextSku(this.prisma);
 
+      // بارکد داخلی + رکوردش در ProductBarcode — وگرنه بارکد کارخانه‌ای برای کالای
+      // تأییدشده جایی ثبت نمی‌شد (اسکنر فروش از این جدول هم می‌خواند).
+      // پسوند تصادفی لازم است: دو تأیید در یک میلی‌ثانیه با Date.now() تنها به
+      // unique constraint می‌خوردند.
+      const internalBarcode = `WOS${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+
       const product = await this.prisma.product.create({
         data: {
           name,
           sku,
+          internalBarcode,
           searchTokens: buildSearchTokens(name, sku, null),
           unit,
           brandId,
@@ -170,6 +178,9 @@ export class ProductRequestsService {
           vehicleModelId: vehicle?.id ?? null,
           isActive: true,
           description: req.notes ?? null,
+          barcodes: {
+            create: [{ barcode: internalBarcode, type: 'INTERNAL' }],
+          },
         },
       });
 
