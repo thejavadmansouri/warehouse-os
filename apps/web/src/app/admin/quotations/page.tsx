@@ -34,7 +34,8 @@ import {
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import { faDate, money, qty, toFa } from "@/lib/format";
-import type { Quotation } from "@/lib/types";
+import type { PaymentInput, Quotation } from "@/lib/types";
+import { PaymentDialog } from "../pos/_components/payment-dialog";
 
 const TABS: { id: string; label: string }[] = [
   { id: "ACTIVE", label: "معتبر" },
@@ -64,6 +65,13 @@ export default function QuotationsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = React.useState("ACTIVE");
   const [openId, setOpenId] = React.useState<string | null>(null);
+  /**
+   * پیش‌فاکتوری که منتظر انتخاب روش پرداخت است.
+   *
+   * تبدیل بدون پرداخت، فاکتور را با paidAmount صفر ثبت می‌کرد — یعنی هر تبدیل
+   * بی‌صدا یک بدهیِ تمام‌مبلغ می‌ساخت، حتی وقتی مشتری نقد داده بود.
+   */
+  const [payingFor, setPayingFor] = React.useState<{ id: string; total: number; hasCustomer: boolean } | null>(null);
 
   const list = useQuery({
     queryKey: ["quotations", tab],
@@ -82,9 +90,11 @@ export default function QuotationsPage() {
   };
 
   const convert = useMutation({
-    mutationFn: (id: string) => convertQuotation(id),
+    mutationFn: (v: { id: string; payments: PaymentInput[] }) =>
+      convertQuotation(v.id, v.payments),
     onSuccess: (inv) => {
       toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${money(inv.total)} تومان`);
+      setPayingFor(null);
       setOpenId(null);
       refresh();
     },
@@ -266,7 +276,14 @@ export default function QuotationsPage() {
                   <Button
                     className="flex-1"
                     disabled={q.displayStatus !== "ACTIVE" || convert.isPending}
-                    onClick={() => convert.mutate(q.id)}
+                    onClick={() =>
+                      setPayingFor({
+                        id: q.id,
+                        total: q.total,
+                        // برای نسیه لازم است: PaymentDialog بدون مشتری اجازه‌ی CREDIT نمی‌دهد.
+                        hasCustomer: !!q.customerName,
+                      })
+                    }
                   >
                     {convert.isPending ? "در حال ثبت…" : "تبدیل به فاکتور"}
                   </Button>
@@ -299,6 +316,17 @@ export default function QuotationsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* روش پرداخت — گام اجباری پیش از تبدیل. */}
+      <PaymentDialog
+        open={!!payingFor}
+        total={payingFor?.total ?? 0}
+        hasCustomer={payingFor?.hasCustomer ?? false}
+        onConfirm={(payments) =>
+          payingFor && convert.mutate({ id: payingFor.id, payments })
+        }
+        onClose={() => setPayingFor(null)}
+      />
     </div>
   );
 }
