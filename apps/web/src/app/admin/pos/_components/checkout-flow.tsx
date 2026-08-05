@@ -23,9 +23,13 @@ import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
  * دارد (F7). این مسیر برای همان ۹۰٪ فروشی است که باید در چند ثانیه تمام شود.
  */
 
+/**
+ * کارت اول است و پیش‌فرض — بیشتر فروش‌ها با کارت‌خوان تسویه می‌شود، و پیش‌فرضِ
+ * نقد یعنی فروشنده باید هر بار یک کلید اضافه بزند.
+ */
 const FAST_METHODS: { method: PaymentMethod; label: string; icon: typeof Banknote }[] = [
-  { method: "CASH", label: "نقد", icon: Banknote },
   { method: "CARD", label: "کارت", icon: CreditCard },
+  { method: "CASH", label: "نقد", icon: Banknote },
   { method: "CREDIT", label: "نسیه", icon: Clock },
 ];
 
@@ -57,7 +61,7 @@ export function CheckoutFlow({
   const [q, setQ] = useState("");
   const [debounced, setDebounced] = useState("");
   const [highlight, setHighlight] = useState(0);
-  const [method, setMethod] = useState<PaymentMethod>("CASH");
+  const [method, setMethod] = useState<PaymentMethod>("CARD");
   const [received, setReceived] = useState(0);
 
   const searchRef = useRef<HTMLInputElement>(null);
@@ -78,7 +82,7 @@ export function CheckoutFlow({
     setQ("");
     setDebounced("");
     setHighlight(0);
-    setMethod("CASH");
+    setMethod("CARD");
     setReceived(total);
   }, [open, total]);
 

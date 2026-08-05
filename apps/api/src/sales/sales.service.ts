@@ -33,6 +33,13 @@ interface InsufficientStock {
 }
 
 
+/** مکان سیستمیِ فروشِ کالای هنوز ثبت‌نشده. بیرون از سلسله‌مراتب واقعی انبار. */
+const SYSTEM_TYPE_NAME = 'سیستمی';
+const SYSTEM_TYPE_DEPTH = 99;
+const UNREGISTERED_NAME = 'موجودی ثبت‌نشده';
+const UNREGISTERED_CODE_PREFIX = 'SYS-UNREG-';
+
+
 @Injectable()
 export class SalesService {
 
@@ -204,19 +211,30 @@ export class SalesService {
         });
 
 
+        // ردیفی که مکان ندارد یعنی کالای هنوز ثبت‌نشده؛ روی مکان سیستمیِ انبار
+        // می‌نشیند. یک بار حساب می‌شود تا برای هر ردیف کوئری تکراری نزنیم.
+        const needsFallback = dto.lines.some(l => !l.locationId);
+        const fallbackLocationId = needsFallback
+          ? await this.unregisteredStockLocation(tx, dto.warehouseId)
+          : null;
+
         // هر ردیف از مسیر تک‌نقطه‌ی تغییر موجودی رد می‌شود (قانون ۱).
         // tx پاس داده می‌شود تا همه‌ی ردیف‌ها در یک تراکنش بمانند.
         for (let i = 0; i < dto.lines.length; i++) {
           const line = dto.lines[i];
+          const locationId = line.locationId ?? fallbackLocationId!;
           try {
             await this.operation.execute(
               {
                 type:'SALE',
                 productId: line.productId,
-                locationId: line.locationId,
+                locationId,
                 quantity: line.quantity,
                 unitPrice: line.unitPrice,
                 lineDiscount: line.discount ?? null,
+                // فروش هیچ‌وقت به‌خاطر عددِ سیستم متوقف نمی‌شود — جنس در انبار
+                // هست، فقط هنوز ثبت نشده. منفی‌شدن خودش گزارش می‌دهد.
+                allowNegative: true,
                 invoiceId: invoice.id,
                 userId: userId ?? null,
                 source:'POS',
@@ -232,7 +250,7 @@ export class SalesService {
                 error:'INSUFFICIENT_STOCK',
                 lineIndex:i,
                 productId: line.productId,
-                locationId: line.locationId,
+                locationId,
                 requested: line.quantity,
                 available: body.available ?? 0,
                 message:'موجودی این کالا در این مکان کافی نیست',
@@ -442,6 +460,67 @@ export class SalesService {
 
 
   // ---------- کمکی‌ها ----------
+
+  /**
+   * مکانِ سیستمیِ «موجودی ثبت‌نشده» برای این انبار — در اولین استفاده ساخته می‌شود.
+   *
+   * چرا اصلاً لازم است: هر حرکت موجودی باید یک مکان داشته باشد، ولی کالایی که
+   * هنوز وارد نرم‌افزار نشده هیچ قفسه‌ای ندارد و فروشنده هم پشت پیشخوان نمی‌داند
+   * کجاست. بدون این، یا باید فروش را متوقف کنیم یا عدد را روی یک قفسه‌ی واقعیِ
+   * بی‌ربط منفی کنیم و شمارشِ آن قفسه را خراب کنیم.
+   *
+   * این مکان عمداً در سطح ریشه و با نوعِ مخصوص خودش ساخته می‌شود تا در درخت
+   * انبار قاطیِ قفسه‌های واقعی نشود. موجودیِ منفیِ اینجا یعنی «این تعداد فروخته
+   * شد پیش از آنکه ثبت شود» — یعنی صفِ کارِ ثبتِ عقب‌افتاده.
+   */
+  private async unregisteredStockLocation(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+  ): Promise<string> {
+
+    const existing = await tx.location.findUnique({
+      where:{ code: `${UNREGISTERED_CODE_PREFIX}${warehouseId.slice(0, 8)}` },
+      select:{ id:true },
+    });
+    if (existing) return existing.id;
+
+    const warehouse = await tx.warehouse.findUnique({
+      where:{ id: warehouseId },
+      select:{ code:true },
+    });
+    if (!warehouse) {
+      throw new NotFoundException({
+        error:'WAREHOUSE_NOT_FOUND',
+        message:'انبار پیدا نشد',
+      });
+    }
+
+    // عمق ۹۹ عمداً بیرون از سلسله‌مراتب واقعی است تا با قید یکتاییِ
+    // [warehouseId, depth] انواعِ واقعیِ انبار تداخل نکند.
+    const type = await tx.locationType.upsert({
+      where:{ warehouseId_depth:{ warehouseId, depth: SYSTEM_TYPE_DEPTH } },
+      create:{ warehouseId, name: SYSTEM_TYPE_NAME, depth: SYSTEM_TYPE_DEPTH },
+      update:{},
+    });
+
+    const code = `${UNREGISTERED_CODE_PREFIX}${warehouseId.slice(0, 8)}`;
+    const created = await tx.location.create({
+      data:{
+        name: UNREGISTERED_NAME,
+        code,
+        barcode: `LOC-${code}`,
+        path: `${warehouse.code} > ${UNREGISTERED_NAME}`,
+        depth: SYSTEM_TYPE_DEPTH,
+        warehouseId,
+        typeId: type.id,
+      },
+      select:{ id:true },
+    });
+
+    return created.id;
+  }
+
+
 
   /**
    * سود = مجموع (قیمت فروش - آخرین قیمت خرید) × تعداد.
