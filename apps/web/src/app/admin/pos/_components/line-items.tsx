@@ -67,17 +67,19 @@ export function LineItems({
     // نام کالا truncate می‌شود. min-w هم هست تا در پنجره‌ی باریک به‌جای له‌شدن،
     // جدول افقی اسکرول شود.
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full min-w-[900px] table-fixed text-sm">
+      <table className="w-full min-w-[720px] table-fixed text-sm">
         <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
           <tr className="text-muted-foreground">
             <th className="p-2 text-start font-medium">کالا</th>
-            <th className="w-24 p-2 text-start font-medium">تعداد</th>
-            <th className="w-48 p-2 text-start font-medium whitespace-nowrap">
+            <th className="w-16 p-2 text-start font-medium">تعداد</th>
+            <th className="w-36 p-2 text-start font-medium whitespace-nowrap">
               قیمت واحد <span className="font-normal opacity-70">(تومان)</span>
             </th>
-            <th className="w-44 p-2 text-start font-medium">تخفیف</th>
-            <th className="w-44 p-2 text-end font-medium">جمع</th>
-            <th className="w-12 p-2" />
+            <th className="w-32 p-2 text-start font-medium">تخفیف</th>
+            {/* جمع آخرین ستون قبل از حذف است؛ در چیدمان راست‌به‌چپ اولین چیزی
+                است که با سرریز افقی بریده می‌شود، پس عرض کل باید جا شود. */}
+            <th className="w-36 p-2 text-end font-medium">جمع</th>
+            <th className="w-10 p-2" />
           </tr>
         </thead>
         <tbody>
@@ -99,7 +101,17 @@ export function LineItems({
                 <td className="p-2">
                   <div className="truncate font-medium">{l.productName}</div>
                   <div className="truncate text-xs text-muted-foreground">
-                    {l.locationPath} · موجودی {qty(l.available)}
+                    {/*
+                      کالای ثبت‌نشده قفسه ندارد و موجودی‌اش نامعلوم است — نه صفر و
+                      نه یک عدد بزرگ. نشان‌دادن عدد برای آن فقط گمراه‌کننده است.
+                    */}
+                    {l.locationId ? (
+                      <>
+                        {l.locationPath} · موجودی {qty(l.available)}
+                      </>
+                    ) : (
+                      <span className="text-amber-600">در سیستم ثبت نشده</span>
+                    )}
                     {errorLine === i && (
                       <span className="ms-2 text-destructive">موجودی کافی نیست</span>
                     )}
