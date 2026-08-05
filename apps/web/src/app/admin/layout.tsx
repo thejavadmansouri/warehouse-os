@@ -1,13 +1,14 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/auth-store";
 import { AdminSidebar } from "@/components/layout/admin-sidebar";
 import { AdminTopbar } from "@/components/layout/admin-topbar";
 import { LoadingState } from "@/components/states";
 import { cn } from "@/lib/utils";
 import { BackupCloseGuard } from "@/components/backup-close-guard";
+import { isSalesFocused } from "@/lib/nav";
 
 export default function AdminLayout({
   children,
@@ -15,9 +16,25 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isPos = pathname === "/admin/pos";
   const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.user?.role);
   const [hydrated, setHydrated] = React.useState(false);
+  /**
+   * برای فروشنده، پنل یک ابزار فروش است نه پنل مدیریت.
+   *
+   * سایدبار روی ویندوزِ پیشخوان فقط عرض می‌گیرد و حواس را پرت می‌کند، پس
+   * پیش‌فرض جمع است. باز کردنش ممکن است — قفل نیست، فقط از سر راه کنار رفته.
+   */
   const [collapsed, setCollapsed] = React.useState(false);
+  const [appliedRoleDefault, setAppliedRoleDefault] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!hydrated || appliedRoleDefault || !role) return;
+    if (isSalesFocused(role)) setCollapsed(true);
+    setAppliedRoleDefault(true);
+  }, [hydrated, role, appliedRoleDefault]);
 
   React.useEffect(() => {
     setHydrated(true);
@@ -55,7 +72,11 @@ export default function AdminLayout({
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((c) => !c)}
         />
-        <main className="flex-1 p-4 sm:p-6">{children}</main>
+        {/*
+          صندوق فروش خودش ارتفاع کامل را مدیریت می‌کند و padding بیرونی از
+          ارتفاعِ در دسترسش کم می‌کند. بقیه‌ی صفحه‌ها padding عادی می‌گیرند.
+        */}
+        <main className={cn("flex-1", isPos ? "p-0" : "p-4 sm:p-6")}>{children}</main>
         {/* در مرورگر بی‌اثر است؛ فقط داخل قاب دسکتاپ فعال می‌شود. */}
         <BackupCloseGuard />
       </div>

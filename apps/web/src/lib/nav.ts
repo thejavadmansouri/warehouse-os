@@ -69,7 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "داشبورد",
         href: "/admin",
         icon: LayoutDashboard,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
     ],
   },
@@ -93,13 +93,13 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "برندها",
         href: "/admin/brands",
         icon: Tag,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "مدل‌های خودرو",
         href: "/admin/vehicle-models",
         icon: Car,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "لیبل‌های در انتظار",
@@ -111,7 +111,7 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "کاتالوگ قطعات",
         href: "/admin/part-catalog",
         icon: BookAudio,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
     ],
   },
@@ -163,13 +163,13 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "موقعیت‌ها / قفسه‌ها",
         href: "/admin/locations",
         icon: MapPin,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "انواع موقعیت",
         href: "/admin/location-types",
         icon: Layers,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
     ],
   },
@@ -186,7 +186,7 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "ورود اکسل",
         href: "/admin/imports",
         icon: FileSpreadsheet,
-        roles: "ALL",
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "پشتیبان‌گیری",
@@ -217,4 +217,36 @@ export function filterNavByRole(
       ),
     }))
     .filter((s) => s.items.length > 0);
+}
+
+/**
+ * صفحه‌ای که هر نقش بعد از ورود روی آن فرود می‌آید.
+ *
+ * فروشنده باید مستقیم پشت صندوق بنشیند، نه اینکه از داشبورد رد شود — روی
+ * ویندوزِ پیشخوان، هر کلیک اضافه یعنی تأخیر در فروش.
+ *
+ * مدیر کل هم فعلاً روی صندوق فرود می‌آید چون خودش فروشنده است؛ دسترسی‌اش به
+ * بقیه‌ی پنل کامل می‌ماند و فقط نقطه‌ی شروع عوض می‌شود.
+ */
+export function landingPathForRole(role: Role | undefined): string {
+  switch (role) {
+    case "SALES":
+    case "ADMIN":
+    case "MANAGER":
+      return "/admin/pos";
+    // انباردار کارش روی گوشی است؛ اگر از وب وارد شد، «یافتن کالا» تنها چیزی
+    // است که واقعاً به کارش می‌آید.
+    case "STAFF":
+      return "/admin/inventory";
+    default:
+      return "/admin";
+  }
+}
+
+/**
+ * نقش‌هایی که پنل برایشان یک ابزار فروش است، نه یک پنل مدیریت.
+ * برای اینها پوسته‌ی ادمین جمع می‌شود تا تمرکز روی فروش بماند.
+ */
+export function isSalesFocused(role: Role | undefined): boolean {
+  return role === "SALES";
 }
