@@ -8,8 +8,8 @@
     خروجی: پوشه‌ی `payload\` که Inno Setup آن را بسته‌بندی می‌کند.
 
     پیش‌نیازها (خودت دانلود کرده‌ای):
-      -NodeZip   node-v22.x-win-x64.zip
-      -PgZip     postgresql-16.x-windows-x64-binaries.zip
+      -NodeZip   node-v24.x-win-x64.zip
+      -PgZip     postgresql-18.x-windows-x64-binaries.zip
       -NssmZip   nssm-2.24.zip
 
     مثال:

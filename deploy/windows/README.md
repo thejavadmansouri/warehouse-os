@@ -12,6 +12,8 @@
 |---|---|
 | Node.js **24** — **ZIP** نه MSI | nodejs.org/en/download |
 | PostgreSQL **18** — **Binary ZIP** نه Installer | enterprisedb.com/download-postgresql-binaries |
+| Inno Setup | jrsoftware.org/isdl.php |
+| NSSM 2.24 | nssm.cc/download |
 
 نسخه‌ها باید **همان‌هایی باشند که توسعه با آن‌ها انجام شده** (Node 24، Postgres 18)،
 نه قدیمی‌تر:
@@ -24,8 +26,6 @@
 
 ویندوز ۷ فروشنده هیچ ربطی به این نسخه‌ها ندارد: آنجا نه Node اجرا می‌شود نه
 Postgres، فقط کروم.
-| Inno Setup | jrsoftware.org/isdl.php |
-| NSSM 2.24 | nssm.cc/download |
 
 Node را روی خود لپ‌تاپ هم نصب کن (یا به PATH اضافه‌اش کن) — برای اجرای build لازم است.
 
