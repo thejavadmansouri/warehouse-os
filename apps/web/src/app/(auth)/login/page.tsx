@@ -8,6 +8,7 @@ import { z } from "zod";
 import { Wrench, Loader2 } from "lucide-react";
 import { login } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
+import { landingPathForRole } from "@/lib/nav";
 import { ApiException } from "@/lib/api-error-messages";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ export default function LoginPage() {
   const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
   const token = useAuthStore((s) => s.token);
+  const user = useAuthStore((s) => s.user);
   const [hydrated, setHydrated] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -57,15 +59,16 @@ export default function LoginPage() {
   React.useEffect(() => setHydrated(true), []);
 
   React.useEffect(() => {
-    if (hydrated && token) router.replace("/admin");
-  }, [hydrated, token, router]);
+    if (hydrated && token) router.replace(landingPathForRole(user?.role));
+  }, [hydrated, token, user, router]);
 
   const onSubmit = async (values: FormValues) => {
     setError(null);
     try {
       const res = await login(values.username, values.password);
       setAuth(res.access_token, res.user);
-      router.replace("/admin");
+      // نقشِ همین پاسخ، نه state — setAuth هنوز در همین tick ننشسته است.
+      router.replace(landingPathForRole(res.user?.role));
     } catch (e) {
       if (e instanceof ApiException) {
         setError(e.message);

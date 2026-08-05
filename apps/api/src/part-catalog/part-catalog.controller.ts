@@ -1,3 +1,5 @@
+import { Roles } from '../auth/roles.decorator';
+import { Role } from '@prisma/client';
 import {
   Body,
   Controller,
@@ -23,6 +25,7 @@ export class PartCatalogController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post()
   create(
     @Body() dto:CreatePartCatalogDto
@@ -36,6 +39,7 @@ export class PartCatalogController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
   @Get()
   findAll(){
 
@@ -47,6 +51,7 @@ export class PartCatalogController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
   @Get('search')
   search(
     @Query('q') q:string
@@ -60,6 +65,7 @@ export class PartCatalogController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Patch(':id')
   update(
     @Param('id') id:string,
@@ -77,6 +83,7 @@ export class PartCatalogController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Delete(':id')
   remove(
     @Param('id') id:string
