@@ -190,8 +190,13 @@ export default function PosPage() {
 
         if (i >= 0) {
           const next = [...prev];
-          const q = Math.min(next[i].quantity + 1, s.quantity);
-          if (q === next[i].quantity) {
+          // کالای ثبت‌نشده قفسه ندارد و موجودی‌اش نامعلوم است — سقف روی آن
+          // بی‌معنی است، وگرنه تعداد روی صفر قفل می‌شود.
+          const unregistered = !s.locationId;
+          const q = unregistered
+            ? next[i].quantity + 1
+            : Math.min(next[i].quantity + 1, s.quantity);
+          if (!unregistered && q === next[i].quantity) {
             toast.warning(`بیش از موجودی این مکان نمی‌شود (${qty(s.quantity)})`);
           }
           next[i] = { ...next[i], quantity: q };
@@ -272,9 +277,10 @@ export default function PosPage() {
             locationName: "",
             locationCode: "",
             locationBarcode: "",
-            locationPath: "ثبت‌نشده",
-            // بدون سقف: موجودیِ سیستم صفر است ولی جنس هست.
-            quantity: Number.MAX_SAFE_INTEGER,
+            locationPath: "",
+            // موجودی نامعلوم است، نه بی‌نهایت. عددِ ساختگی همان چیزی بود که
+            // «موجودی ۹٬۰۰۷٬۱۹۹٬۲۵۴٬۷۴۰٬۹۹۱» را روی صفحه می‌آورد.
+            quantity: 0,
           }
         );
         toast.warning(`«${r.name}» در سیستم ثبت نشده — بدون قفسه ثبت می‌شود`);
