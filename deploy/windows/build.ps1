@@ -23,6 +23,25 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+<#
+    نسخه‌ی Node که بسته‌بندی می‌شود باید با نسخه‌ای که `npm install` را اجرا
+    می‌کند یکی باشد.
+
+    باینری‌های بومی (sharp، argon2، موتور پریزما) برای یک ABI مشخص ساخته
+    می‌شوند. اگر نصب با Node 24 (ABI 137) انجام شود و node.exe نسخه‌ی ۲۲
+    (ABI 127) داخل بسته برود، برنامه روی سرور مشتری با خطای «برای نسخه‌ی
+    دیگری کامپایل شده» بالا نمی‌آید — و آن خطا موقع ساخت دیده نمی‌شود، سر
+    مشتری دیده می‌شود.
+
+    پس همین‌جا بلند و واضح شکست بخور، نه آنجا بی‌صدا.
+#>
+$REQUIRED_NODE_MAJOR = 24
+
+$buildNodeMajor = [int](node -e "process.stdout.write(String(process.versions.node.split('.')[0]))")
+if ($buildNodeMajor -ne $REQUIRED_NODE_MAJOR) {
+    throw "این پروژه با Node $REQUIRED_NODE_MAJOR ساخته می‌شود ولی Node $buildNodeMajor روی PATH است. نسخه‌ی درست را نصب کن."
+}
+
 $here    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repo    = Resolve-Path (Join-Path $here '..\..')
 $payload = Join-Path $here 'payload'
@@ -92,6 +111,12 @@ $tmp = Join-Path $staging 'node'
 Expand-Archive -Path $NodeZip -DestinationPath $tmp -Force
 $nodeExe = Get-ChildItem $tmp -Filter node.exe -Recurse | Select-Object -First 1
 if (-not $nodeExe) { throw 'node.exe در آرشیو پیدا نشد' }
+
+# همان بررسی، این بار روی خودِ فایلی که بسته‌بندی می‌شود.
+$zipNodeMajor = [int](& $nodeExe.FullName -e "process.stdout.write(String(process.versions.node.split('.')[0]))")
+if ($zipNodeMajor -ne $REQUIRED_NODE_MAJOR) {
+    throw "آرشیو Node نسخه‌ی $zipNodeMajor است ولی وابستگی‌ها با Node $REQUIRED_NODE_MAJOR نصب شده‌اند. باینری‌های بومی روی سرور بالا نمی‌آیند."
+}
 New-Item -ItemType Directory -Force -Path (Join-Path $payload 'app\node') | Out-Null
 Copy-Item $nodeExe.FullName (Join-Path $payload 'app\node\node.exe')
 
