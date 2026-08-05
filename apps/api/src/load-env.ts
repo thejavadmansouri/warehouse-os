@@ -14,7 +14,18 @@
 import { existsSync } from 'fs';
 import { resolve } from 'path';
 
-const envPath = resolve(process.cwd(), '.env');
+/*
+ * مسیر فایل تنظیمات.
+ *
+ * در نصب ویندوز، تنظیمات در `C:\WarehouseOS\config\.env` است — بیرون از پوشه‌ای
+ * که آپدیت جایگزینش می‌کند. سرویس این متغیر را ست می‌کند تا فایل همان‌جا خوانده
+ * شود و ویرایش دستی‌اش با یک ری‌استارت اثر کند.
+ *
+ * در توسعه ست نمی‌شود و مثل قبل کنار پروژه گشته می‌شود.
+ */
+const envPath = process.env.WOS_ENV_FILE
+  ? resolve(process.env.WOS_ENV_FILE)
+  : resolve(process.cwd(), '.env');
 
 if (existsSync(envPath) && typeof process.loadEnvFile === 'function') {
   // مقادیری که از قبل در محیط هستند برنده‌اند — تنظیمات سرویس بر فایل مقدم است.
