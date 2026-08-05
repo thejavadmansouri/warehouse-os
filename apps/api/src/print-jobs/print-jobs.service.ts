@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { buildThermalLabelHtml } from '../labels/label-template';
 import { LabelsService } from '../labels/labels.service';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
@@ -86,14 +87,15 @@ export class PrintJobsService {
 
       try {
 
-        const png =
-          await this.labelsService.locationLabelPng(
-            item.location.id,
-          );
+        // خروجی HTML است نه PNG: رندر تصویری Puppeteer می‌خواست و Puppeteer از
+        // پروژه حذف شد (۳۰۰ مگابایت Chromium داخل نصب‌کننده‌ی ویندوز). لیبل
+        // قفسه روی کاغذ A6 و از مرورگر چاپ می‌شود.
+        const label = await this.labelsService.locationLabel(item.location.id);
+        const png = Buffer.from(buildThermalLabelHtml(label, 384), 'utf8');
 
 
         const filename =
-          `${String(printed + 1).padStart(4,'0')}-${item.location.code}.png`;
+          `${String(printed + 1).padStart(4,'0')}-${item.location.code}.html`;
 
 
         const filepath =

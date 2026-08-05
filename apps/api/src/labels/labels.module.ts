@@ -3,7 +3,8 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { LabelsController } from './labels.controller';
 import { LabelsService } from './labels.service';
 import { ProductsService } from '../products/products.service';
-import { PrinterRenderService } from './printer-render.service';
+import { TsplService } from './tspl.service';
+import { PrinterTransportService } from './printer-transport.service';
 
 @Module({
   imports: [PrismaModule],
@@ -11,11 +12,13 @@ import { PrinterRenderService } from './printer-render.service';
   providers: [
     ProductsService,
     LabelsService,
-    PrinterRenderService,
+    TsplService,
+    PrinterTransportService,
   ],
   exports: [
     LabelsService,
-    PrinterRenderService,
+    TsplService,
+    PrinterTransportService,
   ],
 })
 export class LabelsModule {}

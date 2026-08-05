@@ -1048,6 +1048,14 @@ model LabelSettings {
   showBarcodeText Boolean  @default(true)
   /// خط‌های برش برای کاغذ A4 معمولی
   cropMarks       Boolean  @default(false)
+
+  /// --- پرینتر حرارتی لیبل (TSPL) ---
+  /// نام پرینتر در ویندوز، وقتی با USB به همین سرور وصل است.
+  printerName     String?
+  /// آدرس شبکه، وقتی پرینتر روی LAN است. اگر پر باشد بر printerName اولویت دارد.
+  printerHost     String?
+  printerPort     Int?     @default(9100)
+
   updatedAt       DateTime @updatedAt
 }
 
