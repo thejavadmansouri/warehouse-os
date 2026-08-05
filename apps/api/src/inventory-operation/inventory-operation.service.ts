@@ -36,6 +36,7 @@ export class InventoryOperationService {
       sessionId,
       voiceRecordId,
       unitPrice,
+      lineDiscount,
       invoiceId
     } = dto;
 
@@ -99,6 +100,11 @@ export class InventoryOperationService {
       // قیمت واحد فقط برای فروش معنا دارد؛ برای بقیه‌ی حرکت‌ها null می‌ماند
       unitPrice:
         (type === 'SALE' && unitPrice != null) ? Number(unitPrice) : null,
+
+      // تخفیف ردیف هم فقط برای فروش. بدون این، فاکتور چاپی نمی‌تواند نشان دهد
+      // تخفیف روی کدام قلم بوده و جمع ردیف‌ها با مبلغ فاکتور نمی‌خواند.
+      lineDiscount:
+        (type === 'SALE' && lineDiscount != null) ? Number(lineDiscount) : null,
 
       // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال). برای بقیه null.
       invoiceId: invoiceId ?? null

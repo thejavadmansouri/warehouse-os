@@ -216,6 +216,7 @@ export class SalesService {
                 locationId: line.locationId,
                 quantity: line.quantity,
                 unitPrice: line.unitPrice,
+                lineDiscount: line.discount ?? null,
                 invoiceId: invoice.id,
                 userId: userId ?? null,
                 source:'POS',
@@ -377,7 +378,7 @@ export class SalesService {
       });
     }
 
-    return invoice;
+    return { ...invoice, customer: withFullName(invoice.customer) };
   }
 
 
@@ -434,7 +435,7 @@ export class SalesService {
     ]);
 
     return {
-      data,
+      data: data.map(inv => ({ ...inv, customer: withFullName(inv.customer) })),
       meta:{ total, page, pageSize, pageCount: Math.ceil(total / pageSize) },
     };
   }
@@ -540,4 +541,21 @@ export class SalesService {
 
     return null;
   }
+}
+
+/**
+ * `fullName` ستون دیتابیس نیست؛ از firstName/lastName ساخته می‌شود.
+ *
+ * سرویس مشتری‌ها این کار را می‌کرد ولی سرویس فروش نه، پس هر جایی که فاکتور
+ * برمی‌گشت نامِ مشتری undefined بود و کلاینت روی «مشتری نقدی» می‌افتاد — از
+ * جمله روی فاکتورِ چاپی که دست مشتری می‌رسد.
+ */
+function withFullName<T extends { firstName: string; lastName?: string | null } | null>(
+  customer: T,
+): T extends null ? null : T & { fullName: string } {
+  if (!customer) return null as never;
+  return {
+    ...customer,
+    fullName: [customer.firstName, customer.lastName].filter(Boolean).join(' '),
+  } as never;
 }
