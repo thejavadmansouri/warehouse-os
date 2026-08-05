@@ -311,7 +311,14 @@ export default function PosPage() {
       });
     },
     onSuccess: (inv) => {
-      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${toman(inv.total)}`);
+      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${toman(inv.total)}`, {
+        action: {
+          label: "چاپ فاکتور",
+          // پنجره‌ی جدا، تا سبدِ خالی‌شده و فوکوسِ اسکن سر جایشان بمانند.
+          onClick: () => window.open(`/admin/print/invoice/${inv.id}`, "_blank"),
+        },
+        duration: 8000,
+      });
       setLines([]);
       setCustomer(null);
       setInvoiceDiscountInput(NO_DISCOUNT);

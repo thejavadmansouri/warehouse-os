@@ -763,6 +763,12 @@ export interface Invoice {
     id: string;
     quantity: number;
     unitPrice?: number | null;
+    /**
+     * تخفیف همین ردیف به تومان.
+     * برای فاکتورهای پیش از افزوده‌شدن این ستون null است — در آن حالت فقط
+     * سرجمعِ تخفیف‌های ردیفی از اختلاف جمع ردیف‌ها با subtotal قابل استخراج است.
+     */
+    lineDiscount?: number | null;
     product: { id: string; name: string; sku?: string | null; unit?: string | null };
     location: { id: string; name: string; code: string; path: string };
   }[];

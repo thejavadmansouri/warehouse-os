@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Ban, Loader2 } from "lucide-react";
+import { Ban, Loader2, Printer } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -127,7 +127,7 @@ export function RecentInvoices({
                     <th className="p-2 text-start font-medium">مشتری</th>
                     <th className="p-2 text-start font-medium">مبلغ</th>
                     <th className="p-2 text-start font-medium">مانده</th>
-                    <th className="w-24 p-2" />
+                    <th className="w-36 p-2" />
                   </tr>
                 </thead>
                 <tbody>
@@ -166,16 +166,29 @@ export function RecentInvoices({
                           )}
                         </td>
                         <td className="p-2">
-                          {!cancelled && (
+                          <div className="flex items-center gap-1">
+                            {/* چاپ مجدد — برای فاکتور باطل‌شده هم لازم است. */}
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => setCancelling(inv)}
+                              title="چاپ فاکتور"
+                              onClick={() =>
+                                window.open(`/admin/print/invoice/${inv.id}`, "_blank")
+                              }
                             >
-                              <Ban className="size-3.5 text-destructive" />
-                              <span className="ms-1 text-xs">ابطال</span>
+                              <Printer className="size-3.5" />
                             </Button>
-                          )}
+                            {!cancelled && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setCancelling(inv)}
+                              >
+                                <Ban className="size-3.5 text-destructive" />
+                                <span className="ms-1 text-xs">ابطال</span>
+                              </Button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
