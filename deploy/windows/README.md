@@ -10,8 +10,20 @@
 
 | | از کجا |
 |---|---|
-| Node.js 22 LTS — **ZIP** نه MSI | nodejs.org/en/download |
-| PostgreSQL 16 — **Binary ZIP** نه Installer | enterprisedb.com/download-postgresql-binaries |
+| Node.js **24** — **ZIP** نه MSI | nodejs.org/en/download |
+| PostgreSQL **18** — **Binary ZIP** نه Installer | enterprisedb.com/download-postgresql-binaries |
+
+نسخه‌ها باید **همان‌هایی باشند که توسعه با آن‌ها انجام شده** (Node 24، Postgres 18)،
+نه قدیمی‌تر:
+
+- دامپ `pg_dump -Fc` از پستگرس ۱۸ در نسخه‌ی ۱۶ **قابل بازیابی نیست**. با نسخه‌ی
+  متفاوت، انتقال داده بین محیط توسعه و سرور مشتری یک‌طرفه می‌شود.
+- باینری‌های بومی (sharp، argon2، پریزما) به ABI نود گره خورده‌اند. `build.ps1`
+  خودش بررسی می‌کند و اگر نسخه‌ی نصب و نسخه‌ی بسته‌بندی‌شده یکی نباشد شکست
+  می‌خورد — چون آن خطا در غیر این صورت سرِ مشتری ظاهر می‌شود، نه موقع ساخت.
+
+ویندوز ۷ فروشنده هیچ ربطی به این نسخه‌ها ندارد: آنجا نه Node اجرا می‌شود نه
+Postgres، فقط کروم.
 | Inno Setup | jrsoftware.org/isdl.php |
 | NSSM 2.24 | nssm.cc/download |
 
