@@ -1,9 +1,14 @@
-; نصب‌کننده‌ی Warehouse OS برای سرور ویندوز.
+; Warehouse OS installer for the Windows server.
 ;
-; قبل از Compile باید `build.ps1` اجرا شده و پوشه‌ی `payload` ساخته شده باشد.
+; ASCII ONLY. Inno Setup 6 reads a .iss without a BOM using the system ANSI
+; codepage, so non-ASCII here becomes mojibake in shortcut names and messages.
+; The Persian labels the customer sees are created by first-run.ps1 from code
+; points instead. Persian documentation lives in README.md.
 ;
-; چیدمان عمدی است: فقط `app` هنگام آپدیت جایگزین می‌شود. `data`، `config` و
-; `backups` مالِ مشتری‌اند و نصب‌کننده هرگز دستشان نمی‌زند.
+; Run `build.ps1` first -- it produces the `payload` folder this packages.
+;
+; The layout is deliberate: only `app` is replaced on update. `data`, `config`
+; and `backups` belong to the customer and the installer never touches them.
 
 #define AppName "Warehouse OS"
 #define AppVersion "0.2.0"
@@ -13,46 +18,55 @@
 AppName={#AppName}
 AppVersion={#AppVersion}
 DefaultDirName={#AppRoot}
-; مسیر ثابت است چون اسکریپت‌های سرویس و آپدیت رویش حساب می‌کنند.
+; The path is fixed because the service and update scripts depend on it.
 DisableDirPage=yes
 DefaultGroupName={#AppName}
 OutputBaseFilename=WarehouseOS-Setup-{#AppVersion}
 Compression=lzma2/max
 SolidCompression=yes
-; پستگرس و سرویس ویندوز هر دو دسترسی مدیر می‌خواهند.
+; PostgreSQL and Windows services both need administrator rights.
 PrivilegesRequired=admin
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
 
 [Languages]
-Name: "fa"; MessagesFile: "compiler:Default.isl"
+; Inno ships no Persian translation; the wizard is English. The application
+; itself is Persian, and this installer is run by the integrator, not by
+; warehouse staff.
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-; کد و رانتایم‌ها — اینها با هر آپدیت عوض می‌شوند.
+; Code and runtimes -- these are what an update replaces.
 Source: "payload\app\*";     DestDir: "{app}\app";     Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "payload\pgsql\*";   DestDir: "{app}\pgsql";   Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "payload\scripts\*"; DestDir: "{app}\scripts"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "payload\nssm.exe";  DestDir: "{app}";         Flags: ignoreversion
 
 [Dirs]
-; داده و تنظیمات مشتری. `uninsneveruninstall` یعنی حتی حذف برنامه هم
-; دیتابیس و بکاپ‌ها را پاک نمی‌کند — این عمدی است.
+; Customer data and settings. `uninsneveruninstall` means even removing the
+; program leaves the database and the backups alone -- that is deliberate.
 Name: "{app}\data";     Flags: uninsneveruninstall
 Name: "{app}\config";   Flags: uninsneveruninstall
 Name: "{app}\backups";  Flags: uninsneveruninstall
 Name: "{app}\versions"; Flags: uninsneveruninstall
 
 [Run]
-; راه‌اندازی اولیه. اگر config\.env از قبل باشد خودش رد می‌شود، پس اجرای
-; دوباره‌ی نصب‌کننده روی نصب موجود دیتابیس را خراب نمی‌کند.
+; First-time setup. It skips itself if config\.env already exists, so rerunning
+; the installer over an existing install cannot damage the database.
 Filename: "powershell.exe"; \
   Parameters: "-ExecutionPolicy Bypass -NoProfile -File ""{app}\scripts\first-run.ps1"" -Root ""{app}"""; \
-  StatusMsg: "در حال راه‌اندازی دیتابیس و سرویس‌ها…"; \
+  StatusMsg: "Setting up the database and services..."; \
   Flags: waituntilterminated
 
+; The console window closes with the installer, so hand the operator the
+; addresses and the admin password location as a file they can read afterwards.
+Filename: "notepad.exe"; Parameters: """{app}\INSTALL-INFO.txt"""; \
+  Description: "Show the server address and next steps"; \
+  Flags: postinstall nowait skipifsilent
+
 [UninstallRun]
-; سرویس‌ها باید قبل از حذف فایل‌ها برداشته شوند، وگرنه فایل‌ها قفل می‌مانند.
+; Services must be removed before the files, or the files stay locked.
 Filename: "{app}\nssm.exe"; Parameters: "stop WarehouseOS-Web";   Flags: runhidden; RunOnceId: "stopWeb"
 Filename: "{app}\nssm.exe"; Parameters: "stop WarehouseOS-API";   Flags: runhidden; RunOnceId: "stopApi"
 Filename: "{app}\nssm.exe"; Parameters: "stop WarehouseOS-DB";    Flags: runhidden; RunOnceId: "stopDb"
@@ -60,6 +74,31 @@ Filename: "{app}\nssm.exe"; Parameters: "remove WarehouseOS-Web confirm"; Flags:
 Filename: "{app}\nssm.exe"; Parameters: "remove WarehouseOS-API confirm"; Flags: runhidden; RunOnceId: "rmApi"
 Filename: "{app}\nssm.exe"; Parameters: "remove WarehouseOS-DB confirm";  Flags: runhidden; RunOnceId: "rmDb"
 
-[Icons]
-Name: "{group}\پنل فروش"; Filename: "http://localhost:3001"
-Name: "{group}\پوشه‌ی نصب"; Filename: "{app}"
+[UninstallDelete]
+; first-run.ps1 creates the shortcuts, so Inno does not know about them. The
+; folder is removed by name, which works whatever the Persian labels are.
+Type: filesandordirs; Name: "{group}"
+Type: files;          Name: "{app}\INSTALL-INFO.txt"
+
+[Code]
+{
+  Stop the services before any file is copied.
+
+  Without this, reinstalling or upgrading over a running install fails: node.exe
+  and postgres.exe hold app\ and pgsql\ open, and Inno cannot replace a locked
+  file. Returning an empty string means "carry on".
+}
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  Nssm: String;
+begin
+  Result := '';
+  Nssm := ExpandConstant('{app}\nssm.exe');
+  if FileExists(Nssm) then
+  begin
+    Exec(Nssm, 'stop WarehouseOS-Web', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'stop WarehouseOS-API', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    Exec(Nssm, 'stop WarehouseOS-DB',  '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  end;
+end;

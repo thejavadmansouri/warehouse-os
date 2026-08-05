@@ -30,7 +30,14 @@ async function bootstrap() {
     credentials: true,
   });
 
-  await app.listen(3000);
-  console.log('🚀 Backend NestJS running on http://127.0.0.1:3000');
+  // The Windows service passes PORT, and the installer opens the firewall for
+  // that same port. Hardcoding 3000 here meant a chosen port was silently
+  // ignored and the open firewall port led nowhere.
+  const port = Number(process.env.PORT) || 3000;
+
+  // Bound on every interface, not just loopback: the worker phones and the
+  // seller PC reach this over the warehouse LAN.
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 Backend NestJS listening on 0.0.0.0:${port}`);
 }
 bootstrap();
