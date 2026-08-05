@@ -103,8 +103,11 @@ class ShiftHomeViewModel @Inject constructor(
     }
 
     fun logout() {
-        sessionRepository.endShift()
-        authRepository.logout()
+        // logout حالا سرور را هم خبر می‌کند، پس باید در کوروتین اجرا شود.
+        viewModelScope.launch {
+            sessionRepository.endShift()
+            authRepository.logout()
+        }
     }
 
     companion object {

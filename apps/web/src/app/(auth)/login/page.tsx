@@ -28,6 +28,17 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export default function LoginPage() {
+  /*
+    از query string خوانده می‌شود نه از state، چون apiFetch با یک ریدایرکتِ کاملِ
+    مرورگر به اینجا می‌آید و هیچ state ای زنده نمی‌ماند.
+  */
+  const [sessionReplaced, setSessionReplaced] = React.useState(false);
+  React.useEffect(() => {
+    setSessionReplaced(
+      new URLSearchParams(window.location.search).get("reason") === "session"
+    );
+  }, []);
+
   const router = useRouter();
   const setAuth = useAuthStore((s) => s.setAuth);
   const token = useAuthStore((s) => s.token);
@@ -90,6 +101,19 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+              {/*
+                بیرون‌افتادن به‌خاطر ورود از دستگاه دیگر، خرابی نیست. بدون این
+                توضیح، کاربر فکر می‌کند سیستم قطع شده و دوباره تلاش می‌کند.
+              */}
+              {sessionReplaced ? (
+                <Alert>
+                  <AlertDescription>
+                    این حساب روی دستگاه دیگری وارد شد، برای همین از اینجا خارج شدید.
+                    هر حساب هم‌زمان فقط روی یک دستگاه کار می‌کند.
+                  </AlertDescription>
+                </Alert>
+              ) : null}
+
               {error ? (
                 <Alert variant="destructive">
                   <AlertDescription>{error}</AlertDescription>

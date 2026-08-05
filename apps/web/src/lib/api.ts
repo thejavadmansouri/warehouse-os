@@ -111,7 +111,15 @@ async function apiFetch<R>(path: string, init: ApiRequestInit = {}): Promise<R> 
         !window.location.pathname.startsWith("/login")
       ) {
         useAuthStore.getState().logout();
-        window.location.href = "/login";
+        /*
+         * دلیلِ خروج را با خودمان می‌بریم.
+         *
+         * هر حساب فقط روی یک دستگاه فعال است، پس بیرون‌افتادنِ ناگهانی معمولاً
+         * یعنی همین حساب جای دیگری وارد شده — نه اینکه چیزی خراب شده باشد.
+         * بدون این پیام، کاربر فکر می‌کند سیستم قطع شده است.
+         */
+        const replaced = e.code === "SESSION_REPLACED";
+        window.location.href = replaced ? "/login?reason=session" : "/login";
       }
     }
     throw e;
@@ -154,6 +162,14 @@ export async function login(
 // طبق بخش ۴ — GET /auth/me
 export function getMe(): Promise<T.AuthMeResponse> {
   return apiFetch<T.AuthMeResponse>("/auth/me");
+}
+
+/**
+ * POST /auth/logout — نشستِ سمت سرور را آزاد می‌کند.
+ * بدون این، حساب تا ورود بعدی «اشغال» می‌ماند.
+ */
+export function logoutServer(): Promise<{ success: boolean }> {
+  return apiFetch<{ success: boolean }>("/auth/logout", { method: "POST" });
 }
 
 // =====================================================

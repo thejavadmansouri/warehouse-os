@@ -91,6 +91,11 @@ interface ApiService {
     @POST("inventory/out")
     suspend fun sell(@Body body: SellRequest): SellResponse
 
+    // نشست سمت سرور را آزاد می‌کند. هر حساب هم‌زمان فقط روی یک دستگاه فعال است،
+    // پس خروجِ صریح باید جای خودش را هم پس بدهد.
+    @POST("auth/logout")
+    suspend fun logout()
+
     // ---- Pick tasks (worker picking queue) ----
     // صف کارِ برداشتِ همین کارگر — آدرس قفسه + کالا + تعداد.
     @GET("pick-tasks/mine")
