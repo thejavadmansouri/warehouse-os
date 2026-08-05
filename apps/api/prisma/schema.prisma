@@ -741,7 +741,10 @@ model PickTask {
   id          String         @id @default(uuid())
   warehouseId String
   productId   String
-  locationId  String
+  /// قفسه‌ی برداشت. اختیاری است چون در دوره‌ی راه‌اندازی جنس در انبار هست ولی
+  /// هنوز در نرم‌افزار ثبت نشده — کارگر می‌رود پیدایش می‌کند، پس کار برداشت
+  /// همچنان معنا دارد حتی وقتی سیستم آدرس را نمی‌داند.
+  locationId  String?
   quantity    Int
   status      PickTaskStatus @default(PENDING)
   note        String?
@@ -762,7 +765,7 @@ model PickTask {
 
   warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
   product     Product   @relation(fields: [productId], references: [id])
-  location    Location  @relation(fields: [locationId], references: [id])
+  location    Location? @relation(fields: [locationId], references: [id])
   requestedBy User?     @relation("PickRequester", fields: [requestedById], references: [id])
   assignedTo  User?     @relation("PickAssignee", fields: [assignedToId], references: [id])
   pickedBy    User?     @relation("PickPicker", fields: [pickedById], references: [id])

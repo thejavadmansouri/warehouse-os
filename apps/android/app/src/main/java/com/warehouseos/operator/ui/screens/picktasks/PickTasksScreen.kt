@@ -217,6 +217,18 @@ private fun PickList(
     }
 }
 
+/**
+ * آدرس قفسه برای نمایش.
+ *
+ * کالای هنوز ثبت‌نشده آدرس ندارد ولی فیزیکاً در انبار هست — «—» یا «قفسه» به
+ * کارگر چیزی نمی‌گوید، پس صریح گفته می‌شود که باید خودش پیدایش کند.
+ */
+private fun shelfLabel(task: PickTaskDto): String =
+    task.location?.path?.takeIf { it.isNotBlank() }
+        ?: task.location?.name?.takeIf { it.isNotBlank() }
+        ?: task.location?.code
+        ?: "جای ثبت‌نشده — در انبار پیدا کنید"
+
 /** سربرگ هر قفسه: آدرس + تعداد قلم + یک تپِ بزرگ برای کل قفسه. */
 @Composable
 private fun LocationGroupHeader(
@@ -225,10 +237,7 @@ private fun LocationGroupHeader(
     onPickAll: () -> Unit,
 ) {
     val first = tasks.first()
-    val shelf = first.location?.path?.takeIf { it.isNotBlank() }
-        ?: first.location?.name?.takeIf { it.isNotBlank() }
-        ?: first.location?.code
-        ?: "قفسه"
+    val shelf = shelfLabel(first)
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -329,10 +338,7 @@ private fun PickTaskRow(
                     )
                     Spacer(Modifier.width(Dimens.gapSmall))
                     Text(
-                        text = task.location?.path?.takeIf { it.isNotBlank() }
-                            ?: task.location?.name?.takeIf { it.isNotBlank() }
-                            ?: task.location?.code
-                            ?: "—",
+                        text = shelfLabel(task),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,

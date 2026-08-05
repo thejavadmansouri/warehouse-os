@@ -104,7 +104,7 @@ export default function PosPage() {
    * از نتیجه‌ی جست‌وجو. جدا از mutationFn نگه داشته می‌شود چون آن فقط id کارگر می‌گیرد.
    */
   const workerLinesRef = useRef<
-    { productId: string; locationId: string; quantity: number }[]
+    { productId: string; locationId?: string; quantity: number }[]
   >([]);
 
   /**
@@ -455,34 +455,33 @@ export default function PosPage() {
   /** F9 — کل سبد را برای کارگر بفرست. */
   const openWorkerForCart = useCallback(() => {
     if (!lines.length) return;
-    // کالای ثبت‌نشده قفسه ندارد، پس کارِ برداشت برایش بی‌معنی است — کارگر جایی
-    // برای رفتن ندارد. همان‌ها کنار گذاشته می‌شوند و به فروشنده گفته می‌شود.
-    const withShelf = lines.filter((l) => l.locationId);
-    const skipped = lines.length - withShelf.length;
-    if (!withShelf.length) {
-      toast.error("هیچ‌کدام از اقلام سبد قفسه‌ی ثبت‌شده ندارند");
-      return;
-    }
-    if (skipped > 0) {
-      toast.warning(`${toFa(skipped)} قلمِ ثبت‌نشده فرستاده نمی‌شود`);
-    }
-    workerLinesRef.current = withShelf.map((l) => ({
+    /*
+     * اقلام ثبت‌نشده هم فرستاده می‌شوند.
+     *
+     * قبلاً کنار گذاشته می‌شدند چون «قفسه ندارند پس کارگر جایی برای رفتن ندارد».
+     * ولی جنس فیزیکاً در انبار هست و فقط در نرم‌افزار ثبت نشده — کارگر انبار را
+     * می‌شناسد و پیدایش می‌کند. کارِ برداشت بدون آدرس هم می‌گوید «این را بیاور».
+     */
+    workerLinesRef.current = lines.map((l) => ({
       productId: l.productId,
-      locationId: l.locationId,
+      locationId: l.locationId || undefined,
       quantity: l.quantity,
     }));
-    setWorkerItemCount(withShelf.length);
+    setWorkerItemCount(lines.length);
     setShowWorkerPicker(true);
   }, [lines]);
 
   /** از نتیجه‌ی جست‌وجو → همان یک کالا را (از پرموجودی‌ترین مکان) برای کارگر بفرست. */
   const openWorkerForResult = useCallback(
     (r: LocateResult) => {
-      const loc = r.locations[0];
-      if (!loc) return;
       setShowSearch(false);
+      // بدون موجودی ثبت‌شده هم می‌رود: کارگر خودش در انبار پیدایش می‌کند.
       workerLinesRef.current = [
-        { productId: r.id, locationId: loc.locationId, quantity: 1 },
+        {
+          productId: r.id,
+          locationId: r.locations[0]?.locationId,
+          quantity: 1,
+        },
       ];
       setWorkerItemCount(1);
       setShowWorkerPicker(true);
