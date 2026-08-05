@@ -1,18 +1,23 @@
 <#
-    ساخت بسته‌ی نصب ویندوز.
+    Build the Windows install package.
 
-    روی لپ‌تاپ ویندوزی اجرا می‌شود، نه روی مک. دلیلش این است که `sharp`،
-    `argon2` و موتور کوئری پریزما باینریِ مخصوص سیستم‌عامل‌اند؛ `npm install`
-    روی مک باینری مک می‌سازد و روی سرور ویندوز اجرا نمی‌شود.
+    ASCII ONLY. Windows PowerShell 5.1 reads .ps1 files using the system ANSI
+    codepage, not UTF-8. A single non-ASCII byte in this file is mangled on the
+    way in and breaks the parser, so every comment and message here is English.
+    Persian belongs in README.md, which nothing has to parse.
 
-    خروجی: پوشه‌ی `payload\` که Inno Setup آن را بسته‌بندی می‌کند.
+    Runs on the Windows laptop, not on the Mac. `sharp`, `argon2` and the Prisma
+    query engine are per-platform binaries; `npm install` on macOS produces macOS
+    binaries that will not load on the Windows server.
 
-    پیش‌نیازها (خودت دانلود کرده‌ای):
+    Output: a `payload\` folder for Inno Setup to package.
+
+    Prerequisites (download these yourself):
       -NodeZip   node-v24.x-win-x64.zip
       -PgZip     postgresql-18.x-windows-x64-binaries.zip
       -NssmZip   nssm-2.24.zip
 
-    مثال:
+    Example:
       .\build.ps1 -NodeZip C:\dl\node.zip -PgZip C:\dl\pg.zip -NssmZip C:\dl\nssm.zip
 #>
 param(
@@ -24,121 +29,209 @@ param(
 $ErrorActionPreference = 'Stop'
 
 <#
-    نسخه‌ی Node که بسته‌بندی می‌شود باید با نسخه‌ای که `npm install` را اجرا
-    می‌کند یکی باشد.
+    The Node version that gets packaged must match the one that runs
+    `npm install`.
 
-    باینری‌های بومی (sharp، argon2، موتور پریزما) برای یک ABI مشخص ساخته
-    می‌شوند. اگر نصب با Node 24 (ABI 137) انجام شود و node.exe نسخه‌ی ۲۲
-    (ABI 127) داخل بسته برود، برنامه روی سرور مشتری با خطای «برای نسخه‌ی
-    دیگری کامپایل شده» بالا نمی‌آید — و آن خطا موقع ساخت دیده نمی‌شود، سر
-    مشتری دیده می‌شود.
+    Native binaries (sharp, argon2, the Prisma engine) are built against a
+    specific ABI. Install under Node 24 (ABI 137) and ship a Node 22 (ABI 127)
+    executable and the app dies on the customer's server with "compiled against
+    a different version" -- an error nobody sees at build time, only on site.
 
-    پس همین‌جا بلند و واضح شکست بخور، نه آنجا بی‌صدا.
+    So fail loudly here rather than silently there.
 #>
 $REQUIRED_NODE_MAJOR = 24
 
+<#
+    Same reasoning for PostgreSQL, with a worse failure mode: a `pg_dump -Fc`
+    taken on 18 cannot be restored into 16. Ship the wrong major and the
+    customer's backups become unrestorable on the development machine, which is
+    only discovered when a restore is actually needed.
+#>
+$REQUIRED_PG_MAJOR = 18
+
 $buildNodeMajor = [int](node -e "process.stdout.write(String(process.versions.node.split('.')[0]))")
 if ($buildNodeMajor -ne $REQUIRED_NODE_MAJOR) {
-    throw "این پروژه با Node $REQUIRED_NODE_MAJOR ساخته می‌شود ولی Node $buildNodeMajor روی PATH است. نسخه‌ی درست را نصب کن."
+    throw "This project builds with Node $REQUIRED_NODE_MAJOR but Node $buildNodeMajor is on PATH. Install the correct version."
 }
 
 $here    = Split-Path -Parent $MyInvocation.MyCommand.Path
-$repo    = Resolve-Path (Join-Path $here '..\..')
+$repo    = (Resolve-Path (Join-Path $here '..\..')).Path
 $payload = Join-Path $here 'payload'
 $staging = Join-Path $here '_stage'
 
 function Say($m) { Write-Host "`n=== $m" -ForegroundColor Cyan }
 
-# ---------------------------------------------------------------- پاک‌سازی
-Say 'پاک‌سازی خروجی قبلی'
+# ------------------------------------------------------------------- clean
+Say 'Cleaning previous output'
 Remove-Item -Recurse -Force $payload, $staging -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $payload, $staging | Out-Null
 
-# ---------------------------------------------------------------- وابستگی‌ها
-Say 'نصب وابستگی‌ها (باینری‌های ویندوز)'
+# ------------------------------------------------------------ dependencies
+Say 'Installing dependencies (Windows binaries)'
 Push-Location $repo
 npm ci
-if ($LASTEXITCODE -ne 0) { throw 'npm ci شکست خورد' }
+if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
 
-Say 'تولید کلاینت پریزما'
+Say 'Generating the Prisma client'
 Push-Location (Join-Path $repo 'apps\api')
 npx prisma generate
-if ($LASTEXITCODE -ne 0) { throw 'prisma generate شکست خورد' }
+if ($LASTEXITCODE -ne 0) { throw 'prisma generate failed' }
 Pop-Location
 
-Say 'ساخت API'
+Say 'Building the API'
 npm --workspace @warehouse-os/api run build
-if ($LASTEXITCODE -ne 0) { throw 'build API شکست خورد' }
+if ($LASTEXITCODE -ne 0) { throw 'API build failed' }
 
-Say 'ساخت پنل وب'
-# آدرس API عمداً اینجا ست نمی‌شود: در زمان اجرا از خود مرورگر گرفته می‌شود.
+Say 'Building the web panel'
+# The API host is deliberately not set here: the browser derives it at runtime
+# from the page's own origin, so one build serves the server, the seller PC and
+# the phones without configuration.
 npm --workspace @warehouse-os/web run build
-if ($LASTEXITCODE -ne 0) { throw 'build وب شکست خورد' }
+if ($LASTEXITCODE -ne 0) { throw 'web build failed' }
 Pop-Location
 
 # ---------------------------------------------------------------- app\api
-Say 'جمع‌آوری API'
+Say 'Collecting the API'
 $apiOut = Join-Path $payload 'app\api'
 New-Item -ItemType Directory -Force -Path $apiOut | Out-Null
 Copy-Item (Join-Path $repo 'apps\api\dist')          $apiOut -Recurse
 Copy-Item (Join-Path $repo 'apps\api\prisma')        $apiOut -Recurse
 Copy-Item (Join-Path $repo 'apps\api\package.json')  $apiOut
 
-# فقط وابستگی‌های اجرا. نصب داخل خود پوشه انجام می‌شود تا مسیرها ساده بماند.
+# The Prisma CLI version is read from what the repo actually installed rather
+# than from a range in package.json, so the packaged CLI is the one this schema
+# and these migrations were tested against.
+$prismaPkg = Join-Path $repo 'node_modules\prisma\package.json'
+if (-not (Test-Path $prismaPkg)) { throw 'prisma CLI not found in the repo node_modules; did npm ci run?' }
+$prismaVersion = (Get-Content $prismaPkg -Raw | ConvertFrom-Json).version
+Say "Prisma CLI version: $prismaVersion"
+
+# Runtime dependencies only. Installed inside the folder itself so paths stay
+# simple on the server.
 Push-Location $apiOut
 npm install --omit=dev --no-audit --no-fund
-if ($LASTEXITCODE -ne 0) { throw 'نصب وابستگی‌های اجرایی API شکست خورد' }
+if ($LASTEXITCODE -ne 0) { throw 'installing API runtime dependencies failed' }
+
+<#
+    The Prisma CLI is a devDependency at the repo root and is not listed in
+    apps\api\package.json at all, so the install above never brings it. Without
+    it `first-run.ps1` cannot run `migrate deploy` and the installer dies on the
+    customer's server with a missing file -- install it explicitly.
+#>
+# --omit=dev is repeated here on purpose: `npm install <pkg>` without it would
+# also pull in every devDependency still listed in the copied package.json.
+Say 'Installing the Prisma CLI into the payload (needed for migrate deploy)'
+npm install --omit=dev --no-audit --no-fund --save-exact "prisma@$prismaVersion"
+if ($LASTEXITCODE -ne 0) { throw 'installing the Prisma CLI failed' }
+
 npx prisma generate
+if ($LASTEXITCODE -ne 0) { throw 'prisma generate failed in the payload' }
 Pop-Location
 
+# Prove the file first-run.ps1 will execute is actually there, now, rather than
+# discovering it is missing halfway through a customer install.
+$prismaEntry = Join-Path $apiOut 'node_modules\prisma\build\index.js'
+if (-not (Test-Path $prismaEntry)) { throw "Prisma CLI entry point missing: $prismaEntry" }
+
 # ---------------------------------------------------------------- app\web
-Say 'جمع‌آوری پنل وب'
+Say 'Collecting the web panel'
 $webOut = Join-Path $payload 'app\web'
 New-Item -ItemType Directory -Force -Path $webOut | Out-Null
-# خروجی standalone در monorepo تودرتو می‌نشیند؛ server.js را پیدا کن.
-$standalone = Join-Path $repo 'apps\web\.next\standalone'
-$serverJs = Get-ChildItem -Path $standalone -Filter server.js -Recurse |
-            Select-Object -First 1
-if (-not $serverJs) { throw 'server.js در خروجی standalone پیدا نشد' }
-Copy-Item (Split-Path -Parent $serverJs.FullName)\* $webOut -Recurse -Force
-# node_modules ریشه‌ی standalone جداست و لازم است.
-$rootModules = Join-Path $standalone 'node_modules'
-if (Test-Path $rootModules) { Copy-Item $rootModules $webOut -Recurse -Force }
 
-# ---------------------------------------------------------------- رانتایم‌ها
-Say 'استخراج Node'
+$standalone = Join-Path $repo 'apps\web\.next\standalone'
+if (-not (Test-Path $standalone)) { throw 'standalone output not found; is output:"standalone" still set in next.config.ts?' }
+$standalone = (Resolve-Path $standalone).Path
+
+<#
+    Copy the standalone tree whole.
+
+    Next mirrors the build machine's source path inside the output and hoists
+    node_modules to more than one level of that mirror -- `next` itself sits in
+    the inner one. Copying just the folder holding server.js ships a panel that
+    cannot start, and the missing module only shows up on the server.
+#>
+Copy-Item (Join-Path $standalone '*') $webOut -Recurse -Force
+
+# Find the real entry point. node_modules is excluded because packages ship
+# their own server.js files and any of them could match first.
+$serverJs = Get-ChildItem -Path $standalone -Filter server.js -Recurse -File |
+            Where-Object { $_.FullName -notmatch '\\node_modules\\' } |
+            Select-Object -First 1
+if (-not $serverJs) { throw 'server.js not found in the standalone output' }
+
+$relative = $serverJs.FullName.Substring($standalone.Length).TrimStart('\')
+
+<#
+    Where that entry point lands depends on the build machine's directory
+    layout, which the service scripts cannot know. Write a launcher at a fixed
+    path so `services.ps1` always has one stable thing to point at.
+
+    The real server.js calls process.chdir(__dirname) itself, so requiring it
+    from here leaves its own paths correct.
+#>
+if ($relative -ne 'server.js') {
+    $target = './' + $relative.Replace('\', '/')
+    Say "Web entry point: $relative"
+    $launcher = @"
+// Generated by build.ps1 -- do not edit.
+// Next's standalone output nests the real server under a mirror of the build
+// machine's source path, which is not known until build time. This launcher
+// gives the Windows service one stable path to start.
+require('$target');
+"@
+    Set-Content -Path (Join-Path $webOut 'server.js') -Value $launcher -Encoding ascii
+} else {
+    Say 'Web entry point: server.js (already at the root)'
+}
+
+# --------------------------------------------------------------- runtimes
+Say 'Extracting Node'
 $tmp = Join-Path $staging 'node'
 Expand-Archive -Path $NodeZip -DestinationPath $tmp -Force
 $nodeExe = Get-ChildItem $tmp -Filter node.exe -Recurse | Select-Object -First 1
-if (-not $nodeExe) { throw 'node.exe در آرشیو پیدا نشد' }
+if (-not $nodeExe) { throw 'node.exe not found in the archive' }
 
-# همان بررسی، این بار روی خودِ فایلی که بسته‌بندی می‌شود.
+# The same check again, this time against the executable that actually ships.
 $zipNodeMajor = [int](& $nodeExe.FullName -e "process.stdout.write(String(process.versions.node.split('.')[0]))")
 if ($zipNodeMajor -ne $REQUIRED_NODE_MAJOR) {
-    throw "آرشیو Node نسخه‌ی $zipNodeMajor است ولی وابستگی‌ها با Node $REQUIRED_NODE_MAJOR نصب شده‌اند. باینری‌های بومی روی سرور بالا نمی‌آیند."
+    throw "The Node archive is version $zipNodeMajor but dependencies were installed with Node $REQUIRED_NODE_MAJOR. Native binaries will not load on the server."
 }
 New-Item -ItemType Directory -Force -Path (Join-Path $payload 'app\node') | Out-Null
 Copy-Item $nodeExe.FullName (Join-Path $payload 'app\node\node.exe')
 
-Say 'استخراج PostgreSQL'
+Say 'Extracting PostgreSQL'
 $tmpPg = Join-Path $staging 'pg'
 Expand-Archive -Path $PgZip -DestinationPath $tmpPg -Force
 $pgRoot = Get-ChildItem $tmpPg -Directory |
           Where-Object { Test-Path (Join-Path $_.FullName 'bin\initdb.exe') } |
           Select-Object -First 1
-if (-not $pgRoot) { throw 'پوشه‌ی pgsql با bin\initdb.exe پیدا نشد' }
+if (-not $pgRoot) { throw 'no pgsql folder with bin\initdb.exe found' }
+
+$initdb = Join-Path $pgRoot.FullName 'bin\initdb.exe'
+# Output looks like: initdb (PostgreSQL) 18.4
+$pgVersionText = (& $initdb --version) -join ' '
+# [regex]::Match rather than -notmatch: whether -notmatch populates $Matches is
+# version-dependent, and reading the major version wrong is the whole point of
+# this check.
+$pgMatch = [regex]::Match($pgVersionText, 'PostgreSQL\)\s+(\d+)')
+if (-not $pgMatch.Success) { throw "could not read the PostgreSQL version from: $pgVersionText" }
+$pgMajor = [int]$pgMatch.Groups[1].Value
+if ($pgMajor -ne $REQUIRED_PG_MAJOR) {
+    throw "The PostgreSQL archive is major version $pgMajor but this project uses $REQUIRED_PG_MAJOR. A pg_dump taken on $REQUIRED_PG_MAJOR cannot be restored into $pgMajor."
+}
+Say "PostgreSQL version: $pgVersionText"
 Copy-Item $pgRoot.FullName (Join-Path $payload 'pgsql') -Recurse
 
-Say 'استخراج NSSM'
+Say 'Extracting NSSM'
 $tmpN = Join-Path $staging 'nssm'
 Expand-Archive -Path $NssmZip -DestinationPath $tmpN -Force
 $nssm = Get-ChildItem $tmpN -Filter nssm.exe -Recurse |
         Where-Object { $_.FullName -match 'win64' } | Select-Object -First 1
-if (-not $nssm) { throw 'nssm.exe (win64) پیدا نشد' }
+if (-not $nssm) { throw 'nssm.exe (win64) not found' }
 Copy-Item $nssm.FullName (Join-Path $payload 'nssm.exe')
 
-# ---------------------------------------------------------------- اسکریپت‌ها
-Say 'کپی اسکریپت‌های نصب'
+# ---------------------------------------------------------------- scripts
+Say 'Copying the install scripts'
 $scriptsOut = Join-Path $payload 'scripts'
 New-Item -ItemType Directory -Force -Path $scriptsOut | Out-Null
 Copy-Item (Join-Path $here 'first-run.ps1')  $scriptsOut
@@ -148,5 +241,5 @@ Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
 
 $size = '{0:N0} MB' -f ((Get-ChildItem $payload -Recurse |
          Measure-Object Length -Sum).Sum / 1MB)
-Say "آماده شد: $payload  ($size)"
-Write-Host 'حالا installer.iss را با Inno Setup باز کن و Compile بزن.' -ForegroundColor Green
+Say "Ready: $payload  ($size)"
+Write-Host 'Now open installer.iss in Inno Setup and hit Compile.' -ForegroundColor Green
