@@ -719,7 +719,8 @@ export interface PaymentInput {
 
 export interface InvoiceLineInput {
   productId: string;
-  locationId: string;
+  /** نبودنش یعنی کالا هنوز در سیستم ثبت نشده؛ سرور مکان سیستمی را انتخاب می‌کند. */
+  locationId?: string;
   quantity: number;
   unitPrice: number;
   discount?: number;

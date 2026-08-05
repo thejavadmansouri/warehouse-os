@@ -37,6 +37,7 @@ export class InventoryOperationService {
       voiceRecordId,
       unitPrice,
       lineDiscount,
+      allowNegative,
       invoiceId
     } = dto;
 
@@ -192,66 +193,91 @@ export class InventoryOperationService {
 
 
         /*
-          عملیات اتمیک:
-          فقط وقتی کم کن که موجودی کافی باشد.
-          این جلوی race condition را می گیرد.
+          کسر اتمیک.
+
+          حالت عادی: فقط وقتی کم کن که موجودی کافی باشد — این جلوی race
+          condition بین دو برداشتِ هم‌زمان را می‌گیرد.
+
+          allowNegative فقط از مسیر فروش می‌آید. دلیلش این است که در دوره‌ی
+          راه‌اندازی، جنس فیزیکاً در انبار هست ولی هنوز در نرم‌افزار ثبت نشده؛
+          عددِ صفرِ سیستم غلط است، نه واقعیت. جلوگیری از فروش در این حالت یعنی
+          نرم‌افزار جلوی کسب‌وکار را بگیرد. برداشت انباردار (OUT) همچنان محدود
+          می‌ماند، چون آنجا صفر یعنی واقعاً چیزی روی قفسه نیست.
+
+          موجودیِ منفی خودش اطلاعات است: یعنی «این تعداد فروخته شد پیش از آنکه
+          ثبت شود». وقتی جنس واقعاً ثبت شود، منفی جبران می‌شود.
         */
 
-        const result =
-          await tx.inventory.updateMany({
+        if (allowNegative) {
 
+          await tx.inventory.upsert({
             where:{
-
-              productId,
-
-              locationId,
-
-              quantity:{
-                gte:quantity
-              }
-
+              productId_locationId:{ productId, locationId }
             },
-
-
-            data:{
-
-              quantity:{
-                decrement:quantity
-              }
-
-            }
-
-
+            // ردیف موجودی وجود ندارد → یعنی هیچ‌وقت ثبت نشده؛ از صفر منفی می‌شود.
+            create:{ productId, locationId, quantity: -quantity },
+            update:{ quantity:{ decrement: quantity } },
           });
 
+        } else {
 
-
-        if(result.count === 0){
-
-
-          const current =
-            await tx.inventory.findUnique({
+          const result =
+            await tx.inventory.updateMany({
 
               where:{
-                productId_locationId:{
-                  productId,
-                  locationId
+
+                productId,
+
+                locationId,
+
+                quantity:{
+                  gte:quantity
                 }
+
+              },
+
+
+              data:{
+
+                quantity:{
+                  decrement:quantity
+                }
+
               }
+
 
             });
 
 
 
-          throw new BadRequestException({
+          if(result.count === 0){
 
-            error:'INSUFFICIENT_STOCK',
 
-            available:
-              current?.quantity ?? 0
+            const current =
+              await tx.inventory.findUnique({
 
-          });
+                where:{
+                  productId_locationId:{
+                    productId,
+                    locationId
+                  }
+                }
 
+              });
+
+
+
+            throw new BadRequestException({
+
+              error:'INSUFFICIENT_STOCK',
+
+              available:
+                current?.quantity ?? 0
+
+            });
+
+
+          }
 
         }
 

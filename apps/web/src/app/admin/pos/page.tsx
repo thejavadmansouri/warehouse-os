@@ -89,6 +89,8 @@ export default function PosPage() {
   const [showCustomer, setShowCustomer] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  /** متنی که در نوار بالا زده شده و باید به جست‌وجو منتقل شود. */
+  const [searchSeed, setSearchSeed] = useState("");
   const [showQuotation, setShowQuotation] = useState(false);
   const [showWorkerPicker, setShowWorkerPicker] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
@@ -233,10 +235,15 @@ export default function PosPage() {
       if (res.stock.length === 1) addLine(res.product, res.stock[0]);
       else setPickerStock({ name: res.product.name, product: res.product, stock: res.stock });
     },
-    onError: () => {
-      toast.error("کالایی با این بارکد پیدا نشد");
+    onError: (_e, barcode) => {
+      /*
+       * چیزی که تایپ شده بارکد نبوده — احتمالاً اسم کالاست.
+       * به‌جای خطا، همان متن را به جست‌وجو می‌بریم. فروشنده یک فیلد دارد، نه دو
+       * تا: هرچه می‌داند را می‌زند و Enter.
+       */
+      setSearchSeed(barcode);
+      setShowSearch(true);
       setScan("");
-      focusScan();
     },
   });
 
@@ -249,9 +256,28 @@ export default function PosPage() {
   const addFromLocate = useCallback(
     (r: LocateResult) => {
       setShowSearch(false);
+
+      /*
+       * کالای بدون موجودیِ ثبت‌شده هم فروخته می‌شود.
+       *
+       * در دوره‌ی راه‌اندازی جنس در انبار هست ولی هنوز وارد نرم‌افزار نشده، پس
+       * عددِ صفرِ سیستم غلط است نه واقعیت. ردیف بدون قفسه ثبت می‌شود و سرور آن
+       * را روی مکان سیستمیِ «موجودی ثبت‌نشده» می‌نشاند.
+       */
       if (r.totalStock <= 0 || r.locations.length === 0) {
-        toast.error(`«${r.name}» در هیچ مکانی موجودی ندارد`);
-        focusScan();
+        addLine(
+          { id: r.id, name: r.name, unit: r.unit, salePrice: r.salePrice },
+          {
+            locationId: "",
+            locationName: "",
+            locationCode: "",
+            locationBarcode: "",
+            locationPath: "ثبت‌نشده",
+            // بدون سقف: موجودیِ سیستم صفر است ولی جنس هست.
+            quantity: Number.MAX_SAFE_INTEGER,
+          }
+        );
+        toast.warning(`«${r.name}» در سیستم ثبت نشده — بدون قفسه ثبت می‌شود`);
         return;
       }
       const product: PickableProduct = {
@@ -301,7 +327,9 @@ export default function PosPage() {
         note: note.trim() || undefined,
         lines: lines.map((l) => ({
           productId: l.productId,
-          locationId: l.locationId,
+          // قفسه‌ی خالی یعنی «کالا هنوز ثبت نشده» — سرور خودش مکان سیستمی را
+          // انتخاب می‌کند. فرستادن رشته‌ی تهی خطای اعتبارسنجی می‌دهد.
+          locationId: l.locationId || undefined,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           // درصد فقط در UI زندگی می‌کند؛ سرور تومان می‌گیرد.
@@ -379,7 +407,7 @@ export default function PosPage() {
         validForMinutes,
         lines: lines.map((l) => ({
           productId: l.productId,
-          locationId: l.locationId,
+          locationId: l.locationId || undefined,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           discount: lineDiscount(l) || undefined,
@@ -421,12 +449,23 @@ export default function PosPage() {
   /** F9 — کل سبد را برای کارگر بفرست. */
   const openWorkerForCart = useCallback(() => {
     if (!lines.length) return;
-    workerLinesRef.current = lines.map((l) => ({
+    // کالای ثبت‌نشده قفسه ندارد، پس کارِ برداشت برایش بی‌معنی است — کارگر جایی
+    // برای رفتن ندارد. همان‌ها کنار گذاشته می‌شوند و به فروشنده گفته می‌شود.
+    const withShelf = lines.filter((l) => l.locationId);
+    const skipped = lines.length - withShelf.length;
+    if (!withShelf.length) {
+      toast.error("هیچ‌کدام از اقلام سبد قفسه‌ی ثبت‌شده ندارند");
+      return;
+    }
+    if (skipped > 0) {
+      toast.warning(`${toFa(skipped)} قلمِ ثبت‌نشده فرستاده نمی‌شود`);
+    }
+    workerLinesRef.current = withShelf.map((l) => ({
       productId: l.productId,
       locationId: l.locationId,
       quantity: l.quantity,
     }));
-    setWorkerItemCount(lines.length);
+    setWorkerItemCount(withShelf.length);
     setShowWorkerPicker(true);
   }, [lines]);
 
@@ -476,6 +515,7 @@ export default function PosPage() {
           break;
         case "F3":
           e.preventDefault();
+          setSearchSeed("");
           setShowSearch(true);
           break;
         case "F4":
@@ -555,8 +595,8 @@ export default function PosPage() {
             }}
             placeholder={
               lines.length
-                ? "بارکد بعدی… یا Enter برای تسویه"
-                : "بارکد کالا را اسکن کنید…"
+                ? "بارکد یا نام کالا… یا Enter برای تسویه"
+                : "بارکد را اسکن کنید یا نام کالا را بنویسید…"
             }
             className="h-11 pe-10 text-base"
           />
@@ -789,9 +829,10 @@ export default function PosPage() {
 
       <ProductSearch
         open={showSearch}
+        initialQuery={searchSeed}
         onPick={addFromLocate}
         onSendToWorker={openWorkerForResult}
-        onClose={() => { setShowSearch(false); focusScan(); }}
+        onClose={() => { setShowSearch(false); setSearchSeed(""); focusScan(); }}
       />
 
       <WorkerPicker
