@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AdminSidebar, SidebarCollapseToggle } from "./admin-sidebar";
 import { useAuthStore } from "@/lib/auth-store";
+import { logoutServer } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/format";
 
 function ThemeToggle() {
@@ -59,7 +60,14 @@ export function AdminTopbar({
   const logout = useAuthStore((s) => s.logout);
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // نشستِ سمت سرور هم آزاد شود، وگرنه حساب تا ورود بعدی «اشغال» می‌ماند.
+    // اگر شبکه قطع بود هم خروجِ محلی باید انجام شود، پس خطا خورده می‌شود.
+    try {
+      await logoutServer();
+    } catch {
+      /* سرور در دسترس نبود — خروج محلی به‌هرحال انجام می‌شود. */
+    }
     logout();
     router.replace("/login");
   };

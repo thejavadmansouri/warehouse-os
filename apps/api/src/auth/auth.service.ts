@@ -1,7 +1,7 @@
 import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -140,11 +140,28 @@ export class AuthService implements OnModuleInit {
 
 
 
+    /*
+      هر حساب فقط روی یک دستگاه.
+
+      هر ورود یک شناسه‌ی نشستِ تازه می‌سازد و روی کاربر می‌نشیند؛ از همان لحظه
+      توکن دستگاه قبلی بی‌اعتبار می‌شود و اولین درخواستش ۴۰۱ می‌گیرد.
+
+      «آخرین ورود برنده است» عمدی است: اگر مرورگر بسته شود یا گوشی گم شود،
+      کاربر پشت نشستِ مرده گیر نمی‌افتد و فقط دوباره وارد می‌شود.
+    */
+    const sessionId = randomUUID();
+
+    await this.prisma.user.update({
+      where:{ id:user.id },
+      data:{ activeSessionId: sessionId },
+    });
+
     const payload = {
 
       sub:user.id,
       username:user.username,
       role:user.role,
+      sid:sessionId,
 
     };
 
@@ -167,6 +184,16 @@ export class AuthService implements OnModuleInit {
 
     };
 
+  }
+
+
+  /** خروج: نشست فعال پاک می‌شود و توکن فعلی از همین لحظه بی‌اعتبار است. */
+  async logout(userId: string) {
+    await this.prisma.user.updateMany({
+      where: { id: userId },
+      data: { activeSessionId: null },
+    });
+    return { success: true };
   }
 
 }

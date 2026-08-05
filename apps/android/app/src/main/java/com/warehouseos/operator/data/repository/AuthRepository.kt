@@ -27,9 +27,16 @@ class AuthRepository @Inject constructor(
 
     fun cachedUser(): AuthUser? = tokenStore.cachedUser()
 
-    fun logout() {
-        // Stop ringing the phone once the worker signs out.
+    /**
+     * Sign out.
+     *
+     * The local token goes regardless of what the server says — a worker on a
+     * dead network still has to be able to hand the phone over. Releasing the
+     * server-side session is best effort on top of that.
+     */
+    suspend fun logout() {
         watcher.stop()
+        runCatching { api.logout() }
         tokenStore.clear()
     }
 

@@ -39,4 +39,21 @@ export class AuthController {
 
   }
 
+
+  /**
+   * خروج — نشست فعال را آزاد می‌کند.
+   *
+   * بدون این، تنها راه آزادکردن نشست ورودِ دوباره از جای دیگر بود. حالا فروشنده
+   * می‌تواند صریحاً بیرون بیاید و توکنش همان لحظه بی‌اعتبار شود.
+   */
+  @Post('logout')
+  @UseGuards(JwtAuthGuard)
+  logout(
+    @CurrentUser() user:any
+  ){
+
+    return this.authService.logout(user.userId);
+
+  }
+
 }
