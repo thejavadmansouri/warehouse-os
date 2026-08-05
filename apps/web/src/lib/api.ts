@@ -5,8 +5,45 @@ import { ApiException } from "./api-error-messages";
 import type { ApiErrorBody } from "./types";
 import * as T from "./types";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://127.0.0.1:3000";
+/**
+ * پورتی که API روی آن گوش می‌دهد. بین همه‌ی نصب‌ها یکی است، پس در build ماندنش
+ * اشکالی ندارد — برخلاف میزبان.
+ */
+const API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? "3000";
+
+/**
+ * آدرس API — **در زمان اجرا** از خودِ مرورگر گرفته می‌شود، نه از build.
+ *
+ * قبلاً `NEXT_PUBLIC_API_URL` بود و Next آن را موقع build داخل کد می‌نوشت. یعنی
+ * آی‌پیِ ماشینی که build روی آن انجام شده داخل نسخه‌ی نهایی حک می‌شد؛ همان نسخه
+ * روی سرور مشتری هیچ‌وقت کار نمی‌کرد و هر بار عوض‌شدن آی‌پی سرور یک build دوباره
+ * می‌خواست — روی ماشینی که ابزار build ندارد.
+ *
+ * حالا هر مرورگری که صفحه را باز می‌کند، API را روی همان میزبانی صدا می‌زند که
+ * صفحه را از آن گرفته. سیستم فروشنده، گوشیِ روی وای‌فای، یا خودِ سرور — هر سه
+ * بدون هیچ تنظیمی درست کار می‌کنند، و عوض‌شدن آی‌پی سرور خودبه‌خود دنبال می‌شود.
+ *
+ * عمداً راهی برای override در build نگذاشته‌ام: همان قابلیت بود که آی‌پی اشتباه
+ * را داخل نسخه‌ی تحویلی می‌برد.
+ */
+function resolveApiUrl(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.protocol}//${window.location.hostname}:${API_PORT}`;
+  }
+  // رندر سمت سرور: هیچ درخواستی از اینجا زده نمی‌شود، ولی مقدار باید معتبر بماند.
+  return `http://127.0.0.1:${API_PORT}`;
+}
+
+/**
+ * ⚠️ تابع است، نه ثابت.
+ *
+ * اگر در سطح ماژول یک بار ارزیابی شود، در رندر سمت سرور روی 127.0.0.1 قفل
+ * می‌شود و همان مقدار به مرورگر می‌رسد — یعنی سیستم فروشنده به خودش درخواست
+ * می‌دهد نه به سرور.
+ */
+export function apiUrl(): string {
+  return resolveApiUrl();
+}
 
 // ----- کمک‌کننده‌های داخلی -----
 
@@ -73,7 +110,7 @@ async function rawFetch<R>(
   path: string,
   init: ApiRequestInit = {}
 ): Promise<R> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${apiUrl()}${path}`, {
     credentials: "include",
     ...buildInit(init),
   });
@@ -130,8 +167,8 @@ async function apiFetch<R>(path: string, init: ApiRequestInit = {}): Promise<R> 
 export function assetUrl(path?: string | null): string {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
-  if (path.startsWith("/")) return `${API_URL}${path}`;
-  return `${API_URL}/${path}`;
+  if (path.startsWith("/")) return `${apiUrl()}${path}`;
+  return `${apiUrl()}/${path}`;
 }
 
 // =====================================================
@@ -236,7 +273,7 @@ export function getProductByBarcode(barcode: string): Promise<T.Product> {
 // سپس فایل را به‌صورت blob دانلود می‌کنیم (نه parse JSON).
 export async function exportProductsCsv(): Promise<void> {
   const token = useAuthStore.getState().token;
-  const res = await fetch(`${API_URL}/products/export`, {
+  const res = await fetch(`${apiUrl()}/products/export`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     credentials: "include",
   });
@@ -274,7 +311,7 @@ export async function printProductLabelsPdf(
   opts: ProductLabelPrintOptions = {}
 ): Promise<void> {
   const token = useAuthStore.getState().token;
-  const res = await fetch(`${API_URL}/labels/product/print`, {
+  const res = await fetch(`${apiUrl()}/labels/product/print`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -304,7 +341,7 @@ export async function printAllStockLabelsPdf(
   opts: ProductLabelPrintOptions = {}
 ): Promise<void> {
   const token = useAuthStore.getState().token;
-  const res = await fetch(`${API_URL}/labels/stock/print`, {
+  const res = await fetch(`${apiUrl()}/labels/stock/print`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -1128,7 +1165,7 @@ export async function downloadReportExcel(
   const token = useAuthStore.getState().token;
   const qs = reportQs({ ...params, format: "excel" });
 
-  const res = await fetch(`${API_URL}${endpoint}?${qs}`, {
+  const res = await fetch(`${apiUrl()}${endpoint}?${qs}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
