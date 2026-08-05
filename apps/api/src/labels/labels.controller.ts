@@ -69,44 +69,6 @@ export class LabelsController {
 
 
 
-  // چاپ تکی PNG
-  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
-  @Get('location/:id/print')
-  async printLocationPng(
-    @Param('id') id: string,
-    @Query('width') width: string | undefined,
-    @Res() res: Response,
-  ) {
-
-    const widthPx =
-      width
-        ? parseInt(width, 10)
-        : 384;
-
-
-    const buffer =
-      await this.service.locationLabelPng(
-        id,
-        widthPx,
-      );
-
-
-    res.set({
-      'Content-Type':
-        'image/png',
-
-      'Content-Disposition':
-        `inline; filename="label-${id}.png"`,
-    });
-
-
-    res.send(buffer);
-  }
-
-
-
-
-
   // چاپ لیبلِ کل موجودیِ واردشده (هر کالا به تعداد مجموع موجودی‌اش)
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('stock/print')
@@ -123,7 +85,7 @@ export class LabelsController {
     },
     @Res() res: Response,
   ) {
-    const buffer = await this.service.stockLabelsPdf({
+    const html = await this.service.stockLabelsPdf({
       columns: dto.columns,
       widthMm: dto.widthMm,
       heightMm: dto.heightMm,
@@ -132,11 +94,8 @@ export class LabelsController {
       showBarcodeText: dto.showBarcodeText,
       cropMarks: dto.cropMarks,
     });
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="stock-labels.pdf"',
-    });
-    res.send(buffer);
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
+    res.send(html);
   }
 
   // چاپ گروهی انتخابی PDF
@@ -153,52 +112,17 @@ export class LabelsController {
   ) {
 
 
-    const buffer =
+    const html =
       await this.service.bulkLocationLabelsPdf(
         dto.ids,
         dto.columns ?? 3,
       );
 
 
-    res.set({
-      'Content-Type':
-        'application/pdf',
-
-      'Content-Disposition':
-        'inline; filename="labels.pdf"',
-    });
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
 
 
-    res.send(buffer);
-  }
-
-
-
-
-
-  // تولید PNG گروهی
-  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
-  @Post('location/bulk/png')
-  async bulkLocationPng(
-    @Body()
-    dto: {
-      ids: string[];
-    },
-
-    @Res() res: Response,
-  ) {
-
-
-    const files =
-      await this.service.bulkLocationLabelsPng(
-        dto.ids,
-      );
-
-
-    res.json({
-      count: files.length,
-      message: 'labels generated',
-    });
+    res.send(html);
   }
 
 
@@ -220,23 +144,17 @@ export class LabelsController {
   ) {
 
 
-    const buffer =
+    const html =
       await this.service.childrenLocationLabelsPdf(
         dto.locationId,
         dto.columns ?? 3,
       );
 
 
-    res.set({
-      'Content-Type':
-        'application/pdf',
-
-      'Content-Disposition':
-        'inline; filename="location-children-labels.pdf"',
-    });
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
 
 
-    res.send(buffer);
+    res.send(html);
   }
 
 
@@ -258,23 +176,17 @@ export class LabelsController {
   ) {
 
 
-    const buffer =
+    const html =
       await this.service.treeLocationLabelsPdf(
         dto.locationId,
         dto.columns ?? 3,
       );
 
 
-    res.set({
-      'Content-Type':
-        'application/pdf',
-
-      'Content-Disposition':
-        'inline; filename="location-tree-labels.pdf"',
-    });
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
 
 
-    res.send(buffer);
+    res.send(html);
   }
 
 
@@ -296,23 +208,17 @@ export class LabelsController {
   ) {
 
 
-    const buffer =
+    const html =
       await this.service.rowShelvesLabelsPdf(
         dto.rowId,
         dto.columns ?? 3,
       );
 
 
-    res.set({
-      'Content-Type':
-        'application/pdf',
-
-      'Content-Disposition':
-        'inline; filename="row-shelves-labels.pdf"',
-    });
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
 
 
-    res.send(buffer);
+    res.send(html);
   }
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('location/filter/print')
@@ -328,7 +234,7 @@ export class LabelsController {
   ) {
 
 
-    const buffer =
+    const html =
       await this.service.filteredChildrenLabelsPdf(
         dto.parentId,
         dto.type,
@@ -336,19 +242,26 @@ export class LabelsController {
       );
 
 
-    res.set({
-      'Content-Type':
-        'application/pdf',
-
-      'Content-Disposition':
-        'inline; filename="filtered-location-labels.pdf"',
-    });
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
 
 
-    res.send(buffer);
+    res.send(html);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  /** چاپ مستقیم لیبل کالا روی پرینتر حرارتیِ وصل به همین سرور. */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('product/print-direct')
+  printProductDirect(
+    @Body() dto: { productIds: string[]; copies?: number },
+  ) {
+    return this.service.printProductLabelsDirect(
+      dto?.productIds ?? [],
+      dto?.copies ?? 1,
+    );
+  }
+
+
   @Get('settings')
   getSettings() {
     return this.service.getSettings();
@@ -390,7 +303,7 @@ export class LabelsController {
     // تا لازم نباشد هر بار ابعاد لیبل دوباره انتخاب شود.
     const saved = await this.service.getSettings();
 
-    const buffer = await this.service.productLabelsPdf(dto.items ?? [], {
+    const html = await this.service.productLabelsPdf(dto.items ?? [], {
       columns: dto.columns ?? saved.columns,
       widthMm: dto.widthMm ?? saved.widthMm,
       heightMm: dto.heightMm ?? saved.heightMm,
@@ -406,11 +319,8 @@ export class LabelsController {
       (dto.items ?? []).map((i) => i.productId),
     );
 
-    res.set({
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': 'inline; filename="product-labels.pdf"',
-    });
+    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
 
-    res.send(buffer);
+    res.send(html);
   }
 }

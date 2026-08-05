@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
-import { PrinterRenderService } from './printer-render.service';
+import { TsplService } from './tspl.service';
+import { PrinterTransportService } from './printer-transport.service';
 import { isNumericSku } from '../products/sku.util';
 import {
   buildThermalLabelHtml,
@@ -16,7 +17,8 @@ import {
 export class LabelsService {
   constructor(
     private prisma: PrismaService,
-    private printer: PrinterRenderService,
+    private tspl: TsplService,
+    private transport: PrinterTransportService,
   ) {}
 
   private async qr(text: string): Promise<string> {
@@ -80,6 +82,59 @@ export class LabelsService {
   }
 
   /** تنظیمات پیش‌فرض چاپ لیبل (تک‌ردیفی). */
+  /**
+   * چاپ مستقیم لیبل کالا روی پرینتر حرارتی.
+   *
+   * برخلاف مسیرهای PDF/PNG که خروجی را به مرورگر می‌دهند، این یکی خودش بایت
+   * خام را به پرینتر می‌فرستد — چون پرینتر به همین سرور وصل است و مرورگر
+   * نمی‌تواند بایت خام بفرستد.
+   */
+  async printProductLabelsDirect(productIds: string[], copies = 1) {
+    if (!productIds.length) {
+      throw new BadRequestException({
+        error: 'NO_PRODUCTS',
+        message: 'حداقل یک کالا باید انتخاب شود',
+      });
+    }
+
+    const settings = await this.getSettings();
+    const size = {
+      widthMm: settings.widthMm,
+      heightMm: settings.heightMm,
+      gapMm: settings.gapMm,
+    };
+    const target = {
+      name: settings.printerName,
+      host: settings.printerHost,
+      port: settings.printerPort,
+    };
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds }, deletedAt: null },
+      select: { id: true, name: true, internalBarcode: true, sku: true },
+    });
+
+    let printed = 0;
+    for (const p of products) {
+      const payload = await this.tspl.buildProductLabel(
+        { barcode: p.internalBarcode, name: p.name },
+        size,
+        copies,
+      );
+      await this.transport.send(payload, target);
+      printed++;
+    }
+
+    // لیبل که چاپ شد، کالا از صف چاپ بیرون می‌رود.
+    await this.prisma.product.updateMany({
+      where: { id: { in: products.map((p) => p.id) } },
+      data: { labelPrintedAt: new Date() },
+    });
+
+    return { printed, requested: productIds.length };
+  }
+
+
   async getSettings() {
     const existing = await this.prisma.labelSettings.findUnique({
       where: { id: 'singleton' },
@@ -145,52 +200,10 @@ export class LabelsService {
     return Promise.all(ids.map((id) => this.productLabel(id)));
   }
 
-  async locationLabelPng(
-    id: string,
-    widthPx = 384,
-  ): Promise<Buffer> {
-    const label = await this.locationLabel(id);
-
-    const html = buildThermalLabelHtml(
-      label,
-      widthPx,
-    );
-
-    return this.printer.renderPng(
-      html,
-      widthPx,
-    );
-  }
-
-  async bulkLocationLabelsPng(
-    ids: string[],
-    widthPx = 384,
-  ): Promise<Buffer[]> {
-    const labels = await this.bulkLocationLabels(ids);
-
-    const result: Buffer[] = [];
-
-    for (const label of labels) {
-      const html = buildThermalLabelHtml(
-        label,
-        widthPx,
-      );
-
-      result.push(
-        await this.printer.renderPng(
-          html,
-          widthPx,
-        ),
-      );
-    }
-
-    return result;
-  }
-
   async bulkLocationLabelsPdf(
     ids: string[],
     columns = 3,
-  ): Promise<Buffer> {
+  ): Promise<string> {
     const labels = await this.bulkLocationLabels(ids);
 
     const html = buildSheetLabelHtml(
@@ -198,7 +211,7 @@ export class LabelsService {
       columns,
     );
 
-    return this.printer.renderPdf(html);
+    return html;
   }
 
 
@@ -206,7 +219,7 @@ export class LabelsService {
   async treeLocationLabelsPdf(
     rootId: string,
     columns = 3,
-  ): Promise<Buffer> {
+  ): Promise<string> {
 
     const root =
       await this.prisma.location.findUnique({
@@ -279,14 +292,12 @@ export class LabelsService {
       );
 
 
-    return this.printer.renderPdf(
-      html,
-    );
+    return html;
   }
     async childrenLocationLabelsPdf(
     parentId: string,
     columns = 3,
-  ): Promise<Buffer> {
+  ): Promise<string> {
 
     const parent =
       await this.prisma.location.findUnique({
@@ -343,12 +354,12 @@ export class LabelsService {
       );
 
 
-    return this.printer.renderPdf(html);
+    return html;
   }
   async rowShelvesLabelsPdf(
   rowId: string,
   columns = 3,
-): Promise<Buffer> {
+): Promise<string> {
 
   const row =
     await this.prisma.location.findUnique({
@@ -413,13 +424,13 @@ export class LabelsService {
 
 
 
-  return this.printer.renderPdf(html);
+  return html;
 }
   async filteredChildrenLabelsPdf(
     parentId: string,
     typeName: string,
     columns = 3,
-  ): Promise<Buffer> {
+  ): Promise<string> {
 
     const parent =
       await this.prisma.location.findUnique({
@@ -484,7 +495,7 @@ export class LabelsService {
       );
 
 
-    return this.printer.renderPdf(html);
+    return html;
   }
 
   // چاپ لیبل محصول به‌تعداد (هر آیتم: کالا + quantity کپی) با تنظیمات چاپ.
@@ -494,7 +505,7 @@ export class LabelsService {
   async productLabelsPdf(
     items: { productId: string; quantity: number }[],
     opts: ProductSheetOptions = {},
-  ): Promise<Buffer> {
+  ): Promise<string> {
     const ids = items.map((i) => i.productId);
     const products = await this.prisma.product.findMany({
       where: { id: { in: ids } },
@@ -516,12 +527,12 @@ export class LabelsService {
     }
 
     const html = buildProductSheetLabelHtml(labels, { ...opts, copies: 1 });
-    return this.printer.renderPdf(html);
+    return html;
   }
 
   // چاپ لیبلِ «کل موجودیِ واردشده»: هر کالا به تعداد مجموع موجودی‌اش (جمعِ همه‌ی
   // مکان‌ها) — برای لیبل‌زدن یک‌جای هرچیزی که تا حالا شمرده/وارد شده.
-  async stockLabelsPdf(opts: ProductSheetOptions = {}): Promise<Buffer> {
+  async stockLabelsPdf(opts: ProductSheetOptions = {}): Promise<string> {
     const grouped = await this.prisma.inventory.groupBy({
       by: ['productId'],
       where: { quantity: { gt: 0 } },
