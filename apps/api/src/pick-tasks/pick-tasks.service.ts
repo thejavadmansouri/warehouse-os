@@ -12,7 +12,8 @@ import { PickTasksGateway } from './pick-tasks.gateway';
 
 export interface CreatePickTaskLine {
   productId:string;
-  locationId:string;
+  /** اختیاری: کالای هنوز ثبت‌نشده آدرس ندارد ولی کارگر می‌تواند بیاوردش. */
+  locationId?:string;
   quantity:number;
   note?:string;
 }
@@ -82,7 +83,7 @@ export class PickTasksService {
           data:{
             warehouseId: input.warehouseId,
             productId: line.productId,
-            locationId: line.locationId,
+            locationId: line.locationId ?? null,
             quantity: line.quantity,
             note: line.note ?? null,
             invoiceId: input.invoiceId ?? null,

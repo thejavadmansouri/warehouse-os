@@ -1044,7 +1044,13 @@ export function createPickTasks(body: {
   invoiceId?: string | null;
   /** null یا نبود = «هر کارگری»؛ مقدار = آن کارگر مشخص. */
   assignedToId?: string | null;
-  lines: { productId: string; locationId: string; quantity: number; note?: string }[];
+  lines: {
+    productId: string;
+    /** نبودنش یعنی کالا در سیستم ثبت نشده — کارگر خودش پیدایش می‌کند. */
+    locationId?: string;
+    quantity: number;
+    note?: string;
+  }[];
 }): Promise<T.PickTask[]> {
   return apiFetch<T.PickTask[]>("/pick-tasks", { method: "POST", body });
 }
