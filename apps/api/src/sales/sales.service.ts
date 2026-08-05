@@ -262,6 +262,10 @@ export class SalesService {
         }
 
 
+        // قیمتی که فروشنده زده، قیمت همان کالا در سیستم می‌شود.
+        await this.learnPricesFromSale(tx, dto);
+
+
         for (const p of payments) {
           const payment = await tx.payment.create({
             data:{
@@ -526,6 +530,62 @@ export class SalesService {
    * سود = مجموع (قیمت فروش - آخرین قیمت خرید) × تعداد.
    * اگر قیمت خرید حتی یک کالا موجود نباشد null برمی‌گردد.
    */
+  /**
+   * قیمتی که فروشنده سرِ فروش زده را به‌عنوان قیمت کالا ثبت می‌کند.
+   *
+   * کاتالوگ ۳۳ هزار کالا دارد و تقریباً هیچ‌کدام قیمت ندارند؛ قیمت‌ها در ذهن
+   * فروشنده‌اند و موقع فروش تایپ می‌شوند. بدون این، همان عدد بعد از ثبت فاکتور
+   * دود می‌شد و دفعه‌ی بعد خانه دوباره خالی باز می‌شد.
+   *
+   * قیمت قبلی بازنویسی نمی‌شود: ProductPrice تاریخچه‌ای است و ردیف تازه اضافه
+   * می‌شود، پس اگر عددی اشتباه وارد شود سابقه‌اش هست و برگشت‌پذیر است.
+   *
+   * ⚠️ آخرین قیمتِ فروخته‌شده برنده است. تخفیفِ چانه‌زنی باید در فیلد تخفیف
+   * وارد شود، نه با کم‌کردن قیمت واحد — وگرنه آن عدد قیمت رسمی کالا می‌شود.
+   */
+  private async learnPricesFromSale(
+    tx: Prisma.TransactionClient,
+    dto: CreateInvoiceDto,
+  ) {
+    // قیمت صفر یعنی «هنوز وارد نشده»، نه «مجانی» — یاد گرفته نمی‌شود.
+    const priced = dto.lines.filter(l => l.unitPrice > 0);
+    if (!priced.length) return;
+
+    // آخرین قیمتِ هر کالا در همین فاکتور؛ اگر یک کالا دو ردیف داشت، دومی برنده است.
+    const wanted = new Map<string, number>();
+    for (const l of priced) wanted.set(l.productId, l.unitPrice);
+
+    const current = await tx.productPrice.findMany({
+      where:{ productId:{ in: [...wanted.keys()] } },
+      orderBy:{ createdAt:'desc' },
+    });
+
+    const latest = new Map<string, { salePrice: number | null; purchasePrice: number | null; wholesalePrice: number | null }>();
+    for (const p of current) {
+      if (!latest.has(p.productId)) {
+        latest.set(p.productId, {
+          salePrice: p.salePrice,
+          purchasePrice: p.purchasePrice,
+          wholesalePrice: p.wholesalePrice,
+        });
+      }
+    }
+
+    const rows = [...wanted.entries()]
+      // قیمتی که عوض نشده ردیف تازه نمی‌سازد، وگرنه تاریخچه با هر فروش شلوغ می‌شود.
+      .filter(([productId, salePrice]) => latest.get(productId)?.salePrice !== salePrice)
+      .map(([productId, salePrice]) => ({
+        productId,
+        salePrice,
+        // قیمت خرید و عمده دست‌نخورده منتقل می‌شوند؛ فروشنده آن‌ها را نزده است.
+        purchasePrice: latest.get(productId)?.purchasePrice ?? null,
+        wholesalePrice: latest.get(productId)?.wholesalePrice ?? null,
+      }));
+
+    if (rows.length) await tx.productPrice.createMany({ data: rows });
+  }
+
+
   private async calculateProfit(dto: CreateInvoiceDto): Promise<number | null> {
 
     const productIds = [...new Set(dto.lines.map(l => l.productId))];
