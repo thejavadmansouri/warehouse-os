@@ -59,8 +59,13 @@ foreach ($path in $required) {
 }
 
 function Remove-Svc($name) {
-    & $nssm stop $name  2>$null | Out-Null
-    & $nssm remove $name confirm 2>$null | Out-Null
+    # Only touch a service that exists. On a first install nothing does, and
+    # nssm writes "Can't open service!" to stderr, which under
+    # $ErrorActionPreference='Stop' becomes a terminating error that aborts the
+    # whole install. 2>&1 also folds any nssm stderr into the swallowed stream.
+    if (-not (Get-Service $name -ErrorAction SilentlyContinue)) { return }
+    & $nssm stop $name 2>&1 | Out-Null
+    & $nssm remove $name confirm 2>&1 | Out-Null
 }
 
 Say 'Removing previous services (if any)'

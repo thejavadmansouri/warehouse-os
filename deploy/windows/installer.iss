@@ -42,6 +42,10 @@ Source: "payload\app\*";     DestDir: "{app}\app";     Flags: recursesubdirs cre
 Source: "payload\pgsql\*";   DestDir: "{app}\pgsql";   Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "payload\scripts\*"; DestDir: "{app}\scripts"; Flags: recursesubdirs createallsubdirs ignoreversion
 Source: "payload\nssm.exe";  DestDir: "{app}";         Flags: ignoreversion
+; Microsoft Visual C++ runtime. PostgreSQL 18 crashes during database creation
+; on a machine with an old/absent runtime; extracted to a temp folder, run
+; before first-run, and deleted afterwards.
+Source: "payload\vc_redist.x64.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Dirs]
 ; Customer data and settings. `uninsneveruninstall` means even removing the
@@ -52,6 +56,12 @@ Name: "{app}\backups";  Flags: uninsneveruninstall
 Name: "{app}\versions"; Flags: uninsneveruninstall
 
 [Run]
+; Must run before first-run.ps1: initdb crashes on an old or absent VC++ runtime.
+; A no-op if the machine already has a current one.
+Filename: "{tmp}\vc_redist.x64.exe"; Parameters: "/install /quiet /norestart"; \
+  StatusMsg: "Installing the Microsoft Visual C++ runtime..."; \
+  Flags: waituntilterminated
+
 ; First-time setup. It skips itself if config\.env already exists, so rerunning
 ; the installer over an existing install cannot damage the database.
 Filename: "powershell.exe"; \

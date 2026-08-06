@@ -211,16 +211,24 @@ foreach ($p in @($ApiPort, $WebPort)) {
 # Created here rather than in installer.iss because the labels are Persian and
 # the .iss has to stay ASCII too. They live in the Start Menu group so the
 # uninstaller can remove them by folder name.
+# Shortcuts are a convenience, not part of a working install. Everything that
+# matters (database, services, firewall) is already done, so a shortcut failure
+# must not abort the install -- hence the whole block is best-effort.
+#
+# The .lnk in particular: WScript.Shell.Save() throws FileNotFoundException on a
+# path whose name is Persian, so the folder shortcut is written as a plain .url
+# (file: scheme) too, which Set-Content handles as Unicode without complaint.
 Say 'Creating shortcuts'
-$group = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Warehouse OS'
-New-Item -ItemType Directory -Force -Path $group | Out-Null
-Set-Content -Path (Join-Path $group "$LabelPanel.url") -Encoding ascii `
-    -Value "[InternetShortcut]`r`nURL=http://localhost:$WebPort"
-
-$shell = New-Object -ComObject WScript.Shell
-$lnk = $shell.CreateShortcut((Join-Path $group "$LabelFolder.lnk"))
-$lnk.TargetPath = $Root
-$lnk.Save()
+try {
+    $group = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Warehouse OS'
+    New-Item -ItemType Directory -Force -Path $group | Out-Null
+    Set-Content -Path (Join-Path $group "$LabelPanel.url") -Encoding ascii `
+        -Value "[InternetShortcut]`r`nURL=http://localhost:$WebPort"
+    Set-Content -Path (Join-Path $group "$LabelFolder.url") -Encoding ascii `
+        -Value "[InternetShortcut]`r`nURL=file:///$($Root -replace '\\','/')"
+} catch {
+    Warn "Could not create Start Menu shortcuts (not fatal): $($_.Exception.Message)"
+}
 
 # ------------------------------------------------------------- health check
 # Either this says OK or it says exactly what failed. Finishing an install with

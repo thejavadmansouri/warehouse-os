@@ -230,6 +230,26 @@ $nssm = Get-ChildItem $tmpN -Filter nssm.exe -Recurse |
 if (-not $nssm) { throw 'nssm.exe (win64) not found' }
 Copy-Item $nssm.FullName (Join-Path $payload 'nssm.exe')
 
+# ------------------------------------------------------------ VC++ runtime
+<#
+    PostgreSQL 18's binaries are built with a recent MSVC toolchain. On a machine
+    whose Visual C++ runtime is older than theirs, initdb crashes during its
+    post-bootstrap step with access violation 0xC0000005 -- the binary loads but
+    a specific code path faults. Bundling the current redistributable and running
+    it first (see installer.iss) means the customer's server needs nothing
+    preinstalled.
+#>
+Say 'Downloading the Visual C++ redistributable'
+$vc = Join-Path $payload 'vc_redist.x64.exe'
+try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' `
+        -OutFile $vc -UseBasicParsing
+} catch {
+    throw "Could not download vc_redist.x64.exe: $($_.Exception.Message). Download it by hand to $vc and rerun."
+}
+if (-not (Test-Path $vc)) { throw 'vc_redist.x64.exe was not downloaded' }
+
 # ---------------------------------------------------------------- scripts
 Say 'Copying the install scripts'
 $scriptsOut = Join-Path $payload 'scripts'
