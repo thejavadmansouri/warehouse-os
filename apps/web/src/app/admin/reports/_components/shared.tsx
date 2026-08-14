@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { downloadReportExcel } from "@/lib/api";
 import { money, toFa } from "@/lib/format";
+import { jalaliMonthLength, toGregorian, toJalali } from "@/lib/jalali";
 
 /** رنگ نمودار — از توکن طراحی. `hsl(var(--primary))` اینجا غلط است چون تم oklch است. */
 export const CHART_COLOR = "#2563EB";
@@ -22,43 +23,70 @@ export const PRESETS: { id: PresetRange; label: string }[] = [
   { id: "last_month", label: "ماه گذشته" },
 ];
 
-/** بازه‌ها. هفته در ایران از شنبه شروع می‌شود. */
+/** آخرین لحظه‌ی همان روزِ محلی — مرزِ بالای بازه. */
+function endOfDay(d: Date): Date {
+  const out = new Date(d);
+  out.setHours(23, 59, 59, 999);
+  return out;
+}
+
+/**
+ * بازه‌های آماده‌ی گزارش.
+ *
+ * ⚠️ «ماه» یعنی **ماه شمسی**، نه ماه میلادی.
+ *
+ * قبلاً این‌جا `start.setDate(1)` و `setMonth(...)` بود — یعنی «این ماه» از یکم
+ * ماه میلادی حساب می‌شد. برای مغازه‌ای که ماه مالی‌اش مرداد و شهریور است، گزارش
+ * فروش و سودِ ماه از پایه بازه‌ی غلط می‌گرفت و هیچ‌جا هم اعلام نمی‌شد. هفته و
+ * روز اما واحدهای مشترک‌اند و همان حساب محلی درست است (هفته از شنبه).
+ */
 export function presetDates(preset: PresetRange): { startDate: string; endDate: string } {
   const now = new Date();
-  const start = new Date(now);
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
 
   switch (preset) {
-    case "today":
+    case "today": {
+      const start = new Date(now);
       start.setHours(0, 0, 0, 0);
-      break;
-    case "yesterday":
-      start.setDate(now.getDate() - 1);
+      return { startDate: start.toISOString(), endDate: endOfDay(now).toISOString() };
+    }
+
+    case "yesterday": {
+      const day = new Date(now);
+      day.setDate(now.getDate() - 1);
+      const start = new Date(day);
       start.setHours(0, 0, 0, 0);
-      end.setDate(now.getDate() - 1);
-      end.setHours(23, 59, 59, 999);
-      break;
+      return { startDate: start.toISOString(), endDate: endOfDay(day).toISOString() };
+    }
+
     case "this_week": {
       // getDay(): یکشنبه ۰ … شنبه ۶. فاصله تا شنبه‌ی گذشته:
       const back = (now.getDay() + 1) % 7;
+      const start = new Date(now);
       start.setDate(now.getDate() - back);
       start.setHours(0, 0, 0, 0);
-      break;
+      return { startDate: start.toISOString(), endDate: endOfDay(now).toISOString() };
     }
-    case "this_month":
-      start.setDate(1);
-      start.setHours(0, 0, 0, 0);
-      break;
-    case "last_month":
-      start.setMonth(now.getMonth() - 1, 1);
-      start.setHours(0, 0, 0, 0);
-      end.setDate(0);
-      end.setHours(23, 59, 59, 999);
-      break;
-  }
 
-  return { startDate: start.toISOString(), endDate: end.toISOString() };
+    case "this_month": {
+      const { jy, jm } = toJalali(now);
+      return {
+        startDate: toGregorian(jy, jm, 1).toISOString(),
+        endDate: endOfDay(now).toISOString(),
+      };
+    }
+
+    case "last_month": {
+      const today = toJalali(now);
+      // فروردین که برگردیم، اسفندِ سال قبل است.
+      const jy = today.jm === 1 ? today.jy - 1 : today.jy;
+      const jm = today.jm === 1 ? 12 : today.jm - 1;
+      return {
+        startDate: toGregorian(jy, jm, 1).toISOString(),
+        // طولِ اسفند به کبیسه‌بودنِ سال بستگی دارد؛ jalaliMonthLength خودش می‌داند.
+        endDate: endOfDay(toGregorian(jy, jm, jalaliMonthLength(jy, jm))).toISOString(),
+      };
+    }
+  }
 }
 
 /** برچسب کوتاه شمسی برای محور نمودار: «۱۲ مرداد» */
@@ -195,4 +223,4 @@ export function NoData({ onWiden }: { onWiden?: () => void }) {
 }
 
 export const sum = (rows: number[]) => rows.reduce((a, b) => a + b, 0);
-export const t = (n: number) => `${money(n)} تومان`;
+export const t = (n: number) => `${money(n)} ریال`;

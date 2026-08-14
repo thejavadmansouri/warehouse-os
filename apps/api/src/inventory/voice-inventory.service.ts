@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ParsingEngineService } from '../engine/parsing-engine.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
@@ -24,7 +24,7 @@ export class VoiceInventoryService {
     });
 
     if (!location) {
-      throw new Error('Location not found');
+      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
     }
 
     const engineResult = this.parsingEngine.parse(text);
@@ -132,7 +132,7 @@ export class VoiceInventoryService {
     });
 
     if (!location) {
-      throw new Error('Location not found');
+      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
     }
 
     const engineResult = this.parsingEngine.parse(text);
@@ -227,7 +227,7 @@ export class VoiceInventoryService {
     });
 
     if (!location) {
-      throw new Error('موقعیت پیدا نشد');
+      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
     }
 
     const inventory = await this.inventoryOperation.execute({

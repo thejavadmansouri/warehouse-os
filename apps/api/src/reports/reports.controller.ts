@@ -26,28 +26,33 @@ const COLUMN_LABELS: Record<string, string> = {
   phone: 'شماره تماس',
   productName: 'نام کالا',
   sku: 'کد کالا',
-  amount: 'مبلغ (تومان)',
+  amount: 'مبلغ (ریال)',
   itemCount: 'تعداد اقلام',
   quantitySold: 'تعداد فروش',
-  totalRevenue: 'فروش (تومان)',
-  totalCost: 'بهای خرید (تومان)',
-  profit: 'سود (تومان)',
-  totalProfit: 'سود (تومان)',
+  totalRevenue: 'فروش (ریال)',
+  totalCost: 'بهای خرید (ریال)',
+  profit: 'سود (ریال)',
+  totalProfit: 'سود (ریال)',
   marginPercent: 'حاشیه سود ٪',
-  creditBalance: 'مانده بدهی (تومان)',
+  creditBalance: 'مانده بدهی (ریال)',
   currentStock: 'موجودی',
   minStock: 'حد سفارش',
   shortage: 'کسری',
-  totalSalesAmount: 'مبلغ فروش (تومان)',
+  totalSalesAmount: 'مبلغ فروش (ریال)',
   totalInvoices: 'تعداد فاکتور',
-  totalSalesAmountSum: 'فروش کل (تومان)',
-  averageInvoiceAmount: 'میانگین فاکتور (تومان)',
+  totalSalesAmountSum: 'فروش کل (ریال)',
+  averageInvoiceAmount: 'میانگین فاکتور (ریال)',
   cancelledInvoicesCount: 'فاکتور باطل‌شده',
   status: 'وضعیت',
+  // گزارش سهم دسته‌ی مشتری — totalProfit از بالا می‌آید
+  categoryName: 'دسته مشتری',
+  totalAmount: 'مبلغ فروش (ریال)',
+  invoiceCount: 'تعداد فاکتور',
+  sharePercent: 'سهم از فروش ٪',
 };
 
 /** ستون‌هایی که برای کاربر نهایی معنا ندارند. */
-const HIDDEN_COLUMNS = new Set(['id', 'productId', 'customerId', 'sellerId']);
+const HIDDEN_COLUMNS = new Set(['id', 'productId', 'customerId', 'sellerId', 'color']);
 
 const STATUS_LABELS: Record<string, string> = {
   IN_HAND: 'نزد ما',
@@ -170,6 +175,15 @@ export class ReportsController {
   async sellerPerformance(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
     const r = await this.service.sellerPerformance({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
     if (q.format === 'excel') return toExcel(res, r.sellers.data, 'sellers');
+    return r;
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('sales-by-category')
+  async salesByCategory(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
+    const r = await this.service.salesByCategory({ ...q });
+    if (q.format === 'excel') return toExcel(res, r.categories, 'sales-by-category');
     return r;
   }
 }

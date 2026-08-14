@@ -8,8 +8,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
+import { Role } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { Roles } from '../auth/roles.decorator';
 import { MobileCountService } from './mobile-count.service';
 
 @Controller('mobile')
@@ -84,16 +87,18 @@ export class MobileController {
     return this.countService.addVoiceItem(countId, body.text, req.user.userId);
   }
 
-  // لیست آیتم‌های در انتظار تایید یا نیازمند اصلاح
+  // لیست آیتم‌های در انتظار تایید یا نیازمند اصلاح — فقط مدیر.
   @Get('review/pending')
-  @UseGuards(JwtAuthGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
   async pendingReview(@Req() req: any) {
     return this.countService.listPendingReview();
   }
 
-  // تایید دستی یه آیتم (توسط مدیر/کاربر)
+  // تایید دستی یه آیتم — فقط مدیر. این همان تأییدی است که کلِ چرخه‌ی «پیشنهاد
+  // بده، مدیر تأیید کند» رویش بنا شده؛ اگر کارگر خودش بزند، بازبینی بی‌معنا
+  // می‌شود و می‌تواند productId دلخواه به موجودی بچسباند.
   @Post('review/:itemId/confirm')
-  @UseGuards(JwtAuthGuard)
+  @Roles(Role.ADMIN, Role.MANAGER)
   async confirmReview(
     @Param('itemId') itemId: string,
     @Body() body: { productId?: string },

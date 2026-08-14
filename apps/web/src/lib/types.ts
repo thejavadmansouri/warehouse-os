@@ -29,7 +29,8 @@ export interface AuthMeResponse {
 // طبق بخش ۵ — ساختار خطای یکسان
 export interface ApiErrorBody {
   error: string;
-  message?: string;
+  /** ValidationPipe نست به‌جای یک رشته، آرایه‌ای از خطاهای فیلدها می‌دهد. */
+  message?: string | string[];
   available?: number;
   /** فیلدهای اختصاصی هر خطا — مثلاً lineIndex در INSUFFICIENT_STOCK. */
   [key: string]: unknown;
@@ -125,6 +126,14 @@ export interface Warehouse {
   name: string;
   code: string;
   isActive?: boolean;
+  // تعداد قفسه‌های زیر انبار — findAll/inactive تختش می‌کنند. اگر > 0 باشد،
+  // کد قابل ویرایش نیست (روی لیبل‌ها چاپ شده).
+  locationCount?: number;
+}
+
+export interface ReactivateWarehouseResult {
+  mode: "reactivated" | "already-active";
+  message: string;
 }
 
 export interface LocationType {
@@ -187,6 +196,8 @@ export interface CreateWarehouseDto {
 
 export interface UpdateWarehouseDto {
   name?: string;
+  // فقط وقتی انبار هیچ قفسه‌ای ندارد پذیرفته می‌شود (سرور بررسی می‌کند).
+  code?: string;
 }
 
 // خروجی GET /locations/:id/subtree-stats — برای دیالوگ تأیید حذف
@@ -197,11 +208,26 @@ export interface LocationSubtreeStats {
   totalCount: number;
   hasHistory: boolean;
   willDeactivate: boolean;
+  // موجودیِ زنده‌ی نشسته روی این شاخه — اگر hasStock باشد، حذف بدون تعیینِ
+  // تکلیفِ موجودی (انتقال/تصفیه) رد می‌شود.
+  stockUnits: number;
+  stockProducts: number;
+  stockLocations: number;
+  hasStock: boolean;
+}
+
+/** تصمیمِ تکلیفِ موجودی هنگام حذفِ قفسه‌ی دارای موجودی. */
+export interface RemoveLocationStockOptions {
+  stockAction: "transfer" | "writeoff";
+  destinationLocationId?: string;
+  reason?: string;
 }
 
 export interface DeleteLocationResult {
   mode: "deleted" | "deactivated";
   affected: number;
+  movedUnits?: number;
+  stockAction?: "transfer" | "writeoff" | null;
   message: string;
 }
 
@@ -300,6 +326,48 @@ export interface InventoryLogsQuery {
   action?: InventoryAction;
   from?: string; // ISO date
   to?: string; // ISO date
+  page?: number;
+  limit?: number;
+}
+
+// GET /inventory/kardex/:productId — گردش کالا با مانده‌ی متحرک
+export interface KardexRow {
+  id: string;
+  createdAt: string;
+  action: InventoryAction;
+  docType: "SALE" | "PURCHASE" | "RETURN" | "MANUAL";
+  /** شناسه‌ی سندِ منبع — برای لینک به جزئیات فاکتور فروش. */
+  docId: string | null;
+  docNumber: number | null;
+  locationName: string | null;
+  inQty: number;
+  outQty: number;
+  balance: number;
+  unitPrice: number | null;
+}
+
+/** خلاصه‌ی بازه‌ی کاردکس — جمعِ وارد/خارج و فروش‌ها (بدون در نظر گرفتن فیلترِ action). */
+export interface KardexSummary {
+  totalIn: number;
+  totalOut: number;
+  saleCount: number;
+  saleValue: number;
+}
+
+export interface KardexResponse {
+  product: { id: string; name: string; sku: string };
+  currentStock: number;
+  summary: KardexSummary;
+  rows: {
+    data: KardexRow[];
+    meta: { total: number; page: number; limit: number; lastPage: number };
+  };
+}
+
+export interface KardexQuery {
+  startDate?: string;
+  endDate?: string;
+  action?: InventoryAction;
   page?: number;
   limit?: number;
 }
@@ -646,6 +714,8 @@ export interface StockLocation {
   locationBarcode: string;
   locationPath: string;
   quantity: number;
+  // قفسه‌اش حذف/غیرفعال شده ولی جنس رویش مانده.
+  stranded?: boolean;
 }
 
 /** یک مکانِ موجودی‌دار در نتیجه‌ی جست‌وجوی زنده (شکل خروجی /products/locate). */
@@ -655,6 +725,8 @@ export interface LocateLocation {
   code: string;
   path: string;
   quantity: number;
+  // قفسه حذف/غیرفعال شده ولی جنس رویش مانده.
+  stranded?: boolean;
 }
 
 /** GET /products/locate — کالا + خلاصه‌ی موجودی و آدرس قفسه، در یک درخواست. */
@@ -694,11 +766,168 @@ export interface Customer {
   firstName: string;
   lastName?: string | null;
   fullName: string;
+  /** آدرس مشتری — برای پیک و پیامک و صورتحساب. */
+  address?: string | null;
+  /** شماره ملی. */
+  nationalId?: string | null;
+  /** دسته‌ی مشتری — ارجاع به CustomerCategory. */
+  categoryId?: string | null;
+  category?: CustomerCategory | null;
   note?: string | null;
   smsOptOut?: boolean;
   phones: CustomerPhone[];
-  summary?: { totalPurchased: number; totalDue: number };
+  /** سقف اعتبار حساب‌باز (ریال). صفر = تعیین‌نشده. */
+  creditLimit?: number;
+  /** مهلت پرداخت پیش‌فرض به روز. */
+  creditDays?: number;
+  summary?: CustomerSummary;
   invoices?: InvoiceListRow[];
+}
+
+/** دسته‌ی مشتری — چیزی که مدیر تعریف می‌کند. */
+export interface CustomerCategory {
+  id: string;
+  name: string;
+  /** رنگ badge — HEX مثل `#16a34a`. */
+  color: string;
+  /** ترتیب نمایش — کم‌تر اول. */
+  sortOrder: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  /** تعداد مشتری‌های این دسته — فقط در لیست مدیریت می‌آید. */
+  _count?: { customers: number };
+}
+
+/** آمار خرید دوره‌ای مشتری — خروجی GET /sales/customers/:id/stats. */
+export interface CustomerPurchaseStats {
+  thisMonth: { total: number; count: number };
+  lastMonth: { total: number; count: number };
+  allTime: { total: number; count: number };
+  /** میانگین مبلغ هر فاکتور تأییدشده. */
+  averageInvoice: number;
+}
+
+/**
+ * خلاصه‌ی حساب مشتری.
+ *
+ * `totalDue` از دفتر حساب می‌آید (مانده‌ی اول دوره و برگشتی را هم می‌بیند)، ولی
+ * تفکیک جاری/سررسید/معوق از سررسیدِ فاکتورهاست. این دو نباید قاطی شوند.
+ */
+export interface CustomerSummary {
+  totalPurchased: number;
+  /** مانده‌ی واقعی. مثبت یعنی بدهکار. */
+  totalDue: number;
+  /** هنوز مهلت دارد. */
+  current: number;
+  dueToday: number;
+  overdue: number;
+  /** چکِ دریافت‌شده‌ای که هنوز وصول نشده. */
+  chequesInHandCount: number;
+}
+
+/** یک ردیف گردش حساب. */
+export type LedgerEntryType =
+  | "OPENING"
+  | "INVOICE"
+  | "RECEIPT"
+  | "INVOICE_CANCELLED"
+  | "RETURN"
+  | "CHEQUE_BOUNCED"
+  | "ADJUSTMENT";
+
+export interface LedgerEntry {
+  id: string;
+  type: LedgerEntryType;
+  /** مثبت = بدهی زیاد شده، منفی = کم شده. */
+  amount: number;
+  note?: string | null;
+  createdAt: string;
+  invoice?: { id: string; number: number } | null;
+  receipt?: { id: string; number: number } | null;
+  user?: { id: string; fullName: string } | null;
+}
+
+/** یک ردیف صورتحساب — بدهکار/بستانکار جدا + مانده‌ی متحرک از سمت سرور. */
+export interface LedgerEntryRow extends LedgerEntry {
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+/** خلاصه‌ی بازه‌ی صورتحساب. */
+export interface StatementSummary {
+  openingBalance: number;
+  totalDebit: number;
+  totalCredit: number;
+  closingBalance: number;
+}
+
+export interface StatementResponse {
+  rows: {
+    data: LedgerEntryRow[];
+    meta: { total: number; page: number; limit: number; lastPage: number };
+  };
+  summary: StatementSummary;
+}
+
+/** مشخصات مغازه — سربرگ همه‌ی برگه‌های چاپی. */
+export interface ShopSettings {
+  name: string;
+  phone: string;
+  address: string;
+  cardNumber: string;
+  cardHolder: string;
+  footer: string;
+}
+
+/** یک مشتریِ دارای حساب باز، با تفکیک سنیِ بدهی‌اش. */
+export interface Debtor {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  creditLimit: number;
+  creditDays: number;
+  totalDue: number;
+  /** null یعنی سقف اعتباری تعیین نشده. */
+  available: number | null;
+  current: number;
+  dueToday: number;
+  overdue: number;
+  nextDueDate: string | null;
+}
+
+export interface ReceivablesSummary {
+  customerCount: number;
+  totalDue: number;
+  current: number;
+  dueToday: number;
+  overdue: number;
+}
+
+/** اعلان‌ها — عمداً کم و مشخص، فقط چیزهایی که کسی رویشان عمل می‌کند. */
+export interface Alerts {
+  overdue: {
+    customerCount: number;
+    amount: number;
+    top: { id: string; fullName: string; amount: number }[];
+  };
+  cheques: {
+    count: number;
+    withinDays: number;
+    items: { id: string; number: string; dueDate: string }[];
+  };
+}
+
+/** نتیجه‌ی بررسی سقف اعتبار. هشدار است، نه مانع. */
+export interface CreditCheck {
+  limit: number;
+  currentDebt: number;
+  projected: number;
+  /** null یعنی سقفی تعیین نشده. */
+  available: number | null;
+  exceeded: boolean;
+  exceededBy: number;
 }
 
 export interface ChequeInput {
@@ -733,6 +962,8 @@ export interface CreateInvoiceDto {
   customer?: { firstName: string; lastName?: string; phone?: string } | null;
   discount?: number;
   note?: string;
+  /** سررسید بخش حساب‌باز (ISO). نفرستادنش = مهلت پیش‌فرضِ همین مشتری. */
+  dueDate?: string;
   lines: InvoiceLineInput[];
   payments?: PaymentInput[];
 }
@@ -749,6 +980,8 @@ export interface Invoice {
   status: InvoiceStatus;
   note?: string | null;
   cancelReason?: string | null;
+  /** فقط در فهرست پر می‌شود: آیا این فاکتور دستِ‌کم یک مرجوعی خورده است. */
+  hasReturns?: boolean;
   createdAt: string;
   customer?: Customer | null;
   warehouse?: { id: string; name: string; code: string };
@@ -765,7 +998,7 @@ export interface Invoice {
     quantity: number;
     unitPrice?: number | null;
     /**
-     * تخفیف همین ردیف به تومان.
+     * تخفیف همین ردیف به ریال.
      * برای فاکتورهای پیش از افزوده‌شدن این ستون null است — در آن حالت فقط
      * سرجمعِ تخفیف‌های ردیفی از اختلاف جمع ردیف‌ها با subtotal قابل استخراج است.
      */
@@ -781,6 +1014,8 @@ export interface InvoiceListRow {
   total: number;
   paidAmount: number;
   dueAmount: number;
+  /** سررسید بخش حساب‌باز. null یعنی فاکتور نسیه‌ای نداشته. */
+  dueDate?: string | null;
   status: InvoiceStatus;
   createdAt: string;
 }
@@ -820,7 +1055,17 @@ export interface ReportMeta {
 }
 
 export interface PeriodicSalesReport {
-  summary: { totalAmount: number; invoiceCount: number; averageInvoiceAmount: number };
+  summary: {
+    /** فروشِ ناخالص (پیش از کسرِ مرجوعی). */
+    totalAmount: number;
+    /** برگشت از فروش در همین بازه. */
+    returnsAmount: number;
+    returnCount: number;
+    /** فروشِ خالص = ناخالص − مرجوعی. */
+    netAmount: number;
+    invoiceCount: number;
+    averageInvoiceAmount: number;
+  };
   /** تاریخ ISO است؛ برچسب شمسی سمت کلاینت ساخته می‌شود. */
   chartData: { date: string; amount: number; count: number }[];
   invoices: {
@@ -861,15 +1106,29 @@ export interface PeriodicProfitReport {
   };
 }
 
+/**
+ * گزارش بدهکاران — حالا از همان دفتری می‌آید که صفحه‌ی مشتری از آن می‌خواند،
+ * پس دو صفحه هیچ‌وقت دو عدد نشان نمی‌دهند.
+ */
 export interface DebtorsReport {
-  summary: { totalDebtors: number; totalCreditBalance: number };
+  summary: {
+    totalDebtors: number;
+    totalCreditBalance: number;
+    current: number;
+    dueToday: number;
+    overdue: number;
+  };
   debtors: {
     data: {
       customerId: string;
       customerName: string;
       phone: string | null;
       creditBalance: number;
-      lastInvoiceAt: string;
+      current: number;
+      dueToday: number;
+      overdue: number;
+      nextDueDate: string | null;
+      creditLimit: number;
     }[];
     meta: ReportMeta;
   };
@@ -932,9 +1191,39 @@ export interface SellerPerformanceReport {
       totalProfit: number;
       averageInvoiceAmount: number;
       cancelledInvoicesCount: number;
+      /** مرجوعیِ فروشِ همین فروشنده در این بازه. */
+      returnsAmount: number;
+      returnsCount: number;
     }[];
     meta: ReportMeta;
   };
+}
+
+/** سهم هر دسته‌ی مشتری از فروش — خروجی GET /reports/sales-by-category. */
+export interface SalesByCategoryReport {
+  summary: {
+    /** فروشِ کلِ تأییدشده در بازه (ریال). */
+    totalSales: number;
+    /** فروشِ مشتری‌هایی که دسته دارند. */
+    categorizedSales: number;
+    /** فروشِ مشتری‌های بی‌دسته (سطل «بدون دسته»). */
+    uncategorizedSales: number;
+    /** تعداد دسته‌هایِ دارای فروش در این بازه. */
+    categoryCount: number;
+    topCategory: { name: string; amount: number } | null;
+  };
+  categories: {
+    /** null یعنی سطل «بدون دسته». */
+    categoryId: string | null;
+    categoryName: string;
+    color: string;
+    totalAmount: number;
+    totalProfit: number;
+    invoiceCount: number;
+    /** سهم از کل فروش بازه — جمع روی ۱۰۰ می‌شود. */
+    sharePercent: number;
+    averageInvoiceAmount: number;
+  }[];
 }
 
 // =====================================================
@@ -961,6 +1250,86 @@ export interface Receipt {
   allocations?: ReceiptAllocation[];
 }
 
+// =====================================================
+// برگشت از فروش (مرجوعی)
+// =====================================================
+
+/** یک ردیفِ قابل‌برگشت از یک فاکتور — خوراکِ صفحه‌ی مرجوعی. */
+export interface ReturnableLine {
+  saleLogId: string;
+  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  location: { id: string; name: string; code: string; path: string };
+  unitPrice: number;
+  lineDiscount: number;
+  sold: number;
+  alreadyReturned: number;
+  returnable: number;
+  /** قیمتِ مؤثرِ هر واحد پس از سهمِ تخفیفِ فاکتور — پایه‌ی مبلغِ برگشت. */
+  effectiveUnitPrice: number;
+}
+
+export interface ReturnableInvoice {
+  invoice: {
+    id: string;
+    number: number;
+    status: InvoiceStatus;
+    total: number;
+    dueAmount: number;
+    customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  };
+  lines: ReturnableLine[];
+  /** فاکتورِ باطل‌شده قابلِ مرجوعی نیست. */
+  returnable: boolean;
+}
+
+export interface CreateReturnDto {
+  idempotencyKey?: string;
+  invoiceId: string;
+  /** CASH/CARD وجه از صندوق؛ CREDIT کاهشِ بدهی/بستانکاری در دفتر. */
+  refundMethod: PaymentMethod;
+  reason: string;
+  note?: string;
+  lines: { saleLogId: string; quantity: number; restock?: boolean }[];
+}
+
+export interface SaleReturn {
+  id: string;
+  number: number;
+  invoiceId: string;
+  refundMethod: PaymentMethod;
+  refundAmount: number;
+  reason: string;
+  note?: string | null;
+  createdAt: string;
+  invoice?: { id: string; number: number } | null;
+  customer?: (Customer & { fullName?: string }) | null;
+  warehouse?: { id: string; name: string; code: string } | null;
+  user?: { id: string; fullName: string; username?: string } | null;
+  lines?: {
+    id: string;
+    quantity: number;
+    unitRefund: number;
+    lineRefund: number;
+    restock: boolean;
+    product: { id: string; name: string; sku?: string | null; unit?: string | null };
+    location: { id: string; name: string; code: string; path: string };
+  }[];
+  _count?: { lines: number };
+}
+
+export interface SaleReturnListRow {
+  id: string;
+  number: number;
+  refundMethod: PaymentMethod;
+  refundAmount: number;
+  reason: string;
+  createdAt: string;
+  invoice?: { id: string; number: number } | null;
+  customer?: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  user?: { id: string; fullName: string } | null;
+  _count?: { lines: number };
+}
+
 export type QuotationStatus = "ACTIVE" | "CONVERTED" | "CANCELLED";
 
 export interface Quotation {
@@ -976,6 +1345,7 @@ export interface Quotation {
   isExpired: boolean;
   remainingMinutes: number;
   customerName: string | null;
+  customerId?: string | null;
   note?: string | null;
   convertedInvoiceId?: string | null;
   createdAt: string;
@@ -983,6 +1353,8 @@ export interface Quotation {
   _count?: { lines: number };
   lines?: {
     id: string;
+    /** مکان اختیاری است — هنگام قیمت‌دادن هنوز لزومی ندارد قفسه مشخص باشد. */
+    locationId?: string | null;
     quantity: number;
     unitPrice: number;
     discount: number;
@@ -1017,6 +1389,44 @@ export interface BackupRun {
   filePath: string | null;
   sizeBytes: number | null;
   verified: boolean;
+  error: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+}
+
+/** یک فایل بک‌آپ روی سرور — خوراکِ جدولِ بازیابی. */
+export interface BackupFile {
+  name: string;
+  sizeBytes: number;
+  modifiedAt: string;
+  /** آرشیوی که خوانده نشود بازیابی هم نمی‌شود. */
+  verified: boolean;
+}
+
+export interface BackupFilesResponse {
+  directory: string;
+  files: BackupFile[];
+}
+
+export interface RestoreResult {
+  success: true;
+  sourceFile: string;
+  /** بک‌آپی که خودکار پیش از بازیابی گرفته شد — راهِ برگشت. */
+  preRestoreFile: string | null;
+  counts: { products: number; users: number };
+  /**
+   * بک‌آپ از نسخه‌ی قدیمی‌تری بوده و این مایگریشن‌ها روی دیتابیس نیستند.
+   * خالی یعنی همه‌چیز هم‌نسخه است.
+   */
+  pendingMigrations: string[];
+  message: string;
+}
+
+export interface RestoreRun {
+  id: string;
+  sourceFile: string;
+  preRestoreFile: string | null;
+  status: "RUNNING" | "SUCCESS" | "FAILED";
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
@@ -1058,7 +1468,7 @@ export interface Worker {
 // قیمت‌گذاری
 // ---------------------------------------------------------------------------
 
-/** یک ردیف تاریخچه‌ی قیمت. قیمت‌ها تومان و عدد صحیح‌اند. */
+/** یک ردیف تاریخچه‌ی قیمت. قیمت‌ها ریال و عدد صحیح‌اند. */
 export interface ProductPrice {
   id: string;
   productId: string;
@@ -1107,3 +1517,66 @@ export interface BulkPriceResult {
   skipped: number;
   dryRun: boolean;
 }
+
+// =====================================================
+// فاکتور خرید — ورودِ کالا از برگه‌ی فروشنده
+// =====================================================
+
+export interface PurchaseLineInput {
+  productId: string;
+  /** نفرستادنش یعنی «قفسه را نمی‌دانم» — سرور روی «انبار موقت» می‌گذارد. */
+  locationId?: string;
+  quantity: number;
+  /** قیمت خرید هر واحد به ریال. همین است که گزارش سود را ممکن می‌کند. */
+  unitPrice: number;
+  discount?: number;
+}
+
+export interface CreatePurchaseInput {
+  idempotencyKey: string;
+  warehouseId: string;
+  supplierId?: string | null;
+  /** شماره‌ی فاکتور روی برگه‌ی فروشنده. */
+  supplierRef?: string;
+  /** تاریخ روی برگه (ISO) — تبدیل شمسی سمت کلاینت. */
+  invoiceDate?: string;
+  discount?: number;
+  note?: string;
+  lines: PurchaseLineInput[];
+}
+
+export interface PurchaseLine {
+  id: string;
+  productId: string;
+  locationId: string;
+  quantity: number;
+  unitPrice: number | null;
+  product?: { id: string; name: string; sku: string; unit?: string | null };
+  location?: { id: string; name: string; code: string; path?: string | null };
+}
+
+export interface Purchase {
+  id: string;
+  number: number;
+  supplierId: string | null;
+  warehouseId: string;
+  supplierRef: string | null;
+  invoiceDate: string | null;
+  subtotal: number;
+  discount: number;
+  total: number;
+  status: "CONFIRMED" | "CANCELLED";
+  note: string | null;
+  cancelReason: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  supplier?: { id: string; name: string; phone?: string | null } | null;
+  user?: { id: string; fullName: string | null } | null;
+  lines?: PurchaseLine[];
+  _count?: { lines: number };
+}
+
+export const PURCHASE_STATUS_LABELS: Record<string, string> = {
+  CONFIRMED: "ثبت شده",
+  CANCELLED: "باطل شده",
+};

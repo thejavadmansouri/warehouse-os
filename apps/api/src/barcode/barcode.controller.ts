@@ -10,6 +10,9 @@ import {
   UseGuards
 } from '@nestjs/common';
 
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
+
 import { BarcodeService } from './barcode.service';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -23,6 +26,8 @@ export class BarcodeController {
   ) {}
 
 
+  // خواندنی — هر نقشی می‌تواند بارکد بزند و مشخصات کالا را ببیند.
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES, Role.STAFF)
   @Get('lookup/:barcode')
   lookup(
     @Param('barcode') barcode:string
@@ -33,6 +38,16 @@ export class BarcodeController {
   }
 
 
+  /*
+   * سه روتِ زیر موجودی را عوض می‌کنند و تا امروز **هیچ نقشی رویشان تعریف نشده
+   * بود**. چون RolesGuard وقتی متادیتا نباشد اجازه می‌دهد، هر کاربر لاگین‌شده —
+   * از جمله STAFF — می‌توانست از اینجا OUT/ADJUST/TRANSFER بزند و همان محدودیتی
+   * را که روی /inventory/out گذاشته شده بود دور بزند.
+   *
+   * پس همان محدودیت اینجا هم اعمال می‌شود، و userId در هر سه مسیر پاس داده
+   * می‌شود تا ردیف لاگ عاملِ مشخص داشته باشد (قانون ۱).
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
   @UseGuards(JwtAuthGuard)
   @Post('operation')
   operation(
@@ -46,29 +61,34 @@ export class BarcodeController {
 
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post('operation-with-image')
   @UseInterceptors(FileInterceptor('file'))
   async operationWithImage(
     @Body() dto:any,
-    @UploadedFile() file:any
+    @UploadedFile() file:any,
+    @Req() req:any
   ){
 
     return this.barcodeService.operation(
       {
         ...dto,
         image:file ? `/storage/inventory-logs/${file.filename}` : null
-      }
+      },
+      req.user?.userId
     );
 
   }
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post('scan')
   scan(
-    @Body() dto:any
+    @Body() dto:any,
+    @Req() req:any
   ){
 
-    return this.barcodeService.scan(dto);
+    return this.barcodeService.scan(dto, req.user?.userId);
 
   }
 

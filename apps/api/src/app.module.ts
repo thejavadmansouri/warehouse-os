@@ -34,12 +34,18 @@ import { PrintJobsModule } from './print-jobs/print-jobs.module';
 import { PendingOperationsModule } from './pending-operations/pending-operations.module';
 import { ProductRequestsModule } from './product-requests/product-requests.module';
 import { SalesModule } from './sales/sales.module';
+import { PurchasesModule } from './purchases/purchases.module';
 import { PickTasksModule } from './pick-tasks/pick-tasks.module';
 import { ReportsModule } from './reports/reports.module';
 import { BackupsModule } from './backups/backups.module';
 
+import { ShopModule } from './shop/shop.module';
+import { RealtimeModule } from './realtime/realtime.module';
+
 @Module({
   imports: [
+    RealtimeModule,
+    ShopModule,
     ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'storage'),
@@ -72,6 +78,7 @@ LocationBuilderModule,
     PendingOperationsModule,
     ProductRequestsModule,
     SalesModule,
+    PurchasesModule,
     PickTasksModule,
     ReportsModule,
     BackupsModule,

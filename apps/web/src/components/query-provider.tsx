@@ -2,6 +2,16 @@
 
 import * as React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useLiveEvents } from "@/lib/use-live-events";
+
+/**
+ * داخلِ Provider mount می‌شود تا useQueryClient از context به همان client برسد.
+ * چیزی render نمی‌کند؛ فقط سوکتِ realtime را نگه می‌دارد.
+ */
+function LiveEventsBridge() {
+  useLiveEvents();
+  return null;
+}
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = React.useState(
@@ -17,5 +27,10 @@ export function QueryProvider({ children }: { children: React.ReactNode }) {
       })
   );
 
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return (
+    <QueryClientProvider client={client}>
+      <LiveEventsBridge />
+      {children}
+    </QueryClientProvider>
+  );
 }

@@ -21,3 +21,10 @@ backup/*.sql
 
 # نمونه‌ی تنظیمات باید کامیت شود؛ فقط مقادیر واقعی نه.
 !.env.example
+
+# ابزار جانبی — نباید کامیت شود
+.freebuff/
+backup_before_seed.sql
+backup/*.jsonl
+apps/api/.cs.tmp.ts
+apps/api/.kardo_verify.cjs

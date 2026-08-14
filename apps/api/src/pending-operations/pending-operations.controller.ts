@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 import { PendingOperationsService } from './pending-operations.service';
 import { SyncOperationsDto } from './dto/sync-operations.dto';
+import { ApproveManyDto } from './dto/approve-many.dto';
 
 @Controller()
 export class PendingOperationsController {
@@ -28,6 +29,13 @@ export class PendingOperationsController {
   @Get('manager/review/pending')
   listPending(@Query('warehouseId') warehouseId?: string) {
     return this.service.listPending(warehouseId);
+  }
+
+  // تأیید گروهی — قبل از مسیرِ `:id/approve` تا static صریح باشد.
+  @Roles(Role.MANAGER, Role.ADMIN)
+  @Post('manager/review/approve-many')
+  approveMany(@Body() dto: ApproveManyDto, @Req() req: any) {
+    return this.service.approveMany(dto.ids, req.user?.userId);
   }
 
   // Approve = commit to stock (manager may override product/quantity).

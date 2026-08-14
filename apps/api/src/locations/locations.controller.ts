@@ -6,10 +6,11 @@ import {
   Param,
   Query,
   Body,
+  Req,
 } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
-import { LocationsService } from './locations.service';
+import { LocationsService, RemoveLocationOptions } from './locations.service';
 import { CreateLocationDto } from './dto/create-location.dto';
 
 @Controller('locations')
@@ -56,13 +57,23 @@ export class LocationsController {
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('bulk-delete')
-  bulkDelete(@Body() dto: { ids: string[] }) {
-    return this.service.bulkRemove(dto.ids ?? []);
+  bulkDelete(
+    @Body() dto: { ids: string[] } & RemoveLocationOptions,
+    @Req() req: any,
+  ) {
+    const { ids, ...stockOpts } = dto ?? { ids: [] };
+    return this.service.bulkRemove(ids ?? [], stockOpts, req.user?.userId);
   }
 
+  // بدنه اختیاری است: حذفِ خالی همان DELETE سابق را می‌خواهد؛ حذفِ قفسه‌ی
+  // دارای موجودی باید stockAction (transfer/writeoff) بفرستد.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.service.remove(id);
+  remove(
+    @Param('id') id: string,
+    @Body() body: RemoveLocationOptions | undefined,
+    @Req() req: any,
+  ) {
+    return this.service.remove(id, body, req.user?.userId);
   }
 }

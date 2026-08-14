@@ -1,4 +1,10 @@
-import { Injectable, OnModuleInit, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  UnauthorizedException,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
 import { randomBytes, randomUUID } from 'crypto';
@@ -11,6 +17,65 @@ export class AuthService implements OnModuleInit {
     private prisma: PrismaService,
     private jwtService: JwtService,
   ) {}
+
+
+  /*
+   * قفلِ ساده‌ی brute-force، در حافظه.
+   *
+   * سرور تک‌نمونه و on-prem است، پس Map کافی است و نیازی به Redis/وابستگیِ تازه
+   * نیست. بعد از چند تلاشِ ناموفقِ پیاپی روی یک نام کاربری، آن نام برای چند دقیقه
+   * قفل می‌شود. argon2 کند است ولی جایگزینِ قفل نیست.
+   */
+  private readonly loginAttempts = new Map<string, { count: number; lockUntil: number }>();
+  private readonly MAX_FAILS = 5;
+  private readonly LOCK_MS = 5 * 60_000;
+
+  private assertNotLocked(key: string) {
+    const rec = this.loginAttempts.get(key);
+    if (!rec) return;
+
+    // قفلِ منقضی پاک می‌شود، وگرنه Map با هر نام کاربریِ تصادفی بزرگ‌تر می‌ماند.
+    if (rec.lockUntil && rec.lockUntil <= Date.now()) {
+      this.loginAttempts.delete(key);
+      return;
+    }
+
+    if (rec.lockUntil > Date.now()) {
+      const seconds = Math.ceil((rec.lockUntil - Date.now()) / 1000);
+      const mins = Math.max(1, Math.ceil(seconds / 60));
+
+      /*
+       * بدنه باید **آبجکت** باشد، نه رشته.
+       *
+       * `new HttpException('متن', 429)` بدنه را یک رشته‌ی خام JSON می‌کند. کلاینت
+       * دنبال `body.error` می‌گردد و روی رشته `undefined` می‌گیرد، پس این پیام را
+       * دور می‌ریخت و به‌جایش «خطای غیرمنتظره» نشان می‌داد — یعنی کاربرِ قفل‌شده
+       * هیچ‌وقت نمی‌فهمید قفل شده و فکر می‌کرد رمزش کار نمی‌کند.
+       */
+      throw new HttpException(
+        {
+          error:'TOO_MANY_ATTEMPTS',
+          retryAfterSeconds: seconds,
+          message:`تلاش‌های ناموفقِ زیاد — ${mins} دقیقه‌ی دیگر دوباره امتحان کنید.`,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+  }
+
+  private recordFail(key: string) {
+    const rec = this.loginAttempts.get(key) ?? { count: 0, lockUntil: 0 };
+    rec.count += 1;
+    if (rec.count >= this.MAX_FAILS) {
+      rec.lockUntil = Date.now() + this.LOCK_MS;
+      rec.count = 0;
+    }
+    this.loginAttempts.set(key, rec);
+  }
+
+  private clearFails(key: string) {
+    this.loginAttempts.delete(key);
+  }
 
 
   async onModuleInit() {
@@ -59,6 +124,10 @@ export class AuthService implements OnModuleInit {
     pass: string
   ) {
 
+    // کلیدِ قفل — نامِ نرمال‌شده، تا «Admin» و «admin» یک حساب شمرده شوند.
+    const key = (username ?? '').toLowerCase().trim();
+    this.assertNotLocked(key);
+
 
     const user = await this.prisma.user.findUnique({
 
@@ -71,6 +140,9 @@ export class AuthService implements OnModuleInit {
 
 
     if (!user) {
+
+      // نامِ ناموجود هم شمرده می‌شود تا شمارشِ نام‌های کاربری کند شود.
+      this.recordFail(key);
 
       throw new UnauthorizedException(
         'نام کاربری یا رمز عبور اشتباه است.'
@@ -132,11 +204,17 @@ export class AuthService implements OnModuleInit {
 
     if (!isMatch) {
 
+      this.recordFail(key);
+
       throw new UnauthorizedException(
         'نام کاربری یا رمز عبور اشتباه است.'
       );
 
     }
+
+
+    // ورودِ موفق — شمارنده‌ی تلاش‌ها صفر می‌شود.
+    this.clearFails(key);
 
 
 

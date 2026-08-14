@@ -11,27 +11,32 @@ import { SalesService } from './sales.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { normalizePhone } from '../common/phone.util';
 
+import {
+  ConvertQuotationDto,
+  CreateQuotationDto,
+  QuotationLineDto,
+  UpdateQuotationDto,
+} from './dto/quotation.dto';
 
-export interface QuotationLineInput {
-  productId: string;
-  locationId?: string;
-  quantity: number;
-  unitPrice: number;
-  discount?: number;
-}
 
-export interface CreateQuotationInput {
-  warehouseId: string;
-  customerId?: string;
+/*
+ * شکلِ ورودی‌ها از خودِ DTOها می‌آید، نه از interfaceهای موازی.
+ *
+ * تا امروز کنترلر این interfaceها را به‌عنوان تایپِ `@Body()` می‌داد؛ چون
+ * interface در زمان اجرا وجود ندارد، `ValidationPipe` هیچ‌وقت اجرا نمی‌شد و
+ * ورودی اعتبارسنجی‌نشده مستقیم وارد ریاضیِ پول می‌شد.
+ */
+export type QuotationLineInput = QuotationLineDto;
+export type CreateQuotationInput = CreateQuotationDto;
+export type UpdateQuotationInput = UpdateQuotationDto;
+
+/** مرجعِ مشتری — هم ساخت و هم ویرایش از همین استفاده می‌کنند. */
+type CustomerRef = {
+  customerId?: string | null;
   customer?: { firstName: string; lastName?: string; phone?: string };
-  discount?: number;
-  note?: string;
-  /** مدت اعتبار به دقیقه — ۶۰ یعنی یک ساعت، ۱۴۴۰ یعنی یک شبانه‌روز. */
-  validForMinutes?: number;
-  /** یا مستقیم تاریخ انقضا (ISO). اگر هر دو داده شود، این اولویت دارد. */
-  validUntil?: string;
-  lines: QuotationLineInput[];
-}
+};
+
+type ValidRef = { validUntil?: string; validForMinutes?: number };
 
 const DEFAULT_VALID_MINUTES = 24 * 60;
 const INT4_MAX = 2_147_483_647;
@@ -55,29 +60,7 @@ export class QuotationsService {
    */
   async create(input: CreateQuotationInput, userId?: string) {
 
-    if (!input.lines?.length) {
-      throw new BadRequestException({
-        error: 'NO_LINES',
-        message: 'پیش‌فاکتور باید حداقل یک ردیف داشته باشد',
-      });
-    }
-
-    input.lines.forEach((l, i) => {
-      if (!l.quantity || l.quantity <= 0) {
-        throw new BadRequestException({
-          error: 'INVALID_QUANTITY',
-          lineIndex: i,
-          message: 'تعداد باید بزرگ‌تر از صفر باشد',
-        });
-      }
-      if (l.unitPrice < 0) {
-        throw new BadRequestException({
-          error: 'INVALID_PRICE',
-          lineIndex: i,
-          message: 'قیمت نمی‌تواند منفی باشد',
-        });
-      }
-    });
+    this.assertLinesValid(input.lines);
 
     const subtotal = input.lines.reduce(
       (s, l) => s + l.quantity * l.unitPrice - (l.discount ?? 0),
@@ -146,7 +129,7 @@ export class QuotationsService {
    */
   async convert(
     id: string,
-    body: { payments?: unknown[]; idempotencyKey?: string },
+    body: ConvertQuotationDto,
     userId?: string,
   ) {
     const q = await this.prisma.quotation.findUnique({
@@ -194,9 +177,22 @@ export class QuotationsService {
       });
     }
 
+    /*
+     * کلید یکتا **همیشه** از شناسه‌ی خودِ پیش‌فاکتور ساخته می‌شود و کلاینت
+     * نمی‌تواند عوضش کند.
+     *
+     * قبلاً `body.idempotencyKey ?? ...` بود: دو درخواستِ تبدیلِ هم‌زمان با دو
+     * کلیدِ متفاوت هر دو از گاردِ وضعیت رد می‌شدند (چون هنوز هیچ‌کدام CONVERTED
+     * نکرده بودند) و **دو فاکتور واقعی** می‌ساختند — موجودی دو بار کم می‌شد و
+     * مشتری دو بار بدهکار.
+     *
+     * با کلیدِ ثابت، قیدِ یکتاییِ دیتابیس این را در سطح دیتابیس می‌بندد: نفر دوم
+     * همان فاکتور اول را تحویل می‌گیرد. اگر بین ساختِ فاکتور و به‌روزرسانیِ وضعیت
+     * هم چیزی کرش کند، تلاش دوباره خودش را ترمیم می‌کند.
+     */
     const invoice = await this.sales.createInvoice(
       {
-        idempotencyKey: body.idempotencyKey ?? `quotation-${q.id}`,
+        idempotencyKey: `quotation-${q.id}`,
         warehouseId: q.warehouseId,
         customerId: q.customerId ?? undefined,
         discount: q.discount || undefined,
@@ -208,8 +204,11 @@ export class QuotationsService {
           unitPrice: l.unitPrice,
           discount: l.discount || undefined,
         })),
-        payments: body.payments as never,
-      } as never,
+        // مهلت/سررسید نسیه — مثل مسیر مستقیم F2؛ وقتی انتخاب شده باشد می‌رسد
+        // وگرنه خودِ createInvoice از مهلتِ مشتری می‌سازد.
+        dueDate: body.dueDate,
+        payments: body.payments,
+      },
       userId,
     );
 
@@ -222,6 +221,101 @@ export class QuotationsService {
     });
 
     return invoice;
+  }
+
+
+  /**
+   * ویرایش پیش‌فاکتور فعال — اقلام، قیمت‌ها، مشتری و یادداشت.
+   *
+   * موجودی هنوز دست نمی‌خورد (پیش‌فاکتور است)؛ ردیف‌ها بازنویسی می‌شوند و
+   * جمع‌ها دوباره حساب می‌شوند. فقط ACTIVE قابل ویرایش است — پیش‌فاکتورِ
+   * تبدیل‌شده باید همان بماند که مشتری دیده و خریده.
+   */
+  async update(id: string, input: UpdateQuotationInput) {
+    const q = await this.prisma.quotation.findUnique({ where: { id } });
+
+    if (!q) {
+      throw new NotFoundException({
+        error: 'QUOTATION_NOT_FOUND',
+        message: 'پیش‌فاکتور پیدا نشد',
+      });
+    }
+
+    if (q.status !== QuotationStatus.ACTIVE) {
+      throw new ConflictException({
+        error: 'NOT_ACTIVE',
+        status: q.status,
+        message: 'فقط پیش‌فاکتور فعال قابل ویرایش است',
+      });
+    }
+
+    this.assertLinesValid(input.lines);
+
+    const subtotal = input.lines.reduce(
+      (s, l) => s + l.quantity * l.unitPrice - (l.discount ?? 0),
+      0,
+    );
+    const discount = input.discount ?? 0;
+
+    if (discount > subtotal) {
+      throw new BadRequestException({
+        error: 'DISCOUNT_EXCEEDS_TOTAL',
+        message: 'تخفیف از مبلغ پیش‌فاکتور بیشتر است',
+      });
+    }
+
+    const total = subtotal - discount;
+
+    if (subtotal > INT4_MAX || total > INT4_MAX) {
+      throw new BadRequestException({
+        error: 'AMOUNT_TOO_LARGE',
+        message: 'مبلغ پیش‌فاکتور از حد مجاز بیشتر است',
+      });
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      /*
+       * مشتری و یادداشت فقط وقتی دست می‌خورند که کلاینت صراحتاً چیزی فرستاده
+       * باشد.
+       *
+       * قبلاً `customerId` بی‌قید نوشته می‌شد و `resolveCustomer` برای بدنه‌ی
+       * بدونِ مشتری `null` برمی‌گرداند — یعنی هر ویرایشی که فقط ردیف‌ها را
+       * می‌فرستاد، مشتریِ پیش‌فاکتور را پاک می‌کرد. روت PATCH است و نباید
+       * فیلدِ نفرستاده را صفر کند. `note` هم همین‌طور بود.
+       */
+      const touchesCustomer =
+        input.customerId !== undefined || input.customer !== undefined;
+      const customerId = touchesCustomer
+        ? await this.resolveCustomer(tx, input)
+        : undefined;
+
+      await tx.quotationLine.deleteMany({ where: { quotationId: id } });
+
+      await tx.quotation.update({
+        where: { id },
+        data: {
+          ...(touchesCustomer ? { customerId } : {}),
+          subtotal,
+          discount,
+          total,
+          ...(input.note !== undefined ? { note: input.note } : {}),
+          ...(input.validUntil || input.validForMinutes
+            ? { validUntil: this.resolveValidUntil(input) }
+            : {}),
+          lines: {
+            create: input.lines.map((l) => ({
+              productId: l.productId,
+              locationId: l.locationId ?? null,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              discount: l.discount ?? 0,
+            })),
+          },
+        },
+      });
+    });
+
+    return this.findOne(id);
   }
 
 
@@ -356,11 +450,39 @@ export class QuotationsService {
 
   // ---------- کمکی‌ها ----------
 
+  /** همان اعتبارسنجیِ ردیف‌ها — هم ساخت هم ویرایش از آن استفاده می‌کنند. */
+  private assertLinesValid(lines: QuotationLineInput[]) {
+    if (!lines?.length) {
+      throw new BadRequestException({
+        error: 'NO_LINES',
+        message: 'پیش‌فاکتور باید حداقل یک ردیف داشته باشد',
+      });
+    }
+
+    lines.forEach((l, i) => {
+      if (!l.quantity || l.quantity <= 0) {
+        throw new BadRequestException({
+          error: 'INVALID_QUANTITY',
+          lineIndex: i,
+          message: 'تعداد باید بزرگ‌تر از صفر باشد',
+        });
+      }
+      if (l.unitPrice < 0) {
+        throw new BadRequestException({
+          error: 'INVALID_PRICE',
+          lineIndex: i,
+          message: 'قیمت نمی‌تواند منفی باشد',
+        });
+      }
+    });
+  }
+
+
   private decorate<
     T extends {
       status: QuotationStatus;
       validUntil: Date;
-      customer?: { firstName: string; lastName: string | null } | null;
+      customer?: { id: string; firstName: string; lastName: string | null } | null;
     },
   >(q: T) {
     const isExpired =
@@ -377,11 +499,12 @@ export class QuotationsService {
       customerName: q.customer
         ? [q.customer.firstName, q.customer.lastName].filter(Boolean).join(' ')
         : null,
+      customerId: q.customer?.id ?? null,
     };
   }
 
 
-  private resolveValidUntil(input: CreateQuotationInput): Date {
+  private resolveValidUntil(input: ValidRef): Date {
     if (input.validUntil) {
       const d = new Date(input.validUntil);
       if (isNaN(d.getTime())) {
@@ -409,7 +532,7 @@ export class QuotationsService {
 
   private async resolveCustomer(
     tx: Prisma.TransactionClient,
-    input: CreateQuotationInput,
+    input: CustomerRef,
   ): Promise<string | null> {
     if (input.customerId) {
       const found = await tx.customer.findUnique({ where: { id: input.customerId } });

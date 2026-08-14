@@ -38,7 +38,7 @@ export class InvoiceLineDto {
   quantity:number;
 
 
-  /** قیمت واحد فروش به تومان. صفر مجاز است (کالای هدیه)، منفی نه. */
+  /** قیمت واحد فروش به ریال. صفر مجاز است (کالای هدیه)، منفی نه. */
   @IsInt()
   @Min(0)
   unitPrice:number;
@@ -154,7 +154,7 @@ export class CreateInvoiceDto {
   customer?:InlineCustomerDto;
 
 
-  /** تخفیف کل فاکتور به تومان (جدا از تخفیف ردیف‌ها). */
+  /** تخفیف کل فاکتور به ریال (جدا از تخفیف ردیف‌ها). */
   @IsOptional()
   @IsInt()
   @Min(0)
@@ -164,6 +164,15 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   note?:string;
+
+
+  /**
+   * سررسید بخش نسیه (ISO). نفرستادنش یعنی «مهلت همیشگیِ همین مشتری» —
+   * حالت عادی، تا فروشنده برای هر فروش یک فیلد اضافه پر نکند.
+   */
+  @IsOptional()
+  @IsDateString()
+  dueDate?:string;
 
 
   @IsArray()

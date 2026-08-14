@@ -10,7 +10,9 @@ import { LoadingState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { JalaliDateInput } from "@/components/jalali-date-input";
 import { Badge } from "@/components/ui/badge";
+import { MoneyInput } from "@/components/money-input";
 import {
   Table,
   TableBody,
@@ -20,9 +22,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
+import { Money } from "@/components/money";
 import { createReceipt, getCustomer, getReceipts } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, money, parseNum, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { faDate, money, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { uuid } from "@/lib/uuid";
 import type { Customer, PaymentMethod } from "@/lib/types";
 
 import { CustomerPicker } from "../pos/_components/customer-picker";
@@ -65,7 +69,7 @@ export default function ReceiptsPage() {
 
   const submit = useMutation({
     mutationFn: () => {
-      if (!idemRef.current) idemRef.current = crypto.randomUUID();
+      if (!idemRef.current) idemRef.current = uuid();
       return createReceipt({
         idempotencyKey: idemRef.current,
         customerId: customer!.id,
@@ -79,7 +83,7 @@ export default function ReceiptsPage() {
       });
     },
     onSuccess: (r) => {
-      toast.success(`رسید ${toFa(r.number)} ثبت شد — ${money(r.amount)} تومان`);
+      toast.success(`رسید ${toFa(r.number)} ثبت شد — ${money(r.amount)} ریال`);
       setAmount(0);
       setNote("");
       setChequeNumber("");
@@ -94,7 +98,7 @@ export default function ReceiptsPage() {
 
       if (err?.code === "AMOUNT_EXCEEDS_DEBT") {
         const debt = Number(err.raw.totalDebt ?? 0);
-        toast.error(`مبلغ از بدهی مشتری بیشتر است — بدهی: ${money(debt)} تومان`);
+        toast.error(`مبلغ از بدهی مشتری بیشتر است — بدهی: ${money(debt)} ریال`);
       } else {
         toast.error(err?.message ?? "ثبت رسید ناموفق بود");
       }
@@ -137,7 +141,7 @@ export default function ReceiptsPage() {
               <p className="mt-2 text-sm">
                 بدهی فعلی:{" "}
                 <b className={totalDue > 0 ? "text-amber-600 tabular-nums" : "tabular-nums"}>
-                  {money(totalDue)} تومان
+                  {money(totalDue)} ریال
                 </b>
               </p>
             </div>
@@ -157,11 +161,10 @@ export default function ReceiptsPage() {
             <div className="mt-4 space-y-4">
               <div>
                 <label className="mb-1 block text-sm font-medium">مبلغ دریافتی</label>
-                <Input
-                  dir="ltr"
+                <MoneyInput
                   className="h-11 text-left text-base tabular-nums"
-                  value={amount ? money(amount) : ""}
-                  onChange={(e) => { setAmount(parseNum(e.target.value)); resetIdem(); }}
+                  value={amount}
+                  onChange={(n) => { setAmount(n); resetIdem(); }}
                   placeholder="۰"
                 />
                 <div className="mt-2 flex gap-2">
@@ -215,11 +218,9 @@ export default function ReceiptsPage() {
                     <label className="mb-1 block text-xs text-muted-foreground">
                       تاریخ سررسید
                     </label>
-                    <Input
-                      type="date"
-                      dir="ltr"
+                    <JalaliDateInput
                       value={chequeDue}
-                      onChange={(e) => { setChequeDue(e.target.value); resetIdem(); }}
+                      onChange={(iso) => { setChequeDue(iso); resetIdem(); }}
                     />
                   </div>
                 </div>
@@ -289,8 +290,8 @@ export default function ReceiptsPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {faDate(r.createdAt)}
                       </TableCell>
-                      <TableCell className="font-bold tabular-nums text-emerald-600">
-                        {money(r.amount)}
+                      <TableCell className="font-bold">
+                        <Money value={r.amount} tone="positive" />
                       </TableCell>
                     </TableRow>
                   ))}

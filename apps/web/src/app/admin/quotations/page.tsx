@@ -1,15 +1,25 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileClock } from "lucide-react";
+import {
+  FileClock,
+  Pencil,
+  Plus,
+  Printer,
+  ShoppingCart,
+  Trash2,
+  UserRound,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +34,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { MoneyInput } from "@/components/money-input";
 
 import {
   cancelQuotation,
@@ -31,11 +42,15 @@ import {
   extendQuotation,
   getQuotation,
   getQuotations,
+  updateQuotation,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, money, qty, toFa } from "@/lib/format";
-import type { PaymentInput, Quotation } from "@/lib/types";
+import { faDate, money, parseNum, qty, toFa } from "@/lib/format";
+import { uuid } from "@/lib/uuid";
+import type { Customer, LocateResult, PaymentInput, Quotation } from "@/lib/types";
+import { CustomerPicker } from "../pos/_components/customer-picker";
 import { PaymentDialog } from "../pos/_components/payment-dialog";
+import { ProductSearch } from "../pos/_components/product-search";
 
 const TABS: { id: string; label: string }[] = [
   { id: "ACTIVE", label: "معتبر" },
@@ -51,6 +66,18 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
   CANCELLED: { label: "لغو شد", className: "border-destructive text-destructive" },
 };
 
+/** ردیفِ قابل‌ویرایش در پیش‌فاکتور — id برای ردیف‌های تازه‌افزوده وجود ندارد. */
+type EditLine = {
+  key: string;
+  productId: string;
+  productName: string;
+  unit: string;
+  quantity: number;
+  unitPrice: number;
+  /** تخفیف ردیف به ریال — ردیف‌های موجود مقدار خودشان را نگه می‌دارند. */
+  discount: number;
+};
+
 /** باقی‌مانده‌ی اعتبار به شکل خوانا: «۳ ساعت و ۲۰ دقیقه» */
 function remaining(minutes: number): string {
   if (minutes <= 0) return "منقضی";
@@ -62,6 +89,7 @@ function remaining(minutes: number): string {
 }
 
 export default function QuotationsPage() {
+  const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = React.useState("ACTIVE");
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -72,6 +100,18 @@ export default function QuotationsPage() {
    * بی‌صدا یک بدهیِ تمام‌مبلغ می‌ساخت، حتی وقتی مشتری نقد داده بود.
    */
   const [payingFor, setPayingFor] = React.useState<{ id: string; total: number; hasCustomer: boolean } | null>(null);
+
+  // ---------- ویرایش ----------
+  const [editing, setEditing] = React.useState(false);
+  const [showCustomerPicker, setShowCustomerPicker] = React.useState(false);
+  const [showProductSearch, setShowProductSearch] = React.useState(false);
+  /**
+   * undefined = «دست نخورده، همان مشتری فعلی بماند»
+   * null = «صریحاً بدون مشتری»
+   * Customer = مشتریِ تازه انتخاب‌شده
+   */
+  const [editCustomer, setEditCustomer] = React.useState<Customer | null | undefined>(undefined);
+  const [editLines, setEditLines] = React.useState<EditLine[]>([]);
 
   const list = useQuery({
     queryKey: ["quotations", tab],
@@ -90,10 +130,10 @@ export default function QuotationsPage() {
   };
 
   const convert = useMutation({
-    mutationFn: (v: { id: string; payments: PaymentInput[] }) =>
-      convertQuotation(v.id, v.payments),
+    mutationFn: (v: { id: string; payments: PaymentInput[]; dueDate?: string }) =>
+      convertQuotation(v.id, v.payments, v.dueDate),
     onSuccess: (inv) => {
-      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${money(inv.total)} تومان`);
+      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${money(inv.total)} ریال`);
       setPayingFor(null);
       setOpenId(null);
       refresh();
@@ -124,6 +164,80 @@ export default function QuotationsPage() {
   });
 
   const q: Quotation | undefined = detail.data;
+
+  const startEdit = () => {
+    if (!q) return;
+    setEditLines(
+      q.lines?.map((l) => ({
+        key: uuid(),
+        productId: l.product.id,
+        productName: l.product.name,
+        unit: l.product.unit ?? "عدد",
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+        discount: l.discount,
+      })) ?? []
+    );
+    setEditCustomer(undefined);
+    setEditing(true);
+  };
+
+  const patchEditLine = (i: number, p: Partial<EditLine>) =>
+    setEditLines((prev) => prev.map((l, j) => (j === i ? { ...l, ...p } : l)));
+
+  const removeEditLine = (key: string) =>
+    setEditLines((prev) => prev.filter((l) => l.key !== key));
+
+  const addEditProduct = (r: LocateResult) => {
+    setEditLines((prev) => {
+      const existing = prev.find((l) => l.productId === r.id);
+      if (existing) {
+        return prev.map((l) =>
+          l.productId === r.id ? { ...l, quantity: l.quantity + 1 } : l
+        );
+      }
+      return [
+        ...prev,
+        {
+          key: uuid(),
+          productId: r.id,
+          productName: r.name,
+          unit: r.unit ?? "عدد",
+          quantity: 1,
+          unitPrice: r.salePrice ?? 0,
+          discount: 0,
+        },
+      ];
+    });
+    setShowProductSearch(false);
+  };
+
+  const editSubtotal = editLines.reduce(
+    (s, l) => s + l.quantity * l.unitPrice - l.discount,
+    0
+  );
+
+  const saveEdit = useMutation({
+    mutationFn: () =>
+      updateQuotation(q!.id, {
+        customerId:
+          editCustomer === undefined ? q!.customerId ?? null : editCustomer?.id ?? null,
+        discount: q!.discount,
+        lines: editLines.map((l) => ({
+          productId: l.productId,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discount: l.discount,
+        })),
+      }),
+    onSuccess: () => {
+      toast.success("پیش‌فاکتور ویرایش شد");
+      setEditing(false);
+      refresh();
+    },
+    onError: (e: unknown) =>
+      toast.error(e instanceof ApiException ? e.message : "ذخیره‌ی تغییرات ناموفق بود"),
+  });
 
   return (
     <div className="space-y-6">
@@ -179,7 +293,7 @@ export default function QuotationsPage() {
                 return (
                   <TableRow
                     key={row.id}
-                    onClick={() => setOpenId(row.id)}
+                    onClick={() => { setOpenId(row.id); setEditing(false); }}
                     className="cursor-pointer hover:bg-primary/5"
                   >
                     <TableCell className="font-medium tabular-nums">{toFa(row.number)}</TableCell>
@@ -206,7 +320,10 @@ export default function QuotationsPage() {
       )}
 
       {/* جزئیات */}
-      <Dialog open={!!openId} onOpenChange={(v) => !v && setOpenId(null)}>
+      <Dialog
+        open={!!openId}
+        onOpenChange={(v) => { if (!v) { setOpenId(null); setEditing(false); } }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-base">
@@ -216,6 +333,107 @@ export default function QuotationsPage() {
 
           {detail.isLoading || !q ? (
             <LoadingState />
+          ) : editing ? (
+            <div className="space-y-4">
+              {/* مشتری — انتساب / تغییر / حذف */}
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground">مشتری</p>
+                  <p className="truncate font-medium">
+                    {editCustomer === undefined
+                      ? q.customerName ?? "بدون مشتری"
+                      : editCustomer?.fullName ?? "بدون مشتری"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowCustomerPicker(true)}>
+                    <UserRound className="size-4" />
+                    {q.customerName || editCustomer ? "تغییر" : "انتساب"}
+                  </Button>
+                  {(q.customerName || editCustomer) && (
+                    <Button variant="ghost" size="sm" onClick={() => setEditCustomer(null)}>
+                      حذف
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              {/* اقلام — کم/زیاد/حذف */}
+              <div className="max-h-72 overflow-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 bg-muted/60">
+                    <tr className="text-muted-foreground">
+                      <th className="p-2 text-start font-medium">کالا</th>
+                      <th className="w-24 p-2 text-start font-medium">تعداد</th>
+                      <th className="w-36 p-2 text-start font-medium">قیمت واحد</th>
+                      <th className="w-24 p-2 text-end font-medium">جمع</th>
+                      <th className="w-10 p-2" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {editLines.map((l, i) => (
+                      <tr key={l.key} className="border-t">
+                        <td className="p-2 font-medium">{l.productName}</td>
+                        <td className="p-2">
+                          <Input
+                            dir="ltr"
+                            className="h-8 w-20 text-left tabular-nums"
+                            value={qty(l.quantity)}
+                            onChange={(e) =>
+                              patchEditLine(i, { quantity: parseNum(e.target.value) })
+                            }
+                          />
+                        </td>
+                        <td className="p-2">
+                          <MoneyInput
+                            className="h-8 w-32 text-left text-sm tabular-nums"
+                            value={l.unitPrice}
+                            onChange={(n) => patchEditLine(i, { unitPrice: n })}
+                          />
+                        </td>
+                        <td className="p-2 text-end font-medium tabular-nums">
+                          {money(l.quantity * l.unitPrice - l.discount)}
+                        </td>
+                        <td className="p-2 text-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="حذف ردیف"
+                            onClick={() => removeEditLine(l.key)}
+                          >
+                            <Trash2 className="size-4 text-destructive" />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <Button variant="outline" size="sm" onClick={() => setShowProductSearch(true)}>
+                <Plus className="size-4" /> افزودن کالا
+              </Button>
+
+              <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+                <span className="font-semibold">مبلغ کل</span>
+                <span className="text-lg font-bold tabular-nums">
+                  {money(Math.max(0, editSubtotal - q.discount))} ریال
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  disabled={saveEdit.isPending || editLines.length === 0}
+                  onClick={() => saveEdit.mutate()}
+                >
+                  {saveEdit.isPending ? "در حال ذخیره…" : "ذخیره تغییرات"}
+                </Button>
+                <Button variant="outline" onClick={() => setEditing(false)}>
+                  انصراف
+                </Button>
+              </div>
+            </div>
           ) : (
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-3 text-sm">
@@ -261,7 +479,7 @@ export default function QuotationsPage() {
 
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="font-semibold">مبلغ کل</span>
-                <span className="text-lg font-bold tabular-nums">{money(q.total)} تومان</span>
+                <span className="text-lg font-bold tabular-nums">{money(q.total)} ریال</span>
               </div>
 
               {q.displayStatus === "EXPIRED" && (
@@ -273,6 +491,12 @@ export default function QuotationsPage() {
 
               {(q.displayStatus === "ACTIVE" || q.displayStatus === "EXPIRED") && (
                 <div className="flex flex-wrap gap-2">
+                  {q.displayStatus === "ACTIVE" && (
+                    <Button variant="outline" disabled={!q.lines?.length} onClick={startEdit}>
+                      <Pencil className="size-4" /> ویرایش
+                    </Button>
+                  )}
+
                   <Button
                     className="flex-1"
                     disabled={q.displayStatus !== "ACTIVE" || convert.isPending}
@@ -286,6 +510,24 @@ export default function QuotationsPage() {
                     }
                   >
                     {convert.isPending ? "در حال ثبت…" : "تبدیل به فاکتور"}
+                  </Button>
+
+                  {/* بردن به صندوق — سبد از این پیش‌فاکتور پر می‌شود و فروشنده ادامه می‌دهد. */}
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push(`/admin/pos?quotation=${q.id}`)}
+                  >
+                    <ShoppingCart className="size-4" /> ادامه در صندوق
+                  </Button>
+
+                  {/* چاپ در پنجره‌ی جدا، تا این صفحه و وضعیتش سر جایش بماند. */}
+                  <Button
+                    variant="outline"
+                    onClick={() =>
+                      window.open(`/admin/print/quotation/${q.id}`, "_blank")
+                    }
+                  >
+                    <Printer className="size-4" /> چاپ
                   </Button>
 
                   <Button
@@ -322,10 +564,25 @@ export default function QuotationsPage() {
         open={!!payingFor}
         total={payingFor?.total ?? 0}
         hasCustomer={payingFor?.hasCustomer ?? false}
-        onConfirm={(payments) =>
-          payingFor && convert.mutate({ id: payingFor.id, payments })
+        onConfirm={(payments, dueDate) =>
+          payingFor && convert.mutate({ id: payingFor.id, payments, dueDate })
         }
         onClose={() => setPayingFor(null)}
+      />
+
+      {/* انتساب/تغییر مشتری در حالت ویرایش */}
+      <CustomerPicker
+        open={showCustomerPicker}
+        onPick={(c) => { setEditCustomer(c); setShowCustomerPicker(false); }}
+        onClose={() => setShowCustomerPicker(false)}
+      />
+
+      {/* افزودن کالا در حالت ویرایش */}
+      <ProductSearch
+        open={showProductSearch}
+        onPick={addEditProduct}
+        onSendToWorker={() => {}}
+        onClose={() => setShowProductSearch(false)}
       />
     </div>
   );

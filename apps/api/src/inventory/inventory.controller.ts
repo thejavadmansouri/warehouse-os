@@ -6,7 +6,10 @@ import {
   Param,
   Req,
   Query,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
+import * as XLSX from 'xlsx';
 
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
@@ -18,6 +21,78 @@ import { QueryInventoryLogsDto } from './dto/query-inventory-logs.dto';
 
 import { InventoryService } from './inventory.service';
 import { VoiceInventoryService } from './voice-inventory.service';
+
+
+/** برچسب فارسیِ نوع حرکت برای ستونِ کاردکس. */
+const KARDEX_ACTION_LABELS: Record<string, string> = {
+  IN: 'ورود',
+  OUT: 'خروج',
+  SALE: 'فروش',
+  RETURN: 'برگشت',
+  TRANSFER: 'انتقال',
+  ADJUST: 'اصلاح',
+  COUNT: 'شمارش',
+};
+
+/** پیشوندِ سندِ منبعِ حرکت. */
+const KARDEX_DOC_LABELS: Record<string, string> = {
+  SALE: 'فاکتور فروش',
+  PURCHASE: 'فاکتور خرید',
+  RETURN: 'مرجوعی',
+  MANUAL: 'دستی',
+};
+
+interface KardexOutRow {
+  createdAt: Date;
+  action: string;
+  docType: string;
+  docNumber: number | null;
+  locationName: string | null;
+  inQty: number;
+  outQty: number;
+  balance: number;
+  unitPrice: number | null;
+}
+
+/** خروجی اکسلِ کاردکس — سرستون فارسی و RTL، تاریخِ شمسی. */
+function kardexToExcel(res: Response, rows: KardexOutRow[], sku: string) {
+  const faDate = (d: Date) =>
+    new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(d));
+
+  const sheetRows = rows.map((r) => ({
+    'تاریخ': faDate(r.createdAt),
+    'نوع حرکت': KARDEX_ACTION_LABELS[r.action] ?? r.action,
+    'سند':
+      r.docNumber != null
+        ? `${KARDEX_DOC_LABELS[r.docType] ?? r.docType} ${r.docNumber}`
+        : (KARDEX_DOC_LABELS[r.docType] ?? '—'),
+    'مکان': r.locationName ?? '—',
+    'وارد': r.inQty || '',
+    'خارج': r.outQty || '',
+    'مانده': r.balance,
+    'قیمت واحد (ریال)': r.unitPrice ?? '',
+    // ارزش = تعدادِ جهت‌دار × قیمت واحد — همان ستونِ «ارزش» جدول
+    'ارزش (ریال)':
+      r.unitPrice != null ? (r.inQty > 0 ? r.inQty : r.outQty) * r.unitPrice : '',
+  }));
+
+  const ws = XLSX.utils.json_to_sheet(sheetRows);
+  ws['!views'] = [{ RTL: true }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'kardex');
+  const buf: Buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+  res.setHeader(
+    'Content-Type',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  );
+  res.setHeader('Content-Disposition', `attachment; filename="kardex-${sku}.xlsx"`);
+  return res.send(buf);
+}
 
 
 @Controller('inventory')
@@ -93,6 +168,26 @@ export class InventoryController {
     @Param('id') id:string
   ){
     return this.service.getLog(id);
+  }
+
+
+
+  // کاردکس کالا — گردش ورود/خروج با مانده‌ی متحرک.
+  // مسیرِ literal-first است تا با catch-allِ `:productId/:locationId` تداخل نکند،
+  // پس باید پیش از آن اعلام شود.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('kardex/:productId')
+  async kardex(
+    @Param('productId') productId: string,
+    @Query() q: { startDate?: string; endDate?: string; page?: number; limit?: number; action?: string; format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ){
+    const r = await this.service.kardex(productId, {
+      ...q,
+      limit: q.format === 'excel' ? 10_000 : q.limit,
+    });
+    if (q.format === 'excel') return kardexToExcel(res, r.rows.data, r.product.sku);
+    return r;
   }
 
 

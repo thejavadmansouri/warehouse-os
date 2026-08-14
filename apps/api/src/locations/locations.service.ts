@@ -1,7 +1,18 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BarcodeService } from '../barcode/barcode.service';
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { randomUUID } from 'crypto';
+
+/**
+ * تصمیمِ تکلیفِ موجودی هنگام حذفِ قفسه.
+ * `transfer` → به `destinationLocationId` منتقل کن؛ `writeoff` → با `reason` صفر کن.
+ */
+export interface RemoveLocationOptions {
+  stockAction?: 'transfer' | 'writeoff';
+  destinationLocationId?: string;
+  reason?: string;
+}
 
 @Injectable()
 export class LocationsService {
@@ -9,6 +20,7 @@ export class LocationsService {
   constructor(
     private prisma: PrismaService,
     private barcodeService: BarcodeService,
+    private operation: InventoryOperationService,
   ) {}
 
 
@@ -280,7 +292,28 @@ export class LocationsService {
     );
   }
 
-  // خلاصه‌ی زیردرخت برای دیالوگ تأیید در UI (چند فرزند دارد، سابقه دارد یا نه).
+  /**
+   * موجودیِ زنده‌ی نشسته روی یک زیردرخت.
+   *
+   * فقط ردیف‌های مثبت مهم‌اند: همین‌هایند که اگر قفسه حذف شود «بی‌صاحب» می‌مانند
+   * — روی صفحه‌ی فروش موجود نشان داده می‌شوند ولی سرِ ثبتِ فاکتور رد می‌شوند،
+   * چون مکانشان دیگر معتبر نیست. برای همین قبل از حذف باید تکلیفشان روشن شود.
+   */
+  private async stockOnSubtree(ids: string[]) {
+    const rows = await this.prisma.inventory.findMany({
+      where: { locationId: { in: ids }, quantity: { gt: 0 } },
+      select: { productId: true, locationId: true, quantity: true },
+    });
+    return {
+      rows,
+      units: rows.reduce((s, r) => s + r.quantity, 0),
+      products: new Set(rows.map((r) => r.productId)).size,
+      locations: new Set(rows.map((r) => r.locationId)).size,
+    };
+  }
+
+  // خلاصه‌ی زیردرخت برای دیالوگ تأیید در UI (چند فرزند دارد، سابقه دارد یا نه،
+  // و مهم‌تر: چقدر موجودیِ زنده رویش نشسته که باید قبل از حذف جابه‌جا/تصفیه شود).
   async getSubtreeStats(id: string) {
     const node = await this.prisma.location.findUnique({
       where: { id },
@@ -291,7 +324,10 @@ export class LocationsService {
     const levels = await this.collectSubtreeLevels(id);
     const allIds = levels.flat();
     const descendantCount = allIds.length - 1;
-    const hasHistory = await this.subtreeHasHistory(allIds);
+    const [hasHistory, stock] = await Promise.all([
+      this.subtreeHasHistory(allIds),
+      this.stockOnSubtree(allIds),
+    ]);
 
     return {
       id: node.id,
@@ -300,51 +336,157 @@ export class LocationsService {
       totalCount: allIds.length,
       hasHistory,
       willDeactivate: hasHistory,
+      // اگر این‌ها صفر نباشند، UI باید اول انتخابِ «انتقال یا تصفیه» را بگیرد.
+      stockUnits: stock.units,
+      stockProducts: stock.products,
+      stockLocations: stock.locations,
+      hasStock: stock.units > 0,
     };
   }
 
   // حذف یک موقعیت به‌همراه کل زیردرختش.
-  async remove(id: string) {
+  //
+  // اگر موجودیِ زنده روی زیردرخت باشد، حذف بدون تصمیمِ صریح انجام نمی‌شود:
+  // یا جنس به یک قفسه‌ی دیگر منتقل می‌شود (`transfer`)، یا تصفیه/صفر می‌شود
+  // (`writeoff`). بدون تعیینِ تکلیف، جنس روی قفسه‌ی مرده «بی‌صاحب» می‌ماند و
+  // دیگر قابل فروش نیست — دقیقاً باگی که این تغییر جلویش را می‌گیرد.
+  async remove(id: string, opts?: RemoveLocationOptions, userId?: string) {
     const node = await this.prisma.location.findUnique({
       where: { id },
-      select: { id: true, name: true },
+      select: { id: true, name: true, warehouseId: true },
     });
     if (!node) throw new NotFoundException('موقعیت پیدا نشد');
 
     const levels = await this.collectSubtreeLevels(id);
     const allIds = levels.flat();
-    const hasHistory = await this.subtreeHasHistory(allIds);
+    const idSet = new Set(allIds);
+    const [hasHistory, stock] = await Promise.all([
+      this.subtreeHasHistory(allIds),
+      this.stockOnSubtree(allIds),
+    ]);
 
-    if (hasHistory) {
-      // فقط غیرفعال — کد/بارکد/path و سابقه دست‌نخورده می‌مانند.
-      await this.prisma.location.updateMany({
-        where: { id: { in: allIds } },
-        data: { isActive: false, deletedAt: new Date() },
+    // موجودیِ زنده دارد ولی تکلیفش روشن نشده → به UI بگو انتخاب بگیرد.
+    if (stock.units > 0 && !opts?.stockAction) {
+      throw new BadRequestException({
+        error: 'LOCATION_HAS_STOCK',
+        stockUnits: stock.units,
+        stockProducts: stock.products,
+        stockLocations: stock.locations,
+        message: `این موقعیت ${stock.units} عدد موجودی روی ${stock.locations} قفسه دارد؛ اول جابه‌جا یا تصفیه‌اش کن.`,
       });
-      return {
-        mode: 'deactivated' as const,
-        affected: allIds.length,
-        message: `«${node.name}» و ${allIds.length - 1} زیرمجموعه غیرفعال شدند (سابقه‌ی موجودی داشتند).`,
-      };
     }
 
-    // خالی و بی‌سابقه → حذف واقعی، از عمیق‌ترین سطح به بالا (رعایت FK).
+    // اعتبارسنجیِ انتخاب، پیش از باز کردن تراکنش.
+    if (stock.units > 0 && opts?.stockAction === 'transfer') {
+      const dest = opts.destinationLocationId;
+      if (!dest) {
+        throw new BadRequestException({
+          error: 'DESTINATION_REQUIRED',
+          message: 'برای انتقال، قفسه‌ی مقصد را انتخاب کن.',
+        });
+      }
+      if (idSet.has(dest)) {
+        throw new BadRequestException({
+          error: 'DESTINATION_INSIDE_SUBTREE',
+          message: 'مقصد نمی‌تواند خودِ همین شاخه‌ای باشد که حذف می‌شود.',
+        });
+      }
+      const destLoc = await this.prisma.location.findFirst({
+        where: { id: dest, isActive: true, warehouseId: node.warehouseId },
+        select: { id: true },
+      });
+      if (!destLoc) {
+        throw new BadRequestException({
+          error: 'DESTINATION_NOT_FOUND',
+          message: 'قفسه‌ی مقصد پیدا نشد یا در این انبار فعال نیست.',
+        });
+      }
+    }
+    if (
+      stock.units > 0 &&
+      opts?.stockAction === 'writeoff' &&
+      !opts.reason?.trim()
+    ) {
+      throw new BadRequestException({
+        error: 'REASON_REQUIRED',
+        message: 'برای تصفیه‌ی موجودی، نوشتن دلیل الزامی است.',
+      });
+    }
+
+    // جابه‌جایی/تصفیه و حذف، همه در یک تراکنش: یا کل کار انجام می‌شود یا هیچ.
     await this.prisma.$transaction(async (tx) => {
-      for (let i = levels.length - 1; i >= 0; i--) {
-        await tx.location.deleteMany({ where: { id: { in: levels[i] } } });
+      // ۱) خالی کردنِ موجودی طبق تصمیم — از تک‌نقطه‌ی تغییر موجودی (قانون ۱).
+      if (stock.units > 0) {
+        for (const r of stock.rows) {
+          if (opts!.stockAction === 'transfer') {
+            await this.operation.execute(
+              {
+                type: 'TRANSFER',
+                productId: r.productId,
+                locationId: r.locationId,
+                toLocationId: opts!.destinationLocationId,
+                quantity: r.quantity,
+                source: 'LOCATION_DELETE',
+                userId: userId ?? null,
+                note: `انتقال به‌خاطر حذف «${node.name}»`,
+              },
+              tx,
+            );
+          } else {
+            await this.operation.execute(
+              {
+                type: 'ADJUST',
+                productId: r.productId,
+                locationId: r.locationId,
+                targetQuantity: 0,
+                source: 'LOCATION_DELETE',
+                userId: userId ?? null,
+                note: opts!.reason!.trim(),
+              },
+              tx,
+            );
+          }
+        }
+      }
+
+      // ۲) حذف/غیرفعال‌سازی. سابقه (لاگ/رکورد موجودیِ صفرشده) که بماند فقط
+      // غیرفعال می‌شود تا کد/بارکد/path و تاریخچه دست‌نخورده بماند.
+      if (hasHistory || stock.units > 0) {
+        await tx.location.updateMany({
+          where: { id: { in: allIds } },
+          data: { isActive: false, deletedAt: new Date() },
+        });
+      } else {
+        // خالی و بی‌سابقه → حذف واقعی، از عمیق‌ترین سطح به بالا (رعایت FK).
+        for (let i = levels.length - 1; i >= 0; i--) {
+          await tx.location.deleteMany({ where: { id: { in: levels[i] } } });
+        }
       }
     });
+
+    const deactivated = hasHistory || stock.units > 0;
+    const movedNote =
+      stock.units > 0
+        ? opts!.stockAction === 'transfer'
+          ? ` ${stock.units} عدد موجودی منتقل شد.`
+          : ` ${stock.units} عدد موجودی تصفیه شد.`
+        : '';
+
     return {
-      mode: 'deleted' as const,
+      mode: deactivated ? ('deactivated' as const) : ('deleted' as const),
       affected: allIds.length,
-      message: `«${node.name}» و ${allIds.length - 1} زیرمجموعه حذف شدند.`,
+      movedUnits: stock.units,
+      stockAction: opts?.stockAction ?? null,
+      message: deactivated
+        ? `«${node.name}» و ${allIds.length - 1} زیرمجموعه غیرفعال شدند.${movedNote}`
+        : `«${node.name}» و ${allIds.length - 1} زیرمجموعه حذف شدند.`,
     };
   }
 
   // حذف گروهی: هر موقعیت با زیردرختش طبق همان قانون بالا پردازش می‌شود.
   // موقعیت‌هایی که خودشان زیرمجموعه‌ی یک انتخاب دیگرند نادیده گرفته می‌شوند
   // (والدشان قبلاً آن‌ها را پوشش می‌دهد).
-  async bulkRemove(ids: string[]) {
+  async bulkRemove(ids: string[], opts?: RemoveLocationOptions, userId?: string) {
     const unique = [...new Set(ids)];
     let deleted = 0;
     let deactivated = 0;
@@ -357,7 +499,10 @@ export class LocationsService {
         select: { id: true },
       });
       if (!exists) continue;
-      const res = await this.remove(id);
+      // همان تصمیمِ موجودی برای همه‌ی موارد انتخاب‌شده اعمال می‌شود؛ اگر یکی
+      // موجودی داشته باشد و تصمیمی نیامده باشد، remove خطای LOCATION_HAS_STOCK
+      // می‌دهد و UI انتخاب می‌گیرد.
+      const res = await this.remove(id, opts, userId);
       if (res.mode === 'deleted') deleted += res.affected;
       else deactivated += res.affected;
       // زیرمجموعه‌های همین گره را از پردازش دوباره کنار بگذار

@@ -23,10 +23,23 @@ export class WarehousesController {
     return this.service.findAll();
   }
 
+  // انبارهای غیرفعال — فقط مدیر، برای بخشِ بازگردانی.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('inactive')
+  findInactive() {
+    return this.service.findInactive();
+  }
+
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post()
   create(@Body() dto: CreateWarehouseDto) {
     return this.service.create(dto);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post(':id/reactivate')
+  reactivate(@Param('id') id: string) {
+    return this.service.reactivate(id);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)

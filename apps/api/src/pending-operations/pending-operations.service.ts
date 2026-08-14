@@ -267,6 +267,32 @@ export class PendingOperationsService {
     return this.prisma.pendingOperation.findUnique({ where: { id } });
   }
 
+  /**
+   * تأییدِ گروهی. هر id از همان مسیرِ تکیِ `approve` رد می‌شود تا کلِ منطقِ
+   * claim/rollback/idempotency دست‌نخورده بماند. آیتمی که آماده نیست (محصول
+   * ندارد یا موقعیتش نامعتبر است) کلِ عملیات را نمی‌شکند — رد می‌شود و در
+   * `failed` گزارش می‌شود تا مدیر آن یکی را دستی رسیدگی کند.
+   *
+   * ترتیبی (نه موازی) اجرا می‌شود: هر approve یک تراکنشِ موجودی است و باز کردنِ
+   * هم‌زمانِ صدها اتصال، pool را ته می‌کشد و کلِ API را می‌خواباند.
+   */
+  async approveMany(ids: string[], reviewerId?: string) {
+    const failed: { id: string; message: string }[] = [];
+    let approved = 0;
+    for (const id of ids) {
+      try {
+        await this.approve(id, reviewerId);
+        approved++;
+      } catch (err) {
+        failed.push({
+          id,
+          message: err instanceof Error ? err.message : 'خطا در تأیید',
+        });
+      }
+    }
+    return { approved, failedCount: failed.length, failed };
+  }
+
   async reject(id: string, reviewerId?: string, reviewNote?: string) {
     const op = await this.prisma.pendingOperation.findUnique({ where: { id } });
     if (!op) throw new NotFoundException('عملیات پیدا نشد');

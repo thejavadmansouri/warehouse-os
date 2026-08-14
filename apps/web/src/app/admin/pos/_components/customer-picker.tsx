@@ -7,8 +7,12 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createCustomer, searchCustomers } from "@/lib/api";
-import { toman, toFa } from "@/lib/format";
+import {
+  createCustomer,
+  getActiveCustomerCategories,
+  searchCustomers,
+} from "@/lib/api";
+import { rial, toFa } from "@/lib/format";
 import type { Customer } from "@/lib/types";
 
 /**
@@ -31,6 +35,10 @@ export function CustomerPicker({
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
+  // دسته‌ی مشتری — همان لیستِ دسته‌های فعالِ تعریف‌شده توسط مدیر.
+  const [categoryId, setCategoryId] = useState("");
+  // ردیفِ هایلایت‌شده برای ناوبری با کیبورد (↑/↓/Enter).
+  const [active, setActive] = useState(0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q), 300);
@@ -44,8 +52,16 @@ export function CustomerPicker({
       setFirstName("");
       setLastName("");
       setPhone("");
+      setCategoryId("");
     }
   }, [open]);
+
+  /** دسته‌های فعال برای فرم «مشتری جدید». */
+  const categories = useQuery({
+    queryKey: ["customer-categories", "active"],
+    queryFn: getActiveCustomerCategories,
+    enabled: open && creating,
+  });
 
   const results = useQuery({
     queryKey: ["customers", debounced],
@@ -53,12 +69,16 @@ export function CustomerPicker({
     enabled: open,
   });
 
+  // با تغییرِ نتایج، هایلایت به بالای لیست برگردد تا روی ردیفِ ناموجود نماند.
+  useEffect(() => setActive(0), [debounced, results.data]);
+
   const create = useMutation({
     mutationFn: () =>
       createCustomer({
         firstName: firstName.trim(),
         lastName: lastName.trim() || undefined,
         phones: phone.trim() ? [{ phone: phone.trim(), isPrimary: true }] : undefined,
+        categoryId: categoryId || undefined,
       }),
     onSuccess: (c) => {
       toast.success("مشتری ثبت شد");
@@ -112,6 +132,26 @@ export function CustomerPicker({
               </p>
             </div>
 
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                دسته مشتری <span className="text-muted-foreground">(اختیاری)</span>
+              </label>
+              <select
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+                className="h-10 w-full rounded-md border bg-background px-2 text-sm"
+                aria-label="دسته مشتری"
+              >
+                <option value="">بدون دسته</option>
+                {(categories.data ?? []).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {categories.isLoading && (
+                <p className="mt-1 text-xs text-muted-foreground">در حال بارگذاری دسته‌ها…</p>
+              )}
+            </div>
+
             <div className="flex gap-2">
               <Button
                 className="flex-1"
@@ -131,6 +171,19 @@ export function CustomerPicker({
               autoFocus
               value={q}
               onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                const list = results.data ?? [];
+                if (e.key === "ArrowDown") {
+                  e.preventDefault();
+                  setActive((i) => Math.min(i + 1, list.length - 1));
+                } else if (e.key === "ArrowUp") {
+                  e.preventDefault();
+                  setActive((i) => Math.max(i - 1, 0));
+                } else if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (list[active]) onPick(list[active]);
+                }
+              }}
               placeholder="نام، نام خانوادگی یا شماره تماس…"
             />
 
@@ -147,13 +200,19 @@ export function CustomerPicker({
                 </p>
               )}
 
-              {results.data?.map((c) => (
+              {results.data?.map((c, i) => (
                 <button
                   key={c.id}
                   onClick={() => onPick(c)}
-                  className="flex items-center justify-between gap-3 rounded-lg border p-3 text-right
+                  onMouseEnter={() => setActive(i)}
+                  ref={(el) => {
+                    if (i === active) el?.scrollIntoView({ block: "nearest" });
+                  }}
+                  className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-right
                              hover:border-primary hover:bg-primary/5 focus:outline-none
-                             focus:ring-2 focus:ring-primary"
+                             focus:ring-2 focus:ring-primary ${
+                               i === active ? "border-primary bg-primary/5" : ""
+                             }`}
                 >
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{c.fullName}</span>
@@ -163,7 +222,7 @@ export function CustomerPicker({
                   </span>
                   {!!c.summary?.totalDue && (
                     <span className="shrink-0 text-xs text-amber-600 tabular-nums">
-                      بدهی {toman(c.summary.totalDue)}
+                      بدهی {rial(c.summary.totalDue)}
                     </span>
                   )}
                 </button>

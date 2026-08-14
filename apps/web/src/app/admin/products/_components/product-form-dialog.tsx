@@ -559,7 +559,7 @@ export function ProductFormDialog({
                   name="purchasePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>قیمت خرید (تومان)</FormLabel>
+                      <FormLabel>قیمت خرید (ریال)</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"
@@ -578,7 +578,7 @@ export function ProductFormDialog({
                   name="salePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>قیمت فروش (تومان)</FormLabel>
+                      <FormLabel>قیمت فروش (ریال)</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"
@@ -597,7 +597,7 @@ export function ProductFormDialog({
                   name="wholesalePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>قیمت عمده‌فروشی (تومان)</FormLabel>
+                      <FormLabel>قیمت عمده‌فروشی (ریال)</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"

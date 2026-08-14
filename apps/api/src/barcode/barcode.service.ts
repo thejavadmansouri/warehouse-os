@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 
@@ -54,7 +54,7 @@ export class BarcodeService {
 
 
     if(!product){
-      throw new Error('کالا پیدا نشد');
+      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا پیدا نشد' });
     }
 
 
@@ -71,7 +71,7 @@ export class BarcodeService {
 
 
     if(!location){
-      throw new Error('موقعیت پیدا نشد');
+      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
     }
 
 
@@ -84,7 +84,7 @@ export class BarcodeService {
 
       if(!dto.toLocationBarcode){
 
-        throw new Error('مقصد انتقال مشخص نیست');
+        throw new BadRequestException({ error:'DESTINATION_REQUIRED', message:'مقصد انتقال مشخص نیست' });
 
       }
 
@@ -103,7 +103,7 @@ export class BarcodeService {
 
       if(!toLocation){
 
-        throw new Error('موقعیت مقصد پیدا نشد');
+        throw new NotFoundException({ error:'DESTINATION_NOT_FOUND', message:'موقعیت مقصد پیدا نشد' });
 
       }
 
@@ -191,7 +191,7 @@ return this.inventoryOperation.execute({
 
     if(!product){
 
-      throw new Error('کالا پیدا نشد');
+      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا پیدا نشد' });
 
     }
 

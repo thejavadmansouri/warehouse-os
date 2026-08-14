@@ -5,6 +5,8 @@ import * as React from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Printer } from "lucide-react";
+
 import { money, toFa } from "@/lib/format";
 
 /** مدت‌های رایج. مقدار به دقیقه است تا «۱ ساعت» و «۳ روز» یک مکانیزم باشند. */
@@ -35,15 +37,23 @@ export function QuotationDialog({
   total: number;
   lineCount: number;
   customerName: string | null;
-  onConfirm: (validForMinutes: number) => void;
+  /** `print` یعنی بلافاصله بعد از ثبت، برگه برای چاپ باز شود. */
+  onConfirm: (validForMinutes: number, print: boolean) => void;
   onClose: () => void;
   pending: boolean;
 }) {
   const [minutes, setMinutes] = React.useState(24 * 60);
   const [custom, setCustom] = React.useState("");
+  /**
+   * چاپ پس از ثبت.
+   *
+   * روشن می‌ماند، چون پیش‌فاکتور تقریباً همیشه برای این ساخته می‌شود که به دست
+   * مشتری داده شود. اگر خاموش بود، فروشنده هر بار باید یک کلیک اضافه بزند.
+   */
+  const [print, setPrint] = React.useState(true);
 
   React.useEffect(() => {
-    if (open) { setMinutes(24 * 60); setCustom(""); }
+    if (open) { setMinutes(24 * 60); setCustom(""); setPrint(true); }
   }, [open]);
 
   const effective = custom.trim() ? Math.max(1, Number(custom) || 0) : minutes;
@@ -67,7 +77,7 @@ export function QuotationDialog({
             </div>
             <div className="mt-2 flex justify-between border-t pt-2 font-semibold">
               <span>مبلغ کل</span>
-              <span className="tabular-nums">{money(total)} تومان</span>
+              <span className="tabular-nums">{money(total)} ریال</span>
             </div>
           </div>
 
@@ -104,10 +114,21 @@ export function QuotationDialog({
             فاکتور بررسی و کم می‌شود.
           </p>
 
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border p-3 text-sm">
+            <input
+              type="checkbox"
+              checked={print}
+              onChange={(e) => setPrint(e.target.checked)}
+              className="size-4 accent-primary"
+            />
+            <Printer className="size-4 text-muted-foreground" />
+            بعد از ثبت، برگه را برای چاپ باز کن
+          </label>
+
           <Button
             className="h-11 w-full"
             disabled={pending || lineCount === 0}
-            onClick={() => onConfirm(effective)}
+            onClick={() => onConfirm(effective, print)}
           >
             {pending ? "در حال ثبت…" : "ثبت پیش‌فاکتور"}
           </Button>

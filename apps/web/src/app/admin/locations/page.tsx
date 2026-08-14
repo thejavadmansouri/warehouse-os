@@ -17,9 +17,11 @@ import {
 
 import {
   getWarehouses,
+  getInactiveWarehouses,
   createWarehouse,
   updateWarehouse,
   deleteWarehouse,
+  reactivateWarehouse,
   getLocationChildren,
   getLocationTypes,
   createLocation,
@@ -440,13 +442,47 @@ export default function LocationsPage() {
 
   // حذف تکی (با آمار زیردرخت)
   const [delTarget, setDelTarget] = React.useState<Location | null>(null);
+  // تصمیمِ موجودی وقتی قفسه جنس دارد: انتقال به قفسه‌ی دیگر یا تصفیه.
+  const [stockAction, setStockAction] =
+    React.useState<"transfer" | "writeoff">("transfer");
+  const [destBarcode, setDestBarcode] = React.useState("");
+  const [destLoc, setDestLoc] = React.useState<Location | null>(null);
+  const [writeoffReason, setWriteoffReason] = React.useState("");
+
+  // با باز/بسته شدن دیالوگ، انتخاب‌ها از نو.
+  React.useEffect(() => {
+    setStockAction("transfer");
+    setDestBarcode("");
+    setDestLoc(null);
+    setWriteoffReason("");
+  }, [delTarget?.id]);
+
   const statsQ = useQuery({
     queryKey: ["subtree-stats", delTarget?.id],
     queryFn: () => getLocationSubtreeStats(delTarget!.id),
     enabled: !!delTarget,
   });
+
+  // اسکن/تایپِ بارکدِ قفسه‌ی مقصد → همان‌جا حل می‌شود تا مدیر ببیند کجاست.
+  const resolveDest = useMutation({
+    mutationFn: (barcode: string) => resolveLocationByBarcode(barcode.trim()),
+    onSuccess: (loc) => setDestLoc(loc),
+    onError: () => {
+      setDestLoc(null);
+      toast({ variant: "destructive", title: "قفسه‌ای با این بارکد پیدا نشد" });
+    },
+  });
+
   const delMut = useMutation({
-    mutationFn: (id: string) => deleteLocation(id),
+    mutationFn: (id: string) => {
+      const stockOpts =
+        statsQ.data?.hasStock === true
+          ? stockAction === "transfer"
+            ? { stockAction: "transfer" as const, destinationLocationId: destLoc?.id }
+            : { stockAction: "writeoff" as const, reason: writeoffReason.trim() }
+          : undefined;
+      return deleteLocation(id, stockOpts);
+    },
     onSuccess: (r) => {
       toast({ title: r.message });
       qc.invalidateQueries({ queryKey: ["loc-children"] });
@@ -459,6 +495,12 @@ export default function LocationsPage() {
         description: e instanceof ApiException ? e.message : "حذف ناموفق بود",
       }),
   });
+
+  // وقتی جنس دارد، تا تصمیمِ معتبر گرفته نشود اجازه‌ی حذف نده.
+  const delReady =
+    !statsQ.data?.hasStock ||
+    (stockAction === "transfer" && !!destLoc) ||
+    (stockAction === "writeoff" && writeoffReason.trim().length > 0);
 
   // حذف گروهی
   const [bulkOpen, setBulkOpen] = React.useState(false);
@@ -493,21 +535,71 @@ export default function LocationsPage() {
       setWhCode("");
     }
   }, [whDialog]);
+  // کد فقط وقتی قابل ویرایش است که انبار هنوز قفسه‌ای نساخته باشد (لیبلی چاپ نشده).
+  const whCodeLocked =
+    whDialog?.mode === "edit" && (whDialog.wh.locationCount ?? 0) > 0;
+  // پیشنهادِ بازگردانی وقتی کدِ واردشده مالِ یک انبارِ غیرفعال است.
+  const [restoreOffer, setRestoreOffer] = React.useState<
+    { id: string; name: string } | null
+  >(null);
+
   const whMut = useMutation({
     mutationFn: () =>
       whDialog?.mode === "edit"
-        ? updateWarehouse(whDialog.wh.id, { name: whName.trim() })
+        ? updateWarehouse(whDialog.wh.id, {
+            name: whName.trim(),
+            // کد را همیشه می‌فرستیم؛ اگر عوض نشده باشد سرور no-op می‌کند و اگر
+            // انبار قفسه داشته باشد و کد فرق کند، سرور با پیام روشن ردش می‌کند.
+            code: whCode.trim().toUpperCase(),
+          })
         : createWarehouse({ name: whName.trim(), code: whCode.trim().toUpperCase() }),
     onSuccess: () => {
       toast({ title: whDialog?.mode === "edit" ? "انبار ویرایش شد" : "انبار ساخته شد" });
       qc.invalidateQueries({ queryKey: ["warehouses"] });
       setWhDialog(null);
     },
-    onError: (e) =>
+    onError: (e) => {
+      // کدِ متعلق به انبارِ غیرفعال → به‌جای بن‌بست، پیشنهادِ بازگردانی.
+      if (e instanceof ApiException && e.code === "WAREHOUSE_CODE_INACTIVE") {
+        const raw = e.raw as unknown as {
+          warehouseId?: string;
+          warehouseName?: string;
+        };
+        if (raw.warehouseId) {
+          setWhDialog(null);
+          setRestoreOffer({
+            id: raw.warehouseId,
+            name: raw.warehouseName ?? "",
+          });
+          return;
+        }
+      }
       toast({
         variant: "destructive",
         title: "خطا",
         description: e instanceof ApiException ? e.message : "عملیات انبار ناموفق بود",
+      });
+    },
+  });
+
+  // بازگردانیِ انبارِ غیرفعال — هم از پیشنهادِ بالا، هم از بخشِ «انبارهای غیرفعال».
+  const inactiveQ = useQuery({
+    queryKey: ["warehouses-inactive"],
+    queryFn: () => getInactiveWarehouses(),
+  });
+  const reactivateMut = useMutation({
+    mutationFn: (id: string) => reactivateWarehouse(id),
+    onSuccess: (r) => {
+      toast({ title: r.message });
+      qc.invalidateQueries({ queryKey: ["warehouses"] });
+      qc.invalidateQueries({ queryKey: ["warehouses-inactive"] });
+      setRestoreOffer(null);
+    },
+    onError: (e) =>
+      toast({
+        variant: "destructive",
+        title: "خطا",
+        description: e instanceof ApiException ? e.message : "بازگردانی ناموفق بود",
       }),
   });
 
@@ -518,6 +610,7 @@ export default function LocationsPage() {
     onSuccess: (r) => {
       toast({ title: r.message });
       qc.invalidateQueries({ queryKey: ["warehouses"] });
+      qc.invalidateQueries({ queryKey: ["warehouses-inactive"] });
       setWhDelTarget(null);
     },
     onError: (e) =>
@@ -636,6 +729,50 @@ export default function LocationsPage() {
             ))}
           </div>
         )}
+
+        {/*
+          انبارهای غیرفعال — این‌ها از فهرست بالا حذف شده‌اند ولی کدشان هنوز
+          اشغال است. یک‌جا دیده می‌شوند تا کاربر بداند «حذف‌شده» یعنی چه و با یک
+          کلیک برشان گرداند. اگر چیزی غیرفعال نباشد، اصلاً نشان داده نمی‌شود.
+        */}
+        {(inactiveQ.data?.length ?? 0) > 0 && (
+          <div className="space-y-2 rounded-lg border border-dashed p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <WarehouseIcon className="size-4" />
+              انبارهای غیرفعال ({inactiveQ.data!.length})
+            </div>
+            <p className="text-xs text-muted-foreground">
+              این‌ها حذف نشده‌اند، فقط کنار گذاشته شده‌اند — کد و قفسه‌ها و
+              موجودی‌شان محفوظ است. برای استفاده‌ی دوباره، بازشان گردان.
+            </p>
+            <div className="space-y-1.5">
+              {inactiveQ.data!.map((wh) => (
+                <div
+                  key={wh.id}
+                  className="flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2"
+                >
+                  <WarehouseIcon className="size-4 text-muted-foreground" />
+                  <span className="font-medium">{wh.name}</span>
+                  <Badge variant="secondary" className="font-mono text-[10px]">
+                    {wh.code}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {wh.locationCount ? `${wh.locationCount} قفسه` : "خالی"}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="ms-auto"
+                    disabled={reactivateMut.isPending}
+                    onClick={() => reactivateMut.mutate(wh.id)}
+                  >
+                    بازگردانی
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* چاپ لیبل */}
@@ -667,13 +804,102 @@ export default function LocationsPage() {
               )}
             </DialogDescription>
           </DialogHeader>
+
+          {/*
+            جنسِ روی قفسه‌ی حذف‌شده «بی‌صاحب» و غیرقابل‌فروش می‌شود. پس اگر
+            موجودیِ زنده دارد، اول تکلیفش را می‌گیریم: انتقال به قفسه‌ی دیگر،
+            یا تصفیه (صفر کردن) با دلیل.
+          */}
+          {statsQ.data?.hasStock && (
+            <div className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:bg-amber-950/30">
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-300">
+                ⚠️ روی این شاخه <b>{statsQ.data.stockUnits}</b> عدد موجودی
+                (روی {statsQ.data.stockLocations} قفسه) هست. قبل از حذف، تکلیفش را روشن کن:
+              </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setStockAction("transfer")}
+                  className={`rounded-md border p-2 text-sm font-medium transition-colors ${
+                    stockAction === "transfer"
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "hover:border-primary"
+                  }`}
+                >
+                  انتقال به قفسه‌ی دیگر
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStockAction("writeoff")}
+                  className={`rounded-md border p-2 text-sm font-medium transition-colors ${
+                    stockAction === "writeoff"
+                      ? "border-destructive bg-destructive text-white"
+                      : "hover:border-destructive"
+                  }`}
+                >
+                  تصفیه (صفر کردن)
+                </button>
+              </div>
+
+              {stockAction === "transfer" ? (
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    بارکد قفسه‌ی مقصد را اسکن یا تایپ کن، بعد Enter
+                  </span>
+                  <div className="flex gap-2">
+                    <Input
+                      value={destBarcode}
+                      onChange={(e) => {
+                        setDestBarcode(e.target.value);
+                        setDestLoc(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && destBarcode.trim()) {
+                          e.preventDefault();
+                          resolveDest.mutate(destBarcode);
+                        }
+                      }}
+                      placeholder="بارکد قفسه‌ی مقصد"
+                      className="h-10"
+                    />
+                    <Button
+                      variant="outline"
+                      disabled={!destBarcode.trim() || resolveDest.isPending}
+                      onClick={() => resolveDest.mutate(destBarcode)}
+                    >
+                      {resolveDest.isPending ? <Loader2 className="size-4 animate-spin" /> : "یافتن"}
+                    </Button>
+                  </div>
+                  {destLoc && (
+                    <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                      ✓ مقصد: <b>{destLoc.path ?? destLoc.name}</b>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">
+                    دلیلِ تصفیه (اجباری) — مثلاً «مغایرت انبارگردانی» یا «ضایعات»
+                  </span>
+                  <Input
+                    value={writeoffReason}
+                    onChange={(e) => setWriteoffReason(e.target.value)}
+                    placeholder="دلیل تصفیه"
+                    className="h-10"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setDelTarget(null)} disabled={delMut.isPending}>
               انصراف
             </Button>
             <Button
               variant="destructive"
-              disabled={delMut.isPending}
+              disabled={delMut.isPending || !delReady}
               onClick={() => delTarget && delMut.mutate(delTarget.id)}
             >
               {delMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "حذف"}
@@ -710,7 +936,9 @@ export default function LocationsPage() {
             <DialogTitle>{whDialog?.mode === "edit" ? "ویرایش انبار" : "انبار جدید"}</DialogTitle>
             <DialogDescription>
               {whDialog?.mode === "edit"
-                ? "کد انبار پس از ساخت قابل تغییر نیست (روی لیبل موقعیت‌ها چاپ شده)."
+                ? whCodeLocked
+                  ? "نام را آزادانه عوض کن. کد قفل است چون این انبار قفسه دارد و کدش روی لیبل‌ها چاپ شده."
+                  : "این انبار هنوز قفسه‌ای ندارد، پس کد هم قابل ویرایش است."
                 : "نام و یک کد کوتاه (حروف بزرگ/عدد) برای انبار وارد کنید."}
             </DialogDescription>
           </DialogHeader>
@@ -725,9 +953,14 @@ export default function LocationsPage() {
                 value={whCode}
                 onChange={(e) => setWhCode(e.target.value.toUpperCase())}
                 placeholder="مثلاً WH01"
-                disabled={whDialog?.mode === "edit"}
+                disabled={whCodeLocked}
                 className="font-mono"
               />
+              {whCodeLocked && (
+                <p className="text-xs text-muted-foreground">
+                  کد روی لیبل‌های چاپ‌شده نشسته و قابل تغییر نیست.
+                </p>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -752,10 +985,27 @@ export default function LocationsPage() {
       <Dialog open={!!whDelTarget} onOpenChange={(o) => !o && setWhDelTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>حذف انبار</DialogTitle>
-            <DialogDescription>
-              «{whDelTarget?.name}» حذف شود؟ اگر موقعیتی داشته باشد، فقط غیرفعال می‌شود
-              (کد و سابقه‌اش حفظ می‌شود).
+            <DialogTitle>حذف انبار «{whDelTarget?.name}»</DialogTitle>
+            <DialogDescription asChild>
+              {(whDelTarget?.locationCount ?? 0) > 0 ? (
+                <div className="space-y-2 text-sm">
+                  <p>
+                    این انبار <b>{whDelTarget?.locationCount}</b> قفسه دارد، پس
+                    واقعاً حذف نمی‌شود — فقط <b>غیرفعال</b> می‌شود: از فهرست
+                    برداشته می‌شود ولی کد و قفسه‌ها و موجودی و سابقه‌اش می‌مانند و
+                    کدش هم اشغال می‌ماند. هر وقت بخواهی از بخشِ «انبارهای غیرفعال»
+                    برش می‌گردانی.
+                  </p>
+                  <p className="text-muted-foreground">
+                    فقط می‌خواهی اسم را عوض کنی؟ به‌جای حذف، از دکمه‌ی ویرایش (مداد)
+                    استفاده کن.
+                  </p>
+                </div>
+              ) : (
+                <span>
+                  این انبار خالی است و کاملاً حذف می‌شود. مطمئنی؟
+                </span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -767,7 +1017,45 @@ export default function LocationsPage() {
               disabled={whDelMut.isPending}
               onClick={() => whDelTarget && whDelMut.mutate(whDelTarget.id)}
             >
-              {whDelMut.isPending ? <Loader2 className="size-4 animate-spin" /> : "حذف"}
+              {whDelMut.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (whDelTarget?.locationCount ?? 0) > 0 ? (
+                "غیرفعال کن"
+              ) : (
+                "حذف"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* پیشنهادِ بازگردانی — وقتی کدِ واردشده مالِ انبارِ غیرفعال است */}
+      <Dialog open={!!restoreOffer} onOpenChange={(o) => !o && setRestoreOffer(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>این کد مالِ یک انبارِ غیرفعال است</DialogTitle>
+            <DialogDescription>
+              کدی که زدی متعلق به انبار «{restoreOffer?.name}» است که قبلاً غیرفعال
+              شده. می‌خواهی همان انبار را با همه‌ی قفسه‌ها و موجودی‌اش برگردانی؟
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setRestoreOffer(null)}
+              disabled={reactivateMut.isPending}
+            >
+              نه، کدِ دیگری می‌زنم
+            </Button>
+            <Button
+              disabled={reactivateMut.isPending}
+              onClick={() => restoreOffer && reactivateMut.mutate(restoreOffer.id)}
+            >
+              {reactivateMut.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                "بله، بازگردان"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

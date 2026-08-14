@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { LedgerService } from '../sales/ledger.service';
 
 
 /**
@@ -40,7 +41,10 @@ function meta(total: number, page: number, limit: number) {
 @Injectable()
 export class ReportsService {
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ledger: LedgerService,
+  ) {}
 
 
   /** فروش دوره‌ای — خلاصه + نمودار روزانه + فاکتورها. */
@@ -53,11 +57,18 @@ export class ReportsService {
       createdAt: { gte: start, lte: end },
     };
 
-    const [agg, total, invoices, chart] = await Promise.all([
+    const [agg, retAgg, total, invoices, chart] = await Promise.all([
       this.prisma.saleInvoice.aggregate({
         where,
         _sum: { total: true },
         _avg: { total: true },
+        _count: true,
+      }),
+      // برگشت از فروشِ همین بازه — تا «فروشِ خالص» با واقعیت بخواند و عددِ
+      // فروش با مرجوعی‌ها متورم نماند.
+      this.prisma.saleReturn.aggregate({
+        where: { createdAt: { gte: start, lte: end } },
+        _sum: { refundAmount: true },
         _count: true,
       }),
       this.prisma.saleInvoice.count({ where }),
@@ -66,7 +77,9 @@ export class ReportsService {
         include: {
           customer: { select: { firstName: true, lastName: true } },
           user: { select: { fullName: true } },
-          _count: { select: { lines: true } },
+          // فقط ردیف‌های فروش — وگرنه حرکت‌های RETURNِ ابطال/مرجوعی هم شمرده
+          // می‌شوند و «تعداد اقلام» فاکتور بعد از هر برگشتی بزرگ‌تر می‌شود.
+          _count: { select: { lines: { where: { action: 'SALE' } } } },
         },
         orderBy: { createdAt: 'desc' },
         skip,
@@ -90,9 +103,18 @@ export class ReportsService {
       `,
     ]);
 
+    const totalAmount = agg._sum.total ?? 0;
+    const returnsAmount = retAgg._sum.refundAmount ?? 0;
+
     return {
       summary: {
-        totalAmount: agg._sum.total ?? 0,
+        // فروشِ ناخالص (پیش از کسرِ مرجوعی) — همان عددِ قبلی، بی‌تغییر.
+        totalAmount,
+        // برگشت از فروش در همین بازه.
+        returnsAmount,
+        returnCount: retAgg._count,
+        // فروشِ خالص = ناخالص − مرجوعی.
+        netAmount: totalAmount - returnsAmount,
         invoiceCount: agg._count,
         averageInvoiceAmount: Math.round(agg._avg.total ?? 0),
       },
@@ -217,57 +239,42 @@ export class ReportsService {
    * ⚠️ «روزهای تأخیر» برگردانده نمی‌شود چون فاکتور تاریخ سررسید ندارد؛ ساختنش
    * یعنی عدد ساختگی. به‌جایش تاریخ آخرین فاکتور نسیه داده می‌شود.
    */
+  /**
+   * بدهکاران.
+   *
+   * محاسبه‌ی مستقلِ قبلی (جمعِ `SaleInvoice.dueAmount`) برداشته شد: مانده‌ی اول
+   * دوره، برگشت از فروش و چک برگشتی را نمی‌دید، پس این گزارش از امروز با
+   * صفحه‌ی مشتری اختلاف پیدا می‌کرد. حالا هر دو از یک فرمولِ دفتر می‌خورند.
+   */
   async debtors(q: RangeQuery) {
-    const { page, limit, skip } = paging(q);
+    const { page, limit } = paging(q);
 
-    const rows = await this.prisma.$queryRaw<
-      {
-        customerId: string;
-        firstName: string;
-        lastName: string | null;
-        phone: string | null;
-        balance: bigint;
-        lastInvoiceAt: Date;
-      }[]
-    >`
-      SELECT c."id" AS "customerId", c."firstName", c."lastName",
-             (SELECT "phone" FROM "CustomerPhone"
-               WHERE "customerId" = c."id"
-               ORDER BY "isPrimary" DESC, "createdAt" ASC LIMIT 1) AS "phone",
-             SUM(si."dueAmount")::bigint AS "balance",
-             MAX(si."createdAt")         AS "lastInvoiceAt"
-      FROM "SaleInvoice" si
-      JOIN "Customer" c ON c."id" = si."customerId"
-      WHERE si."status" = 'CONFIRMED' AND si."dueAmount" > 0
-      GROUP BY c."id", c."firstName", c."lastName"
-      HAVING SUM(si."dueAmount") > 0
-      ORDER BY SUM(si."dueAmount") DESC
-      OFFSET ${skip} LIMIT ${limit}
-    `;
-
-    const [totals] = await this.prisma.$queryRaw<{ count: bigint; sum: bigint }[]>`
-      SELECT COUNT(*)::bigint AS count, COALESCE(SUM(b),0)::bigint AS sum
-      FROM (
-        SELECT SUM("dueAmount") AS b FROM "SaleInvoice"
-        WHERE "status" = 'CONFIRMED' AND "dueAmount" > 0 AND "customerId" IS NOT NULL
-        GROUP BY "customerId"
-      ) t
-    `;
+    const [rows, summary] = await Promise.all([
+      this.ledger.debtors({ page, limit }),
+      this.ledger.receivablesSummary(),
+    ]);
 
     return {
       summary: {
-        totalDebtors: Number(totals?.count ?? 0),
-        totalCreditBalance: Number(totals?.sum ?? 0),
+        totalDebtors: summary.customerCount,
+        totalCreditBalance: summary.totalDue,
+        current: summary.current,
+        dueToday: summary.dueToday,
+        overdue: summary.overdue,
       },
       debtors: {
-        data: rows.map((r) => ({
-          customerId: r.customerId,
-          customerName: [r.firstName, r.lastName].filter(Boolean).join(' '),
+        data: rows.data.map((r) => ({
+          customerId: r.id,
+          customerName: r.fullName,
           phone: r.phone,
-          creditBalance: Number(r.balance),
-          lastInvoiceAt: r.lastInvoiceAt,
+          creditBalance: r.totalDue,
+          current: r.current,
+          dueToday: r.dueToday,
+          overdue: r.overdue,
+          nextDueDate: r.nextDueDate,
+          creditLimit: r.creditLimit,
         })),
-        meta: meta(Number(totals?.count ?? 0), page, limit),
+        meta: meta(rows.meta.total, page, limit),
       },
     };
   }
@@ -383,6 +390,24 @@ export class ReportsService {
         OFFSET ${skip} LIMIT ${limit}
       `;
 
+      // شمارشِ کل، جدا از صفحه. قبلاً `rows.length` بود — یعنی تعدادِ همین صفحه،
+      // پس lastPage همیشه ۱ می‌شد و صفحه‌ی دوم از UI قابل رفتن نبود.
+      const [{ count }] = await this.prisma.$queryRaw<{ count: bigint }[]>`
+        SELECT COUNT(*)::bigint AS count FROM (
+          SELECT p."id"
+          FROM "Product" p
+          JOIN "Inventory" i ON i."productId" = p."id"
+          WHERE p."deletedAt" IS NULL
+          GROUP BY p."id"
+          HAVING SUM(i."quantity") > 0
+             AND NOT EXISTS (
+               SELECT 1 FROM "InventoryLog" l
+               WHERE l."productId" = p."id" AND l."action" = 'SALE'
+                 AND l."createdAt" BETWEEN ${start} AND ${end}
+             )
+        ) t
+      `;
+
       return {
         products: {
           data: rows.map((r) => ({
@@ -394,7 +419,7 @@ export class ReportsService {
             totalSalesAmount: 0,
             lastSoldAt: r.lastSoldAt,
           })),
-          meta: meta(rows.length, page, limit),
+          meta: meta(Number(count), page, limit),
         },
       };
     }
@@ -492,7 +517,12 @@ export class ReportsService {
   }
 
 
-  /** عملکرد فروشنده. «باطل‌شده» گزارش می‌شود، نه «مرجوعی» — مدل مرجوعی ندارد. */
+  /**
+   * عملکرد فروشنده.
+   *
+   * مرجوعی به فروشنده‌ی **فاکتور اصلی** نسبت داده می‌شود، نه به کسی که سندِ
+   * مرجوعی را زده — چون معیارِ عملکرد این است که فروشِ خودِ او چقدر برگشت خورده.
+   */
   async sellerPerformance(q: RangeQuery) {
     const { start, end } = range(q);
     const { page, limit, skip } = paging(q);
@@ -505,19 +535,40 @@ export class ReportsService {
         amount: bigint;
         profit: bigint;
         cancelled: bigint;
+        returnsAmount: bigint;
+        returnsCount: bigint;
       }[]
     >`
       SELECT u."id" AS "sellerId", u."fullName" AS "sellerName",
              COUNT(*) FILTER (WHERE si."status" = 'CONFIRMED')::bigint AS "invoices",
              COALESCE(SUM(si."total")  FILTER (WHERE si."status" = 'CONFIRMED'),0)::bigint AS "amount",
              COALESCE(SUM(si."profit") FILTER (WHERE si."status" = 'CONFIRMED'),0)::bigint AS "profit",
-             COUNT(*) FILTER (WHERE si."status" = 'CANCELLED')::bigint AS "cancelled"
+             COUNT(*) FILTER (WHERE si."status" = 'CANCELLED')::bigint AS "cancelled",
+             COALESCE((
+               SELECT SUM(sr."refundAmount") FROM "SaleReturn" sr
+               JOIN "SaleInvoice" si2 ON si2."id" = sr."invoiceId"
+               WHERE si2."userId" = u."id" AND sr."createdAt" BETWEEN ${start} AND ${end}
+             ),0)::bigint AS "returnsAmount",
+             COALESCE((
+               SELECT COUNT(*) FROM "SaleReturn" sr
+               JOIN "SaleInvoice" si2 ON si2."id" = sr."invoiceId"
+               WHERE si2."userId" = u."id" AND sr."createdAt" BETWEEN ${start} AND ${end}
+             ),0)::bigint AS "returnsCount"
       FROM "SaleInvoice" si
       JOIN "User" u ON u."id" = si."userId"
       WHERE si."createdAt" BETWEEN ${start} AND ${end}
       GROUP BY u."id", u."fullName"
       ORDER BY 4 DESC
       OFFSET ${skip} LIMIT ${limit}
+    `;
+
+    // تعدادِ کلِ فروشنده‌های این بازه — قبلاً `rows.length` بود، یعنی تعدادِ
+    // همین صفحه، و صفحه‌ی دوم هیچ‌وقت در دسترس نبود.
+    const [{ count }] = await this.prisma.$queryRaw<{ count: bigint }[]>`
+      SELECT COUNT(DISTINCT si."userId")::bigint AS count
+      FROM "SaleInvoice" si
+      WHERE si."userId" IS NOT NULL
+        AND si."createdAt" BETWEEN ${start} AND ${end}
     `;
 
     return {
@@ -533,10 +584,81 @@ export class ReportsService {
             totalProfit: Number(r.profit),
             averageInvoiceAmount: invoices > 0 ? Math.round(amount / invoices) : 0,
             cancelledInvoicesCount: Number(r.cancelled),
+            returnsAmount: Number(r.returnsAmount),
+            returnsCount: Number(r.returnsCount),
           };
         }),
-        meta: meta(rows.length, page, limit),
+        meta: meta(Number(count), page, limit),
       },
+    };
+  }
+
+
+  /**
+   * سهم هر دسته‌ی مشتری از فروش.
+   *
+   * مشتریِ بی‌دسته در سطل «بدون دسته» می‌افتد تا سهم‌ها با هم روی ۱۰۰٪ بسته
+   * شوند — ناپیدا کردن آن یعنی مدیر فکر کند داده گم شده.
+   */
+  async salesByCategory(q: RangeQuery) {
+    const { start, end } = range(q);
+
+    const rows = await this.prisma.$queryRaw<
+      {
+        categoryId: string | null;
+        categoryName: string | null;
+        color: string | null;
+        amount: bigint;
+        profit: bigint;
+        invoiceCount: bigint;
+      }[]
+    >`
+      SELECT cc."id"   AS "categoryId",
+             cc."name" AS "categoryName",
+             cc."color" AS "color",
+             COALESCE(SUM(si."total"), 0)::bigint  AS "amount",
+             COALESCE(SUM(si."profit"), 0)::bigint AS "profit",
+             COUNT(*)::bigint                        AS "invoiceCount"
+      FROM "SaleInvoice" si
+      LEFT JOIN "Customer" c ON c."id" = si."customerId"
+      LEFT JOIN "CustomerCategory" cc ON cc."id" = c."categoryId"
+      WHERE si."status" = 'CONFIRMED'
+        AND si."createdAt" BETWEEN ${start} AND ${end}
+      GROUP BY cc."id", cc."name", cc."color"
+      ORDER BY 4 DESC
+    `;
+
+    const totalSales = rows.reduce((a, r) => a + Number(r.amount), 0);
+
+    const categories = rows.map((r) => {
+      const amount = Number(r.amount);
+      const invoiceCount = Number(r.invoiceCount);
+      return {
+        categoryId: r.categoryId,
+        categoryName: r.categoryName ?? 'بدون دسته',
+        color: r.color ?? '#94a3b8',
+        totalAmount: amount,
+        totalProfit: Number(r.profit),
+        invoiceCount,
+        sharePercent: totalSales > 0 ? Number(((amount / totalSales) * 100).toFixed(1)) : 0,
+        averageInvoiceAmount: invoiceCount > 0 ? Math.round(amount / invoiceCount) : 0,
+      };
+    });
+
+    const categorized = categories.filter((c) => c.categoryId !== null);
+    const uncategorized = categories.find((c) => c.categoryId === null);
+
+    return {
+      summary: {
+        totalSales,
+        categorizedSales: categorized.reduce((a, c) => a + c.totalAmount, 0),
+        uncategorizedSales: uncategorized?.totalAmount ?? 0,
+        categoryCount: categorized.length,
+        topCategory: categories[0]
+          ? { name: categories[0].categoryName, amount: categories[0].totalAmount }
+          : null,
+      },
+      categories,
     };
   }
 }

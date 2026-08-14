@@ -37,6 +37,7 @@ import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState, EmptyState } from "@/components/states";
 import { LabelPrintDialog } from "@/components/labels/label-print-dialog";
 import { ProductFormDialog } from "../_components/product-form-dialog";
+import { ProductKardex } from "../_components/product-kardex";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -494,6 +495,11 @@ export default function ProductDetailPage() {
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* کاردکس — گردش کالا با مانده‌ی متحرک */}
+      <div className="print:hidden">
+        <ProductKardex productId={product.id} />
       </div>
 
       {/* دیالوگ ویرایش */}

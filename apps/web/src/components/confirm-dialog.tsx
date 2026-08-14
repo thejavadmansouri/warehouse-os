@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,7 +12,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 
+/**
+ * تأییدِ کارهای برگشت‌ناپذیر — با الگوی استانداردِ AlertDialog.
+ *
+ * `requireReason` برای کارهایی مثل ابطال است که دلیلشان باید ثبت شود؛ دکمه‌ی
+ * تأیید تا دلیل وارد نشود غیرفعال می‌ماند و دلیل به `onConfirm` پاس داده می‌شود.
+ * دیالوگ با کلیکِ تأیید خودش بسته نمی‌شود (preventDefault) تا والد بعد از
+ * موفقیتِ واقعی ببنددش.
+ */
 export function ConfirmDialog({
   open,
   onOpenChange,
@@ -21,6 +31,8 @@ export function ConfirmDialog({
   cancelText = "انصراف",
   destructive = false,
   loading = false,
+  requireReason = false,
+  reasonPlaceholder,
   onConfirm,
 }: {
   open: boolean;
@@ -31,8 +43,19 @@ export function ConfirmDialog({
   cancelText?: string;
   destructive?: boolean;
   loading?: boolean;
-  onConfirm: () => void;
+  /** ورودیِ دلیل را الزامی می‌کند و مقدارش را به onConfirm می‌فرستد. */
+  requireReason?: boolean;
+  reasonPlaceholder?: string;
+  onConfirm: (reason?: string) => void;
 }) {
+  const [reason, setReason] = React.useState("");
+
+  React.useEffect(() => {
+    if (!open) setReason("");
+  }, [open]);
+
+  const canConfirm = !loading && (!requireReason || reason.trim().length > 0);
+
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
@@ -44,14 +67,26 @@ export function ConfirmDialog({
             </AlertDialogDescription>
           ) : null}
         </AlertDialogHeader>
+
+        {requireReason ? (
+          <Input
+            autoFocus
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={200}
+            placeholder={reasonPlaceholder}
+            className="h-10"
+          />
+        ) : null}
+
         <AlertDialogFooter>
           <AlertDialogCancel disabled={loading}>{cancelText}</AlertDialogCancel>
           <AlertDialogAction
             onClick={(e) => {
               e.preventDefault();
-              onConfirm();
+              onConfirm(requireReason ? reason.trim() : undefined);
             }}
-            disabled={loading}
+            disabled={!canConfirm}
             className={
               destructive
                 ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"

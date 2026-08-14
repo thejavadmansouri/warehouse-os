@@ -4,12 +4,12 @@ import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, Filter, X } from "lucide-react";
 
-import { getInventoryLogs, getLocations, getProducts } from "@/lib/api";
+import { getInventoryLogs, getLocations } from "@/lib/api";
+import { ProductPicker } from "@/components/product-picker";
 import type {
   InventoryAction,
   InventoryLogsQuery,
   Location,
-  Product,
 } from "@/lib/types";
 import { useAuthStore } from "@/lib/auth-store";
 import { useToast } from "@/hooks/use-toast";
@@ -101,10 +101,7 @@ export default function InventoryLogsPage() {
   });
 
   // بارگذاری گزینه‌های فیلتر — طبق بخش ۶.۳ و ۶.۶
-  const productsQ = useQuery({
-    queryKey: ["products", "all"],
-    queryFn: () => getProducts(),
-  });
+  // (محصول دیگر اینجا بارگذاری نمی‌شود؛ ProductPicker خودش از سرور جست‌وجو می‌کند.)
   const locationsQ = useQuery({
     queryKey: ["locations", "all"],
     queryFn: () => getLocations(),
@@ -214,20 +211,16 @@ export default function InventoryLogsPage() {
 
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="f-product">محصول</Label>
-              <Select value={productId} onValueChange={setProductId}>
-                <SelectTrigger id="f-product" className="w-full">
-                  <SelectValue placeholder="همه محصولات" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">همه محصولات</SelectItem>
-                  {(productsQ.data ?? []).map((p: Product) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                      {p.sku ? ` — ${p.sku}` : ""}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/*
+                فهرست کشویی جای خود را به جست‌وجوی سمت سرور داد: اندپوینت
+                محصولات صفحه‌بندی‌شده است و این فهرست فقط ۵۰ کالای اول را
+                داشت — یعنی فیلتر برای بقیه‌ی کاتالوگ بی‌اثر بود.
+              */}
+              <ProductPicker
+                id="f-product"
+                value={productId === "ALL" ? null : productId}
+                onChange={(id) => setProductId(id ?? "ALL")}
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">

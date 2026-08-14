@@ -9,7 +9,7 @@
  *   جمع اقلام   = Σ جمع ردیف‌ها          ← سرور اسمش را subtotal گذاشته
  *   مبلغ نهایی  = جمع اقلام − تخفیف کل فاکتور
  *
- * درصد فقط در رابط کاربری وجود دارد؛ سرور همیشه عدد تومانی می‌گیرد. آنچه ذخیره
+ * درصد فقط در رابط کاربری وجود دارد؛ سرور همیشه عدد ریالی می‌گیرد. آنچه ذخیره
  * می‌کنیم «ورودیِ فروشنده + حالتش» است نه عدد نهایی، تا اگر تعداد یا قیمت عوض
  * شد، درصد خودش دوباره اعمال شود — این همان چیزی است که فروشنده انتظار دارد.
  */
@@ -17,7 +17,7 @@
 export type DiscountMode = "amount" | "percent";
 
 export interface DiscountInput {
-  /** عددی که فروشنده تایپ کرده — بسته به mode، تومان است یا درصد. */
+  /** عددی که فروشنده تایپ کرده — بسته به mode، ریال است یا درصد. */
   value: number;
   mode: DiscountMode;
 }
@@ -28,13 +28,13 @@ export const NO_DISCOUNT: DiscountInput = { value: 0, mode: "amount" };
 export const MAX_PERCENT = 100;
 
 /**
- * ورودی تخفیف را به تومان تبدیل می‌کند و به `base` محدودش می‌کند.
+ * ورودی تخفیف را به ریال تبدیل می‌کند و به `base` محدودش می‌کند.
  *
  * محدودکردن اینجا لازم است چون سرور تخفیف بیشتر از مبلغ را با
  * DISCOUNT_EXCEEDS_TOTAL رد می‌کند؛ بهتر است فروشنده همان لحظه ببیند تا اینکه
  * سرِ ثبت خطا بخورد.
  */
-export function discountToToman(input: DiscountInput, base: number): number {
+export function discountToRial(input: DiscountInput, base: number): number {
   if (base <= 0) return 0;
   const raw =
     input.mode === "percent"
@@ -43,7 +43,7 @@ export function discountToToman(input: DiscountInput, base: number): number {
   return clamp(raw, 0, base);
 }
 
-/** درصدِ معادلِ یک تخفیف تومانی — برای نمایش کنار مبلغ. */
+/** درصدِ معادلِ یک تخفیف ریالی — برای نمایش کنار مبلغ. */
 export function tomanToPercent(amount: number, base: number): number {
   if (base <= 0) return 0;
   return Math.round((amount / base) * 1000) / 10; // یک رقم اعشار

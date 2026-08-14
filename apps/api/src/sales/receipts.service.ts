@@ -3,31 +3,32 @@ import {
   BadRequestException,
   NotFoundException,
 } from '@nestjs/common';
-import { PaymentMethod } from '@prisma/client';
+import { PaymentMethod, LedgerEntryType } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { LedgerService } from './ledger.service';
+import { CreateReceiptDto } from './dto/create-receipt.dto';
+import { EventsGateway } from '../realtime/events.gateway';
 
 
-export interface CreateReceiptInput {
-  idempotencyKey?: string;
-  customerId: string;
-  amount: number;
-  method: PaymentMethod;
-  note?: string;
-  cheque?: {
-    number: string;
-    bankName?: string;
-    branch?: string;
-    holderName?: string;
-    dueDate: string;
-  };
-}
+/**
+ * شکل ورودی از خودِ DTO می‌آید، نه از یک interface موازی.
+ *
+ * دو تعریف جدا یعنی تعریفی که `ValidationPipe` می‌بیند با تعریفی که سرویس
+ * انتظار دارد می‌توانند از هم جدا بیفتند — و دقیقاً همین‌جا بود که اندپوینت
+ * سال‌ها بدون هیچ اعتبارسنجی کار می‌کرد.
+ */
+export type CreateReceiptInput = CreateReceiptDto;
 
 
 @Injectable()
 export class ReceiptsService {
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private ledger: LedgerService,
+    private realtime: EventsGateway,
+  ) {}
 
 
   /**
@@ -95,22 +96,45 @@ export class ReceiptsService {
         select: { id: true, dueAmount: true, paidAmount: true },
       });
 
-      const totalDebt = debts.reduce((s, d) => s + d.dueAmount, 0);
+      /*
+       * بدهیِ واقعی از **دفتر** می‌آید، نه از جمعِ فاکتورهای باز.
+       *
+       * قبلاً اینجا `dueAmount` فاکتورها جمع می‌شد. یعنی مشتری‌ای که بدهی‌اش
+       * مانده‌ی اول دوره بود و هیچ فاکتور بازی نداشت، اصلاً نمی‌توانست پول
+       * بدهد — «این مشتری بدهی ثبت‌شده‌ای ندارد» می‌گرفت، در حالی که صفحه‌ی
+       * خودش بالای همان فرم می‌نوشت چند میلیون بدهکار است.
+       *
+       * تخصیص به فاکتورها سرِ جایش می‌ماند (تا بدانیم پول بابت کدام فاکتور
+       * بوده)، ولی «چقدر بدهکار است» فقط یک منبع دارد.
+       */
+      const totalDebt = await this.ledger.balance(input.customerId, tx);
 
-      if (totalDebt === 0) {
+      if (totalDebt <= 0) {
         throw new BadRequestException({
           error: 'NO_DEBT',
-          message: 'این مشتری بدهی ثبت‌شده‌ای ندارد',
+          message:
+            totalDebt < 0
+              ? 'این مشتری بستانکار است و بدهی ندارد'
+              : 'این مشتری بدهی ثبت‌شده‌ای ندارد',
         });
       }
 
-      // بیش از بدهی نپذیر. پیش‌دریافت مفهوم جداگانه‌ای است و اگر اینجا
-      // قاطی شود، «مانده‌ی مشتری» دیگر قابل اتکا نیست.
-      if (input.amount > totalDebt) {
+      /*
+       * پیش‌دریافت: مازاد رد نمی‌شود، ولی بی‌صدا هم ثبت نمی‌شود.
+       *
+       * مشتری واقعاً علی‌الحساب می‌دهد («این را بگیر، بقیه‌اش بماند»). قبلاً کل
+       * رسید رد می‌شد و فروشنده مجبور بود عدد را دستکاری کند. حالا کلاینت باید
+       * صراحتاً `allowOverpayment` بفرستد؛ بدون آن همان خطای قبلی می‌آید تا
+       * مبلغِ اشتباهِ تایپی بی‌سروصدا به بستانکاری تبدیل نشود.
+       */
+      const overpayment = Math.max(0, input.amount - totalDebt);
+
+      if (overpayment > 0 && !input.allowOverpayment) {
         throw new BadRequestException({
           error: 'AMOUNT_EXCEEDS_DEBT',
           amount: input.amount,
           totalDebt,
+          overpayment,
           message: `مبلغ دریافتی از کل بدهی مشتری بیشتر است (بدهی: ${totalDebt})`,
         });
       }
@@ -139,29 +163,84 @@ export class ReceiptsService {
         });
       }
 
+      /*
+       * مازادِ پیش‌دریافت به هیچ فاکتوری تخصیص نمی‌یابد و همین درست است: بابت
+       * چیزی که هنوز خریده نشده، فاکتوری وجود ندارد. حلقه وقتی فاکتورها تمام
+       * شوند خودش می‌ایستد و مازاد فقط در دفتر می‌ماند.
+       */
       let remaining = input.amount;
 
       for (const debt of debts) {
         if (remaining <= 0) break;
 
         const applied = Math.min(remaining, debt.dueAmount);
+        if (applied <= 0) continue;
 
-        await tx.receiptAllocation.create({
-          data: { receiptId: receipt.id, invoiceId: debt.id, amount: applied },
+        /*
+         * نوشتنِ شرطی و نسبی، نه مقدار مطلق.
+         *
+         * قبلاً اینجا `paidAmount: debt.paidAmount + applied` نوشته می‌شد — یعنی
+         * عددی که از یک خواندنِ قبل از تراکنش آمده بود. دو رسیدِ هم‌زمان برای یک
+         * مشتری (یا رسید و مرجوعی روی یک فاکتور) هر دو همان مانده را می‌خواندند و
+         * دومی نوشته‌ی اولی را پاک می‌کرد: پول گرفته شده بود ولی مانده‌ی فاکتور
+         * برنگشته بود. دفتر درست می‌ماند و dueAmount غلط — دقیقاً همان اختلافی که
+         * تفکیک سنیِ بدهکاران را بی‌اعتبار می‌کند.
+         *
+         * شرطِ `dueAmount >= applied` در لحظه‌ی نوشتن دوباره ارزیابی می‌شود. اگر
+         * رسیدِ هم‌زمانی این فاکتور را زودتر تسویه کرده باشد count صفر می‌شود،
+         * این فاکتور رد می‌شود و پول برای فاکتور بعدیِ صف می‌ماند.
+         */
+        const claimed = await tx.saleInvoice.updateMany({
+          where: { id: debt.id, dueAmount: { gte: applied } },
+          data: {
+            paidAmount: { increment: applied },
+            dueAmount: { decrement: applied },
+          },
         });
 
-        await tx.saleInvoice.update({
-          where: { id: debt.id },
-          data: {
-            paidAmount: debt.paidAmount + applied,
-            dueAmount: debt.dueAmount - applied,
-          },
+        if (claimed.count === 0) continue;
+
+        // تخصیص فقط بعد از کسرِ موفق ثبت می‌شود، وگرنه سندی می‌ماند که پشتش
+        // هیچ کاهشی در مانده‌ی فاکتور نیست.
+        await tx.receiptAllocation.create({
+          data: { receiptId: receipt.id, invoiceId: debt.id, amount: applied },
         });
 
         remaining -= applied;
       }
 
+      /*
+       * کاهش بدهی در دفتر — در همان تراکنشِ رسید.
+       *
+       * مبلغِ کاملِ رسید ثبت می‌شود، نه جمعِ تخصیص‌ها. این دو همیشه برابرند
+       * (بیش از بدهی پذیرفته نمی‌شود)، ولی اگر روزی پیش‌دریافت اضافه شد، پولی
+       * که واقعاً گرفته‌ایم باید در حساب مشتری دیده شود حتی اگر هنوز به فاکتوری
+       * نچسبیده باشد.
+       */
+      await this.ledger.record(tx, {
+        customerId: input.customerId,
+        type: LedgerEntryType.RECEIPT,
+        amount: -input.amount,
+        receiptId: receipt.id,
+        userId: userId ?? null,
+        note: [
+          `رسید ${receipt.number}`,
+          input.method === PaymentMethod.CHEQUE ? 'چک، تا وصول در جریان است' : '',
+          // پیش‌دریافت باید در گردش حساب دیده شود، وگرنه ماه بعد کسی نمی‌فهمد
+          // چرا مانده منفی است.
+          overpayment > 0 ? `شامل ${overpayment} پیش‌دریافت` : '',
+        ]
+          .filter(Boolean)
+          .join(' — '),
+      });
+
       return receipt.id;
+    });
+
+    // رسید ثبت شد → مانده‌ی حساب مشتری عوض شد؛ همان لحظه اعلان کن.
+    this.realtime.broadcast({
+      type: 'receipt.created',
+      customerId: input.customerId,
     });
 
     return this.findOne(receiptId);

@@ -4,22 +4,25 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, PaymentMethod, InvoiceStatus } from '@prisma/client';
+import {
+  Prisma,
+  PaymentMethod,
+  InvoiceStatus,
+  LedgerEntryType,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { SystemLocationsService } from '../inventory/system-locations.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { normalizePhone } from '../common/phone.util';
+import { INT4_MAX } from '../common/money';
+import { LedgerService } from './ledger.service';
+import { EventsGateway } from '../realtime/events.gateway';
 
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { QueryInvoicesDto } from './dto/query-invoices.dto';
 
-
-/**
- * بیشترین عددی که در ستون Int (INT4 پستگرس) جا می‌شود.
- * واحد پول تومان است، پس سقف هر فاکتور ≈ ۲.۱ میلیارد تومان.
- */
-const INT4_MAX = 2_147_483_647;
 
 /** چیزی که در پاسخِ خطای کمبود موجودی برمی‌گردد تا کلاینت همان ردیف را قرمز کند. */
 interface InsufficientStock {
@@ -33,20 +36,44 @@ interface InsufficientStock {
 }
 
 
-/** مکان سیستمیِ فروشِ کالای هنوز ثبت‌نشده. بیرون از سلسله‌مراتب واقعی انبار. */
-const SYSTEM_TYPE_NAME = 'سیستمی';
-const SYSTEM_TYPE_DEPTH = 99;
-const UNREGISTERED_NAME = 'موجودی ثبت‌نشده';
-const UNREGISTERED_CODE_PREFIX = 'SYS-UNREG-';
-
-
 @Injectable()
 export class SalesService {
 
   constructor(
     private prisma: PrismaService,
     private operation: InventoryOperationService,
+    private ledger: LedgerService,
+    private systemLocations: SystemLocationsService,
+    private realtime: EventsGateway,
   ) {}
+
+
+  /**
+   * سررسید بخش نسیه‌ی فاکتور.
+   *
+   * اولویت با چیزی است که فروشنده صراحتاً فرستاده؛ وگرنه از مهلت پیش‌فرضِ خودِ
+   * مشتری ساخته می‌شود. این‌طور فروشنده در حالت عادی هیچ فیلدی پر نمی‌کند و
+   * فقط وقتی برای این خرید فرق دارد دستش را می‌برد سمت تاریخ.
+   */
+  private async resolveDueDate(
+    tx: Prisma.TransactionClient,
+    customerId: string,
+    explicit?: string | null,
+  ): Promise<Date> {
+    if (explicit) return new Date(explicit);
+
+    const customer = await tx.customer.findUnique({
+      where:{ id: customerId },
+      select:{ creditDays: true },
+    });
+
+    const due = new Date();
+    due.setDate(due.getDate() + (customer?.creditDays ?? 0));
+    // پایان روزِ سررسید — وگرنه فاکتوری که ساعت ۱۰ صبح ثبت شده، ساعت ۹ صبحِ
+    // روز سررسید «معوق» حساب می‌شود.
+    due.setHours(23, 59, 59, 999);
+    return due;
+  }
 
 
   /**
@@ -82,6 +109,89 @@ export class SalesService {
         error:'WAREHOUSE_NOT_FOUND',
         message:'انبار پیدا نشد',
       });
+    }
+
+
+    /*
+     * مکانِ هر ردیف باید در همین انبار باشد.
+     *
+     * قبلاً `locationId` مستقیم از کلاینت به تک‌نقطه‌ی تغییر موجودی می‌رفت و
+     * آنجا هم بررسی نمی‌شد: فاکتوری برای انبار A می‌توانست موجودیِ قفسه‌ای در
+     * انبار B را کم کند، و چون فروش با allowNegative اجرا می‌شود حتی خطا هم
+     * نمی‌داد — قفسه‌ی انبارِ دیگر بی‌صدا منفی می‌شد.
+     *
+     * همین بررسی مکانِ ناموجود را هم می‌گیرد؛ قبلاً به خطای FK پستگرس و ۵۰۰
+     * می‌رسید به‌جای یک پیام روشن.
+     */
+    const linesWithLoc = dto.lines
+      .map((l, i) => ({ i, productId: l.productId, locationId: l.locationId }))
+      .filter(
+        (x): x is { i: number; productId: string; locationId: string } =>
+          !!x.locationId,
+      );
+
+    if (linesWithLoc.length) {
+      const locationIds = [...new Set(linesWithLoc.map(x => x.locationId))];
+      const locs = await this.prisma.location.findMany({
+        where:{ id:{ in: locationIds } },
+        select:{ id:true, warehouseId:true, isActive:true },
+      });
+      const byId = new Map(locs.map(l => [l.id, l]));
+
+      /*
+       * تنها خطرِ واقعی که این بررسی باید بگیرد: قفسه‌ی *زنده‌ای* که به انبارِ
+       * دیگری تعلق دارد. فاکتورِ این انبار نباید موجودیِ قفسه‌ی انبارِ دیگر را
+       * کم کند — و چون فروش با allowNegative اجرا می‌شود، بی‌این بررسی حتی خطا
+       * هم نمی‌داد.
+       *
+       * اما قفسه‌ی *غیرفعال/حذف‌شده* داستانش فرق دارد: حذفِ قفسه‌ی دارای موجودی
+       * فقط غیرفعالش می‌کند (رکورد و warehouseId سرِ جایشان می‌مانند)، و جنس
+       * رویش «بی‌صاحب» می‌شود. این جنس فیزیکاً در انبار هست و باید فروختنی
+       * بماند؛ قبلاً همین‌جا با LOCATION_NOT_IN_WAREHOUSE رد می‌شد و فاکتور
+       * اصلاً ثبت نمی‌شد. پس فقط قفسه‌ی «فعال و متعلق به انبارِ دیگر» را رد کن.
+       */
+      const foreign = linesWithLoc.find(x => {
+        const loc = byId.get(x.locationId);
+        return (
+          loc &&
+          loc.isActive &&
+          loc.warehouseId != null &&
+          loc.warehouseId !== dto.warehouseId
+        );
+      });
+      if (foreign) {
+        throw new BadRequestException({
+          error:'LOCATION_NOT_IN_WAREHOUSE',
+          lineIndex: foreign.i,
+          locationId: foreign.locationId,
+          message:'مکان انتخاب‌شده در این انبار نیست',
+        });
+      }
+
+      /*
+       * مکانی که اصلاً رکوردی ندارد فقط وقتی مجاز است که واقعاً موجودیِ همان
+       * کالا رویش نشسته باشد — وگرنه upsertِ فروش می‌خواهد ردیفِ موجودی (و لاگ)
+       * روی مکانِ ناموجود بسازد و به خطای کلید خارجی می‌خورد. عملاً به‌خاطر
+       * قیدهای RESTRICT چنین چیزی نباید پیش بیاید، ولی این تور ایمنی «مکانِ
+       * کاملاً ساختگی» را با پیام روشن می‌گیرد نه با ۵۰۰.
+       */
+      const missing = linesWithLoc.filter(x => !byId.has(x.locationId));
+      if (missing.length) {
+        const invRows = await this.prisma.inventory.findMany({
+          where:{ OR: missing.map(x => ({ productId: x.productId, locationId: x.locationId })) },
+          select:{ productId:true, locationId:true },
+        });
+        const hasInv = new Set(invRows.map(r => `${r.productId}::${r.locationId}`));
+        const bogus = missing.find(x => !hasInv.has(`${x.productId}::${x.locationId}`));
+        if (bogus) {
+          throw new BadRequestException({
+            error:'LOCATION_NOT_FOUND',
+            lineIndex: bogus.i,
+            locationId: bogus.locationId,
+            message:'مکان انتخاب‌شده پیدا نشد',
+          });
+        }
+      }
     }
 
 
@@ -122,7 +232,7 @@ export class SalesService {
 
     // ستون‌های مبلغ از نوع Int هستند (INT4 پستگرس). اگر جلوی سرریز گرفته نشود،
     // Prisma با خطای خام می‌ترکد و مسیر فایل و متن کوئری به کلاینت درز می‌کند.
-    // سقف ≈ ۲.۱ میلیارد تومان برای هر فاکتور.
+    // سقف ≈ ۲.۱ میلیارد ریال برای هر فاکتور.
     if (subtotal > INT4_MAX || total > INT4_MAX) {
       throw new BadRequestException({
         error:'AMOUNT_TOO_LARGE',
@@ -193,6 +303,14 @@ export class SalesService {
 
         const customerId = await this.resolveCustomer(tx, dto);
 
+        // سررسید فقط برای بخش نسیه معنا دارد. مهلت پیش‌فرض روی خود مشتری
+        // نشسته تا فروشنده مجبور نباشد هر بار انتخابش کند؛ اگر صراحتاً چیزی
+        // فرستاده شده باشد، همان می‌چربد.
+        const dueDate =
+          dueAmount > 0 && customerId
+            ? await this.resolveDueDate(tx, customerId, dto.dueDate)
+            : null;
+
         const invoice = await tx.saleInvoice.create({
           data:{
             idempotencyKey: dto.idempotencyKey,
@@ -204,6 +322,7 @@ export class SalesService {
             total,
             paidAmount,
             dueAmount,
+            dueDate,
             profit,
             note: dto.note ?? null,
             status: InvoiceStatus.CONFIRMED,
@@ -211,11 +330,30 @@ export class SalesService {
         });
 
 
+        /*
+         * بدهی همین‌جا وارد دفتر می‌شود، در همان تراکنشِ فاکتور.
+         *
+         * اگر بیرون از تراکنش بود، یک خطای وسط راه فاکتوری می‌ساخت که در حساب
+         * مشتری اثری ندارد — دقیقاً همان ناهماهنگیِ عددی که دفتر برای جلوگیری
+         * از آن ساخته شده.
+         */
+        if (dueAmount > 0 && customerId) {
+          await this.ledger.record(tx, {
+            customerId,
+            type: LedgerEntryType.INVOICE,
+            amount: dueAmount,
+            invoiceId: invoice.id,
+            userId: userId ?? null,
+            note: `فاکتور ${invoice.number}`,
+          });
+        }
+
+
         // ردیفی که مکان ندارد یعنی کالای هنوز ثبت‌نشده؛ روی مکان سیستمیِ انبار
         // می‌نشیند. یک بار حساب می‌شود تا برای هر ردیف کوئری تکراری نزنیم.
         const needsFallback = dto.lines.some(l => !l.locationId);
         const fallbackLocationId = needsFallback
-          ? await this.unregisteredStockLocation(tx, dto.warehouseId)
+          ? await this.systemLocations.unregisteredStock(tx, dto.warehouseId)
           : null;
 
         // هر ردیف از مسیر تک‌نقطه‌ی تغییر موجودی رد می‌شود (قانون ۱).
@@ -293,6 +431,16 @@ export class SalesService {
         return invoice.id;
       });
 
+      // تراکنش commit شد → همان لحظه اعلان کن. فروش هم موجودی را کم کرده، پس
+      // stock.changed هم می‌فرستیم تا لیست موجودی/گزارش‌ها هم زنده شوند.
+      this.realtime.broadcast({
+        type: 'sale.created',
+        invoiceId,
+        warehouseId: dto.warehouseId,
+        customerId: dto.customerId ?? null,
+      });
+      this.realtime.broadcast({ type: 'stock.changed', warehouseId: dto.warehouseId });
+
       return this.findOne(invoiceId);
 
     } catch (err:any) {
@@ -349,17 +497,64 @@ export class SalesService {
       }
 
 
+      /*
+       * بدهیِ فاکتورِ باطل‌شده باید برگردد.
+       *
+       * قبلاً این‌جا فقط موجودی برمی‌گشت و `dueAmount` دست‌نخورده می‌ماند: ابطال
+       * یک فاکتور نسیه، بدهی مشتری را سرِ جایش نگه می‌داشت و «بدهکاران» تا ابد
+       * عددِ غلط نشان می‌داد.
+       */
+      const cancelled = await tx.saleInvoice.findUniqueOrThrow({
+        where:{ id },
+        select:{ number:true, customerId:true, dueAmount:true },
+      });
+
+      if (cancelled.customerId && cancelled.dueAmount > 0) {
+        await this.ledger.record(tx, {
+          customerId: cancelled.customerId,
+          type: LedgerEntryType.INVOICE_CANCELLED,
+          amount: -cancelled.dueAmount,
+          invoiceId: id,
+          userId: userId ?? null,
+          note:`ابطال فاکتور ${cancelled.number}: ${reason}`,
+        });
+
+        await tx.saleInvoice.update({
+          where:{ id },
+          data:{ dueAmount: 0 },
+        });
+      }
+
+
       const lines = await tx.inventoryLog.findMany({
         where:{ invoiceId: id, action:'SALE' },
       });
 
+      /*
+       * اگر بخشی از این فاکتور قبلاً مرجوعیِ سالم خورده، همان مقدار قبلاً به
+       * موجودی برگشته است. ابطال باید فقط باقی‌ماندهٔ واقعاً بیرون‌مانده را
+       * برگرداند، وگرنه موجودیِ آن کالا دوبار زیاد می‌شود. اقلامِ معیوب
+       * (restock=false) اصلاً حرکت انبار نداشته‌اند، پس اینجا هم برنمی‌گردند.
+       */
+      const restocked = await tx.saleReturnLine.groupBy({
+        by:['saleLogId'],
+        where:{ saleLogId:{ in: lines.map(l => l.id) }, restock: true },
+        _sum:{ quantity: true },
+      });
+      const restockedQty = new Map(
+        restocked.map(r => [r.saleLogId, r._sum.quantity ?? 0]),
+      );
+
       for (const line of lines) {
+        const remaining = line.quantity - (restockedQty.get(line.id) ?? 0);
+        if (remaining <= 0) continue;
+
         await this.operation.execute(
           {
             type:'RETURN',
             productId: line.productId,
             locationId: line.locationId,
-            quantity: line.quantity,
+            quantity: remaining,
             invoiceId: id,
             userId: userId ?? null,
             source:'SALE_CANCEL',
@@ -369,6 +564,10 @@ export class SalesService {
         );
       }
     });
+
+    // تراکنشِ ابطال commit شد → اعلانِ زنده. ابطال موجودی را هم برگردانده.
+    this.realtime.broadcast({ type: 'sale.canceled', invoiceId: id });
+    this.realtime.broadcast({ type: 'stock.changed' });
 
     return this.findOne(id);
   }
@@ -383,7 +582,11 @@ export class SalesService {
         warehouse:{ select:{ id:true, name:true, code:true } },
         user:{ select:{ id:true, fullName:true, username:true } },
         payments:{ include:{ cheque:true } },
+        // فقط ردیف‌های فروش. حرکت‌های RETURNِ ابطال/مرجوعی هم invoiceId همین
+        // فاکتور را دارند؛ بدون این فیلتر، «ردیف‌های فاکتور» با ردیف‌های برگشتی
+        // قاطی می‌شد و جمعِ نمایشی با مبلغِ فاکتور نمی‌خواند.
         lines:{
+          where:{ action:'SALE' },
           include:{
             product:{ select:{ id:true, name:true, sku:true, unit:true } },
             location:{ select:{ id:true, name:true, code:true, path:true } },
@@ -413,7 +616,10 @@ export class SalesService {
 
     if (q.warehouseId) where.warehouseId = q.warehouseId;
     if (q.customerId) where.customerId = q.customerId;
-    if (q.status) where.status = q.status as InvoiceStatus;
+    // `RETURNED` وضعیتِ واقعیِ مدل نیست؛ یعنی «دستِ‌کم یک مرجوعی خورده». بقیه
+    // وضعیت‌ها مستقیم روی status می‌نشینند.
+    if (q.status === 'RETURNED') where.returns = { some: {} };
+    else if (q.status) where.status = q.status as InvoiceStatus;
 
     if (q.from || q.to) {
       where.createdAt = {};
@@ -436,6 +642,13 @@ export class SalesService {
       ];
     }
 
+    /*
+     * ردیف‌های فاکتور فقط وقتی خواسته شود می‌آیند (کاردکس مشتری) — فهرستِ
+     * معمولی سبک می‌ماند و همان الگوی findOne است: فقط حرکت‌های SALE، تا
+     * ردیف‌های برگشتیِ ابطال/مرجوعی با اقلام واقعی قاطی نشوند.
+     */
+    const includeLines = q.includeLines === 'true';
+
     const [data, total] = await this.prisma.$transaction([
       this.prisma.saleInvoice.findMany({
         where,
@@ -447,7 +660,23 @@ export class SalesService {
             },
           },
           user:{ select:{ id:true, fullName:true } },
-          _count:{ select:{ lines:true } },
+          // فقط ردیف‌های فروش شمرده می‌شوند. رابطه‌ی `lines` همه‌ی لاگ‌های این
+          // فاکتور است، پس بدون این فیلتر حرکت‌های RETURNِ ابطال و مرجوعی هم
+          // شمرده می‌شدند و ستون «تعداد اقلام» بعد از هر برگشتی متورم می‌شد.
+          // `returns` در همین کوئری شمرده می‌شود تا لیست بدون N+1 بداند کدام
+          // فاکتور مرجوعی خورده (نشانِ «مرجوعی دارد» + تبِ «مرجوع‌شده»).
+          _count:{ select:{ lines:{ where:{ action:'SALE' } }, returns:true } },
+          ...(includeLines
+            ? {
+                lines:{
+                  where:{ action:'SALE' },
+                  include:{
+                    product:{ select:{ id:true, name:true, sku:true, unit:true } },
+                    location:{ select:{ id:true, name:true, code:true, path:true } },
+                  },
+                },
+              }
+            : {}),
         },
         orderBy:{ createdAt:'desc' },
         skip:(page - 1) * pageSize,
@@ -457,72 +686,17 @@ export class SalesService {
     ]);
 
     return {
-      data: data.map(inv => ({ ...inv, customer: withFullName(inv.customer) })),
+      data: data.map(inv => ({
+        ...inv,
+        customer: withFullName(inv.customer),
+        hasReturns: inv._count.returns > 0,
+      })),
       meta:{ total, page, pageSize, pageCount: Math.ceil(total / pageSize) },
     };
   }
 
 
   // ---------- کمکی‌ها ----------
-
-  /**
-   * مکانِ سیستمیِ «موجودی ثبت‌نشده» برای این انبار — در اولین استفاده ساخته می‌شود.
-   *
-   * چرا اصلاً لازم است: هر حرکت موجودی باید یک مکان داشته باشد، ولی کالایی که
-   * هنوز وارد نرم‌افزار نشده هیچ قفسه‌ای ندارد و فروشنده هم پشت پیشخوان نمی‌داند
-   * کجاست. بدون این، یا باید فروش را متوقف کنیم یا عدد را روی یک قفسه‌ی واقعیِ
-   * بی‌ربط منفی کنیم و شمارشِ آن قفسه را خراب کنیم.
-   *
-   * این مکان عمداً در سطح ریشه و با نوعِ مخصوص خودش ساخته می‌شود تا در درخت
-   * انبار قاطیِ قفسه‌های واقعی نشود. موجودیِ منفیِ اینجا یعنی «این تعداد فروخته
-   * شد پیش از آنکه ثبت شود» — یعنی صفِ کارِ ثبتِ عقب‌افتاده.
-   */
-  private async unregisteredStockLocation(
-    tx: Prisma.TransactionClient,
-    warehouseId: string,
-  ): Promise<string> {
-
-    const existing = await tx.location.findUnique({
-      where:{ code: `${UNREGISTERED_CODE_PREFIX}${warehouseId.slice(0, 8)}` },
-      select:{ id:true },
-    });
-    if (existing) return existing.id;
-
-    const warehouse = await tx.warehouse.findUnique({
-      where:{ id: warehouseId },
-      select:{ code:true },
-    });
-    if (!warehouse) {
-      throw new NotFoundException({
-        error:'WAREHOUSE_NOT_FOUND',
-        message:'انبار پیدا نشد',
-      });
-    }
-
-    // عمق ۹۹ عمداً بیرون از سلسله‌مراتب واقعی است تا با قید یکتاییِ
-    // [warehouseId, depth] انواعِ واقعیِ انبار تداخل نکند.
-    const type = await tx.locationType.upsert({
-      where:{ warehouseId_depth:{ warehouseId, depth: SYSTEM_TYPE_DEPTH } },
-      create:{ warehouseId, name: SYSTEM_TYPE_NAME, depth: SYSTEM_TYPE_DEPTH },
-      update:{},
-    });
-
-    const code = `${UNREGISTERED_CODE_PREFIX}${warehouseId.slice(0, 8)}`;
-    const created = await tx.location.create({
-      data:{
-        name: UNREGISTERED_NAME,
-        code,
-        barcode: `LOC-${code}`,
-        path: `${warehouse.code} > ${UNREGISTERED_NAME}`,
-        depth: SYSTEM_TYPE_DEPTH,
-        warehouseId,
-        typeId: type.id,
-      },
-      select:{ id:true },
-    });
-
-    return created.id;
-  }
 
 
 

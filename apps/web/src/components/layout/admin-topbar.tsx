@@ -21,6 +21,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AdminSidebar, SidebarCollapseToggle } from "./admin-sidebar";
+import { LiveClock } from "@/components/live-clock";
+import { NotificationBell } from "@/components/notification-bell";
 import { useAuthStore } from "@/lib/auth-store";
 import { logoutServer } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/format";
@@ -100,6 +102,11 @@ export function AdminTopbar({
       </div>
 
       <div className="flex-1" />
+
+      {/* چیدمان راست‌به‌چپ است، پس هرچه بعد از فاصله‌انداز بیاید سمت چپ می‌نشیند. */}
+      <LiveClock />
+
+      <NotificationBell />
 
       <ThemeToggle />
 

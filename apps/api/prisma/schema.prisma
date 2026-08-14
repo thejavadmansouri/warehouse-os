@@ -1,8 +1,7 @@
 generator client {
-  provider = "prisma-client-js"
-  /*
+  provider      = "prisma-client-js"
+  /**
    * موتور کوئری پریزما باینریِ مخصوص سیستم‌عامل است.
-   *
    * `native` یعنی همان ماشینی که generate روی آن اجرا شده. سرور مشتری ویندوز
    * است، پس اگر فقط native بماند و بسته روی مک ساخته شود، سرور آنجا بالا
    * نمی‌آید. با آوردن هر دو، خروجی روی هر دو محیط کار می‌کند.
@@ -16,35 +15,39 @@ datasource db {
 }
 
 model User {
-  id              String             @id @default(uuid())
-  username        String             @unique
-  password        String
-  fullName        String
-  role            Role               @default(STAFF)
+  id                      String                   @id @default(uuid())
+  username                String                   @unique
+  password                String
+  fullName                String
+  role                    Role                     @default(STAFF)
   /// شناسه‌ی نشستِ فعال — هر حساب فقط روی یک دستگاه.
   /// هر ورود مقدار تازه‌ای می‌گذارد؛ توکن‌های قبلی از همان لحظه بی‌اعتبار می‌شوند.
   /// null یعنی هیچ نشست فعالی نیست (خروج یا هرگز وارد نشده).
-  activeSessionId String?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  auditLogs       AuditLog[]
-  inventoryCounts InventoryCount[]
-  inventoryLogs   InventoryLog[]
-  sessions        InventorySession[]
-  voiceRecords    VoiceRecord[]
-  voiceSessions   VoiceSession[]
-  printJobs       PrintJob[]
-  pendingCaptured PendingOperation[] @relation("PendingWorker")
-  pendingReviewed PendingOperation[] @relation("PendingReviewer")
+  activeSessionId         String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  auditLogs               AuditLog[]
+  inventoryCounts         InventoryCount[]
+  inventoryLogs           InventoryLog[]
+  sessions                InventorySession[]
+  voiceRecords            VoiceRecord[]
+  voiceSessions           VoiceSession[]
+  printJobs               PrintJob[]
+  pendingCaptured         PendingOperation[]       @relation("PendingWorker")
+  pendingReviewed         PendingOperation[]       @relation("PendingReviewer")
   productRequestsMade     ProductCreationRequest[] @relation("ProductRequestWorker")
   productRequestsReviewed ProductCreationRequest[] @relation("ProductRequestReviewer")
-  saleInvoices            SaleInvoice[]           @relation("InvoiceSeller")
-  saleInvoicesCancelled   SaleInvoice[]           @relation("InvoiceCanceller")
-  receiptsTaken           Receipt[]               @relation("ReceiptTaker")
-  quotations              Quotation[]             @relation("QuotationSeller")
-  pickTasksRequested      PickTask[]              @relation("PickRequester")
-  pickTasksAssigned       PickTask[]              @relation("PickAssignee")
-  pickTasksPicked         PickTask[]              @relation("PickPicker")
+  saleInvoices            SaleInvoice[]            @relation("InvoiceSeller")
+  saleInvoicesCancelled   SaleInvoice[]            @relation("InvoiceCanceller")
+  receiptsTaken           Receipt[]                @relation("ReceiptTaker")
+  saleReturns             SaleReturn[]             @relation("ReturnProcessor")
+  purchases               PurchaseInvoice[]        @relation("PurchaseRecorder")
+  purchasesCancelled      PurchaseInvoice[]        @relation("PurchaseCanceller")
+  ledgerEntries           CustomerLedger[]         @relation("LedgerActor")
+  quotations              Quotation[]              @relation("QuotationSeller")
+  pickTasksRequested      PickTask[]               @relation("PickRequester")
+  pickTasksAssigned       PickTask[]               @relation("PickAssignee")
+  pickTasksPicked         PickTask[]               @relation("PickPicker")
 }
 
 model Warehouse {
@@ -58,8 +61,10 @@ model Warehouse {
   locations     Location[]
   locationTypes LocationType[]
   saleInvoices  SaleInvoice[]
+  saleReturns   SaleReturn[]
   pickTasks     PickTask[]
   quotations    Quotation[]
+  purchases     PurchaseInvoice[]
 }
 
 model LocationType {
@@ -103,6 +108,7 @@ model Location {
   pendingOps       PendingOperation[]
   productRequests  ProductCreationRequest[]
   pickTasks        PickTask[]
+  saleReturnLines  SaleReturnLine[]
 
   @@index([parentId])
   @@index([warehouseId])
@@ -111,12 +117,12 @@ model Location {
 }
 
 model Category {
-  id             String          @id @default(uuid())
-  name           String          @unique
-  code           String          @unique
-  createdAt      DateTime        @default(now())
-  inventoryItems InventoryItem[]
-  products       Product[]
+  id              String                   @id @default(uuid())
+  name            String                   @unique
+  code            String                   @unique
+  createdAt       DateTime                 @default(now())
+  inventoryItems  InventoryItem[]
+  products        Product[]
   productRequests ProductCreationRequest[]
 }
 
@@ -130,23 +136,24 @@ model Brand {
 }
 
 model Supplier {
-  id        String    @id @default(uuid())
+  id        String            @id @default(uuid())
   name      String
   phone     String?
   address   String?
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
   products  Product[]
+  purchases PurchaseInvoice[]
 }
 
 model VehicleModel {
-  id             String          @id @default(uuid())
+  id             String           @id @default(uuid())
   name           String
-  aliases        String[]        @default([])
+  aliases        String[]         @default([])
   startYear      Int
   endYear        Int
   systemType     String?
-  createdAt      DateTime        @default(now())
+  createdAt      DateTime         @default(now())
   inventoryItems InventoryItem[]
   products       Product[]
   productLinks   ProductVehicle[]
@@ -166,56 +173,60 @@ model PartCatalog {
 }
 
 model Product {
-  id              String           @id @default(uuid())
-  name            String
-  sku             String           @unique
-  internalBarcode String           @unique @default(uuid())
-  partNumber      String?
-  partCatalogId   String?
-  description     String?
-  unit            String           @default("عدد")
-  weight          Float?
-  minStock        Int              @default(0)
-  categoryId      String?
-  brandId         String?
-  vehicleModelId  String?
-  supplierId      String?
-  isActive        Boolean          @default(true)
+  id                  String                   @id @default(uuid())
+  name                String
+  sku                 String                   @unique
+  internalBarcode     String                   @unique @default(uuid())
+  partNumber          String?
+  partCatalogId       String?
+  description         String?
+  unit                String                   @default("عدد")
+  weight              Float?
+  minStock            Int                      @default(0)
+  categoryId          String?
+  brandId             String?
+  vehicleModelId      String?
+  supplierId          String?
+  isActive            Boolean                  @default(true)
   /// توکن‌های نرمال‌شده‌ی نام + SKU + شماره فنی، برای جستجوی ایندکس‌دار.
   /// pg_trgm روی متن فارسی در این محیط کار نمی‌کند (show_trgm خالی برمی‌گرداند)،
   /// بنابراین جستجو به‌جای ترای‌گرام روی این آرایه با ایندکس GIN انجام می‌شود.
-  searchTokens    String[]         @default([])
+  searchTokens        String[]                 @default([])
   /// آخرین باری که لیبل این کالا چاپ شده.
   ///
   /// null یعنی «هنوز لیبل نخورده» و کالا در صف چاپ می‌ماند. چون روی لیبل
   /// فقط نام و کد چاپ می‌شود و کد هرگز عوض نمی‌شود، تنها تغییرِ نام لیبل را
   /// باطل می‌کند — در آن حالت این فیلد پاک می‌شود و کالا خودش به صف برمی‌گردد.
   /// تغییر قیمت عمداً بی‌اثر است، چون قیمت روی لیبل نیست.
-  labelPrintedAt  DateTime?
-  deletedAt       DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  accountingSyncs AccountingSync[]
-  assets          Asset[]
-  inventories     Inventory[]
-  inventoryItems  InventoryItem[]
-  inventoryLogs   InventoryLog[]
-  brand           Brand?           @relation(fields: [brandId], references: [id])
-  category        Category?        @relation(fields: [categoryId], references: [id])
-  partCatalog     PartCatalog?     @relation(fields: [partCatalogId], references: [id])
-  supplier        Supplier?        @relation(fields: [supplierId], references: [id])
-  vehicleModel    VehicleModel?    @relation(fields: [vehicleModelId], references: [id])
-  barcodes        ProductBarcode[]
-  prices          ProductPrice[]
-  voiceRecords    VoiceRecord[]
-  pendingOps      PendingOperation[]
+  labelPrintedAt      DateTime?
+  deletedAt           DateTime?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  accountingSyncs     AccountingSync[]
+  assets              Asset[]
+  inventories         Inventory[]
+  inventoryItems      InventoryItem[]
+  inventoryLogs       InventoryLog[]
+  brand               Brand?                   @relation(fields: [brandId], references: [id])
+  category            Category?                @relation(fields: [categoryId], references: [id])
+  partCatalog         PartCatalog?             @relation(fields: [partCatalogId], references: [id])
+  supplier            Supplier?                @relation(fields: [supplierId], references: [id])
+  vehicleModel        VehicleModel?            @relation(fields: [vehicleModelId], references: [id])
+  barcodes            ProductBarcode[]
+  prices              ProductPrice[]
+  voiceRecords        VoiceRecord[]
+  pendingOps          PendingOperation[]
   createdFromRequests ProductCreationRequest[] @relation("ProductRequestCreated")
-  vehicles        ProductVehicle[]
-  pickTasks       PickTask[]
-  quotationLines  QuotationLine[]
+  vehicles            ProductVehicle[]
+  pickTasks           PickTask[]
+  quotationLines      QuotationLine[]
+  saleReturnLines     SaleReturnLine[]
 
   @@index([searchTokens], type: Gin)
   @@index([labelPrintedAt])
+  // مرحله‌ی ۱ جستجو (کدِ دقیق) در هر کیبورد-استروک `partNumber = ?` را می‌زند؛
+  // بدون این ایندکس، OR با sku/barcode به seq scan روی کل محصولات می‌افتد.
+  @@index([partNumber])
 }
 
 /// یک قطعه معمولاً روی چند خودرو می‌نشیند («دسته موتور زیر باطری 206 و سمند ملی»).
@@ -240,9 +251,9 @@ model ProductBarcode {
   product   Product     @relation(fields: [productId], references: [id])
 }
 
-/// قیمت‌ها به **تومان** و به صورت عدد صحیح ذخیره می‌شوند (بدون اعشار).
+/// قیمت‌ها به **ریال** و به صورت عدد صحیح ذخیره می‌شوند (بدون اعشار).
 /// ⚠️ داده‌ی ایمپورت‌شده‌ی فعلی از این نظر بررسی نشده — بعضی ردیف‌ها قیمت خریدشان
-/// از قیمت فروش بیشتر است، که یعنی احتمالاً بعضی ردیف‌ها ریال وارد شده‌اند.
+/// از قیمت فروش بیشتر است، که یعنی احتمالاً بعضی ردیف‌ها تومان وارد شده‌اند.
 /// پیش از اتکا به گزارش سود باید پاک‌سازی شود.
 model ProductPrice {
   id             String   @id @default(uuid())
@@ -252,6 +263,11 @@ model ProductPrice {
   wholesalePrice Int?
   createdAt      DateTime @default(now())
   product        Product  @relation(fields: [productId], references: [id])
+
+  // «آخرین قیمتِ هر محصول» (`where productId, orderBy createdAt desc, take 1`) در
+  // هر لیست/جستجو/جزئیاتِ محصول include می‌شود؛ بدون این ایندکس هر محصول یک اسکنِ
+  // جدا روی ProductPrice می‌خورد. مهم‌ترین بُردِ سرعتِ لیست‌ها.
+  @@index([productId, createdAt])
 }
 
 model Asset {
@@ -300,14 +316,25 @@ model InventoryLog {
   userId        String?
   sessionId     String?
   voiceRecordId String?
-  unitPrice     Int?              // قیمت واحد فروش (فقط برای SALE) — تومان؛ null برای بقیه حرکت‌ها
-  /// تخفیف همین ردیف به تومان (فقط برای SALE).
+  /// قیمتِ واحدِ همین حرکت به ریال — قیمتِ **فروش** برای SALE و قیمتِ **خرید**
+  /// برای INِ ناشی از فاکتور خرید. برای بقیه‌ی حرکت‌ها null.
+  /// مفهوم یکی است («پول به ازای هر واحد در این جابه‌جایی») پس ستون جدا ندارد.
+  unitPrice     Int?
+  /// تخفیف همین ردیف به ریال (فقط برای SALE).
   /// بدون این، تخفیفِ ردیفی فقط در subtotal فاکتور جمع می‌شد و روی فاکتور چاپی
   /// جمعِ ردیف‌ها با مبلغ فاکتور نمی‌خواند — که برای مشتری شبیه اشتباه است.
   lineDiscount  Int?
   // فاکتور فروش چندردیفی: ردیف‌های فاکتور همین رکوردهای لجر هستند، نه یک جدول جدا.
   // بنابراین جمع فاکتور هیچ‌وقت با حرکت واقعی موجودی اختلاف پیدا نمی‌کند.
   invoiceId     String?
+  /// وقتی این ردیف حرکتِ RETURNِ ناشی از یک سند مرجوعی است، به همان سند وصل
+  /// می‌شود — تا یک حرکتِ برگشتِ موجودی همیشه قابل‌ردیابی به سندی باشد که سببش
+  /// شده. null برای فروش، ابطال، و همه‌ی حرکت‌های دیگر.
+  saleReturnId  String?
+  /// فاکتور خریدی که این ردیفِ IN را ساخته. مثل فروش، ردیف‌های فاکتور خرید
+  /// جدول جدا ندارند و همین رکوردهای لجرند — پس جمعِ سند هیچ‌وقت با حرکتِ
+  /// واقعیِ انبار اختلاف پیدا نمی‌کند. null برای هر ورودِ دیگری.
+  purchaseId    String?
   createdAt     DateTime          @default(now())
   source        String            @default("MANUAL")
   assets        Asset[]
@@ -317,8 +344,66 @@ model InventoryLog {
   user          User?             @relation(fields: [userId], references: [id])
   voiceRecord   VoiceRecord?      @relation(fields: [voiceRecordId], references: [id])
   invoice       SaleInvoice?      @relation(fields: [invoiceId], references: [id])
+  saleReturn    SaleReturn?       @relation("ReturnMovement", fields: [saleReturnId], references: [id])
+  purchase      PurchaseInvoice?  @relation(fields: [purchaseId], references: [id])
+  // ردیف‌های مرجوعی که این ردیفِ SALE را برمی‌گردانند (saleLogId به این اشاره دارد).
+  returnLines   SaleReturnLine[]
 
   @@index([invoiceId])
+  @@index([saleReturnId])
+  @@index([purchaseId])
+}
+
+
+/// فاکتور خرید — ورودِ کالا از روی برگه‌ای که فروشنده همراه جنس می‌آورد.
+///
+/// چرا لازم است: تا امروز هیچ مسیری برای ثبتِ **قیمت خرید** وجود نداشت، پس
+/// `SaleInvoice.profit` برای تقریباً کل کاتالوگ null درمی‌آمد و گزارش سود عملاً
+/// خالی بود. ورودِ تک‌تکِ اقلام از صفحه‌ی موجودی هم سندی باقی نمی‌گذاشت که
+/// بشود گفت کدام جنس با کدام فاکتور آمده.
+///
+/// عمداً **دفتر بدهی به تأمین‌کننده ندارد**: این سند فقط می‌گوید چه چیزی با چه
+/// قیمتی وارد شد. حساب‌وکتابِ پرداخت به فروشنده کارِ جداگانه‌ای است.
+///
+/// ردیف‌ها جدول جدا ندارند — هر ردیف یک `InventoryLog` با `action=IN` و
+/// `purchaseId` همین سند (همان الگوی `SaleInvoice`).
+model PurchaseInvoice {
+  id             String         @id @default(uuid())
+  number         Int            @unique @default(autoincrement())
+  /// کلید یکتای کلاینت؛ ارسال دوباره سند تکراری نمی‌سازد.
+  idempotencyKey String?        @unique
+  supplierId     String?
+  warehouseId    String
+  userId         String?
+  /// شماره‌ی فاکتور روی برگه‌ی فروشنده — کلیدِ تطبیقِ سندِ نرم‌افزار با کاغذ.
+  supplierRef    String?
+  /// تاریخِ روی برگه. با تاریخِ ثبت فرق دارد: فاکتور دیروز ممکن است امروز وارد شود.
+  invoiceDate    DateTime?
+  subtotal       Int            @default(0)
+  discount       Int            @default(0)
+  total          Int            @default(0)
+  status         PurchaseStatus @default(CONFIRMED)
+  note           String?
+  cancelReason   String?
+  cancelledAt    DateTime?
+  cancelledById  String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  supplier    Supplier?      @relation(fields: [supplierId], references: [id])
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
+  user        User?          @relation("PurchaseRecorder", fields: [userId], references: [id])
+  cancelledBy User?          @relation("PurchaseCanceller", fields: [cancelledById], references: [id])
+  lines       InventoryLog[]
+
+  @@index([warehouseId, createdAt])
+  @@index([supplierId])
+  @@index([status])
+}
+
+enum PurchaseStatus {
+  CONFIRMED
+  CANCELLED
 }
 
 model InventorySession {
@@ -654,27 +739,68 @@ model ProductCreationRequest {
 /// بدون هیچ شماره‌ای ثبت کرد. شماره‌ها جدا نگه داشته می‌شوند چون یک نفر
 /// می‌تواند موبایل و تلفن ثابت داشته باشد.
 model Customer {
-  id        String   @id @default(uuid())
-  firstName String
-  lastName  String?
+  id          String   @id @default(uuid())
+  firstName   String
+  lastName    String?
   /// نام کامل نرمال‌شده برای جست‌وجو. از firstName/lastName ساخته می‌شود و
   /// منبع مستقلِ حقیقت نیست — فقط ایندکس جست‌وجو.
-  searchName String  @default("")
-  note      String?
+  searchName  String   @default("")
+  /// آدرس مشتری — برای پیک و پیامک و صورتحساب.
+  address     String?
+  /// شماره ملی — برای صورتحساب رسمی و شناسایی یکتا.
+  nationalId  String?
+  /// دسته‌ی مشتری — ارجاع به جدول CustomerCategory که مدیر تعریف می‌کند.
+  categoryId  String?
+  note        String?
   /// مشتری گفته پیامک نمی‌خواهم — از ارسال گروهی حذف می‌شود.
-  smsOptOut Boolean  @default(false)
-  isActive  Boolean  @default(true) // Soft Delete (قانون ۵)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  smsOptOut   Boolean  @default(false)
+  /// سقف اعتبار حساب‌باز (ریال). صفر یعنی «سقفی تعیین نشده».
+  ///
+  /// عبور از سقف **جلوی فروش را نمی‌گیرد**، فقط هشدار می‌دهد: فعلاً مدیر خودش
+  /// فروشنده است و قفل‌کردن فروش یعنی نرم‌افزار جلوی کار را بگیرد.
+  creditLimit Int      @default(0)
+  /// مهلت پرداخت پیش‌فرض این مشتری به روز. سررسید فاکتور از همین ساخته می‌شود
+  /// تا فروشنده مجبور نباشد هر بار انتخابش کند؛ صفر یعنی سررسید همان روز.
+  creditDays  Int      @default(0)
+  isActive    Boolean  @default(true) // Soft Delete (قانون ۵)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category   CustomerCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
   phones     CustomerPhone[]
   invoices   SaleInvoice[]
   messages   SmsMessage[]
   receipts   Receipt[]
   quotations Quotation[]
+  ledger     CustomerLedger[]
+  returns    SaleReturn[]
 
   @@index([searchName])
   @@index([lastName])
+  @@index([nationalId])
+  @@index([categoryId])
+}
+
+/// دسته‌ی مشتری — مدیر تعریف می‌کند و مشتری‌ها بر اساسش دسته‌بندی و فیلتر
+/// می‌شوند. Soft delete: دسته‌ای که مشتری دارد حذف نمی‌شود، فقط غیرفعال می‌شود
+/// تا از انتخاب‌های جدید بیفتد.
+model CustomerCategory {
+  id        String   @id @default(uuid())
+  /// نام یکتا — «عمده»، «خرده»، «ویژه» و...
+  name      String   @unique
+  /// رنگ badge — مقدار HEX مثل `#16a34a`. پیش‌فرض خاکستری خنثی.
+  color     String   @default("#64748b")
+  /// ترتیب نمایش در dropdown و فیلتر — کم‌تر اول.
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  customers Customer[]
+
+  @@index([isActive])
+  @@index([sortOrder])
 }
 
 /// بانک شماره. شماره به فرم نرمال ذخیره می‌شود (ارقام انگلیسی، بدون فاصله و
@@ -763,10 +889,10 @@ model PickTask {
 
   requestedById String? // فروشنده
   /// اگر خالی باشد یعنی «هر کارگری که آزاد است». تخصیص به فرد خاص اختیاری است.
-  assignedToId String?
-  pickedById   String?
-  pickedAt     DateTime?
-  cancelReason String?
+  assignedToId  String?
+  pickedById    String?
+  pickedAt      DateTime?
+  cancelReason  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -797,42 +923,48 @@ enum PickTaskStatus {
 /// ابطال فاکتور هیچ‌وقت ردیف لجر را حذف نمی‌کند؛ حرکت‌های RETURN جبرانی ثبت
 /// می‌شوند و وضعیت به CANCELLED تغییر می‌کند (لجر append-only است).
 model SaleInvoice {
-  id           String        @id @default(uuid())
-  number       Int           @unique @default(autoincrement()) // شماره‌ی خوانا برای کاربر
+  id             String        @id @default(uuid())
+  number         Int           @unique @default(autoincrement()) // شماره‌ی خوانا برای کاربر
   /// کلید یکتای کلاینت. ارسال دوباره (retry شبکه یا صف آفلاین) فاکتور تکراری
   /// نمی‌سازد؛ یکتایی در سطح دیتابیس تضمین می‌شود، نه فقط در کد.
-  idempotencyKey String?     @unique
-  customerId   String?
-  warehouseId  String
-  userId       String? // فروشنده
-  subtotal     Int           @default(0) // جمع ردیف‌ها پیش از تخفیف
-  discount     Int           @default(0) // تخفیف کل فاکتور (تومان)
-  total        Int           @default(0) // مبلغ نهایی = subtotal - discount
-  paidAmount   Int           @default(0) // جمع پرداخت‌های ثبت‌شده
-  dueAmount    Int           @default(0) // مانده = total - paidAmount (نسیه)
+  idempotencyKey String?       @unique
+  customerId     String?
+  warehouseId    String
+  userId         String? // فروشنده
+  subtotal       Int           @default(0) // جمع ردیف‌ها پیش از تخفیف
+  discount       Int           @default(0) // تخفیف کل فاکتور (ریال)
+  total          Int           @default(0) // مبلغ نهایی = subtotal - discount
+  paidAmount     Int           @default(0) // جمع پرداخت‌های ثبت‌شده
+  dueAmount      Int           @default(0) // مانده = total - paidAmount (نسیه)
+  /// سررسید پرداختِ بخش نسیه. از `Customer.creditDays` ساخته می‌شود مگر اینکه
+  /// فروشنده صراحتاً چیز دیگری بفرستد. null یعنی فاکتور نسیه‌ای نداشته.
+  dueDate        DateTime?
   /// سود فاکتور، در همان لحظه‌ی فروش از ProductPrice.purchasePrice محاسبه و
   /// ذخیره می‌شود. اگر بعداً محاسبه شود غلط درمی‌آید، چون قیمت خرید تغییر می‌کند.
   /// null یعنی قیمت خرید در زمان فروش موجود نبوده.
-  profit       Int?
-  status       InvoiceStatus @default(CONFIRMED)
-  note         String?
-  cancelReason String?
-  cancelledAt  DateTime?
-  cancelledById String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  profit         Int?
+  status         InvoiceStatus @default(CONFIRMED)
+  note           String?
+  cancelReason   String?
+  cancelledAt    DateTime?
+  cancelledById  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
-  customer    Customer?      @relation(fields: [customerId], references: [id])
-  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
-  user        User?          @relation("InvoiceSeller", fields: [userId], references: [id])
-  cancelledBy User?          @relation("InvoiceCanceller", fields: [cancelledById], references: [id])
+  customer    Customer?           @relation(fields: [customerId], references: [id])
+  warehouse   Warehouse           @relation(fields: [warehouseId], references: [id])
+  user        User?               @relation("InvoiceSeller", fields: [userId], references: [id])
+  cancelledBy User?               @relation("InvoiceCanceller", fields: [cancelledById], references: [id])
   lines       InventoryLog[]
   payments    Payment[]
   allocations ReceiptAllocation[]
+  ledger      CustomerLedger[]
+  returns     SaleReturn[]
 
   @@index([warehouseId, createdAt])
   @@index([customerId])
   @@index([status])
+  @@index([dueDate])
 }
 
 enum InvoiceStatus {
@@ -847,7 +979,7 @@ model Payment {
   id        String        @id @default(uuid())
   invoiceId String
   method    PaymentMethod
-  amount    Int // تومان
+  amount    Int // ریال
   note      String?
   createdAt DateTime      @default(now())
 
@@ -896,24 +1028,77 @@ model Cheque {
 /// بدون این، فروش نسیه یک‌طرفه بود: بدهی ثبت می‌شد ولی هیچ‌جا نمی‌شد ثبت کرد
 /// که مشتری بعداً پول آورده. گزارش بدهکاران فقط بالا می‌رفت.
 model Receipt {
-  id         String        @id @default(uuid())
-  number     Int           @unique @default(autoincrement())
-  customerId String
-  userId     String? // دریافت‌کننده
-  amount     Int // تومان
-  method     PaymentMethod // نقد / کارت / چک — نسیه اینجا بی‌معناست
-  note       String?
+  id             String        @id @default(uuid())
+  number         Int           @unique @default(autoincrement())
+  customerId     String
+  userId         String? // دریافت‌کننده
+  amount         Int // ریال
+  method         PaymentMethod // نقد / کارت / چک — نسیه اینجا بی‌معناست
+  note           String?
   /// کلید یکتای کلاینت؛ ارسال دوباره رسید تکراری نمی‌سازد.
-  idempotencyKey String?  @unique
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   customer    Customer            @relation(fields: [customerId], references: [id])
   user        User?               @relation("ReceiptTaker", fields: [userId], references: [id])
   cheque      Cheque?
   allocations ReceiptAllocation[]
+  ledger      CustomerLedger[]
 
   @@index([customerId, createdAt])
+}
+
+/// دفتر حساب مشتری — تنها مرجعِ «مانده‌ی مشتری».
+///
+/// چرا جدول جدا، وقتی `SaleInvoice.dueAmount` هم هست: چون بدهی همیشه از فاکتور
+/// نمی‌آید. مانده‌ی اول دوره (بدهیِ قبل از نرم‌افزار)، برگشت از فروش، و چکِ
+/// برگشتی هیچ‌کدام فاکتور نیستند. بدون این جدول، این‌ها یا جایی ثبت نمی‌شدند یا
+/// هرکدام یک فرمول جدا می‌خواستند — و همان‌جاست که یک صفحه ۳۸۵ میلیون نشان
+/// می‌دهد و صفحه‌ی دیگر ۳۷۵.
+///
+/// **append-only است.** هیچ ردیفی ویرایش یا حذف نمی‌شود، حتی توسط مدیر کل؛
+/// اصلاح فقط با ثبت ردیفِ معکوس (نوع ADJUSTMENT) همراه کاربر و دلیل. این تنها
+/// چیزی است که وقتی دو نفر سر عدد بدهی اختلاف دارند، جواب دارد.
+///
+/// مانده‌ی مشتری = SUM(amount). بس.
+model CustomerLedger {
+  id         String          @id @default(uuid())
+  customerId String
+  type       LedgerEntryType
+  /// ریال. **مثبت = بدهی مشتری زیاد می‌شود، منفی = کم می‌شود.**
+  /// همین یک قرارداد باعث می‌شود مانده یک SUM ساده باشد و هیچ‌جا لازم نشود
+  /// بر اساس نوعِ ردیف تصمیم گرفت که جمع کنیم یا تفریق.
+  amount     Int
+  /// رویدادی که این ردیف را ساخته — برای گردش حساب و ردیابی.
+  invoiceId  String?
+  receiptId  String?
+  /// سند مرجوعی که این ردیفِ بستانکاری را ساخته (نوع RETURN). null برای بقیه.
+  returnId   String?
+  note       String?
+  userId     String?
+  createdAt  DateTime        @default(now())
+
+  customer   Customer     @relation(fields: [customerId], references: [id])
+  invoice    SaleInvoice? @relation(fields: [invoiceId], references: [id])
+  receipt    Receipt?     @relation(fields: [receiptId], references: [id])
+  saleReturn SaleReturn?  @relation(fields: [returnId], references: [id])
+  user       User?        @relation("LedgerActor", fields: [userId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([invoiceId])
+  @@index([receiptId])
+  @@index([returnId])
+}
+
+enum LedgerEntryType {
+  OPENING // مانده‌ی اول دوره — بدهیِ پیش از نرم‌افزار
+  INVOICE // بخش نسیه‌ی یک فاکتور فروش
+  RECEIPT // دریافت وجه از مشتری
+  INVOICE_CANCELLED // ابطال فاکتور — بدهی‌اش برمی‌گردد
+  RETURN // برگشت کالا — بدهی کم می‌شود
+  CHEQUE_BOUNCED // چک برگشت خورد — بدهی دوباره برقرار می‌شود
+  ADJUSTMENT // اصلاح دستی، همیشه با دلیل
 }
 
 /// تخصیص یک رسید به فاکتورهای بدهکار.
@@ -935,28 +1120,103 @@ model ReceiptAllocation {
   @@index([invoiceId])
 }
 
+/// برگشت از فروش (مرجوعی).
+///
+/// یک سند مستقل که همیشه به یک فاکتورِ موجود ارجاع می‌دهد — مرجوعیِ بدون فاکتور
+/// وجود ندارد. فاکتور اصلی هیچ‌وقت ویرایش نمی‌شود؛ این سند در کنارش می‌نشیند و
+/// حرکت‌های RETURN جبرانی و ردیفِ بستانکاریِ دفتر را می‌سازد.
+///
+/// چرا جدول جدا در حالی که ردیف‌های فروش خودشان لاگِ موجودی‌اند: چون مرجوعی
+/// دادهٔ سطحِ سند دارد که روی لاگ نمی‌نشیند — روشِ برگشت وجه، دلیل، مبلغِ کل
+/// برگشتی، و شماره‌ی خوانا برای مشتری. هر ردیفِ مرجوعی به همان ردیفِ SALE قفل
+/// می‌شود تا قیمت از فاکتور بیاید و بیش از فروخته‌شده برنگردد.
+model SaleReturn {
+  id             String        @id @default(uuid())
+  number         Int           @unique @default(autoincrement())
+  /// کلید یکتای کلاینت؛ ارسال دوباره سند مرجوعیِ تکراری نمی‌سازد.
+  idempotencyKey String?       @unique
+  /// فاکتوری که این مرجوعی برایش است — اجباری. بدون فاکتور مرجوعی معنا ندارد.
+  invoiceId      String
+  /// از فاکتور برداشته می‌شود؛ برای فروش نقدیِ گذری null است.
+  customerId     String?
+  warehouseId    String
+  userId         String?
+  /// چطور پول برمی‌گردد: CASH/CARD یعنی وجه از صندوق برگشت داده شد؛ CREDIT یعنی
+  /// از حساب مشتری کم شد (ردیفِ بستانکاری در دفتر). نسیه اینجا بی‌معناست.
+  refundMethod   PaymentMethod
+  /// مجموع مبلغِ برگشتی به ریال — جمعِ lineRefund ردیف‌ها.
+  refundAmount   Int           @default(0)
+  reason         String
+  note           String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  invoice   SaleInvoice      @relation(fields: [invoiceId], references: [id])
+  customer  Customer?        @relation(fields: [customerId], references: [id])
+  warehouse Warehouse        @relation(fields: [warehouseId], references: [id])
+  user      User?            @relation("ReturnProcessor", fields: [userId], references: [id])
+  lines     SaleReturnLine[]
+  movements InventoryLog[]   @relation("ReturnMovement")
+  ledger    CustomerLedger[]
+
+  @@index([invoiceId])
+  @@index([customerId, createdAt])
+  @@index([warehouseId, createdAt])
+}
+
+/// یک قلمِ مرجوعی — به یک ردیفِ SALE از فاکتور اصلی قفل می‌شود.
+///
+/// `saleLogId` همان لاگِ فروش است؛ از آن قیمت و سقفِ قابل‌برگشت درمی‌آید:
+/// قابل‌برگشت = تعدادِ فروخته − جمعِ همین ردیف‌ها روی همان saleLogId.
+model SaleReturnLine {
+  id         String   @id @default(uuid())
+  returnId   String
+  /// لاگِ SALE فاکتور که این قلم برمی‌گرداند.
+  saleLogId  String
+  productId  String
+  /// مکانی که کالا از آن فروخته شده بود؛ در صورت restock موجودی به همین‌جا برمی‌گردد.
+  locationId String
+  quantity   Int
+  /// قیمتِ مؤثرِ هر واحد در لحظه‌ی مرجوعی — قیمتِ فروش منهای سهمِ تخفیفِ فاکتور،
+  /// یعنی همان چیزی که مشتری واقعاً پرداخته بود.
+  unitRefund Int
+  /// مبلغِ برگشتیِ این قلم = quantity × unitRefund (با گردکردنِ سازگار).
+  lineRefund Int
+  /// کالا به موجودی برگشت؟ سالم = true؛ معیوب = false (فقط برگشتِ مالی، بدون حرکت انبار).
+  restock    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  saleReturn SaleReturn   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  saleLog    InventoryLog @relation(fields: [saleLogId], references: [id])
+  product    Product      @relation(fields: [productId], references: [id])
+  location   Location     @relation(fields: [locationId], references: [id])
+
+  @@index([returnId])
+  @@index([saleLogId])
+}
+
 /// پیش‌فاکتور — مشتری قیمت می‌گیرد ولی نمی‌خرد.
 ///
 /// عمداً جدول جدا دارد و **هیچ حرکتی در موجودی ثبت نمی‌کند**. ردیف‌های فاکتور
 /// واقعی در این سیستم همان رکوردهای لجرند؛ اگر پیش‌فاکتور از همان مسیر می‌رفت،
 /// صرفِ قیمت گرفتن انبار را خالی می‌کرد.
 model Quotation {
-  id          String          @id @default(uuid())
-  number      Int             @unique @default(autoincrement())
-  customerId  String?
-  warehouseId String
-  userId      String?
-  subtotal    Int             @default(0)
-  discount    Int             @default(0)
-  total       Int             @default(0)
+  id                 String          @id @default(uuid())
+  number             Int             @unique @default(autoincrement())
+  customerId         String?
+  warehouseId        String
+  userId             String?
+  subtotal           Int             @default(0)
+  discount           Int             @default(0)
+  total              Int             @default(0)
   /// تا چه زمانی معتبر است. فروشنده هنگام ساخت تعیین می‌کند (۱ ساعت، ۲۴ ساعت، …).
-  validUntil  DateTime
-  status      QuotationStatus @default(ACTIVE)
-  note        String?
+  validUntil         DateTime
+  status             QuotationStatus @default(ACTIVE)
+  note               String?
   /// اگر به فاکتور واقعی تبدیل شد، اینجا وصل می‌شود.
-  convertedInvoiceId String?  @unique
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
+  convertedInvoiceId String?         @unique
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
 
   customer  Customer?       @relation(fields: [customerId], references: [id])
   warehouse Warehouse       @relation(fields: [warehouseId], references: [id])
@@ -996,20 +1256,41 @@ enum QuotationStatus {
 /// ⚠️ مسیر ذخیره روی **سروری** است که پستگرس آنجاست، نه روی سیستم مدیر.
 /// اگر مدیر از راه دور وصل باشد، باید مسیری بدهد که سرور بتواند در آن بنویسد
 /// (مثلاً یک درایو شبکه‌ای که برای سرویس سرور در دسترس است).
+/// مشخصات مغازه — روی همه‌ی برگه‌های چاپی می‌نشیند.
+///
+/// تک‌ردیفی است (id ثابت "singleton")، مثل BackupConfig. جدول جدا و نه فایل
+/// تنظیمات، چون مدیر باید بتواند از خود پنل عوضش کند: شماره‌ی کارت عوض می‌شود
+/// و کسی نمی‌رود روی سرور ویندوز فایل ویرایش کند.
+model ShopSettings {
+  id         String   @id @default("singleton")
+  /// نامی که بالای فاکتور چاپ می‌شود. خالی یعنی نام انبار استفاده شود.
+  name       String   @default("")
+  phone      String   @default("")
+  address    String   @default("")
+  /// شماره کارت برای واریز — روی فاکتور نسیه مهم‌ترین خط برگه است.
+  cardNumber String   @default("")
+  cardHolder String   @default("")
+  /// یک خط دلخواه پایین برگه (شرایط فروش، ساعت کار، …).
+  footer     String   @default("")
+  updatedAt  DateTime @updatedAt
+
+  @@map("ShopSettings")
+}
+
 model BackupConfig {
-  id              String   @id @default("singleton")
-  enabled         Boolean  @default(true)
+  id               String   @id @default("singleton")
+  enabled          Boolean  @default(true)
   /// پوشه‌ی مقصد روی سرور. خالی یعنی پوشه‌ی پیش‌فرض کنار برنامه.
-  destination     String   @default("")
+  destination      String   @default("")
   /// ساعت اجرای روزانه به وقت محلی — ۰ تا ۲۳.
-  hour            Int      @default(23)
-  minute          Int      @default(0)
+  hour             Int      @default(23)
+  minute           Int      @default(0)
   /// چند فایل نگه داشته شود؛ قدیمی‌ترها خودکار حذف می‌شوند.
-  keepCount       Int      @default(14)
+  keepCount        Int      @default(14)
   /// اگر از این تعداد ساعت بیشتر از آخرین بک‌آپ گذشته باشد، هنگام بستن
   /// برنامه به مدیر یادآوری می‌شود.
-  remindAfterHours Int     @default(12)
-  updatedAt       DateTime @updatedAt
+  remindAfterHours Int      @default(12)
+  updatedAt        DateTime @updatedAt
 
   runs BackupRun[]
 }
@@ -1020,17 +1301,17 @@ model BackupConfig {
 /// `pg_restore --list` خوانده می‌شود تا مطمئن شویم فایل سالم است و خالی نیست.
 /// نتیجه در `verified` ثبت می‌شود.
 model BackupRun {
-  id         String       @id @default(uuid())
-  configId   String?
-  status     BackupStatus @default(RUNNING)
+  id          String       @id @default(uuid())
+  configId    String?
+  status      BackupStatus @default(RUNNING)
   /// دستی یا زمان‌بندی‌شده یا «پیش از بستن برنامه»
-  trigger    String       @default("MANUAL")
-  filePath   String?
-  sizeBytes  BigInt?
-  verified   Boolean      @default(false)
-  error      String?
-  startedAt  DateTime     @default(now())
-  finishedAt DateTime?
+  trigger     String       @default("MANUAL")
+  filePath    String?
+  sizeBytes   BigInt?
+  verified    Boolean      @default(false)
+  error       String?
+  startedAt   DateTime     @default(now())
+  finishedAt  DateTime?
   startedById String?
 
   config BackupConfig? @relation(fields: [configId], references: [id])
@@ -1039,32 +1320,59 @@ model BackupRun {
   @@index([startedAt])
 }
 
+/// سابقه‌ی هر بازیابی.
+///
+/// بازیابی کلِ دیتابیس را جایگزین می‌کند — مخرب‌ترین کاری که از پنل ممکن است.
+/// بدون ردِ ممیزی هیچ‌وقت معلوم نمی‌شود چه کسی، کِی، و از روی کدام فایل سیستم
+/// را برگرداند؛ و وقتی بعداً عددی جا افتاده باشد، همین ردیف تنها جواب است.
+///
+/// `preRestoreFile` بک‌آپی است که **خودکار پیش از بازیابی** گرفته می‌شود، تا
+/// بازیابیِ اشتباه هم برگشت‌پذیر بماند.
+model RestoreRun {
+  id             String        @id @default(uuid())
+  sourceFile     String
+  preRestoreFile String?
+  status         RestoreStatus @default(RUNNING)
+  error          String?
+  startedAt      DateTime      @default(now())
+  finishedAt     DateTime?
+  startedById    String?
+
+  @@index([startedAt])
+}
+
+enum RestoreStatus {
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
 /// تنظیمات پیش‌فرض چاپ لیبل. تک‌ردیفی (id ثابت "singleton").
 ///
 /// بدون این، مدیر هر بار باید ابعاد لیبل و تعداد ستون را دوباره انتخاب کند —
 /// وقتی روزی چند بار چاپ می‌گیری، همین یک اصطکاک واقعی است.
 model LabelSettings {
-  id              String   @id @default("singleton")
+  id              String  @id @default("singleton")
   /// چند لیبل در هر ردیف روی کاغذ
-  columns         Int      @default(4)
-  widthMm         Int      @default(50)
-  heightMm        Int      @default(30)
-  gapMm           Int      @default(2)
+  columns         Int     @default(4)
+  widthMm         Int     @default(50)
+  heightMm        Int     @default(30)
+  gapMm           Int     @default(2)
   /// نام کالا زیر بارکد چاپ شود
-  showName        Boolean  @default(true)
+  showName        Boolean @default(true)
   /// عدد کد زیر خطوط بارکد چاپ شود
-  showBarcodeText Boolean  @default(true)
+  showBarcodeText Boolean @default(true)
   /// خط‌های برش برای کاغذ A4 معمولی
-  cropMarks       Boolean  @default(false)
+  cropMarks       Boolean @default(false)
 
   /// --- پرینتر حرارتی لیبل (TSPL) ---
   /// نام پرینتر در ویندوز، وقتی با USB به همین سرور وصل است.
-  printerName     String?
+  printerName String?
   /// آدرس شبکه، وقتی پرینتر روی LAN است. اگر پر باشد بر printerName اولویت دارد.
-  printerHost     String?
-  printerPort     Int?     @default(9100)
+  printerHost String?
+  printerPort Int?    @default(9100)
 
-  updatedAt       DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 enum BackupStatus {

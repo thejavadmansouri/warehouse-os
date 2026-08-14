@@ -3,24 +3,25 @@
 import { forwardRef } from "react";
 
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/money-input";
 import { money, parseNum, toFa } from "@/lib/format";
 import {
   MAX_PERCENT,
   clamp,
-  discountToToman,
+  discountToRial,
   type DiscountInput as DiscountValue,
 } from "../_lib/discount";
 
 /**
- * ورودی تخفیف با کلید تعویضِ تومان/درصد.
+ * ورودی تخفیف با کلید تعویضِ ریال/درصد.
  *
  * یک کنترل برای هر دو حالت است، نه دو فیلد جدا: فروشنده وسط فروش نباید فکر کند
  * کدام خانه را پر کند. دکمه‌ی کنارش حالت را عوض می‌کند و **عدد را نگه نمی‌دارد**
- * — «۱۰» در حالت درصد یعنی ۱۰٪ و در حالت تومان یعنی ۱۰ تومان، و تبدیلِ خودکار
+ * — «۱۰» در حالت درصد یعنی ۱۰٪ و در حالت ریال یعنی ۱۰ ریال، و تبدیلِ خودکار
  * بینشان بیشتر گیج می‌کند تا کمک.
  *
  * زیرِ فیلد، معادلِ محاسبه‌شده نشان داده می‌شود تا قبل از ثبت معلوم باشد این
- * درصد چقدر تومان می‌شود.
+ * درصد چقدر ریال می‌شود.
  */
 export const DiscountField = forwardRef<
   HTMLInputElement,
@@ -39,7 +40,7 @@ export const DiscountField = forwardRef<
   ref
 ) {
   const isPercent = value.mode === "percent";
-  const applied = discountToToman(value, base);
+  const applied = discountToRial(value, base);
   // تخفیفِ تایپ‌شده از مبلغ بیشتر است → سرور ردش می‌کند، همین‌جا هشدار بده.
   const clipped = !isPercent && value.value > base && base > 0;
 
@@ -49,38 +50,45 @@ export const DiscountField = forwardRef<
   return (
     <div className={compact ? "flex flex-col gap-0.5" : "flex flex-col gap-1"}>
       <div className="flex items-stretch gap-1">
-        <Input
-          ref={ref}
-          id={id}
-          dir="ltr"
-          disabled={disabled}
-          inputMode="numeric"
-          className={`min-w-0 flex-1 text-left tabular-nums ${
-            compact ? "h-10" : "h-10 w-28"
-          } ${clipped ? "border-amber-500" : ""}`}
-          value={
-            value.value
-              ? isPercent
-                ? toFa(value.value)
-                : money(value.value)
-              : ""
-          }
-          onChange={(e) => {
-            const n = parseNum(e.target.value);
-            onChange({
-              ...value,
-              value: isPercent ? clamp(n, 0, MAX_PERCENT) : Math.max(0, n),
-            });
-          }}
-          placeholder={isPercent ? "۰٪" : "۰"}
-        />
+        {isPercent ? (
+          /* درصد جداکننده ندارد، پس همان Input ساده کافی است. */
+          <Input
+            ref={ref}
+            id={id}
+            dir="ltr"
+            disabled={disabled}
+            inputMode="numeric"
+            className={`min-w-0 flex-1 text-left tabular-nums ${
+              compact ? "h-10" : "h-10 w-28"
+            } ${clipped ? "border-amber-500" : ""}`}
+            value={value.value ? toFa(value.value) : ""}
+            onChange={(e) => {
+              const n = parseNum(e.target.value);
+              onChange({ ...value, value: clamp(n, 0, MAX_PERCENT) });
+            }}
+            placeholder="۰٪"
+          />
+        ) : (
+          /* ریال جداکننده دارد — فقط بعد از blur قالب‌بندی شود. */
+          <MoneyInput
+            ref={ref}
+            id={id}
+            disabled={disabled}
+            className={`min-w-0 flex-1 text-left tabular-nums ${
+              compact ? "h-10" : "h-10 w-28"
+            } ${clipped ? "border-amber-500" : ""}`}
+            value={value.value}
+            onChange={(n) => onChange({ ...value, value: Math.max(0, n) })}
+            placeholder="۰"
+          />
+        )}
         <button
           type="button"
           onClick={toggle}
           disabled={disabled}
-          title={isPercent ? "تبدیل به مبلغ تومانی" : "تبدیل به درصد"}
-          aria-label={isPercent ? "حالت درصد — برای تومان کلیک کنید" : "حالت تومان — برای درصد کلیک کنید"}
-          /* عرض ثابت: وگرنه «٪» و «تومان» دو عرض متفاوت می‌سازند و ستون ناهموار می‌شود. */
+          title={isPercent ? "تبدیل به مبلغ ریالی" : "تبدیل به درصد"}
+          aria-label={isPercent ? "حالت درصد — برای ریال کلیک کنید" : "حالت ریال — برای درصد کلیک کنید"}
+          /* عرض ثابت: وگرنه «٪» و «ریال» دو عرض متفاوت می‌سازند و ستون ناهموار می‌شود. */
           className={`w-14 shrink-0 rounded-md border text-xs font-medium transition-colors
                       hover:border-primary hover:text-primary focus:outline-none
                       focus:ring-2 focus:ring-primary disabled:opacity-50 ${
@@ -89,7 +97,7 @@ export const DiscountField = forwardRef<
                           : "text-muted-foreground"
                       }`}
         >
-          {isPercent ? "٪" : "تومان"}
+          {isPercent ? "٪" : "ریال"}
         </button>
       </div>
 

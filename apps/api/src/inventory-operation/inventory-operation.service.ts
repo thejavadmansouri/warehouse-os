@@ -1,10 +1,37 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsGateway } from '../realtime/events.gateway';
 
 @Injectable()
 export class InventoryOperationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private realtime: EventsGateway,
+  ) {}
+
+  /**
+   * پوششِ نازکِ realtime دورِ تک‌نقطه‌ی تغییر موجودی.
+   *
+   * هر حرکتِ موجودی (IN/OUT/SALE/RETURN/TRANSFER/ADJUST/COUNT) از هر مسیری —
+   * فروش، مرجوعی، دستی، صوتی، sync موبایل — از همین‌جا رد می‌شود، پس یک اعلانِ
+   * `stock.changed` اینجا همه را realtime می‌کند.
+   *
+   * فقط وقتی خودمان تراکنش را مدیریت کرده‌ایم (txClient نداریم، یعنی commit قطعی
+   * شده) اعلان می‌دهیم. اگر تراکنش از بیرون آمده (فاکتور فروش/مرجوعی)، صاحبِ آن
+   * تراکنش بعد از commitِ خودش اعلانِ دامنه‌ایِ خودش را می‌فرستد؛ این‌طوری روی
+   * تراکنشی که ممکن است بعداً rollback شود، زودهنگام اعلان نمی‌دهیم.
+   */
+  async execute(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
+    const result = await this.runOperation(dto, txClient);
+    if (!txClient) {
+      this.realtime.broadcast({
+        type: 'stock.changed',
+        productId: dto?.productId ?? null,
+      });
+    }
+    return result;
+  }
 
   /**
    * تک‌نقطه‌ی تغییر موجودی (قانون ۱).
@@ -18,7 +45,7 @@ export class InventoryOperationService {
    *   (voice، count، transfer، pending-operations، product-requests و …)
    *   بدون تغییر کار می‌کنند.
    */
-  async execute(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
+  private async runOperation(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
 
     // وقتی تراکنش بیرونی داریم از همان استفاده کن، وگرنه تراکنش خودت را باز کن.
     const db: Prisma.TransactionClient | PrismaService = txClient ?? this.prisma;
@@ -38,7 +65,9 @@ export class InventoryOperationService {
       unitPrice,
       lineDiscount,
       allowNegative,
-      invoiceId
+      invoiceId,
+      saleReturnId,
+      purchaseId
     } = dto;
 
 
@@ -98,17 +127,29 @@ export class InventoryOperationService {
 
       note:note ?? null,
 
-      // قیمت واحد فقط برای فروش معنا دارد؛ برای بقیه‌ی حرکت‌ها null می‌ماند
+      // قیمت واحد برای دو حرکت معنا دارد: فروش (قیمت فروش) و ورودِ ناشی از
+      // فاکتور خرید (قیمت خرید). برای بقیه null می‌ماند — یک ورودِ دستی یا
+      // برگشتی قیمتی ندارد که ثبت شود.
       unitPrice:
-        (type === 'SALE' && unitPrice != null) ? Number(unitPrice) : null,
+        ((type === 'SALE' || (type === 'IN' && purchaseId)) && unitPrice != null)
+          ? Number(unitPrice)
+          : null,
 
       // تخفیف ردیف هم فقط برای فروش. بدون این، فاکتور چاپی نمی‌تواند نشان دهد
       // تخفیف روی کدام قلم بوده و جمع ردیف‌ها با مبلغ فاکتور نمی‌خواند.
       lineDiscount:
         (type === 'SALE' && lineDiscount != null) ? Number(lineDiscount) : null,
 
-      // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال). برای بقیه null.
-      invoiceId: invoiceId ?? null
+      // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال/مرجوعی). برای بقیه null.
+      invoiceId: invoiceId ?? null,
+
+      // سند مرجوعی که این حرکتِ RETURN را ساخته — فقط از مسیر برگشت از فروش
+      // پر می‌شود؛ برای فروش، ابطال، و بقیه‌ی حرکت‌ها null می‌ماند.
+      saleReturnId: saleReturnId ?? null,
+
+      // فاکتور خریدی که این ردیفِ IN را ساخته. مثل فروش، ردیف‌های سند خرید
+      // همین رکوردهای لجرند؛ برای ورودِ دستی و صوتی و اسکن null می‌ماند.
+      purchaseId: purchaseId ?? null
 
     };
 

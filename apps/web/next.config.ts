@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
 
   allowedDevOrigins: [
     "10.141.233.130",
+    "192.168.1.136",
   ],
 
   typescript: {

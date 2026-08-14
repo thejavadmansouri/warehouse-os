@@ -20,8 +20,12 @@ export class QueryInvoicesDto {
   q?:string;
 
 
+  /**
+   * وضعیت فاکتور. علاوه بر وضعیت‌های واقعیِ مدل، `RETURNED` یک وضعیتِ مجازی است
+   * (مرجوعی وضعیتِ فاکتور را عوض نمی‌کند): فاکتورهایی که دستِ‌کم یک مرجوعی خورده‌اند.
+   */
   @IsOptional()
-  @IsIn(['CONFIRMED', 'CANCELLED'])
+  @IsIn(['CONFIRMED', 'CANCELLED', 'RETURNED'])
   status?:string;
 
 
@@ -48,6 +52,12 @@ export class QueryInvoicesDto {
   @Min(1)
   @Max(200)
   pageSize?:number;
+
+
+  /** وقتی true باشد، ردیف‌های فاکتور (اقلام) هم در پاسخ می‌آیند — برای کاردکس مشتری. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  includeLines?:string;
 }
 
 

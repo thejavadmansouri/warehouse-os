@@ -248,7 +248,6 @@ export class LabelsController {
     res.send(html);
   }
 
-  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   /** چاپ مستقیم لیبل کالا روی پرینتر حرارتیِ وصل به همین سرور. */
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('product/print-direct')
@@ -262,12 +261,15 @@ export class LabelsController {
   }
 
 
+  // تنظیمات چاپ — فقط مدیر؛ نباید هر کاربرِ لاگین‌شده (حتی STAFF) عوضش کند.
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Get('settings')
   getSettings() {
     return this.service.getSettings();
   }
 
 
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Put('settings')
   updateSettings(
     @Body() dto: {
@@ -284,6 +286,7 @@ export class LabelsController {
   }
 
 
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('product/print')
   async printProductLabelsPdf(
     @Body()

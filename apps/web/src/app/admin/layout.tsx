@@ -8,7 +8,9 @@ import { AdminTopbar } from "@/components/layout/admin-topbar";
 import { LoadingState } from "@/components/states";
 import { cn } from "@/lib/utils";
 import { BackupCloseGuard } from "@/components/backup-close-guard";
+import { ConnectionBanner } from "@/components/connection-banner";
 import { isSalesFocused } from "@/lib/nav";
+import { CartsProvider } from "@/app/admin/pos/_lib/carts-context";
 
 export default function AdminLayout({
   children,
@@ -46,6 +48,17 @@ export default function AdminLayout({
     }
   }, [hydrated, token, router]);
 
+  /*
+   * صفحه‌های چاپ، پوسته‌ی پنل را اصلاً نمی‌گیرند.
+   *
+   * در App Router لایه‌ی فرزند نمی‌تواند لایه‌ی والد را حذف کند، پس نوار بالا و
+   * سایدبار روی برگه‌ی چاپی هم می‌آمدند — و روی کاغذ چاپ می‌شدند. پنهان‌کردنشان
+   * با CSS هم فضای مرده و صفحه‌ی دوم می‌ساخت. اینجا از ریشه رندر نمی‌شوند.
+   *
+   * بررسی نشست سرِ جایش می‌ماند: برگه‌ی چاپ هم بدون ورود باز نمی‌شود.
+   */
+  const isPrint = pathname.startsWith("/admin/print");
+
   if (!hydrated || !token) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -54,7 +67,10 @@ export default function AdminLayout({
     );
   }
 
+  if (isPrint) return <>{children}</>;
+
   return (
+    <CartsProvider>
     <div className="flex min-h-screen bg-background">
       {/* سایدبار ثابت سمت راست (RTL: اولین فرزند flex در راست قرار می‌گیرد) */}
       <aside
@@ -68,6 +84,10 @@ export default function AdminLayout({
 
       {/* محتوای اصلی */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* بالاتر از نوار بالا می‌نشیند: وقتی سرور نیست، این اولین چیزی است
+            که باید دیده شود. */}
+        <ConnectionBanner />
+
         <AdminTopbar
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((c) => !c)}
@@ -81,5 +101,6 @@ export default function AdminLayout({
         <BackupCloseGuard />
       </div>
     </div>
+    </CartsProvider>
   );
 }

@@ -6,6 +6,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -42,6 +43,7 @@ import {
   getPeriodicProfit,
   getPeriodicSales,
   getProductPerformance,
+  getSalesByCategory,
   getSellerPerformance,
 } from "@/lib/api";
 import { faDate, money, qty, toFa } from "@/lib/format";
@@ -132,6 +134,11 @@ export default function ReportsPage() {
     queryFn: () => getSellerPerformance({ ...dates, page, limit }),
     enabled: tab === "sellers",
   });
+  const byCategory = useQuery({
+    queryKey: ["rep", "by-category", dates],
+    queryFn: () => getSalesByCategory(dates),
+    enabled: tab === "categories",
+  });
 
   const timeBased = tab !== "debtors" && tab !== "cheques" && tab !== "low-stock";
 
@@ -168,9 +175,10 @@ export default function ReportsPage() {
       )}
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid h-auto grid-cols-2 gap-1 p-1 md:grid-cols-4 lg:grid-cols-7">
+        <TabsList className="grid h-auto grid-cols-2 gap-1 p-1 md:grid-cols-4 lg:grid-cols-8">
           <TabsTrigger value="sales" className="py-2 text-xs">فروش</TabsTrigger>
           <TabsTrigger value="profit" className="py-2 text-xs">سود</TabsTrigger>
+          <TabsTrigger value="categories" className="py-2 text-xs">دسته مشتری</TabsTrigger>
           <TabsTrigger value="debtors" className="py-2 text-xs">بدهکاران</TabsTrigger>
           <TabsTrigger value="cheques" className="py-2 text-xs">چک‌ها</TabsTrigger>
           <TabsTrigger value="products" className="py-2 text-xs">پرفروش/راکد</TabsTrigger>
@@ -191,8 +199,14 @@ export default function ReportsPage() {
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
-                <SummaryCard label="مبلغ کل فروش" value={t(sales.data.summary.totalAmount)} />
+                <SummaryCard label="فروش ناخالص" value={t(sales.data.summary.totalAmount)} />
+                <SummaryCard
+                  label="برگشت از فروش"
+                  value={t(sales.data.summary.returnsAmount)}
+                />
+                <SummaryCard label="فروش خالص" value={t(sales.data.summary.netAmount)} />
                 <SummaryCard label="تعداد فاکتور" value={toFa(sales.data.summary.invoiceCount)} />
+                <SummaryCard label="تعداد مرجوعی" value={toFa(sales.data.summary.returnCount)} />
                 <SummaryCard label="میانگین هر فاکتور" value={t(sales.data.summary.averageInvoiceAmount)} />
               </div>
 
@@ -327,7 +341,141 @@ export default function ReportsPage() {
           )}
         </TabsContent>
 
-        {/* ۳ — بدهکاران */}
+        {/* ۳ — سهم دسته‌ی مشتری */}
+        <TabsContent value="categories" className="space-y-4">
+          {byCategory.isLoading ? <LoadingState /> : byCategory.isError ? (
+            <ErrorState onRetry={() => byCategory.refetch()} />
+          ) : !byCategory.data?.categories.length ? (
+            <NoData onWiden={widen} />
+          ) : (
+            <>
+              <div className="flex justify-end">
+                <ExportButton
+                  endpoint="/reports/sales-by-category"
+                  params={dates}
+                  fileName="سهم-دسته-مشتری"
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-4">
+                <SummaryCard label="فروش کل" value={t(byCategory.data.summary.totalSales)} />
+                <SummaryCard
+                  label="فروش دسته‌بندی‌شده"
+                  value={t(byCategory.data.summary.categorizedSales)}
+                  tone="success"
+                />
+                <SummaryCard
+                  label="فروش بدون دسته"
+                  value={t(byCategory.data.summary.uncategorizedSales)}
+                  tone={
+                    byCategory.data.summary.uncategorizedSales > 0 ? "warning" : "default"
+                  }
+                />
+                <SummaryCard
+                  label="پرفروش‌ترین دسته"
+                  value={byCategory.data.summary.topCategory?.name ?? "—"}
+                />
+              </div>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">سهم هر دسته از فروش</CardTitle>
+                </CardHeader>
+                <CardContent className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={byCategory.data.categories}
+                      layout="vertical"
+                      margin={{ left: 8, right: 16 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                      <XAxis
+                        type="number"
+                        fontSize={12}
+                        tickFormatter={(v) => `٪${toFa(Number(v))}`}
+                      />
+                      <YAxis type="category" dataKey="categoryName" width={110} fontSize={12} />
+                      <Tooltip
+                        formatter={(v) => [`٪${toFa(Number(v))}`, "سهم از فروش"]}
+                        labelFormatter={(l) => `دسته: ${l}`}
+                      />
+                      <Bar dataKey="sharePercent" radius={[0, 4, 4, 0]}>
+                        {byCategory.data.categories.map((c) => (
+                          <Cell key={c.categoryId ?? "none"} fill={c.color} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              <ScrollTable
+                total={{
+                  label: "جمع فروش",
+                  value: t(sum(byCategory.data.categories.map((c) => c.totalAmount))),
+                }}
+              >
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+                    <TableRow>
+                      <TableHead>دسته</TableHead>
+                      <TableHead className="text-center">فاکتور</TableHead>
+                      <TableHead className="text-start">فروش</TableHead>
+                      <TableHead className="text-start">سود</TableHead>
+                      <TableHead>سهم از فروش</TableHead>
+                      <TableHead className="text-start">میانگین فاکتور</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {byCategory.data.categories.map((c) => (
+                      <TableRow key={c.categoryId ?? "none"}>
+                        <TableCell className="font-bold">
+                          <span className="flex items-center gap-2">
+                            <span
+                              className="size-2.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: c.color }}
+                            />
+                            {c.categoryName}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums">
+                          {toFa(c.invoiceCount)}
+                        </TableCell>
+                        <TableCell className="font-bold tabular-nums">
+                          {money(c.totalAmount)}
+                        </TableCell>
+                        <TableCell className="tabular-nums text-emerald-600">
+                          {money(c.totalProfit)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-28 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.min(100, c.sharePercent)}%`,
+                                  backgroundColor: c.color,
+                                }}
+                              />
+                            </div>
+                            <span className="text-xs tabular-nums">
+                              ٪{toFa(c.sharePercent)}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="tabular-nums">
+                          {money(c.averageInvoiceAmount)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollTable>
+            </>
+          )}
+        </TabsContent>
+
+        {/* ۴ — بدهکاران */}
         <TabsContent value="debtors" className="space-y-4">
           {debtors.isLoading ? <LoadingState /> : debtors.isError ? (
             <ErrorState onRetry={() => debtors.refetch()} />
@@ -349,6 +497,17 @@ export default function ReportsPage() {
                 <ExportButton endpoint="/reports/debtors" params={{}} fileName="بدهکاران" />
               </div>
 
+              {/* سن بدهی — تفکیک مانده به جاری / سررسید امروز / معوق */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <SummaryCard label="جاری (سررسید نرسیده)" value={t(debtors.data.summary.current)} />
+                <SummaryCard label="سررسید امروز" value={t(debtors.data.summary.dueToday)} tone="warning" />
+                <SummaryCard
+                  label="معوق (گذشته از سررسید)"
+                  value={t(debtors.data.summary.overdue)}
+                  tone={debtors.data.summary.overdue > 0 ? "warning" : "default"}
+                />
+              </div>
+
               <ScrollTable
                 total={{
                   label: "جمع این صفحه",
@@ -360,7 +519,8 @@ export default function ReportsPage() {
                     <TableRow>
                       <TableHead>مشتری</TableHead>
                       <TableHead>شماره تماس</TableHead>
-                      <TableHead>آخرین فاکتور</TableHead>
+                      <TableHead>نزدیک‌ترین سررسید</TableHead>
+                      <TableHead className="text-start">معوق</TableHead>
                       <TableHead className="text-start">مانده‌ی بدهی</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -371,7 +531,18 @@ export default function ReportsPage() {
                         <TableCell className="tabular-nums" dir="ltr">
                           {d.phone ? toFa(d.phone) : "—"}
                         </TableCell>
-                        <TableCell className="text-xs text-muted-foreground">{faDate(d.lastInvoiceAt)}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {d.nextDueDate ? faDate(d.nextDueDate) : "—"}
+                        </TableCell>
+                        {/* معوق ستون جداست، نه یک برچسب کنار مبلغ: مدیر این
+                            صفحه را برای پیدا کردن همین ستون باز می‌کند. */}
+                        <TableCell className="font-bold tabular-nums">
+                          {d.overdue > 0 ? (
+                            <span className="text-destructive">{money(d.overdue)}</span>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
                         <TableCell className="font-bold tabular-nums text-amber-600">
                           {money(d.creditBalance)}
                         </TableCell>
@@ -586,6 +757,7 @@ export default function ReportsPage() {
                     <TableHead className="text-start">فروش کل</TableHead>
                     <TableHead className="text-start">سود</TableHead>
                     <TableHead className="text-start">میانگین فاکتور</TableHead>
+                    <TableHead className="text-start">مرجوعی</TableHead>
                     <TableHead className="text-center">باطل‌شده</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -597,6 +769,9 @@ export default function ReportsPage() {
                       <TableCell className="font-bold tabular-nums">{money(s.totalSalesAmount)}</TableCell>
                       <TableCell className="tabular-nums text-emerald-600">{money(s.totalProfit)}</TableCell>
                       <TableCell className="tabular-nums">{money(s.averageInvoiceAmount)}</TableCell>
+                      <TableCell className="tabular-nums text-amber-600">
+                        {s.returnsAmount > 0 ? money(s.returnsAmount) : "—"}
+                      </TableCell>
                       <TableCell className="text-center">
                         <Badge variant={s.cancelledInvoicesCount > 0 ? "destructive" : "secondary"}>
                           {toFa(s.cancelledInvoicesCount)}

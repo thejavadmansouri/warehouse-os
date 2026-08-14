@@ -7,6 +7,28 @@ import { nextSku } from './sku.util';
 import { BulkPriceDto } from './dto/bulk-price.dto';
 
 
+/** سقف نتایج جستجو — صندوق فروش هیچ‌وقت بیش از این را نشان نمی‌دهد. */
+const MAX_SEARCH_RESULTS = 100;
+
+/**
+ * تا وقتی نتایجِ مرحله‌ی سریع کمتر از این باشد، مرحله‌ی زیررشته‌ای هم اجرا می‌شود.
+ *
+ * عمداً بالاست: با آستانه‌ی پایین (۱۰ تای قبلی) یک کوئریِ پرنتیجه‌ی بی‌ربط جلوی
+ * اجرای fallback را می‌گرفت و کالای درست هیچ‌وقت پیدا نمی‌شد.
+ */
+const SUBSTRING_STAGE_THRESHOLD = 20;
+
+/**
+ * فرار دادنِ کاراکترهای معنی‌دارِ LIKE در ورودی کاربر.
+ *
+ * بدون این، یک `%` تایپ‌شده یعنی «هر چیزی» و کل کاتالوگ برمی‌گردد. ترتیب مهم است:
+ * بک‌اسلش باید اول فرار داده شود وگرنه فرارهای بعدی را خراب می‌کند.
+ */
+function escapeLike(s: string): string {
+  return s.replace(/\\/g, '\\\\').replace(/[%_]/g, (c) => '\\' + c);
+}
+
+
 @Injectable()
 export class ProductsService {
 
@@ -826,12 +848,21 @@ export class ProductsService {
   }
 
   /**
-   * بازیابیِ شناسه‌ها به ترتیب ربط. چهار مرحله، از دقیق به فراگیر؛ هر مرحله فقط
-   * وقتی اجرا می‌شود که مرحله‌ی قبل کافی نبوده باشد:
+   * بازیابیِ شناسه‌ها به ترتیب ربط.
+   *
+   * مدل تطبیق «کلمه‌به‌کلمه»ی پارسیان است: هر کلمه‌ی کوئری باید **زیررشته**ی یکی از
+   * کلمات کالا باشد، مستقل از ترتیب. معیارهای واقعیِ درستی:
+   *   «نت لو اید» → لنت جلو پراید   (نت⊂لنت، لو⊂جلو، اید⊂پراید)
+   *   «فرانسیل»   → دیفرانسیل
+   * مدل قبلی برابریِ کامل توکن می‌خواست، پس این دو کوئری **صفر** نتیجه می‌دادند.
+   *
+   * چهار مرحله، از دقیق به فراگیر:
    *   ۱) کدِ دقیق (SKU / شماره فنی / بارکد) — همیشه و بدون قید و شرط اول لیست.
-   *   ۲) همه‌ی توکن‌ها (`searchTokens @> ...`) — با ایندکس GIN، مستقل از ترتیب.
-   *   ۳) یکی‌کم (n-1 توکن) برای کوئری‌های ۲+ کلمه‌ای — تحملِ کلمه‌ی جاافتاده/اضافه.
-   *   ۴) زیررشته‌ی خام — آخرین سنگر برای تایپ ناقص («دیسک ترم»).
+   *   ۲) برابریِ کامل توکن‌ها (`searchTokens @> ...`) — با ایندکس GIN و سریع؛
+   *      مسیرِ داغِ کوئری‌های عادی. اگر جواب داد، اسکنِ مرحله‌ی ۳ اصلاً اجرا نمی‌شود.
+   *   ۳) زیررشته‌ی هر توکن با امتیازدهی — اسکن کامل، ولی روی ۳۳ هزار کالا چند
+   *      ده میلی‌ثانیه. اینجاست که «نت لو اید» جواب می‌دهد.
+   *   ۴) یکی‌کم (n-1 توکن) روی همان تطبیقِ زیررشته‌ای — تحملِ کلمه‌ی اضافه/غلط.
    */
   private async rankIds(q: string): Promise<string[]> {
     const tokens = tokenizeQuery(q);
@@ -859,31 +890,108 @@ export class ProductsService {
     );
 
     if (tokens.length > 0) {
-      // ۲) همه‌ی توکن‌ها
-      push(await this.byTokens(tokens, 100 - out.length));
+      // ۲) برابریِ کامل — مسیر سریع با ایندکس
+      push(await this.byTokens(tokens, MAX_SEARCH_RESULTS - out.length));
 
-      // ۳) یکی‌کم — فقط اگر هنوز نتیجه‌ی کمی داریم
-      if (out.length < 10 && tokens.length >= 2) {
-        for (let skip = 0; skip < tokens.length && out.length < 100; skip++) {
-          const subset = tokens.filter((_, i) => i !== skip);
-          push(await this.byTokens(subset, 100 - out.length));
+      /*
+       * ۳) زیررشته‌ای.
+       *
+       * آستانه عمداً سخاوتمندانه است (نه «فقط اگر صفر بود»): وقتی برابریِ کامل
+       * چند نتیجه‌ی کم می‌دهد، کالای درست ممکن است اصلاً بینشان نباشد — همان
+       * ایرادی که باعث می‌شد fallback هیچ‌وقت اجرا نشود.
+       */
+      if (out.length < SUBSTRING_STAGE_THRESHOLD) {
+        push(await this.bySubstring(tokens, MAX_SEARCH_RESULTS - out.length));
+
+        // ۴) یکی‌کم — کلمه‌ی اضافه یا غلط نباید کل نتیجه را صفر کند.
+        if (out.length < SUBSTRING_STAGE_THRESHOLD && tokens.length >= 2) {
+          for (
+            let skip = 0;
+            skip < tokens.length && out.length < MAX_SEARCH_RESULTS;
+            skip++
+          ) {
+            const subset = tokens.filter((_, i) => i !== skip);
+            push(
+              await this.bySubstring(subset, MAX_SEARCH_RESULTS - out.length),
+            );
+          }
         }
       }
     }
 
-    // ۴) زیررشته‌ی خام
-    if (out.length < 10) {
-      push(
-        await this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-          SELECT id FROM "Product"
-          WHERE "deletedAt" IS NULL AND name ILIKE ${'%' + q + '%'}
-          ORDER BY length(name) ASC
-          LIMIT ${100 - out.length}
-        `),
-      );
-    }
+    return out.slice(0, MAX_SEARCH_RESULTS);
+  }
 
-    return out.slice(0, 100);
+  /**
+   * تطبیقِ زیررشته‌ایِ کلمه‌به‌کلمه، با رتبه‌بندی در خودِ SQL.
+   *
+   * تطبیق روی کلماتِ کالا که با فاصله به‌هم چسبانده شده‌اند (`txt`) انجام می‌شود،
+   * نه با unnest و حلقه روی آرایه. چون هیچ توکنی فاصله ندارد، «زیررشته‌ی txt» دقیقاً
+   * معادلِ «زیررشته‌ی یکی از کلمات» است — ولی چهار برابر سریع‌تر تمام می‌شود
+   * (۴۸۷ms → ۱۳۰ms روی ۳۳٬۵ هزار کالا).
+   *
+   * امتیاز هر کلمه‌ی کوئری: ابتدای نام ۳ · ابتدای یک کلمه ۲ · وسط کلمه ۱.
+   *
+   * و مهم‌ترین سیگنال، پاداشِ **ترتیب**: اگر کلمات کوئری به همان ترتیب در نام
+   * ظاهر شوند +۵. بدون این، «نت لو اید» اول «لوله خرطومی هواکش پراید هانتر» را
+   * می‌آورد (چون «لو» ابتدای «لوله» است) و «لنت جلو پراید» هفتم می‌شود. کاربر
+   * تکه‌های کلماتِ پشت‌سرهم را تایپ می‌کند، پس ترتیب واقعاً معنا دارد.
+   *
+   * به‌علاوه +۲ برای کالای موجود — چیزی که همین حالا قابل فروش است باید بالاتر
+   * از چیزی باشد که نیست.
+   *
+   * تای‌بریکرها: کالای کم‌کلمه‌تر و با نامِ کوتاه‌تر مشخص‌تر است، پس بالاتر.
+   */
+  private async bySubstring(tokens: string[], limit: number) {
+    if (tokens.length === 0 || limit <= 0) return [];
+
+    const conditions = tokens.map(
+      (t) => Prisma.sql`s.txt LIKE ${'%' + escapeLike(t) + '%'}`,
+    );
+
+    const scores = tokens.map(
+      (t) => Prisma.sql`CASE
+        WHEN s.txt LIKE ${escapeLike(t) + '%'} THEN 3
+        WHEN s.txt LIKE ${'% ' + escapeLike(t) + '%'} THEN 2
+        ELSE 1
+      END`,
+    );
+
+    // کلمه‌ی i باید جلوتر از کلمه‌ی i+1 ظاهر شود. برای کوئری تک‌کلمه‌ای بی‌معناست.
+    const ordered =
+      tokens.length < 2
+        ? Prisma.sql`0`
+        : Prisma.sql`CASE WHEN ${Prisma.join(
+            tokens.slice(0, -1).map(
+              (t, i) =>
+                Prisma.sql`strpos(s.txt, ${t}) < strpos(s.txt, ${tokens[i + 1]})`,
+            ),
+            ' AND ',
+          )} THEN 5 ELSE 0 END`;
+
+    return this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
+      SELECT p.id
+      FROM "Product" p
+      CROSS JOIN LATERAL (
+        SELECT array_to_string(p."searchTokens", ' ') AS txt
+      ) s
+      WHERE p."deletedAt" IS NULL
+        AND ${Prisma.join(conditions, ' AND ')}
+      ORDER BY
+        (
+          ${ordered}
+          + ${Prisma.join(scores, ' + ')}
+          + CASE
+              WHEN EXISTS (
+                SELECT 1 FROM "Inventory" i
+                WHERE i."productId" = p.id AND i.quantity > 0
+              ) THEN 2 ELSE 0
+            END
+        ) DESC,
+        cardinality(p."searchTokens") ASC,
+        char_length(p.name) ASC
+      LIMIT ${limit}
+    `);
   }
 
   /** تطبیقِ AND روی آرایه‌ی توکن — کاملاً با ایندکس GIN اجرا می‌شود. */
@@ -1018,6 +1126,8 @@ export class ProductsService {
           code: r.location?.code ?? '',
           path: r.location?.path ?? '',
           quantity: r.quantity,
+          // قفسه حذف/غیرفعال شده ولی جنس رویش مانده — «بی‌صاحب» و فروختنی.
+          stranded: !r.location || !r.location.isActive,
         })),
       };
     });
@@ -1086,7 +1196,7 @@ export class ProductsService {
 
     if(!product){
 
-      throw new Error('کالا پیدا نشد');
+      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا پیدا نشد' });
 
     }
 

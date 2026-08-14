@@ -3,7 +3,13 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { DatabaseBackup, ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  DatabaseBackup,
+  ShieldCheck,
+  ShieldAlert,
+  Download,
+  RotateCcw,
+} from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState } from "@/components/states";
@@ -22,13 +28,23 @@ import {
 } from "@/components/ui/table";
 
 import {
+  downloadBackupFile,
+  getBackupFiles,
   getBackupHistory,
   getBackupStatus,
+  restoreBackup,
   runBackup,
   updateBackupConfig,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import { faDate, toFa } from "@/lib/format";
+import { useAuthStore } from "@/lib/auth-store";
+import type { BackupFile, RestoreResult } from "@/lib/types";
+
+import {
+  RestoreDialog,
+  RestoreResultCard,
+} from "./_components/restore-dialog";
 
 function mb(bytes: number | null): string {
   if (bytes == null) return "—";
@@ -83,7 +99,43 @@ export default function BackupsPage() {
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["backup-status"] });
     qc.invalidateQueries({ queryKey: ["backup-history"] });
+    qc.invalidateQueries({ queryKey: ["backup-files"] });
   };
+
+  // ---------- بازیابی ----------
+
+  // بازیابی و دانلود فقط مدیر کل: یکی همه‌چیز را جایگزین می‌کند، دیگری کل
+  // داده را از سرور بیرون می‌برد.
+  const isAdmin = useAuthStore((s) => s.hasRole)("ADMIN");
+
+  const files = useQuery({
+    queryKey: ["backup-files"],
+    queryFn: getBackupFiles,
+  });
+
+  const [picked, setPicked] = React.useState<BackupFile | null>(null);
+  const [result, setResult] = React.useState<RestoreResult | null>(null);
+
+  const restore = useMutation({
+    mutationFn: (phrase: string) => restoreBackup(picked!.name, phrase),
+    onSuccess: (r) => {
+      setPicked(null);
+      setResult(r);
+      // بعد از بازیابی همه‌چیز عوض شده — هیچ کشِ قبلی معتبر نیست.
+      qc.clear();
+      refresh();
+    },
+    onError: (e: unknown) => {
+      toast.error(e instanceof ApiException ? e.message : "بازیابی ناموفق بود", {
+        duration: 12000,
+      });
+    },
+  });
+
+  const download = useMutation({
+    mutationFn: (name: string) => downloadBackupFile(name),
+    onError: () => toast.error("دانلود فایل پشتیبان ناموفق بود"),
+  });
 
   const save = useMutation({
     mutationFn: () => updateBackupConfig(draft!),
@@ -295,10 +347,113 @@ export default function BackupsPage() {
         </Card>
       </div>
 
+      {/* فایل‌های پشتیبان — دانلود و بازیابی */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between border-b p-3">
+          <div>
+            <div className="text-sm font-semibold">فایل‌های پشتیبان</div>
+            {files.data ? (
+              <div className="mt-0.5 text-xs text-muted-foreground" dir="ltr">
+                {files.data.directory}
+              </div>
+            ) : null}
+          </div>
+          <Button variant="outline" size="sm" onClick={() => files.refetch()}>
+            تازه‌سازی
+          </Button>
+        </div>
+
+        {result ? (
+          <div className="p-3">
+            <RestoreResultCard result={result} onDismiss={() => setResult(null)} />
+          </div>
+        ) : null}
+
+        {files.isLoading ? (
+          <LoadingState />
+        ) : files.isError ? (
+          <ErrorState onRetry={() => files.refetch()} />
+        ) : !files.data?.files.length ? (
+          <p className="p-8 text-center text-sm text-muted-foreground">
+            هیچ فایل پشتیبانی در این مسیر نیست
+          </p>
+        ) : (
+          <div className="max-h-[26rem] overflow-auto">
+            <Table>
+              <TableHeader className="sticky top-0 bg-card">
+                <TableRow>
+                  <TableHead>فایل</TableHead>
+                  <TableHead>تاریخ</TableHead>
+                  <TableHead>حجم</TableHead>
+                  <TableHead>سلامت</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {files.data.files.map((f) => (
+                  <TableRow key={f.name}>
+                    <TableCell className="text-xs" dir="ltr">{f.name}</TableCell>
+                    <TableCell className="text-xs">{faDate(f.modifiedAt)}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{mb(f.sizeBytes)}</TableCell>
+                    <TableCell>
+                      {f.verified ? (
+                        <Badge variant="outline" className="border-emerald-600 text-emerald-700">
+                          سالم
+                        </Badge>
+                      ) : (
+                        <Badge variant="destructive">خوانده نمی‌شود</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        {isAdmin ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="دانلود — نسخه‌ای بیرون از سرور نگه دارید"
+                            disabled={download.isPending}
+                            onClick={() => download.mutate(f.name)}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        ) : null}
+
+                        {isAdmin ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive"
+                            // آرشیوی که خوانده نشود بازیابی هم نمی‌شود؛ سرور هم
+                            // ردش می‌کند، ولی دکمه نباید اصلاً وسوسه‌کننده باشد.
+                            disabled={!f.verified || restore.isPending}
+                            onClick={() => setPicked(f)}
+                          >
+                            <RotateCcw className="me-1 h-4 w-4" />
+                            بازیابی
+                          </Button>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+      </Card>
+
+      <RestoreDialog
+        file={picked}
+        onOpenChange={(o) => !o && setPicked(null)}
+        onConfirm={(phrase) => restore.mutate(phrase)}
+        loading={restore.isPending}
+      />
+
       <p className="rounded-md border-e-4 border-e-primary bg-primary/5 p-3 text-xs leading-6">
         هر بک‌آپ پس از تهیه <b>خوانده می‌شود</b> تا مطمئن شویم فایل سالم است — بک‌آپی که
         باز نشود بک‌آپ نیست. توصیه: هر چند وقت یک‌بار یک نسخه را روی هارد بیرونی یا
-        شبکه هم کپی کنید؛ اگر هارد سرور بسوزد، بک‌آپ کنارش هم می‌سوزد.
+        شبکه هم کپی کنید؛ اگر هارد سرور بسوزد، بک‌آپ کنارش هم می‌سوزد — و دکمه‌ی
+        <b> دانلود</b> بالا دقیقاً برای همین است.
       </p>
     </div>
   );

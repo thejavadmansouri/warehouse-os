@@ -62,7 +62,7 @@ export const ACTION_BADGE_CLASS: Record<string, string> = {
 };
 
 // =====================================================
-// ارقام فارسی و پول (تومان) — طبق docs/DESIGN_SYSTEM.md
+// ارقام فارسی و پول (ریال) — طبق docs/DESIGN_SYSTEM.md
 // =====================================================
 
 const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
@@ -99,10 +99,10 @@ export function money(n?: number | null): string {
   return toFa(Math.round(n).toLocaleString("en-US")).replace(/,/g, "٬");
 }
 
-/** مبلغ کامل با واحد. واحد پول کل سیستم تومان است. */
-export function toman(n?: number | null): string {
+/** مبلغ کامل با واحد. واحد پول کل سیستم ریال است. */
+export function rial(n?: number | null): string {
   if (n === null || n === undefined) return "—";
-  return `${money(n)} تومان`;
+  return `${money(n)} ریال`;
 }
 
 /** تعداد با ارقام فارسی. */

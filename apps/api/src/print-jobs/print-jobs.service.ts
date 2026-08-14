@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { buildThermalLabelHtml } from '../labels/label-template';
 import { LabelsService } from '../labels/labels.service';
@@ -45,7 +45,7 @@ export class PrintJobsService {
 
 
     if (!job) {
-      throw new Error('Print job not found');
+      throw new NotFoundException({ error:'PRINT_JOB_NOT_FOUND', message:'کار چاپ پیدا نشد' });
     }
 
 

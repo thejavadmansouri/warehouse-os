@@ -22,24 +22,40 @@ import {
   FileClock,
   DatabaseBackup,
   Tags,
+  Store,
+  Undo2,
+  Files,
+  FileText,
+  Wallet,
+  Warehouse,
+  LibraryBig,
+  Settings,
+  PackagePlus,
+  ScrollText,
 } from "lucide-react";
 
 export interface NavItem {
   title: string;
-  href: string;
+  /** برگ‌ها href دارند؛ هاب‌ها (فقط گروه‌بندی) می‌توانند نداشته باشند. */
+  href?: string;
   icon: typeof LayoutDashboard;
   roles: Role[] | "ALL";
+  /** زیرمجموعه‌ها — اگر باشد، این آیتم یک هابِ جمع‌شونده است. */
+  children?: NavItem[];
 }
 
 export interface NavSection {
   title: string;
+  /** آیکنِ سرتیترِ بخش — تا سرتیتر هم‌زبانِ بقیه‌ی ردیف‌ها باشد، نه یک برچسبِ ریز. */
+  icon: typeof LayoutDashboard;
   items: NavItem[];
 }
 
 // نقش‌های مجاز برای دیدن هر منو (بر اساس حداقل عملیات خواندن)
 export const NAV_SECTIONS: NavSection[] = [
   {
-    title: "اصلی",
+    title: "فروش",
+    icon: Store,
     items: [
       {
         title: "صندوق فروش",
@@ -48,16 +64,51 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: ["ADMIN", "MANAGER", "SALES"],
       },
       {
-        title: "پیش‌فاکتورها",
-        href: "/admin/quotations",
-        icon: FileClock,
+        // هابِ «اسناد فروش» — هر چیزی که یک سندِ فروش است، یک‌جا.
+        title: "اسناد فروش",
+        icon: Files,
         roles: ["ADMIN", "MANAGER", "SALES"],
+        children: [
+          {
+            title: "فاکتورها",
+            href: "/admin/invoices",
+            icon: FileText,
+            roles: ["ADMIN", "MANAGER", "SALES"],
+          },
+          {
+            title: "پیش‌فاکتورها",
+            href: "/admin/quotations",
+            icon: FileClock,
+            roles: ["ADMIN", "MANAGER", "SALES"],
+          },
+          {
+            title: "مرجوعی‌ها",
+            href: "/admin/returns",
+            icon: Undo2,
+            roles: ["ADMIN", "MANAGER"],
+          },
+        ],
       },
       {
-        title: "دریافت وجه",
-        href: "/admin/receipts",
-        icon: HandCoins,
+        // هابِ «حساب‌ها و مالی» — مشتری، بدهی، دریافت. کار از مشتری شروع می‌شود.
+        title: "حساب‌ها و مالی",
+        icon: Wallet,
         roles: ["ADMIN", "MANAGER", "SALES"],
+        children: [
+          {
+            title: "مشتریان",
+            href: "/admin/customers",
+            icon: Users,
+            roles: ["ADMIN", "MANAGER", "SALES"],
+          },
+          {
+            // ثبتِ دریافت داخل پرونده‌ی مشتری است؛ این صفحه تاریخچه‌ی همه‌ی دریافت‌هاست.
+            title: "تاریخچه دریافت‌ها",
+            href: "/admin/receipts",
+            icon: HandCoins,
+            roles: ["ADMIN", "MANAGER"],
+          },
+        ],
       },
       {
         title: "گزارش‌ها",
@@ -75,6 +126,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: "کاتالوگ",
+    icon: LibraryBig,
     items: [
       {
         title: "محصولات",
@@ -117,7 +169,14 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: "انبار",
+    icon: Warehouse,
     items: [
+      {
+        title: "فاکتور خرید",
+        href: "/admin/purchases",
+        icon: PackagePlus,
+        roles: ["ADMIN", "MANAGER"],
+      },
       {
         title: "موجودی",
         href: "/admin/inventory",
@@ -128,6 +187,13 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "لاگ موجودی",
         href: "/admin/inventory/logs",
         icon: ClipboardList,
+        roles: ["ADMIN", "MANAGER"],
+      },
+      {
+        // کاردکس — گردشِ هر کالا؛ نقطهٔ ورود از پرفروش‌ها یا جستجو.
+        title: "کاردکس کالا",
+        href: "/admin/inventory/kardex",
+        icon: ScrollText,
         roles: ["ADMIN", "MANAGER"],
       },
       {
@@ -154,12 +220,8 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: ClipboardCheck,
         roles: ["ADMIN", "MANAGER"],
       },
-    ],
-  },
-  {
-    title: "موقعیت‌ها",
-    items: [
       {
+        // «موقعیت‌ها» بخشِ جدا بود؛ ادغام شد تا سایدبار کوتاه‌تر شود.
         title: "موقعیت‌ها / قفسه‌ها",
         href: "/admin/locations",
         icon: MapPin,
@@ -175,6 +237,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     title: "ابزارها",
+    icon: Settings,
     items: [
       {
         title: "مانیتور ورودی صوتی",
@@ -195,6 +258,12 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: ["ADMIN", "MANAGER"],
       },
       {
+        title: "مشخصات مغازه",
+        href: "/admin/shop-settings",
+        icon: Store,
+        roles: ["ADMIN", "MANAGER"],
+      },
+      {
         title: "کاربران",
         href: "/admin/users",
         icon: Users,
@@ -204,6 +273,18 @@ export const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
+/** یک آیتم را برای نقش فیلتر می‌کند؛ برای هاب، بازگشتی روی فرزندان. */
+function itemForRole(item: NavItem, role: Role): NavItem | null {
+  if (item.children) {
+    const kids = item.children
+      .map((c) => itemForRole(c, role))
+      .filter((c): c is NavItem => c !== null);
+    // هابِ بدون فرزندِ مجاز اصلاً نشان داده نمی‌شود.
+    return kids.length ? { ...item, children: kids } : null;
+  }
+  return item.roles === "ALL" || item.roles.includes(role) ? item : null;
+}
+
 export function filterNavByRole(
   sections: NavSection[],
   role: Role | undefined
@@ -212,9 +293,9 @@ export function filterNavByRole(
   return sections
     .map((s) => ({
       ...s,
-      items: s.items.filter(
-        (i) => i.roles === "ALL" || i.roles.includes(role)
-      ),
+      items: s.items
+        .map((i) => itemForRole(i, role))
+        .filter((i): i is NavItem => i !== null),
     }))
     .filter((s) => s.items.length > 0);
 }

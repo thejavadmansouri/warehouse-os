@@ -162,7 +162,7 @@ export default function PricingPage() {
                   <th className="w-32 p-2 text-start font-medium">برند</th>
                   <th className="w-32 p-2 text-start font-medium">خرید</th>
                   <th className="w-48 p-2 text-start font-medium">
-                    قیمت فروش <span className="font-normal opacity-70">(تومان)</span>
+                    قیمت فروش <span className="font-normal opacity-70">(ریال)</span>
                   </th>
                   <th className="w-24 p-2" />
                 </tr>

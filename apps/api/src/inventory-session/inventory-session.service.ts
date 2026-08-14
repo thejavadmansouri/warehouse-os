@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
@@ -29,7 +29,7 @@ export class InventorySessionService {
 
 
     if(!location){
-      throw new Error('قفسه پیدا نشد');
+      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'قفسه پیدا نشد' });
     }
 
 

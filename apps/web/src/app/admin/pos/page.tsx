@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiException } from "@/lib/api-error-messages";
 import {
-  Trash2, Send, User, Percent, CreditCard, Search, FileClock, ReceiptText,
+  Trash2, Send, User, Percent, CreditCard, Search, FileClock, ReceiptText, Wallet,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -14,20 +16,31 @@ import {
   createInvoice,
   createPickTasks,
   createQuotation,
+  getCustomer,
+  getInvoices,
+  getQuotation,
   getWarehouses,
+  locateProducts,
   resolveForSale,
 } from "@/lib/api";
-import { money, parseNum, qty, toFa, toman } from "@/lib/format";
+import { faToEn, money, parseNum, qty, toFa, rial } from "@/lib/format";
+import { uuid } from "@/lib/uuid";
 import type {
   Customer,
   InsufficientStockError,
+  Invoice,
   LocateResult,
   PaymentInput,
   StockLocation,
 } from "@/lib/types";
 
 import { LocationPicker } from "./_components/location-picker";
+import { CartTabs } from "./_components/cart-tabs";
 import { CheckoutFlow } from "./_components/checkout-flow";
+import { CurrentCustomerChip } from "./_components/current-customer-chip";
+import { CustomerSummary } from "./_components/customer-summary";
+import { InlineResults } from "./_components/inline-results";
+import { OpenAccounts } from "./_components/open-accounts";
 import { CustomerPicker } from "./_components/customer-picker";
 import { DiscountField } from "./_components/discount-input";
 import {
@@ -41,13 +54,24 @@ import { PaymentDialog } from "./_components/payment-dialog";
 import { ProductSearch } from "./_components/product-search";
 import { QuotationDialog } from "./_components/quotation-dialog";
 import { RecentInvoices } from "./_components/recent-invoices";
+import { SaleReceiptDialog } from "./_components/sale-receipt-dialog";
+import { TodayPurchasesDialog } from "./_components/today-purchases-dialog";
 import { WorkerPicker } from "./_components/worker-picker";
 import {
   NO_DISCOUNT,
-  discountToToman,
+  discountToRial,
   tomanToPercent,
   type DiscountInput as DiscountValue,
 } from "./_lib/discount";
+import { type Cart } from "./_lib/carts";
+import { useCartsContext } from "./_lib/carts-context";
+
+/** ابتدای امروز به‌صورت ISO — برای شمارش «فاکتورهای امروز» مشتریِ جاری. */
+function startOfToday(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
 
 /** حداقل چیزی که برای افزودن یک ردیف لازم است — هم از resolve می‌آید هم از جست‌وجو. */
 type PickableProduct = {
@@ -60,6 +84,14 @@ type PickableProduct = {
 /** ردیف سبد — تعریف و ریاضی‌اش کنار خود جدول است تا یک منبع حقیقت باشد. */
 type Line = PosLine;
 
+/**
+ * ورودی ثبت فاکتور.
+ *
+ * آبجکت است نه دو آرگومان، چون `mutate` فقط یک متغیر می‌گیرد و سررسید باید
+ * کنار پرداخت‌ها سفر کند.
+ */
+type SubmitArgs = { payments?: PaymentInput[]; dueDate?: string };
+
 /** برچسب میانبر روی خود دکمه — این چیزی است که سرعت را می‌سازد. */
 function Key({ children }: { children: string }) {
   return (
@@ -70,15 +102,56 @@ function Key({ children }: { children: string }) {
 }
 
 export default function PosPage() {
-  const [lines, setLines] = useState<Line[]>([]);
-  const [customer, setCustomer] = useState<Customer | null>(null);
-  const [invoiceDiscountInput, setInvoiceDiscountInput] =
-    useState<DiscountValue>(NO_DISCOUNT);
-  const [note, setNote] = useState("");
+  /*
+   * چند فاکتور هم‌زمان.
+   *
+   * سبد، مشتری، تخفیف و یادداشت همه داخل تبِ فعال زندگی می‌کنند. اسم setterها
+   * عمداً همان قبلی‌هاست تا بقیه‌ی صفحه دست نخورد و این تغییر یک بازنویسیِ
+   * سراسری نشود.
+   */
+  const {
+    carts, cart, activeId, setActiveId, addCart, closeCart,
+    patch: patchCart, resetCurrent, ensureIdem, invalidateIdem, canAdd,
+  } = useCartsContext();
+
+  const { lines, customer, note, activeRow, errorLine } = cart;
+  const invoiceDiscountInput = cart.discount;
+
+  const setLines = useCallback(
+    (u: Line[] | ((prev: Line[]) => Line[])) =>
+      patchCart((c) => ({ lines: typeof u === "function" ? u(c.lines) : u })),
+    [patchCart]
+  );
+  const setCustomer = useCallback(
+    // جدا کردنِ مشتری، قفل را هم باز می‌کند — قفلِ بی‌مشتری بی‌معناست.
+    (c: Customer | null) =>
+      patchCart(c ? { customer: c } : { customer: null, customerLocked: false }),
+    [patchCart]
+  );
+  const toggleCustomerLock = useCallback(
+    () => patchCart((c) => ({ customerLocked: !c.customerLocked })),
+    [patchCart]
+  );
+  const setNote = useCallback((n: string) => patchCart({ note: n }), [patchCart]);
+  const setInvoiceDiscountInput = useCallback(
+    (d: DiscountValue) => patchCart({ discount: d }),
+    [patchCart]
+  );
+  const setActiveRow = useCallback(
+    (u: number | ((prev: number) => number)) =>
+      patchCart((c) => ({
+        activeRow: typeof u === "function" ? u(c.activeRow) : u,
+      })),
+    [patchCart]
+  );
+  const setErrorLine = useCallback(
+    (n: number | null) => patchCart({ errorLine: n }),
+    [patchCart]
+  );
+
+  // انبار بین همه‌ی تب‌ها مشترک است — فروشنده پشت یک پیشخوان نشسته.
   const [warehouseId, setWarehouseId] = useState("");
   const [scan, setScan] = useState("");
-  const [activeRow, setActiveRow] = useState(0);
-  const [errorLine, setErrorLine] = useState<number | null>(null);
 
   /** کالایی که منتظر انتخاب مکان است — خود کالا هم نگه داشته می‌شود، نه فقط نامش. */
   const [pickerStock, setPickerStock] = useState<{
@@ -94,9 +167,25 @@ export default function PosPage() {
   const [showQuotation, setShowQuotation] = useState(false);
   const [showWorkerPicker, setShowWorkerPicker] = useState(false);
   const [showRecent, setShowRecent] = useState(false);
+  const [showOpenAccounts, setShowOpenAccounts] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
+  /** فاکتورِ تازه‌ثبت‌شده — تا وقتی خودش بسته نشود، رسیدش روی صفحه می‌ماند. */
+  const [receipt, setReceipt] = useState<Invoice | null>(null);
+  /** دیالوگ «خریدهای امروزِ مشتریِ جاری» — از دکمه‌ی چیپ. */
+  const [showTodayPurchases, setShowTodayPurchases] = useState(false);
   /** تعداد اقلامی که همین الان قرار است به کارگر برود (سبد کامل یا یک کالای جست‌وجو). */
   const [workerItemCount, setWorkerItemCount] = useState(0);
+
+  /**
+   * جست‌وجوی زنده‌ی همان نوار اسکن.
+   *
+   * `liveHighlight === -1` یعنی هیچ ردیفی انتخاب نشده و Enter باید مسیر بارکد
+   * را برود — نگهبانِ اصلی در برابر اینکه Enterِ بارکدخوان کالای اشتباه را
+   * اضافه کند. `liveDismissed` هم برای Esc است: لیست بسته شود ولی متن بماند.
+   */
+  const [liveHighlight, setLiveHighlight] = useState(-1);
+  const [liveDismissed, setLiveDismissed] = useState(false);
+  const [liveQuery, setLiveQuery] = useState("");
 
   const scanRef = useRef<HTMLInputElement>(null);
   /**
@@ -115,10 +204,142 @@ export default function PosPage() {
    * تکراری نمی‌سازد. اما اگر محتوای سبد عوض شود، دیگر همان فاکتور نیست،
    * پس کلید باطل می‌شود.
    */
-  const idemRef = useRef<string | null>(null);
-  const invalidateIdem = () => { idemRef.current = null; };
 
   const warehouses = useQuery({ queryKey: ["warehouses"], queryFn: getWarehouses });
+
+  /**
+   * هیچ انباری تعریف نشده.
+   *
+   * تا امروز این حالت بی‌صدا بود: کشویی انبار خالی می‌ماند، `warehouseId` رشته‌ی
+   * تهی می‌رفت، و فروشنده *بعد* از زدنِ کل سبد یک «انبار پیدا نشد» می‌گرفت که
+   * نمی‌گفت مشکل چیست. حالا قبل از اولین اسکن معلوم است.
+   */
+  const noWarehouse = !warehouses.isLoading && !warehouses.data?.length;
+
+
+  /*
+   * پرونده‌ی کامل مشتریِ انتخاب‌شده.
+   *
+   * نتیجه‌ی جست‌وجوی مشتری فقط نام و شماره دارد؛ سقف اعتبار و بدهی از این
+   * کوئری می‌آید. بدون آن، فروشنده وضعیت اعتبار را تازه سرِ تسویه می‌فهمید —
+   * یعنی بعد از اینکه کل سبد را زده.
+   */
+  /*
+   * ورود با مشتریِ از پیش انتخاب‌شده (`/admin/pos?customer=...`).
+   *
+   * از پرونده‌ی مشتری «فروش به این مشتری» می‌آید اینجا. فقط یک بار اجرا
+   * می‌شود، وگرنه عوض‌کردن مشتری در صندوق دوباره به همان برمی‌گشت.
+   */
+  const seededCustomer = useRef(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const id = searchParams.get("customer");
+    if (!id || seededCustomer.current) return;
+    seededCustomer.current = true;
+    getCustomer(id)
+      .then((c) => setCustomer(c))
+      .catch(() => toast.error("مشتری پیدا نشد"));
+  }, [searchParams, setCustomer]);
+
+  /*
+   * بارگذاری پیش‌فاکتور در سبد (?quotation=...).
+   *
+   * از «ادامه در صندوق» در صفحه‌ی پیش‌فاکتورها می‌آید: سبد از همان اقلام و
+   * قیمت‌ها پر می‌شود (مشتری هم اگر داشته باشد) و فروشنده قیمت/تعداد را
+   * بررسی یا اصلاح می‌کند و ادامه می‌دهد — بدون اینکه مجبور باشد دوباره
+   * اسکن کند.
+   */
+  const seededQuotation = useRef(false);
+
+  useEffect(() => {
+    const id = searchParams.get("quotation");
+    if (!id || seededQuotation.current) return;
+    seededQuotation.current = true;
+    getQuotation(id)
+      .then((q) => {
+        setLines(
+          (q.lines ?? []).map((l) => ({
+            key: uuid(),
+            productId: l.product.id,
+            productName: l.product.name,
+            unit: l.product.unit ?? "عدد",
+            locationId: l.locationId ?? "",
+            locationPath: "",
+            available: 0,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            // تخفیف ردیف ریالی است — همین شکل را سرور می‌گیرد.
+            discount: { value: l.discount, mode: "amount" },
+            included: true,
+          }))
+        );
+        if (q.customerId) {
+          getCustomer(q.customerId)
+            .then((c) => setCustomer(c))
+            .catch(() => toast.error("مشتری پیش‌فاکتور پیدا نشد"));
+        }
+        toast.success(
+          `پیش‌فاکتور ${toFa(q.number)} در صندوق بارگذاری شد — قیمت‌ها را بررسی کنید`
+        );
+      })
+      .catch(() => toast.error("بارگذاری پیش‌فاکتور ناموفق بود"));
+  }, [searchParams, setLines, setCustomer]);
+
+  const customerDetail = useQuery({
+    queryKey: ["customer", customer?.id],
+    queryFn: () => getCustomer(customer!.id),
+    enabled: !!customer?.id,
+  });
+
+  /*
+   * شمارشِ فاکتورهای امروزِ همین مشتری — فقط تعداد لازم است، پس صفحه‌ی ۱ با
+   * `pageSize: 1` کافی است و meta.total عدد واقعی را می‌دهد.
+   */
+  const customerTodayInvoices = useQuery({
+    queryKey: ["customer-today-count", customer?.id],
+    queryFn: () =>
+      getInvoices({ customerId: customer!.id, from: startOfToday(), pageSize: 1 }),
+    enabled: !!customer?.id,
+    staleTime: 30_000,
+  });
+
+  // تأخیر کوتاه: آن‌قدر که هر ضربه‌ی کلید یک درخواست نزند، ولی «زنده» حس شود.
+  useEffect(() => {
+    const t = setTimeout(() => setLiveQuery(scan), 150);
+    return () => clearTimeout(t);
+  }, [scan]);
+
+  /*
+   * حداقل سه حرف: با دو حرف نتیجه آن‌قدر زیاد است که کمکی نمی‌کند، و مهم‌تر
+   * اینکه بارکدخوان در حال تایپِ یک بارکد بلند نباید هر چند حرف یک کوئری بزند.
+   */
+  const liveEnabled = !liveDismissed && liveQuery.trim().length >= 3;
+
+  const liveResults = useQuery({
+    queryKey: ["pos-inline", liveQuery],
+    queryFn: () => locateProducts(liveQuery.trim()),
+    enabled: liveEnabled,
+    placeholderData: keepPreviousData,
+  });
+
+  const liveList = useMemo(
+    () => (liveEnabled ? (liveResults.data ?? []) : []),
+    [liveEnabled, liveResults.data]
+  );
+
+  // با عوض‌شدن متن، انتخاب باید از نو شروع شود.
+  useEffect(() => {
+    setLiveHighlight(-1);
+  }, [liveQuery]);
+
+  /** بستن لیست بعد از افزودن — وگرنه روی سبدِ تازه باز می‌ماند. */
+  const closeLive = useCallback(() => {
+    setScan("");
+    setLiveQuery("");
+    setLiveHighlight(-1);
+    setLiveDismissed(false);
+  }, []);
 
   useEffect(() => {
     if (!warehouseId && warehouses.data?.length) setWarehouseId(warehouses.data[0].id);
@@ -134,18 +355,40 @@ export default function PosPage() {
    * (به `_lib/discount.ts` نگاه کن.) هر انحرافی اینجا یعنی عددِ روی صفحه با
    * عددِ ثبت‌شده فرق کند.
    */
+  /**
+   * فقط ردیف‌های تیک‌خورده.
+   *
+   * تیک‌برداشتن یعنی «فعلاً این را نمی‌خواهد» — نه در جمع می‌آید، نه ثبت
+   * می‌شود، ولی روی صفحه می‌ماند تا اگر نظرش عوض شد دوباره اسکن لازم نباشد.
+   * همه‌ی ریاضیِ فاکتور از همین‌جا رد می‌شود.
+   */
+  const activeLines = useMemo(() => lines.filter((l) => l.included), [lines]);
+
+  /**
+   * جمعِ یک تبِ دلخواه — برای برچسبِ روی نوار تب.
+   *
+   * ریاضیِ کامل فاکتور (با تخفیف کل) عمداً اینجا تکرار نمی‌شود: روی تب فقط یک
+   * عددِ تقریبی برای شناختن لازم است، و دوباره‌نویسیِ فرمول یعنی دو جا که
+   * می‌توانند از هم جدا بیفتند.
+   */
+  const cartTotal = useCallback(
+    (c: Cart) =>
+      c.lines.filter((l) => l.included).reduce((s, l) => s + lineNet(l), 0),
+    []
+  );
+
   const grossSubtotal = useMemo(
-    () => lines.reduce((s, l) => s + lineGross(l), 0),
-    [lines]
+    () => activeLines.reduce((s, l) => s + lineGross(l), 0),
+    [activeLines]
   );
   /** جمع تخفیف‌های ردیفی — فقط برای نمایش. */
   const linesDiscountTotal = useMemo(
-    () => lines.reduce((s, l) => s + lineDiscount(l), 0),
-    [lines]
+    () => activeLines.reduce((s, l) => s + lineDiscount(l), 0),
+    [activeLines]
   );
   /** همان چیزی که سرور subtotal صدایش می‌کند: جمع ردیف‌ها **پس از** تخفیف ردیفی. */
   const subtotal = grossSubtotal - linesDiscountTotal;
-  const invoiceDiscount = discountToToman(invoiceDiscountInput, subtotal);
+  const invoiceDiscount = discountToRial(invoiceDiscountInput, subtotal);
   const total = Math.max(0, subtotal - invoiceDiscount);
   /** تخفیف کل (ردیفی + فاکتوری) و درصد مؤثرش نسبت به مبلغ خام. */
   const totalDiscount = linesDiscountTotal + invoiceDiscount;
@@ -155,17 +398,22 @@ export default function PosPage() {
    * ردیف‌های بی‌قیمت.
    *
    * تقریباً هیچ کالایی در دیتابیس ProductPrice ندارد، پس اگر جلویش گرفته نشود
-   * فروشنده به‌راحتی یک فاکتورِ صفر تومانی ثبت می‌کند و تازه بعداً می‌فهمد.
+   * فروشنده به‌راحتی یک فاکتورِ صفر ریالی ثبت می‌کند و تازه بعداً می‌فهمد.
    */
   const zeroPriceCount = useMemo(
-    () => lines.filter((l) => l.unitPrice <= 0).length,
-    [lines]
+    () => activeLines.filter((l) => l.unitPrice <= 0).length,
+    [activeLines]
   );
-  const canCheckout = lines.length > 0 && zeroPriceCount === 0;
+  const canCheckout =
+    activeLines.length > 0 && zeroPriceCount === 0 && !noWarehouse;
 
   /** رفتن به تسویه — از Enterِ خانه‌ی خالیِ اسکن یا F2. */
   const startCheckout = useCallback(() => {
-    if (!lines.length) return;
+    if (!activeLines.length) return;
+    if (noWarehouse) {
+      toast.error("هیچ انباری تعریف نشده — اول یک انبار بسازید");
+      return;
+    }
     if (zeroPriceCount > 0) {
       toast.error(
         `${toFa(zeroPriceCount)} ردیف قیمت ندارد — قبل از ثبت قیمتشان را وارد کنید`
@@ -173,7 +421,7 @@ export default function PosPage() {
       return;
     }
     setShowCheckout(true);
-  }, [lines.length, zeroPriceCount]);
+  }, [lines.length, zeroPriceCount, noWarehouse]);
 
   // ---------- افزودن ردیف ----------
 
@@ -208,16 +456,18 @@ export default function PosPage() {
         return [
           ...prev,
           {
-            key: crypto.randomUUID(),
+            key: uuid(),
             productId: p.id,
             productName: p.name,
             unit: p.unit ?? "عدد",
             locationId: s.locationId,
             locationPath: s.locationPath || s.locationName,
             available: s.quantity,
+            stranded: s.stranded,
             quantity: 1,
             unitPrice: p.salePrice ?? 0,
             discount: NO_DISCOUNT,
+            included: true,
           },
         ];
       });
@@ -299,6 +549,7 @@ export default function PosPage() {
         locationBarcode: "",
         locationPath: l.path,
         quantity: l.quantity,
+        stranded: l.stranded,
       }));
       if (stock.length === 1) addLine(product, stock[0]);
       else setPickerStock({ name: r.name, product, stock });
@@ -323,44 +574,46 @@ export default function PosPage() {
   // ---------- ثبت ----------
 
   const submit = useMutation({
-    mutationFn: (payments?: PaymentInput[]) => {
-      if (!idemRef.current) idemRef.current = crypto.randomUUID();
+    mutationFn: ({ payments, dueDate }: SubmitArgs = {}) => {
       return createInvoice({
-        idempotencyKey: idemRef.current,
+        idempotencyKey: ensureIdem(),
         warehouseId,
         customerId: customer?.id ?? null,
         discount: invoiceDiscount || undefined,
         note: note.trim() || undefined,
-        lines: lines.map((l) => ({
+        // فقط برای حساب‌باز پر است؛ در بقیه‌ی روش‌ها سررسیدی وجود ندارد.
+        dueDate,
+        lines: activeLines.map((l) => ({
           productId: l.productId,
           // قفسه‌ی خالی یعنی «کالا هنوز ثبت نشده» — سرور خودش مکان سیستمی را
           // انتخاب می‌کند. فرستادن رشته‌ی تهی خطای اعتبارسنجی می‌دهد.
           locationId: l.locationId || undefined,
           quantity: l.quantity,
           unitPrice: l.unitPrice,
-          // درصد فقط در UI زندگی می‌کند؛ سرور تومان می‌گیرد.
+          // درصد فقط در UI زندگی می‌کند؛ سرور ریال می‌گیرد.
           discount: lineDiscount(l) || undefined,
         })),
         payments,
       });
     },
     onSuccess: (inv) => {
-      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${toman(inv.total)}`, {
-        action: {
-          label: "چاپ فاکتور",
-          // پنجره‌ی جدا، تا سبدِ خالی‌شده و فوکوسِ اسکن سر جایشان بمانند.
-          onClick: () => window.open(`/admin/print/invoice/${inv.id}`, "_blank"),
-        },
-        duration: 8000,
-      });
-      setLines([]);
-      setCustomer(null);
-      setInvoiceDiscountInput(NO_DISCOUNT);
-      setNote("");
-      setErrorLine(null);
+      /*
+       * رسیدِ ماندگار به‌جای toast.
+       *
+       * toast شش ثانیه بعد محو می‌شد؛ نگاهِ فروشنده در آن لحظه روی مشتری
+       * بعدی است، نه صفحه. رسید تا وقتی خودش ببندد می‌ماند، شماره و مبلغ را
+       * بزرگ نشان می‌دهد و «چاپ مجدد» دارد — و با یک Enter بسته می‌شود تا
+       * چرخه‌ی اسکنِ مشتری بعدی کند نشود.
+       */
+      setReceipt(inv);
+      /*
+       * قفلِ مشتری فقط برای حساب‌باز: اگر بخشی از پرداختِ این فاکتور نسیه بوده
+       * (حتی ترکیبی)، مشتری روی تب می‌ماند برای خریدِ بعدی؛ فروشِ نقدی/کارت/چک
+       * برمی‌گردد به «نقدی گذری».
+       */
+      resetCurrent();
       setShowPayment(false);
       setShowCheckout(false);
-      idemRef.current = null;
       focusScan();
     },
     onError: (e: unknown) => {
@@ -404,14 +657,14 @@ export default function PosPage() {
    * موجودی دست نمی‌خورد؛ فقط قیمت برای مدت مشخصی نگه داشته می‌شود.
    */
   const saveQuotation = useMutation({
-    mutationFn: (validForMinutes: number) =>
+    mutationFn: ({ validForMinutes }: { validForMinutes: number; print: boolean }) =>
       createQuotation({
         warehouseId,
         customerId: customer?.id ?? null,
         discount: invoiceDiscount || undefined,
         note: note.trim() || undefined,
         validForMinutes,
-        lines: lines.map((l) => ({
+        lines: activeLines.map((l) => ({
           productId: l.productId,
           locationId: l.locationId || undefined,
           quantity: l.quantity,
@@ -419,14 +672,20 @@ export default function PosPage() {
           discount: lineDiscount(l) || undefined,
         })),
       }),
-    onSuccess: (q) => {
-      toast.success(`پیش‌فاکتور ${toFa(q.number)} ثبت شد — ${toman(q.total)}`);
-      setLines([]);
-      setCustomer(null);
-      setInvoiceDiscountInput(NO_DISCOUNT);
-      setNote("");
+    onSuccess: (q, vars) => {
+      // چاپ همان لحظه، تا برگه پیش از رفتنِ مشتری دستش باشد.
+      if (vars.print) window.open(`/admin/print/quotation/${q.id}`, "_blank");
+
+      toast.success(`پیش‌فاکتور ${toFa(q.number)} ثبت شد — ${rial(q.total)}`, {
+        action: {
+          label: "چاپ",
+          onClick: () => window.open(`/admin/print/quotation/${q.id}`, "_blank"),
+        },
+        duration: 6000,
+      });
+      // پیش‌فاکتور فروش نیست — مشتری مثل فروشِ نقدی ریست می‌شود.
+      resetCurrent();
       setShowQuotation(false);
-      invalidateIdem();
       focusScan();
     },
     onError: () => toast.error("ثبت پیش‌فاکتور ناموفق بود"),
@@ -454,7 +713,7 @@ export default function PosPage() {
 
   /** F9 — کل سبد را برای کارگر بفرست. */
   const openWorkerForCart = useCallback(() => {
-    if (!lines.length) return;
+    if (!activeLines.length) return;
     /*
      * اقلام ثبت‌نشده هم فرستاده می‌شوند.
      *
@@ -462,14 +721,14 @@ export default function PosPage() {
      * ولی جنس فیزیکاً در انبار هست و فقط در نرم‌افزار ثبت نشده — کارگر انبار را
      * می‌شناسد و پیدایش می‌کند. کارِ برداشت بدون آدرس هم می‌گوید «این را بیاور».
      */
-    workerLinesRef.current = lines.map((l) => ({
+    workerLinesRef.current = activeLines.map((l) => ({
       productId: l.productId,
       locationId: l.locationId || undefined,
       quantity: l.quantity,
     }));
-    setWorkerItemCount(lines.length);
+    setWorkerItemCount(activeLines.length);
     setShowWorkerPicker(true);
-  }, [lines]);
+  }, [activeLines]);
 
   /** از نتیجه‌ی جست‌وجو → همان یک کالا را (از پرموجودی‌ترین مکان) برای کارگر بفرست. */
   const openWorkerForResult = useCallback(
@@ -493,7 +752,8 @@ export default function PosPage() {
 
   const anyDialogOpen =
     !!pickerStock || showCustomer || showPayment || showSearch || showQuotation ||
-    showWorkerPicker || showRecent || showCheckout;
+    showWorkerPicker || showRecent || showCheckout || showOpenAccounts || !!receipt ||
+    showTodayPurchases;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -505,6 +765,7 @@ export default function PosPage() {
         setShowQuotation(false);
         setShowWorkerPicker(false);
         setShowRecent(false);
+        setShowOpenAccounts(false);
         // CheckoutFlow خودش Esc را مدیریت می‌کند (گام دوم → گام اول)، پس اینجا
         // بسته نمی‌شود؛ وگرنه یک Esc کل تسویه را می‌بندد.
         focusScan();
@@ -513,6 +774,25 @@ export default function PosPage() {
 
       if (anyDialogOpen) return;
 
+      // Ctrl+T — فاکتور جدید، همان میانبری که در مرورگر عادت شده.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "t") {
+        e.preventDefault();
+        addCart();
+        focusScan();
+        return;
+      }
+
+      // Ctrl+Shift+X — جدا کردن مشتریِ قفل‌شده (همان دکمه‌ی × چیپ).
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "x") {
+        e.preventDefault();
+        if (customer) {
+          setCustomer(null);
+          invalidateIdem();
+          toast.info("مشتری جدا شد — فروش نقدی گذری");
+        }
+        return;
+      }
+
       switch (e.key) {
         case "F2":
           e.preventDefault();
@@ -520,8 +800,7 @@ export default function PosPage() {
           break;
         case "F3":
           e.preventDefault();
-          setSearchSeed("");
-          setShowSearch(true);
+          setShowOpenAccounts(true);
           break;
         case "F4":
           e.preventDefault();
@@ -547,14 +826,20 @@ export default function PosPage() {
           e.preventDefault();
           setShowRecent(true);
           break;
+        /*
+         * جهت‌ها فقط وقتی ردیفِ فعال را عوض می‌کنند که فوکوس روی نوار اسکن باشد.
+         *
+         * داخل خانه‌های جدول، خودِ جدول جابه‌جایی را مدیریت می‌کند (تعداد ↔ قیمت).
+         * بدون این شرط، یک فلش هر دو کار را می‌کرد و مکان‌نما می‌پرید.
+         */
         case "ArrowDown":
-          if (lines.length) {
+          if (lines.length && document.activeElement === scanRef.current) {
             e.preventDefault();
             setActiveRow((r) => Math.min(r + 1, lines.length - 1));
           }
           break;
         case "ArrowUp":
-          if (lines.length) {
+          if (lines.length && document.activeElement === scanRef.current) {
             e.preventDefault();
             setActiveRow((r) => Math.max(r - 1, 0));
           }
@@ -571,7 +856,7 @@ export default function PosPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lines, activeRow, anyDialogOpen, submit.isPending, sendToWorker.isPending]);
+  }, [lines, activeRow, anyDialogOpen, submit.isPending, sendToWorker.isPending, addCart, focusScan, customer, setCustomer, invalidateIdem]);
 
   useEffect(() => { focusScan(); }, [focusScan]);
 
@@ -579,20 +864,124 @@ export default function PosPage() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col gap-3 p-4">
+      <CartTabs
+        carts={carts}
+        activeId={activeId}
+        canAdd={canAdd}
+        totalOf={cartTotal}
+        onSelect={(id) => { setActiveId(id); focusScan(); }}
+        onAdd={() => { addCart(); focusScan(); }}
+        onClose={closeCart}
+      />
+
+      {noWarehouse && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive
+                        bg-destructive/10 px-4 py-3">
+          <div>
+            <p className="font-semibold text-destructive">هیچ انباری تعریف نشده</p>
+            <p className="text-sm text-muted-foreground">
+              تا وقتی یک انبار ساخته نشود، فاکتور ثبت نمی‌شود.
+            </p>
+          </div>
+          <Button asChild variant="destructive">
+            <Link href="/admin/locations">ساخت انبار</Link>
+          </Button>
+        </div>
+      )}
+
       {/* نوار اسکن — همیشه فوکوس دارد */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
           <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={scanRef}
+            id="pos-scan"
             value={scan}
             onChange={(e) => setScan(e.target.value)}
             onKeyDown={(e) => {
+              // ↑↓ در لیست زنده. تا اولین ↓، هیچ ردیفی انتخاب نیست.
+              if (liveList.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+                e.preventDefault();
+                // وگرنه همین فلش به هندلر سراسری هم می‌رسد و هم‌زمان ردیفِ
+                // فعالِ جدول را جابه‌جا می‌کند.
+                e.stopPropagation();
+                setLiveHighlight((h) =>
+                  e.key === "ArrowDown"
+                    ? Math.min(h + 1, liveList.length - 1)
+                    : Math.max(h - 1, -1)
+                );
+                return;
+              }
+
+              // Esc لیست را می‌بندد ولی متن را نگه می‌دارد — شاید بخواهد ادامه بدهد.
+              if (e.key === "Escape" && liveList.length) {
+                e.preventDefault();
+                // Esc اینجا فقط لیست را می‌بندد، نه همه‌ی دیالوگ‌های صفحه.
+                e.stopPropagation();
+                setLiveDismissed(true);
+                setLiveHighlight(-1);
+                return;
+              }
+
+              /*
+               * زنجیره‌ی کیبوردی: اسکن →Tab→ تعداد →Tab→ قیمت →Enter→ برگشت به
+               * بارکد (و اگر بارکدی زده نشود و باز Enter، می‌رود تسویه). این Tab
+               * اولْ ردیف را روی تعداد می‌گذارد؛ Shift+Tab میان‌بر مستقیم به قیمت
+               * است (وقتی تعداد همان ۱ است). بارکدخوان Tab نمی‌فرستد، پس اسکنِ
+               * پیاپی دست‌نخورده می‌ماند. فقط وقتی لیست زنده باز نیست.
+               */
+              if (e.key === "Tab" && lines.length && !liveList.length) {
+                e.preventDefault();
+                const col = e.shiftKey ? 1 : 0;
+                const cell = document.querySelector<HTMLInputElement>(
+                  `[data-cell="${activeRow}:${col}"]`
+                );
+                cell?.focus();
+                cell?.select();
+                return;
+              }
+
               if (e.key !== "Enter") return;
               e.preventDefault();
+
+              // ردیفی با ↓ انتخاب شده → همان را بردار.
+              if (liveHighlight >= 0 && liveList[liveHighlight]) {
+                addFromLocate(liveList[liveHighlight]);
+                closeLive();
+                return;
+              }
+
+              const typed = scan.trim();
+
+              /*
+               * عددِ کوتاه = تعدادِ ردیفِ فعال، نه بارکد.
+               *
+               * بعد از افزودن کالا، کارِ بعدیِ فروشنده تقریباً همیشه گفتن تعداد
+               * است. تا حالا باید دست از کیبورد برمی‌داشت و روی خانه‌ی تعداد
+               * کلیک می‌کرد.
+               *
+               * مرزش طولِ عدد است: بارکد هیچ‌وقت کوتاه‌تر از ۵ رقم نیست و تعداد
+               * تقریباً هیچ‌وقت بلندتر. بدون این مرز، اسکنِ یک بارکد به‌جای
+               * افزودن کالا تعداد را عوض می‌کرد.
+               */
+              const asQty = /^\d{1,4}$/.test(faToEn(typed)) ? Number(faToEn(typed)) : 0;
+              if (asQty > 0 && lines.length) {
+                patchLine(activeRow, { quantity: asQty });
+                setScan("");
+                // بعد از تعداد، خانه‌ی قیمتِ همان ردیف؛ ترتیب طبیعیِ کار.
+                requestAnimationFrame(() => {
+                  const cell = document.querySelector<HTMLInputElement>(
+                    `[data-cell="${activeRow}:1"]`
+                  );
+                  cell?.focus();
+                  cell?.select();
+                });
+                return;
+              }
+
               // بارکد در خانه → کالا را اضافه کن و منتظر بعدی بمان.
-              if (scan.trim()) {
-                onScan.mutate(scan.trim());
+              if (typed) {
+                onScan.mutate(typed);
                 return;
               }
               // خانه خالی و سبد پُر → یعنی «تمام شد، برو تسویه».
@@ -605,7 +994,36 @@ export default function PosPage() {
             }
             className="h-11 pe-10 text-base"
           />
+
+          <InlineResults
+            results={liveList}
+            highlight={liveHighlight}
+            loading={liveResults.isFetching}
+            onHover={setLiveHighlight}
+            onPick={(r) => { addFromLocate(r); closeLive(); }}
+            onSendToWorker={(r) => { openWorkerForResult(r); closeLive(); }}
+          />
         </div>
+
+        {customer && (
+          <CurrentCustomerChip
+            name={customer.fullName}
+            primaryPhone={
+              customer.phones?.find((p) => p.isPrimary)?.phone ??
+              customer.phones?.[0]?.phone ??
+              null
+            }
+            category={customer.category ?? null}
+            totalDue={customerDetail.data?.summary?.totalDue ?? 0}
+            todayCount={customerTodayInvoices.data?.meta?.total ?? 0}
+            loading={customerTodayInvoices.isFetching}
+            locked={cart.customerLocked}
+            onToggleLock={toggleCustomerLock}
+            onOpen={() => window.open(`/admin/customers/${customer.id}`, "_blank")}
+            onShowToday={() => setShowTodayPurchases(true)}
+            onClear={() => { setCustomer(null); invalidateIdem(); }}
+          />
+        )}
 
         <select
           value={warehouseId}
@@ -617,11 +1035,23 @@ export default function PosPage() {
           ))}
         </select>
 
-        <Button variant="outline" className="h-11" onClick={() => setShowSearch(true)}>
-          جست‌وجوی کالا <Key>F3</Key>
+        <Button
+          variant="outline"
+          className="h-11 border-amber-400 text-amber-700 hover:bg-amber-50 hover:text-amber-800
+                     dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40"
+          onClick={() => setShowOpenAccounts(true)}
+        >
+          <Wallet className="size-4" />
+          حساب باز <Key>F3</Key>
         </Button>
 
-        <Button variant="outline" className="h-11" onClick={() => setShowRecent(true)}>
+        {/* سبز عمدی است: تنها دکمه‌ی «نگاه به گذشته» بین ابزارهای فروش، و
+            فروشنده باید بدون خواندن متن پیدایش کند. */}
+        <Button
+          className="h-11 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700
+                     dark:bg-emerald-600 dark:hover:bg-emerald-500"
+          onClick={() => setShowRecent(true)}
+        >
           <ReceiptText className="size-4" />
           فاکتورهای امروز <Key>F10</Key>
         </Button>
@@ -647,32 +1077,28 @@ export default function PosPage() {
           از پایین سرریز می‌کرد و روی نوار کلیدها می‌افتاد.
         */}
         <div className="flex min-h-0 w-80 shrink-0 flex-col gap-3">
+          {/*
+            کارت مشتری بیرون از ناحیه‌ی اسکرول است: همیشه کامل دیده می‌شود و
+            اسکرول‌بار نمی‌گیرد. فقط «جمع اقلام» در فضای باقی‌مانده اسکرول می‌شود.
+          */}
+          <CustomerSummary
+            customer={customer}
+            onOpenFullProfile={() => window.open(`/admin/customers/${customer?.id}`, "_blank")}
+            onShowTodayPurchases={() => setShowTodayPurchases(true)}
+          />
+
+          {/* دکمه انتخاب مشتری وقتی مشتری انتخاب نشده */}
+          {!customer && (
+            <Button
+              variant="outline"
+              className="h-11 w-full justify-center gap-2"
+              onClick={() => setShowCustomer(true)}
+            >
+              <User className="size-4" /> انتخاب مشتری <Key>F4</Key>
+            </Button>
+          )}
+
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-          <div className="shrink-0 rounded-lg border bg-card p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <span className="text-sm font-semibold">مشتری</span>
-              <Button variant="ghost" size="sm" onClick={() => setShowCustomer(true)}>
-                <User className="size-4" /> <Key>F4</Key>
-              </Button>
-            </div>
-
-            {customer ? (
-              <div>
-                <p className="font-medium">{customer.fullName}</p>
-                <p className="text-xs text-muted-foreground" dir="ltr">
-                  {customer.phones?.[0]?.phone ? toFa(customer.phones[0].phone) : "بدون شماره"}
-                </p>
-                {!!customer.summary?.totalDue && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    بدهی قبلی: {toman(customer.summary.totalDue)}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">فروش نقدی گذری</p>
-            )}
-          </div>
-
           <div className="shrink-0 rounded-lg border bg-card p-3">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">جمع اقلام</span>
@@ -682,7 +1108,7 @@ export default function PosPage() {
             {linesDiscountTotal > 0 && (
               <div className="mt-1 flex justify-between text-sm">
                 <span className="text-muted-foreground">تخفیف ردیف‌ها</span>
-                <span className="tabular-nums text-emerald-600">
+                <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                   − {money(linesDiscountTotal)}
                 </span>
               </div>
@@ -712,11 +1138,15 @@ export default function PosPage() {
               </div>
             )}
 
-            <div className="mt-3 flex items-baseline justify-between border-t pt-3">
-              <span className="font-semibold">مبلغ نهایی</span>
-              <span className="text-xl font-bold tabular-nums">{money(total)}</span>
+            {/* مبلغ نهایی تنها عددی است که فروشنده بلند می‌خواند — باید از
+                فاصله‌ی یک متری هم خوانده شود. */}
+            <div className="mt-3 rounded-lg bg-blue-600 px-3 py-2.5 text-white dark:bg-blue-700">
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm font-medium text-blue-100">مبلغ نهایی</span>
+                <span className="text-2xl font-bold tabular-nums">{money(total)}</span>
+              </div>
+              <p className="text-end text-[11px] text-blue-200">ریال</p>
             </div>
-            <p className="text-end text-xs text-muted-foreground">تومان</p>
 
             <Input
               value={note}
@@ -728,60 +1158,58 @@ export default function PosPage() {
           </div>
           </div>
 
-          <div className="flex shrink-0 flex-col gap-2">
-            <Button
-              variant="outline"
-              className="h-11 justify-between"
-              disabled={!lines.length || sendToWorker.isPending}
-              onClick={openWorkerForCart}
-            >
-              <span className="flex items-center gap-2">
-                <Send className="size-4" />
-                {sendToWorker.isPending ? "در حال ارسال…" : "ارسال به کارگر"}
-              </span>
-              <Key>F9</Key>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="h-11 justify-between"
-              disabled={!lines.length || saveQuotation.isPending}
-              onClick={() => setShowQuotation(true)}
-            >
-              <span className="flex items-center gap-2">
-                <FileClock className="size-4" /> پیش‌فاکتور
-              </span>
-              <Key>F8</Key>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="h-11 justify-between"
-              disabled={!lines.length}
-              onClick={() => setShowPayment(true)}
-            >
-              <span className="flex items-center gap-2">
-                <CreditCard className="size-4" /> پرداخت
-              </span>
-              <Key>F7</Key>
-            </Button>
-
-            {zeroPriceCount > 0 && (
-              <p className="rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-500">
-                {toFa(zeroPriceCount)} ردیف قیمت ندارد. تا قیمتشان وارد نشود فاکتور ثبت نمی‌شود.
-              </p>
-            )}
-
-            <Button
-              className="h-14 justify-between text-base"
-              disabled={!canCheckout || submit.isPending}
-              onClick={startCheckout}
-            >
-              <span>{submit.isPending ? "در حال ثبت…" : "تسویه و ثبت فاکتور"}</span>
-              <Key>F2</Key>
-            </Button>
-          </div>
         </div>
+      </div>
+
+      {zeroPriceCount > 0 && (
+        <p className="shrink-0 rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-500">
+          {toFa(zeroPriceCount)} ردیف قیمت ندارد. تا قیمتشان وارد نشود فاکتور ثبت نمی‌شود.
+        </p>
+      )}
+
+      {/*
+        نوارِ عملیاتِ اصلی — پایینِ صفحه، ۴ باکسِ هم‌اندازه در یک ردیف. «تسویه»
+        تنها دکمه‌ی توپُرِ آبی است (عملِ نهایی)؛ سه‌تای دیگر outlineِ کم‌رنگ‌ترند
+        تا سلسله‌مراتب روشن باشد. همه h-14 و flex-1 تا عرض برابر بگیرند.
+      */}
+      <div className="flex shrink-0 items-stretch gap-2">
+        <Button
+          variant="outline"
+          className="h-14 flex-1 gap-2"
+          disabled={!lines.length || sendToWorker.isPending}
+          onClick={openWorkerForCart}
+        >
+          <Send className="size-4" />
+          {sendToWorker.isPending ? "در حال ارسال…" : "ارسال به کارگر"}
+          <Key>F9</Key>
+        </Button>
+
+        <Button
+          variant="outline"
+          className="h-14 flex-1 gap-2"
+          disabled={!lines.length || saveQuotation.isPending}
+          onClick={() => setShowQuotation(true)}
+        >
+          <FileClock className="size-4" /> پیش‌فاکتور <Key>F8</Key>
+        </Button>
+
+        <Button
+          variant="outline"
+          className="h-14 flex-1 gap-2"
+          disabled={!lines.length}
+          onClick={() => setShowPayment(true)}
+        >
+          <CreditCard className="size-4" /> پرداخت <Key>F7</Key>
+        </Button>
+
+        <Button
+          className="h-14 flex-1 gap-2 text-base"
+          disabled={!canCheckout || submit.isPending}
+          onClick={startCheckout}
+        >
+          {submit.isPending ? "در حال ثبت…" : "تسویه و ثبت فاکتور"}
+          <Key>F2</Key>
+        </Button>
       </div>
 
       {/*
@@ -792,6 +1220,7 @@ export default function PosPage() {
         {(
           [
             ["Enter", "بارکد / تسویه"],
+            ["Tab", "تعداد ← قیمت"],
             ["F2", "تسویه"],
             ["F3", "جست‌وجو"],
             ["F4", "مشتری"],
@@ -802,6 +1231,7 @@ export default function PosPage() {
             ["F10", "فاکتورهای امروز"],
             ["↑↓", "انتخاب ردیف"],
             ["Delete", "حذف"],
+            ["Ctrl+Shift+X", "جدا کردن مشتری"],
           ] as const
         ).map(([k, label]) => (
           <span key={k} className="flex items-center gap-1.5">
@@ -854,7 +1284,9 @@ export default function PosPage() {
         lineCount={lines.length}
         customerName={customer?.fullName ?? null}
         pending={saveQuotation.isPending}
-        onConfirm={(m) => saveQuotation.mutate(m)}
+        onConfirm={(validForMinutes, print) =>
+          saveQuotation.mutate({ validForMinutes, print })
+        }
         onClose={() => { setShowQuotation(false); focusScan(); }}
       />
 
@@ -865,9 +1297,31 @@ export default function PosPage() {
         customer={customer}
         pending={submit.isPending}
         onCustomerChange={(c) => { setCustomer(c); invalidateIdem(); }}
-        onSubmit={(payments) => submit.mutate(payments)}
+        onSubmit={(payments, dueDate) => submit.mutate({ payments, dueDate })}
         onOpenFullPayment={() => { setShowCheckout(false); setShowPayment(true); }}
         onClose={() => { setShowCheckout(false); focusScan(); }}
+      />
+
+      <OpenAccounts
+        open={showOpenAccounts}
+        onClose={() => { setShowOpenAccounts(false); focusScan(); }}
+        onPick={(d) => {
+          /*
+             فهرست بدهکاران فقط خلاصه دارد، نه پرونده‌ی کامل مشتری. همین حداقل
+             کافی است تا سبد به نامش بسته شود؛ سقف اعتبار و بقیه را کوئریِ
+             `customerDetail` بلافاصله می‌آورد.
+          */
+          setCustomer({
+            id: d.id,
+            firstName: d.fullName,
+            lastName: null,
+            fullName: d.fullName,
+            phones: [],
+          });
+          invalidateIdem();
+          setShowOpenAccounts(false);
+          focusScan();
+        }}
       />
 
       <RecentInvoices
@@ -880,8 +1334,20 @@ export default function PosPage() {
         open={showPayment}
         total={total}
         hasCustomer={!!customer}
-        onConfirm={(payments) => submit.mutate(payments)}
+        customerCreditDays={customer?.creditDays}
+        onConfirm={(payments, dueDate) => submit.mutate({ payments, dueDate })}
         onClose={() => { setShowPayment(false); focusScan(); }}
+      />
+
+      <SaleReceiptDialog
+        invoice={receipt}
+        onClose={() => { setReceipt(null); focusScan(); }}
+      />
+
+      <TodayPurchasesDialog
+        open={showTodayPurchases}
+        customer={customer}
+        onClose={() => { setShowTodayPurchases(false); focusScan(); }}
       />
     </div>
   );

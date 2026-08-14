@@ -10,6 +10,7 @@ import { CheckCircle2, XCircle } from "lucide-react";
 
 import {
   approvePendingOperation,
+  approvePendingOperationsMany,
   getPendingOperations,
   rejectPendingOperation,
 } from "@/lib/api";
@@ -75,6 +76,7 @@ export default function ReviewPage() {
   );
   const [rejectNote, setRejectNote] = React.useState("");
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [showBulkConfirm, setShowBulkConfirm] = React.useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["pending-operations"],
@@ -95,6 +97,13 @@ export default function ReviewPage() {
     return (data ?? []).filter((op) => op.location?.warehouse?.id === warehouseId);
   }, [data, warehouseId]);
 
+  // «آماده» = محصولش قبلاً resolve شده (کارگر آنلاین جنس را انتخاب کرده). این‌ها
+  // را می‌شود گروهی تأیید کرد؛ آن‌هایی که محصول ندارند برای انتخابِ دستی می‌مانند.
+  const readyIds = React.useMemo(
+    () => filtered.filter((op) => op.productId).map((op) => op.id),
+    [filtered]
+  );
+
   const approveMut = useMutation({
     mutationFn: (vars: { id: string; productId?: string }) =>
       approvePendingOperation(
@@ -112,6 +121,27 @@ export default function ReviewPage() {
         description: e instanceof Error ? e.message : "تأیید ناموفق بود",
       }),
     onSettled: () => setBusyId(null),
+  });
+
+  const bulkMut = useMutation({
+    mutationFn: (ids: string[]) => approvePendingOperationsMany(ids),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["pending-operations"] });
+      setShowBulkConfirm(false);
+      toast({
+        title: `${formatNumber(res.approved)} مورد تأیید و به موجودی اضافه شد`,
+        description:
+          res.failedCount > 0
+            ? `${formatNumber(res.failedCount)} مورد آماده نبود و برای بررسی دستی ماند`
+            : undefined,
+      });
+    },
+    onError: (e: unknown) =>
+      toast({
+        variant: "destructive",
+        title: "خطا",
+        description: e instanceof Error ? e.message : "تأیید گروهی ناموفق بود",
+      }),
   });
 
   const rejectMut = useMutation({
@@ -161,23 +191,67 @@ export default function ReviewPage() {
         title="بازبینی عملیات کارگر"
         description="عملیات ثبت‌شده توسط کارگر که در انتظار تأیید مدیر است. تأیید = ثبت واقعی موجودی."
         actions={
-          warehouses.length > 0 ? (
-            <Select value={warehouseId} onValueChange={setWarehouseId}>
-              <SelectTrigger className="w-56">
-                <SelectValue placeholder="همه‌ی انبارها" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">همه‌ی انبارها</SelectItem>
-                {warehouses.map((w) => (
-                  <SelectItem key={w.id} value={w.id}>
-                    {w.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {readyIds.length > 0 && (
+              <Button
+                onClick={() => setShowBulkConfirm(true)}
+                disabled={bulkMut.isPending}
+              >
+                <CheckCircle2 className="size-4" />
+                تأیید همه‌ی آماده‌ها ({formatNumber(readyIds.length)})
+              </Button>
+            )}
+            {warehouses.length > 0 && (
+              <Select value={warehouseId} onValueChange={setWarehouseId}>
+                <SelectTrigger className="w-56">
+                  <SelectValue placeholder="همه‌ی انبارها" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">همه‌ی انبارها</SelectItem>
+                  {warehouses.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
         }
       />
+
+      <Dialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base">تأیید گروهی</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {formatNumber(Math.min(readyIds.length, 1000))} عملیاتِ آماده تأیید و
+            مقدارشان به موجودی اضافه می‌شود. عملیاتی که هنوز محصولش مشخص نیست
+            تأیید نمی‌شود و برای بررسی دستی می‌ماند.
+            {readyIds.length > 1000 && (
+              <>
+                {" "}
+                (بیش از ۱۰۰۰ مورد آماده است؛ هر بار تا ۱۰۰۰ مورد تأیید می‌شود —
+                برای بقیه دوباره بزنید.)
+              </>
+            )}
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowBulkConfirm(false)}>
+              انصراف
+            </Button>
+            <Button
+              disabled={bulkMut.isPending}
+              onClick={() => bulkMut.mutate(readyIds.slice(0, 1000))}
+            >
+              {bulkMut.isPending
+                ? "در حال تأیید…"
+                : `تأیید ${formatNumber(Math.min(readyIds.length, 1000))} مورد`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {isLoading ? (
         <LoadingState />

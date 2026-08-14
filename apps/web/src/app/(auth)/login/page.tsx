@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Wrench, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { login } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { landingPathForRole } from "@/lib/nav";
@@ -84,13 +84,15 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-primary/5 via-background to-accent/5 p-4">
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20">
-            <Wrench className="h-7 w-7" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="کاردو"
+            className="h-14 w-14 rounded-2xl shadow-lg shadow-primary/20"
+          />
           <div>
-            <h1 className="text-xl font-bold">پنل مدیریت انبار</h1>
+            <h1 className="text-xl font-bold">کاردو</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              سیستم مدیریت موجودی لوازم یدکی خودرو
+              سامانه فروش و انبارداری
             </p>
           </div>
         </div>
@@ -177,7 +179,7 @@ export default function LoginPage() {
         </Card>
 
         <p className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} — تمامی حقوق محفوظ است
+          © {new Date().getFullYear()} کاردو — تمامی حقوق محفوظ است
         </p>
       </div>
     </div>

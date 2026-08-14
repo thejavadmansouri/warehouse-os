@@ -1,6 +1,7 @@
 // wrapper مرکزی fetch — طبق بخش ۳، ۴ و ۵ سند
 // هیچ‌جای کامپوننت نباید مستقیم fetch صدا بزند؛ همه‌چیز از همین فایل رد می‌شود.
 import { useAuthStore } from "./auth-store";
+import { useConnectionStore } from "./connection-store";
 import { ApiException } from "./api-error-messages";
 import type { ApiErrorBody } from "./types";
 import * as T from "./types";
@@ -101,8 +102,45 @@ function defaultStatusMessage(status: number): string {
   if (status === 401) return "احراز هویت نشده‌اید";
   if (status === 403) return "دسترسی غیرمجاز";
   if (status === 404) return "موردی یافت نشد";
+  if (status === 429) return "تلاش‌های زیاد — کمی صبر کنید و دوباره امتحان کنید";
   if (status >= 500) return "خطای سمت سرور";
   return "خطای غیرمنتظره";
+}
+
+/**
+ * بدنه‌ی خطای سرور → شکلی که کلاینت می‌فهمد.
+ *
+ * ⚠️ پیامِ سرور هیچ‌وقت نباید بی‌صدا دور ریخته شود.
+ *
+ * قبلاً فقط شکلِ `{ error, message }` پذیرفته می‌شد و هر چیز دیگری به پیام
+ * عمومی تبدیل می‌شد. قفلِ ورود بدنه‌اش یک رشته‌ی خام بود، پس کاربرِ قفل‌شده
+ * «خطای غیرمنتظره» می‌دید و فکر می‌کرد رمزش غلط است — پنج دقیقه، بدون هیچ
+ * سرنخی. حالا هر سه شکل خوانده می‌شود و پیامِ سرور برنده است.
+ */
+function toErrorBody(parsed: unknown, status: number): ApiErrorBody {
+  const fallback = { error: `HTTP_${status}`, message: defaultStatusMessage(status) };
+
+  // بدنه‌ی رشته‌ای — مثل `new HttpException('متن', status)` در Nest.
+  if (typeof parsed === "string" && parsed.trim()) {
+    return { ...fallback, message: parsed };
+  }
+
+  if (parsed && typeof parsed === "object") {
+    const body = parsed as Partial<ApiErrorBody>;
+    // آرایه‌ی `message`ِ ValidationPipe دست‌نخورده رد می‌شود؛ ساختنِ متن کارِ
+    // `resolveApiError` است و اینجا تکرارش فقط دو جداکننده‌ی متفاوت می‌سازد.
+    const hasMessage =
+      typeof body.message === "string" ? body.message.trim() !== "" : Array.isArray(body.message);
+
+    return {
+      ...fallback,
+      ...body,
+      error: typeof body.error === "string" ? body.error : fallback.error,
+      message: hasMessage ? body.message : fallback.message,
+    } as ApiErrorBody;
+  }
+
+  return fallback;
 }
 
 // fetch پایین‌سطحی — بدون تزریق خودکار توکن، بدون redirect
@@ -110,20 +148,30 @@ async function rawFetch<R>(
   path: string,
   init: ApiRequestInit = {}
 ): Promise<R> {
-  const res = await fetch(`${apiUrl()}${path}`, {
-    credentials: "include",
-    ...buildInit(init),
-  });
+  let res: Response;
+
+  /*
+   * تفکیکِ «سرور نیست» از «سرور جواب داد ولی خطا داد».
+   *
+   * fetch فقط وقتی throw می‌کند که اصلاً نتواند به سرور برسد. هر پاسخی — حتی
+   * ۴۰۱ یا ۵۰۰ — یعنی سرور بالاست. این تنها نقطه‌ای است که همه‌ی درخواست‌های
+   * پنل از آن رد می‌شوند، پس وضعیت ارتباط همین‌جا به‌روز می‌شود و هیچ صفحه‌ای
+   * لازم نیست خودش چیزی چک کند.
+   */
+  try {
+    res = await fetch(`${apiUrl()}${path}`, {
+      credentials: "include",
+      ...buildInit(init),
+    });
+  } catch (e) {
+    useConnectionStore.getState().setOnline(false);
+    throw e;
+  }
+
+  useConnectionStore.getState().setOnline(true);
 
   if (!res.ok) {
-    const parsed = (await parseJson(res)) as ApiErrorBody | null;
-    if (parsed && typeof parsed.error === "string") {
-      throw new ApiException(res.status, parsed);
-    }
-    throw new ApiException(res.status, {
-      error: `HTTP_${res.status}`,
-      message: defaultStatusMessage(res.status),
-    });
+    throw new ApiException(res.status, toErrorBody(await parseJson(res), res.status));
   }
 
   if (res.status === 204) return undefined as R;
@@ -506,6 +554,21 @@ export function getWarehouses(): Promise<T.Warehouse[]> {
   return apiFetch<T.Warehouse[]>("/warehouses");
 }
 
+// GET /warehouses/inactive (ADMIN/MANAGER) — برای بخشِ بازگردانی
+export function getInactiveWarehouses(): Promise<T.Warehouse[]> {
+  return apiFetch<T.Warehouse[]>("/warehouses/inactive");
+}
+
+// POST /warehouses/:id/reactivate (ADMIN/MANAGER)
+export function reactivateWarehouse(
+  id: string
+): Promise<T.ReactivateWarehouseResult> {
+  return apiFetch<T.ReactivateWarehouseResult>(
+    `/warehouses/${encodeURIComponent(id)}/reactivate`,
+    { method: "POST" }
+  );
+}
+
 // POST /warehouses (ADMIN/MANAGER)
 export function createWarehouse(
   dto: T.CreateWarehouseDto
@@ -544,20 +607,26 @@ export function getLocationSubtreeStats(
 }
 
 // DELETE /locations/:id (ADMIN/MANAGER) — حذف هوشمند (خالی→حذف، دارای سابقه→غیرفعال)
-export function deleteLocation(id: string): Promise<T.DeleteLocationResult> {
+// اگر قفسه موجودی داشته باشد، stockOpts (انتقال/تصفیه) الزامی است؛ وگرنه سرور
+// خطای LOCATION_HAS_STOCK می‌دهد تا UI انتخاب بگیرد.
+export function deleteLocation(
+  id: string,
+  stockOpts?: T.RemoveLocationStockOptions
+): Promise<T.DeleteLocationResult> {
   return apiFetch<T.DeleteLocationResult>(
     `/locations/${encodeURIComponent(id)}`,
-    { method: "DELETE" }
+    { method: "DELETE", body: stockOpts ?? undefined }
   );
 }
 
 // POST /locations/bulk-delete (ADMIN/MANAGER)
 export function bulkDeleteLocations(
-  ids: string[]
+  ids: string[],
+  stockOpts?: T.RemoveLocationStockOptions
 ): Promise<T.BulkDeleteLocationsResult> {
   return apiFetch<T.BulkDeleteLocationsResult>("/locations/bulk-delete", {
     method: "POST",
-    body: { ids },
+    body: { ids, ...(stockOpts ?? {}) },
   });
 }
 
@@ -628,6 +697,23 @@ export function getInventoryLogs(
 export function getInventoryLog(id: string): Promise<T.InventoryLogRow> {
   return apiFetch<T.InventoryLogRow>(
     `/inventory/logs/${encodeURIComponent(id)}`
+  );
+}
+
+// کاردکس کالا — GET /inventory/kardex/:productId
+export function getProductKardex(
+  productId: string,
+  query: T.KardexQuery = {}
+): Promise<T.KardexResponse> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== null && v !== "") {
+      qs.set(k, String(v));
+    }
+  }
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<T.KardexResponse>(
+    `/inventory/kardex/${encodeURIComponent(productId)}${suffix}`
   );
 }
 
@@ -954,6 +1040,16 @@ export function approvePendingOperation(
   });
 }
 
+// POST /manager/review/approve-many — تأیید گروهیِ آماده‌ها (idempotent per-item)
+export function approvePendingOperationsMany(
+  ids: string[]
+): Promise<{ approved: number; failedCount: number; failed: { id: string; message: string }[] }> {
+  return apiFetch("/manager/review/approve-many", {
+    method: "POST",
+    body: { ids },
+  });
+}
+
 // POST /manager/review/:id/reject — رد با ذخیره‌ی دلیل
 export function rejectPendingOperation(
   id: string,
@@ -1034,6 +1130,8 @@ export function getInvoices(params: {
   to?: string;
   page?: number;
   pageSize?: number;
+  /** ردیف‌های فاکتور (اقلام) هم در پاسخ بیایند — برای کاردکس مشتری. */
+  includeLines?: boolean;
 } = {}): Promise<{ data: T.Invoice[]; meta: { total: number; page: number; pageSize: number; pageCount: number } }> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
@@ -1049,30 +1147,285 @@ export function cancelInvoice(id: string, reason: string): Promise<T.Invoice> {
   });
 }
 
-// GET /sales/customers — q روی نام، فامیل و شماره‌ی ناقص کار می‌کند
+// ----- برگشت از فروش (مرجوعی) -----
+
+/** ردیف‌های قابل‌برگشتِ یک فاکتور — فروخته، مرجوعیِ قبلی، و قابل‌برگشت هر قلم. */
+export function getReturnableLines(invoiceId: string): Promise<T.ReturnableInvoice> {
+  return apiFetch<T.ReturnableInvoice>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/returnable`
+  );
+}
+
+// POST /sales/returns — ثبت مرجوعی. اتمیک: موجودی، دفتر و سند با هم یا هیچ‌کدام.
+export function createReturn(dto: T.CreateReturnDto): Promise<T.SaleReturn> {
+  return apiFetch<T.SaleReturn>("/sales/returns", { method: "POST", body: dto });
+}
+
+export function getReturns(params: {
+  warehouseId?: string;
+  customerId?: string;
+  invoiceId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<{ data: T.SaleReturnListRow[]; meta: T.ReportMeta }> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  return apiFetch(`/sales/returns?${qs.toString()}`);
+}
+
+export function getReturn(id: string): Promise<T.SaleReturn> {
+  return apiFetch<T.SaleReturn>(`/sales/returns/${encodeURIComponent(id)}`);
+}
+
+export type CustomerSort = "name" | "newest" | "dueDesc" | "dueAsc";
+
+/**
+ * GET /sales/customers — صفحه‌بندی‌شده، با مانده‌ی هر مشتری.
+ * `sortBy` روی مانده‌ی دفتر هم کار می‌کند (بیشترین/کمترین بدهی).
+ */
+export function searchCustomersPaged(params: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: CustomerSort;
+  /** فیلتر بر اساس دسته — فقط مشتری‌های یک دسته. */
+  categoryId?: string;
+}): Promise<{
+  data: T.Customer[];
+  meta: { total: number; page: number; pageSize: number; pageCount: number };
+}> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  return apiFetch(`/sales/customers?${qs.toString()}`);
+}
+
+// GET /sales/customers — q روی نام، فامیل و شماره‌ی ناقص کار می‌کند.
+// نسخه‌ی سبک برای پیکرهای انتخابِ مشتری در صندوق — بدون صفحه‌بندی.
 export function searchCustomers(
   q: string,
   pageSize = 20
 ): Promise<T.Customer[]> {
-  const qs = new URLSearchParams({ pageSize: String(pageSize) });
-  if (q) qs.set("q", q);
-  return apiFetch<{ data: T.Customer[] }>(`/sales/customers?${qs.toString()}`).then(
-    (r) => r.data ?? []
-  );
+  return searchCustomersPaged({ q, pageSize }).then((r) => r.data ?? []);
 }
 
 export function getCustomer(id: string): Promise<T.Customer> {
   return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}`);
 }
 
+// ----- مشخصات مغازه -----
+
+export function getShopSettings(): Promise<T.ShopSettings> {
+  return apiFetch<T.ShopSettings>("/shop-settings");
+}
+
+export function updateShopSettings(
+  body: Partial<T.ShopSettings>
+): Promise<T.ShopSettings> {
+  return apiFetch<T.ShopSettings>("/shop-settings", { method: "PUT", body });
+}
+
+/** ویرایش مشتری — شامل سقف اعتبار و مهلت پیش‌فرض. */
+export function updateCustomer(
+  id: string,
+  body: {
+    firstName?: string;
+    lastName?: string;
+    address?: string;
+    nationalId?: string;
+    categoryId?: string;
+    note?: string;
+    smsOptOut?: boolean;
+    creditLimit?: number;
+    creditDays?: number;
+  }
+): Promise<T.Customer> {
+  return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+/** آمار خرید دوره‌ای مشتری — این ماه، ماه قبل، کل و میانگین فاکتور. */
+export function getCustomerStats(id: string): Promise<T.CustomerPurchaseStats> {
+  return apiFetch<T.CustomerPurchaseStats>(
+    `/sales/customers/${encodeURIComponent(id)}/stats`
+  );
+}
+
+/** افزودن شماره به بانک شماره‌ی مشتری — با برچسب (موبایل/ثابت/محل کار). */
+export function addCustomerPhone(
+  id: string,
+  body: { phone: string; label?: string; isPrimary?: boolean }
+): Promise<T.Customer> {
+  return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}/phones`, {
+    method: "POST",
+    body,
+  });
+}
+
+/** حذف شماره از بانک شماره‌ی مشتری. */
+export function removeCustomerPhone(id: string, phoneId: string): Promise<T.Customer> {
+  return apiFetch<T.Customer>(
+    `/sales/customers/${encodeURIComponent(id)}/phones/${encodeURIComponent(phoneId)}`,
+    { method: "DELETE" }
+  );
+}
+
+/** تعیین شماره‌ی اصلی مشتری — بقیه‌ی شماره‌های او غیراصلی می‌شوند. */
+export function setPrimaryCustomerPhone(
+  id: string,
+  phoneId: string
+): Promise<T.Customer> {
+  return apiFetch<T.Customer>(
+    `/sales/customers/${encodeURIComponent(id)}/phones/${encodeURIComponent(phoneId)}/primary`,
+    { method: "POST" }
+  );
+}
+
+/**
+ * بررسی سقف اعتبار پیش از ثبت فروش حساب‌باز.
+ *
+ * عمداً جدا از ثبت است تا فروشنده هشدار را *قبل* از زدن دکمه ببیند. عبور از
+ * سقف جلوی فروش را نمی‌گیرد — فقط عدد را نشان می‌دهد.
+ */
+export function creditCheck(
+  customerId: string,
+  amount: number
+): Promise<T.CreditCheck> {
+  return apiFetch<T.CreditCheck>(
+    `/sales/customers/${encodeURIComponent(customerId)}/credit-check?amount=${amount}`
+  );
+}
+
+/**
+ * مشتریانِ دارای حساب باز.
+ *
+ * بدترین وضعیت اول مرتب شده (معوق → سررسید امروز → بزرگ‌ترین بدهی)، پس صفحه
+ * لازم نیست دوباره مرتبش کند.
+ */
+export function getOpenAccounts(
+  params: { q?: string; onlyOverdue?: boolean; page?: number; limit?: number } = {}
+): Promise<{ data: T.Debtor[]; meta: { total: number; page: number; limit: number } }> {
+  const qs = new URLSearchParams();
+  if (params.q) qs.set("q", params.q);
+  if (params.onlyOverdue) qs.set("onlyOverdue", "true");
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  return apiFetch(`/sales/debtors?${qs.toString()}`);
+}
+
+export function getReceivablesSummary(): Promise<T.ReceivablesSummary> {
+  return apiFetch("/sales/receivables/summary");
+}
+
+export function getAlerts(): Promise<T.Alerts> {
+  return apiFetch("/sales/alerts");
+}
+
+/**
+ * صورتحساب مشتری — گردش با مانده‌ی متحرک و خلاصه‌ی بازه.
+ * startDate/endDate اختیاری‌اند؛ بدون بازه، کلِ تاریخچه با closingBalance واقعی می‌آید.
+ */
+export function getStatement(
+  customerId: string,
+  params: { startDate?: string; endDate?: string; page?: number; limit?: number } = {}
+): Promise<T.StatementResponse> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  return apiFetch(
+    `/sales/customers/${encodeURIComponent(customerId)}/statement?${qs.toString()}`
+  );
+}
+
+/** مانده‌ی اول دوره — فقط یک بار برای هر مشتری، فقط مدیر. */
+export function setOpeningBalance(
+  customerId: string,
+  amount: number,
+  note?: string
+): Promise<T.LedgerEntry> {
+  return apiFetch(
+    `/sales/customers/${encodeURIComponent(customerId)}/opening-balance`,
+    { method: "POST", body: { amount, note } }
+  );
+}
+
+/** اصلاح دستی حساب — دلیل اجباری است. */
+export function adjustBalance(
+  customerId: string,
+  amount: number,
+  reason: string
+): Promise<T.LedgerEntry> {
+  return apiFetch(`/sales/customers/${encodeURIComponent(customerId)}/adjust`, {
+    method: "POST",
+    body: { amount, reason },
+  });
+}
+
 // فقط firstName الزامی است — ثبت مشتری بدون شماره باید ممکن باشد
 export function createCustomer(body: {
   firstName: string;
   lastName?: string;
+  address?: string;
+  nationalId?: string;
+  categoryId?: string;
   note?: string;
   phones?: { phone: string; label?: string; isPrimary?: boolean }[];
 }): Promise<T.Customer> {
   return apiFetch<T.Customer>("/sales/customers", { method: "POST", body });
+}
+
+// ----- دسته‌های مشتری -----
+
+/** همه‌ی دسته‌ها با شمارش مشتری — صفحه‌ی مدیریت (فقط مدیر). */
+export function getCustomerCategories(): Promise<T.CustomerCategory[]> {
+  return apiFetch<T.CustomerCategory[]>("/sales/customer-categories");
+}
+
+/** فقط دسته‌های فعال — برای dropdown فرم‌ها و فیلتر. */
+export function getActiveCustomerCategories(): Promise<T.CustomerCategory[]> {
+  return apiFetch<T.CustomerCategory[]>("/sales/customer-categories/active");
+}
+
+export function createCustomerCategory(body: {
+  name: string;
+  color?: string;
+  sortOrder?: number;
+}): Promise<T.CustomerCategory> {
+  return apiFetch<T.CustomerCategory>("/sales/customer-categories", {
+    method: "POST",
+    body,
+  });
+}
+
+export function updateCustomerCategory(
+  id: string,
+  body: {
+    name?: string;
+    color?: string;
+    sortOrder?: number;
+    isActive?: boolean;
+  }
+): Promise<T.CustomerCategory> {
+  return apiFetch<T.CustomerCategory>(
+    `/sales/customer-categories/${encodeURIComponent(id)}`,
+    { method: "PATCH", body }
+  );
+}
+
+/** غیرفعال‌سازی — مشتری‌ها دست نمی‌خورند، فقط از انتخاب‌های جدید می‌افتد. */
+export function deactivateCustomerCategory(id: string): Promise<T.CustomerCategory> {
+  return apiFetch<T.CustomerCategory>(
+    `/sales/customer-categories/${encodeURIComponent(id)}`,
+    { method: "DELETE" }
+  );
 }
 
 // POST /pick-tasks — ارسال لوکیشن کالا به گوشی کارگر
@@ -1151,6 +1504,10 @@ export function getLowStock(p: { page?: number; limit?: number }) {
 
 export function getSellerPerformance(p: ReportRange) {
   return apiFetch<T.SellerPerformanceReport>(`/reports/seller-performance?${reportQs(p)}`);
+}
+
+export function getSalesByCategory(p: ReportRange) {
+  return apiFetch<T.SalesByCategoryReport>(`/reports/sales-by-category?${reportQs(p)}`);
 }
 
 /**
@@ -1242,6 +1599,100 @@ export function runBackup(trigger: "MANUAL" | "ON_CLOSE" = "MANUAL"): Promise<Ba
   return apiFetch<BackupRun>("/backups/run", { method: "POST", body: { trigger } });
 }
 
+/** فایل‌های بک‌آپِ موجود روی سرور. */
+export function getBackupFiles(): Promise<T.BackupFilesResponse> {
+  return apiFetch<T.BackupFilesResponse>("/backups/files");
+}
+
+export function getRestoreHistory(limit = 20): Promise<T.RestoreRun[]> {
+  return apiFetch<T.RestoreRun[]>(`/backups/restore-history?limit=${limit}`);
+}
+
+/**
+ * دانلود یک فایل بک‌آپ.
+ *
+ * تنها راهِ نگه‌داشتنِ نسخه‌ای **بیرون از سرور**. بک‌آپی که فقط روی همان سروری
+ * باشد که ممکن است بسوزد، در روزِ بد به کار نمی‌آید.
+ *
+ * از `apiFetch` رد نمی‌شود چون پاسخ فایل باینری است نه JSON.
+ */
+export async function downloadBackupFile(name: string): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(
+    `${apiUrl()}/backups/files/${encodeURIComponent(name)}/download`,
+    { headers: token ? { Authorization: `Bearer ${token}` } : {} },
+  );
+
+  if (!res.ok) {
+    throw new ApiException(res.status, {
+      error: "DOWNLOAD_FAILED",
+      message: "دانلود فایل پشتیبان ناموفق بود",
+    });
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * بازیابی کلِ دیتابیس از یک فایل بک‌آپ.
+ *
+ * ⚠️ همه‌ی داده‌ی فعلی جایگزین می‌شود. `confirm` باید دقیقاً «بازیابی» باشد —
+ * سرور هم همین را دوباره بررسی می‌کند، این فقط لایه‌ی اول است.
+ */
+export function restoreBackup(fileName: string, confirm: string): Promise<T.RestoreResult> {
+  return apiFetch<T.RestoreResult>("/backups/restore", {
+    method: "POST",
+    body: { fileName, confirm },
+  });
+}
+
+// =====================================================
+// فاکتور خرید
+// =====================================================
+
+/** تأمین‌کننده‌ها — فهرست کوتاه است و صفحه‌بندی ندارد. */
+export function getSuppliers(): Promise<T.Supplier[]> {
+  return apiFetch<T.Supplier[] | { data?: T.Supplier[] }>("/suppliers").then((r) =>
+    Array.isArray(r) ? r : (r.data ?? []),
+  );
+}
+
+export function createPurchase(body: T.CreatePurchaseInput): Promise<T.Purchase> {
+  return apiFetch<T.Purchase>("/purchases", { method: "POST", body });
+}
+
+export function getPurchases(p: {
+  q?: string;
+  supplierId?: string;
+  warehouseId?: string;
+  status?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+} = {}) {
+  return apiFetch<{ data: T.Purchase[]; meta: T.ReportMeta }>(
+    `/purchases?${reportQs(p)}`,
+  );
+}
+
+export function getPurchase(id: string): Promise<T.Purchase> {
+  return apiFetch<T.Purchase>(`/purchases/${encodeURIComponent(id)}`);
+}
+
+export function cancelPurchase(id: string, reason: string): Promise<T.Purchase> {
+  return apiFetch<T.Purchase>(`/purchases/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
 // =====================================================
 // دریافت وجه از بدهکار
 // =====================================================
@@ -1252,6 +1703,8 @@ export function createReceipt(body: {
   amount: number;
   method: T.PaymentMethod;
   note?: string;
+  /** ثبت مازاد به‌عنوان پیش‌دریافت — فقط بعد از تأیید صریح کاربر. */
+  allowOverpayment?: boolean;
   cheque?: T.ChequeInput;
 }): Promise<T.Receipt> {
   return apiFetch<T.Receipt>("/sales/receipts", { method: "POST", body });
@@ -1282,7 +1735,7 @@ export function createQuotation(body: {
     locationId?: string;
     quantity: number;
     unitPrice: number;
-    /** تخفیف ردیف به تومان — سرور آن را از جمع ردیف کم می‌کند. */
+    /** تخفیف ردیف به ریال — سرور آن را از جمع ردیف کم می‌کند. */
     discount?: number;
   }[];
 }): Promise<T.Quotation> {
@@ -1305,6 +1758,31 @@ export function getQuotation(id: string): Promise<T.Quotation> {
 }
 
 /**
+ * ویرایش پیش‌فاکتور فعال — اقلام، قیمت‌ها و مشتری.
+ * ردیف‌ها به‌صورت کامل فرستاده می‌شوند (ردیف‌های قدیمی حذف و دوباره ساخته می‌شوند).
+ */
+export function updateQuotation(
+  id: string,
+  body: {
+    customerId?: string | null;
+    note?: string;
+    discount?: number;
+    validForMinutes?: number;
+    lines: {
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      discount?: number;
+    }[];
+  }
+): Promise<T.Quotation> {
+  return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+/**
  * تبدیل پیش‌فاکتور به فاکتور.
  *
  * `payments` باید فرستاده شود. سرور آن را به createInvoice پاس می‌دهد و اگر
@@ -1313,11 +1791,12 @@ export function getQuotation(id: string): Promise<T.Quotation> {
  */
 export function convertQuotation(
   id: string,
-  payments?: T.PaymentInput[]
+  payments?: T.PaymentInput[],
+  dueDate?: string
 ): Promise<T.Invoice> {
   return apiFetch<T.Invoice>(`/sales/quotations/${encodeURIComponent(id)}/convert`, {
     method: "POST",
-    body: { payments },
+    body: { payments, dueDate },
   });
 }
 
