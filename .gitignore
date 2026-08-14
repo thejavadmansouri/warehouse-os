@@ -28,3 +28,7 @@ backup_before_seed.sql
 backup/*.jsonl
 apps/api/.cs.tmp.ts
 apps/api/.kardo_verify.cjs
+
+# حذف کامل از تاریخچه — الگوهای سراسری
+*.dump
+storage/
