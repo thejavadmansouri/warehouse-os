@@ -30,23 +30,50 @@ export class UploadsService {
     }
   }
 
+  /**
+   * عکس محصول — همان pipeline تاییدشده‌ی pending-operation:
+   * سقف حجم، MIME مجاز، sniff و re-encode با sharp (حذف EXIF/GPS) + تامب‌نیل.
+   */
   async uploadProductImage(productId: string, file: Express.Multer.File) {
-    const filename = `${productId}-${Date.now()}.jpg`;
-    const filepath = join(this.productPath, filename);
-    writeFileSync(filepath, file.buffer);
-    const image = `/storage/products/${filename}`;
+    const p = await this.validateAndProcessImage(file);
+    const base = `${productId}-${Date.now()}-${p.sha256.slice(0, 8)}`;
+    writeFileSync(join(this.productPath, `${base}.jpg`), p.mainBuffer);
+    writeFileSync(join(this.productPath, `${base}.thumb.jpg`), p.thumbBuffer);
     return this.prisma.asset.create({
-      data: { path: image, type: 'PRODUCT_IMAGE', productId },
+      data: {
+        path: `/storage/products/${base}.jpg`,
+        thumbnailPath: `/storage/products/${base}.thumb.jpg`,
+        fileName: `${base}.jpg`,
+        type: 'PRODUCT_IMAGE',
+        mimeType: 'image/jpeg',
+        bytes: p.mainBuffer.length,
+        width: p.width,
+        height: p.height,
+        sha256: p.sha256,
+        productId,
+      },
     });
   }
 
+  /** عکس لاگ انبار — همان pipeline تاییدشده. */
   async uploadInventoryLogImage(logId: string, file: Express.Multer.File) {
-    const filename = `${logId}-${Date.now()}.jpg`;
-    const filepath = join(this.inventoryLogPath, filename);
-    writeFileSync(filepath, file.buffer);
-    const image = `/storage/inventory-logs/${filename}`;
+    const p = await this.validateAndProcessImage(file);
+    const base = `${logId}-${Date.now()}-${p.sha256.slice(0, 8)}`;
+    writeFileSync(join(this.inventoryLogPath, `${base}.jpg`), p.mainBuffer);
+    writeFileSync(join(this.inventoryLogPath, `${base}.thumb.jpg`), p.thumbBuffer);
     return this.prisma.asset.create({
-      data: { path: image, type: 'INVENTORY_IMAGE', inventoryLogId: logId },
+      data: {
+        path: `/storage/inventory-logs/${base}.jpg`,
+        thumbnailPath: `/storage/inventory-logs/${base}.thumb.jpg`,
+        fileName: `${base}.jpg`,
+        type: 'INVENTORY_IMAGE',
+        mimeType: 'image/jpeg',
+        bytes: p.mainBuffer.length,
+        width: p.width,
+        height: p.height,
+        sha256: p.sha256,
+        inventoryLogId: logId,
+      },
     });
   }
 
@@ -60,15 +87,7 @@ export class UploadsService {
     clientRequestId: string,
     file: Express.Multer.File,
   ) {
-    if (!file?.buffer?.length) {
-      throw new BadRequestException('فایلی دریافت نشد');
-    }
-    if (file.size > MAX_BYTES) {
-      throw new BadRequestException('حجم عکس بیش از حد مجاز است');
-    }
-    if (!ALLOWED_MIME.has(file.mimetype) || !this.sniffImage(file.buffer)) {
-      throw new BadRequestException('فرمت عکس نامعتبر است (فقط JPEG یا WebP)');
-    }
+    const p = await this.validateAndProcessImage(file);
 
     const op = await this.prisma.pendingOperation.findUnique({
       where: { clientRequestId },
@@ -79,11 +98,57 @@ export class UploadsService {
       throw new NotFoundException('عملیات مرتبط پیدا نشد');
     }
 
-    // Normalise orientation and strip EXIF (incl. GPS) by re-encoding to JPEG.
+    // Idempotent re-upload: same op + same bytes → return the existing asset.
+    const existing = await this.prisma.asset.findFirst({
+      where: { pendingOperationId: op.id, sha256: p.sha256 },
+      select: { id: true },
+    });
+    if (existing) return existing;
+
+    const base = `${clientRequestId}-${p.sha256.slice(0, 12)}`;
+    writeFileSync(join(this.inventoryPhotoPath, `${base}.jpg`), p.mainBuffer);
+    writeFileSync(join(this.inventoryPhotoPath, `${base}.thumb.jpg`), p.thumbBuffer);
+
+    return this.prisma.asset.create({
+      data: {
+        path: `/storage/inventory-photos/${base}.jpg`,
+        thumbnailPath: `/storage/inventory-photos/${base}.thumb.jpg`,
+        fileName: `${base}.jpg`,
+        type: 'INVENTORY_IMAGE',
+        mimeType: 'image/jpeg',
+        bytes: p.mainBuffer.length,
+        width: p.width,
+        height: p.height,
+        sha256: p.sha256,
+        pendingOperationId: op.id,
+        // If the op is already committed, link straight to the ledger row too.
+        inventoryLogId: op.committedLogId ?? undefined,
+      },
+      select: { id: true },
+    });
+  }
+
+  /**
+   * Pipeline مشترک اعتبارسنجی + پردازش برای همه‌ی آپلودهای عکس:
+   * سقف حجم، MIME مجاز، sniff ماجیک‌بایت و re-encode با sharp — جهت‌گیری درست
+   * می‌شود و EXIF (شامل GPS) با تبدیل به JPEG حذف می‌شود؛ خروجی اصلی + تامب‌نیل
+   * به‌همراه ابعاد فایلِ ذخیره‌شده و sha256 برمی‌گردد.
+   */
+  private async validateAndProcessImage(file: Express.Multer.File) {
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('فایلی دریافت نشد');
+    }
+    if (file.size > MAX_BYTES) {
+      throw new BadRequestException('حجم عکس بیش از حد مجاز است');
+    }
+    if (!ALLOWED_MIME.has(file.mimetype) || !this.sniffImage(file.buffer)) {
+      throw new BadRequestException('فرمت عکس نامعتبر است (فقط JPEG یا WebP)');
+    }
+
     let mainBuffer: Buffer;
+    let thumbBuffer: Buffer;
     let width: number | undefined;
     let height: number | undefined;
-    let thumbBuffer: Buffer;
     try {
       mainBuffer = await sharp(file.buffer)
         .rotate()
@@ -104,35 +169,7 @@ export class UploadsService {
     }
 
     const sha256 = createHash('sha256').update(mainBuffer).digest('hex');
-
-    // Idempotent re-upload: same op + same bytes → return the existing asset.
-    const existing = await this.prisma.asset.findFirst({
-      where: { pendingOperationId: op.id, sha256 },
-      select: { id: true },
-    });
-    if (existing) return existing;
-
-    const base = `${clientRequestId}-${sha256.slice(0, 12)}`;
-    writeFileSync(join(this.inventoryPhotoPath, `${base}.jpg`), mainBuffer);
-    writeFileSync(join(this.inventoryPhotoPath, `${base}.thumb.jpg`), thumbBuffer);
-
-    return this.prisma.asset.create({
-      data: {
-        path: `/storage/inventory-photos/${base}.jpg`,
-        thumbnailPath: `/storage/inventory-photos/${base}.thumb.jpg`,
-        fileName: `${base}.jpg`,
-        type: 'INVENTORY_IMAGE',
-        mimeType: 'image/jpeg',
-        bytes: mainBuffer.length,
-        width,
-        height,
-        sha256,
-        pendingOperationId: op.id,
-        // If the op is already committed, link straight to the ledger row too.
-        inventoryLogId: op.committedLogId ?? undefined,
-      },
-      select: { id: true },
-    });
+    return { mainBuffer, thumbBuffer, width, height, sha256 };
   }
 
   /** Resolve an asset's on-disk file for authenticated streaming (role-gated). */

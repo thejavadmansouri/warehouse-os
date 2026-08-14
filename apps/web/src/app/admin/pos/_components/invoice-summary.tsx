@@ -81,12 +81,12 @@ export function InvoiceSummary({
       )}
 
       {/* مبلغ نهایی — باید از فاصله یک متری هم خوانده شود */}
-      <div className="mt-3 rounded-lg bg-blue-600 px-3 py-3 text-white dark:bg-blue-700">
+      <div className="mt-3 rounded-lg bg-primary px-3 py-3 text-primary-foreground">
         <div className="flex items-baseline justify-between">
-          <span className="text-sm font-medium text-blue-100">مبلغ نهایی</span>
+          <span className="text-sm font-medium text-primary-foreground/80">مبلغ نهایی</span>
           <span className="text-3xl font-bold tabular-nums">{money(total)}</span>
         </div>
-        <p className="text-end text-xs text-blue-200">ریال</p>
+        <p className="text-end text-xs text-primary-foreground/70">ریال</p>
       </div>
 
       {/* یادداشت */}

@@ -27,7 +27,7 @@ export class UploadsController {
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('product/:id/image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
   async uploadProductImage(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
@@ -37,7 +37,9 @@ export class UploadsController {
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('inventory-log/:id/image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
   async uploadInventoryLogImage(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,

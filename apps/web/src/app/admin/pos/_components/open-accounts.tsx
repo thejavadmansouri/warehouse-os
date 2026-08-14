@@ -103,7 +103,7 @@ export function OpenAccounts({
               type="button"
               onClick={() => onPick(d)}
               className="flex items-center justify-between gap-3 rounded-lg border p-3 text-right
-                         transition-colors hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                         transition-colors hover:border-primary hover:bg-primary/10"
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate font-medium">{d.fullName}</span>

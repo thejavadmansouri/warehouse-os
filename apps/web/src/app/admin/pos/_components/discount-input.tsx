@@ -60,7 +60,7 @@ export const DiscountField = forwardRef<
             inputMode="numeric"
             className={`min-w-0 flex-1 text-left tabular-nums ${
               compact ? "h-10" : "h-10 w-28"
-            } ${clipped ? "border-amber-500" : ""}`}
+            } ${clipped ? "border-amber-600/70" : ""}`}
             value={value.value ? toFa(value.value) : ""}
             onChange={(e) => {
               const n = parseNum(e.target.value);
@@ -76,7 +76,7 @@ export const DiscountField = forwardRef<
             disabled={disabled}
             className={`min-w-0 flex-1 text-left tabular-nums ${
               compact ? "h-10" : "h-10 w-28"
-            } ${clipped ? "border-amber-500" : ""}`}
+            } ${clipped ? "border-amber-600/70" : ""}`}
             value={value.value}
             onChange={(n) => onChange({ ...value, value: Math.max(0, n) })}
             placeholder="۰"

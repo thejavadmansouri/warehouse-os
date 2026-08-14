@@ -119,7 +119,7 @@ function ResultRow({
   return (
     <div
       className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-right transition-colors ${
-        inStock ? "hover:border-primary hover:bg-primary/5" : "hover:border-amber-500 hover:bg-amber-50/50"
+        inStock ? "hover:border-primary hover:bg-primary/5" : "hover:border-amber-600/60 hover:bg-amber-600/10"
       }`}
     >
       {/*
@@ -153,7 +153,7 @@ function ResultRow({
             </span>
           </span>
         ) : (
-          <span className="mt-1 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-500">
+          <span className="mt-1 inline-block rounded bg-amber-600/10 px-1.5 py-0.5 text-xs text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
             در سیستم ثبت نشده — قابل فروش
           </span>
         )}

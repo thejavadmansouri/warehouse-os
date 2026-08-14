@@ -84,7 +84,7 @@ export function CurrentCustomerChip({
             aria-pressed={locked}
             className={`shrink-0 rounded p-0.5 transition-colors ${
               locked
-                ? "text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                ? "text-primary hover:text-primary/80"
                 : "text-muted-foreground/60 hover:text-foreground"
             }`}
           >

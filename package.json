@@ -37,7 +37,7 @@
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
     "qrcode": "^1.5.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "allowScripts": {
     "@parcel/watcher@2.6.0": true,

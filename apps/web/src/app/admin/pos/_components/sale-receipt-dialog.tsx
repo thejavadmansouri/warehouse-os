@@ -80,12 +80,12 @@ export function SaleReceiptDialog({
             </div>
 
             {/* مبلغ نهایی — همان عددی که فروشنده بلند می‌خواند. */}
-            <div className="rounded-lg bg-blue-600 px-3 py-2.5 text-white dark:bg-blue-700">
+            <div className="rounded-lg bg-primary px-3 py-2.5 text-primary-foreground">
               <div className="flex items-baseline justify-between">
-                <span className="text-sm font-medium text-blue-100">مبلغ نهایی</span>
+                <span className="text-sm font-medium text-primary-foreground/80">مبلغ نهایی</span>
                 <span className="text-2xl font-bold tabular-nums">{money(invoice.total)}</span>
               </div>
-              <p className="text-end text-[11px] text-blue-200">ریال</p>
+              <p className="text-end text-[11px] text-primary-foreground/70">ریال</p>
             </div>
 
             {/* تفکیک پرداخت — روش‌های ترکیبی و چک اینجا دیده می‌شوند. */}
@@ -108,7 +108,7 @@ export function SaleReceiptDialog({
 
             {/* مانده — برای فروش حساب‌باز مهم‌ترین عددِ همین رسید است. */}
             {due > 0 && (
-              <div className="flex items-center justify-between rounded-lg border border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+              <div className="flex items-center justify-between rounded-lg border border-amber-600/50 bg-amber-600/10 px-3 py-2 text-sm text-amber-600 dark:border-amber-600/50 dark:bg-amber-600/10 dark:text-amber-400">
                 <span className="font-medium">مانده‌ی حساب</span>
                 <span className="font-bold tabular-nums">{money(due)}</span>
               </div>

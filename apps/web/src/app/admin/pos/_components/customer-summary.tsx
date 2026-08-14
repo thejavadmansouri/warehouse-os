@@ -4,17 +4,10 @@ import { useQuery } from "@tanstack/react-query";
 import { User, CreditCard, Clock, ShoppingCart, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { getCustomer, getInvoices } from "@/lib/api";
+import { getCustomer } from "@/lib/api";
 import { money, toFa, rial } from "@/lib/format";
-import type { Customer } from "@/lib/types";
+import type { Customer, Invoice } from "@/lib/types";
 import { useState } from "react";
-
-/** ابتدای امروز به‌صورت ISO — برای شمارش «فاکتورهای امروز» مشتریِ جاری. */
-function startOfToday(): string {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
-}
 
 /**
  * خلاصه وضعیت مشتری و تاریخچه خرید.
@@ -25,10 +18,16 @@ function startOfToday(): string {
  */
 export function CustomerSummary({
   customer,
+  todayCount,
+  recentInvoices,
   onOpenFullProfile,
   onShowTodayPurchases,
 }: {
   customer: Customer | null;
+  /** تعداد فاکتورهای امروزِ مشتری — از همان کوئریِ واحدِ page.tsx می‌آید. */
+  todayCount: number;
+  /** آخرین فاکتورهای امروزِ مشتری (تا ۵ تا) — همان کوئریِ واحد. */
+  recentInvoices: Invoice[];
   onOpenFullProfile: () => void;
   onShowTodayPurchases: () => void;
 }) {
@@ -40,18 +39,6 @@ export function CustomerSummary({
     enabled: !!customer?.id,
   });
 
-  const customerTodayInvoices = useQuery({
-    queryKey: ["customer-today-count", customer?.id],
-    queryFn: () =>
-      getInvoices({
-        customerId: customer!.id,
-        from: startOfToday(),
-        pageSize: 5,
-      }),
-    enabled: !!customer?.id,
-    staleTime: 30_000,
-  });
-
   if (!customer) return null;
 
   const d = customerDetail.data;
@@ -59,8 +46,15 @@ export function CustomerSummary({
   const limit = d?.creditLimit ?? 0;
   const left = limit - due;
   const days = d?.creditDays ?? 0;
-  const todayCount = customerTodayInvoices.data?.meta?.total ?? 0;
-  const recentInvoices = customerTodayInvoices.data?.data ?? [];
+  /*
+   * شماره‌ی اصلی (isPrimary) را نشان بده — نه همیشه اولینِ فهرست. همراستا با
+   * چیپ مشتری؛ برای مشتری‌ای که شماره‌ی اصلی‌اش اولین نیست، دو جا نباید دو
+   * شماره‌ی متفاوت ببینند.
+   */
+  const primaryPhone =
+    customer.phones?.find((p) => p.isPrimary)?.phone ??
+    customer.phones?.[0]?.phone ??
+    null;
 
   return (
     <div className="rounded-lg border bg-card">
@@ -72,9 +66,9 @@ export function CustomerSummary({
           </div>
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">{customer.fullName}</div>
-            {customer.phones?.[0]?.phone && (
+            {primaryPhone && (
               <div className="text-xs text-muted-foreground" dir="ltr">
-                {toFa(customer.phones[0].phone)}
+                {toFa(primaryPhone)}
               </div>
             )}
           </div>
@@ -154,7 +148,7 @@ export function CustomerSummary({
 
             {/* هشدار اعتبار */}
             {limit > 0 && due > limit && (
-              <div className="flex items-center gap-2 rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+              <div className="flex items-center gap-2 rounded-md bg-amber-600/10 px-2 py-1.5 text-xs text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
                 <AlertTriangle className="size-3.5" />
                 <span>از سقف اعتبار عبور کرده</span>
               </div>
@@ -162,8 +156,8 @@ export function CustomerSummary({
 
             {/* فاکتورهای امروز */}
             {todayCount > 0 && (
-              <div className="flex items-center justify-between rounded-md bg-blue-50 px-2 py-1.5 text-xs dark:bg-blue-950/30">
-                <span className="text-blue-700 dark:text-blue-400">
+              <div className="flex items-center justify-between rounded-md bg-primary/10 px-2 py-1.5 text-xs">
+                <span className="text-primary">
                   <ShoppingCart className="inline size-3.5" />
                   {" "}{toFa(todayCount)} خرید امروز
                 </span>
@@ -171,7 +165,7 @@ export function CustomerSummary({
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowHistory(!showHistory)}
-                  className="h-6 px-2 text-xs text-blue-700 hover:text-blue-800 dark:text-blue-400"
+                  className="h-6 px-2 text-xs text-primary hover:text-primary/80"
                 >
                   {showHistory ? (
                     <ChevronUp className="size-3.5" />

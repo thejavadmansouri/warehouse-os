@@ -168,7 +168,7 @@ export function LineItems({
           <p>• بارکد کالا را اسکن کنید</p>
           <p>• یا نام / کد کالا را جستجو کنید</p>
         </div>
-        <div className="mt-2 rounded-lg bg-blue-50 px-4 py-2 text-sm text-blue-700 dark:bg-blue-950/30 dark:text-blue-400">
+        <div className="mt-2 rounded-lg bg-primary/10 px-4 py-2 text-sm text-primary">
           فیلد جستجو همیشه آماده است — شروع کنید
         </div>
       </div>
@@ -212,7 +212,7 @@ export function LineItems({
                   errorLine === i
                     ? "border-e-destructive bg-destructive/10"
                     : activeRow === i
-                      ? "border-e-blue-600 bg-blue-50 dark:bg-blue-950/30"
+                      ? "border-e-primary bg-primary/10"
                       : "border-e-transparent"
                 } ${
                   // ردیفِ کنارگذاشته کم‌رنگ می‌شود، ولی خوانا می‌ماند — باید
@@ -251,7 +251,7 @@ export function LineItems({
                           موجودی {qty(l.available)}
                         </span>
                         {isLowStock && !isOutOfStock && (
-                          <span className="rounded bg-amber-100 px-1 py-0.5 text-[10px] font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-400">
+                          <span className="rounded bg-amber-600/10 px-1 py-0.5 text-[10px] font-medium text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
                             کم
                           </span>
                         )}
@@ -263,15 +263,14 @@ export function LineItems({
                         {l.stranded && (
                           <span
                             title="قفسه‌ی این جنس حذف شده — همین‌طور فروخته می‌شود؛ بهتر است به یک قفسه‌ی معتبر منتقلش کنی."
-                            className="rounded bg-orange-100 px-1 py-0.5 text-[10px] font-medium text-orange-800 dark:bg-orange-950/50 dark:text-orange-400"
+                            className="rounded bg-orange-500/10 px-1 py-0.5 text-[10px] font-medium text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
                           >
                             قفسه حذف‌شده
                           </span>
                         )}
                       </>
                     ) : (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-900
-                                       dark:bg-amber-950/50 dark:text-amber-400">
+                      <span className="rounded bg-amber-600/10 px-1.5 py-0.5 font-medium text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
                         در سیستم ثبت نشده
                       </span>
                     )}
@@ -297,8 +296,8 @@ export function LineItems({
                         onPatch(i, { quantity: Math.max(1, l.quantity - 1) });
                       }}
                       className="flex size-8 shrink-0 items-center justify-center rounded-md border
-                                 text-muted-foreground hover:border-blue-500 hover:text-blue-600
-                                 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                 text-muted-foreground hover:border-primary hover:text-primary
+                                 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-primary"
                       disabled={l.quantity <= 1}
                       aria-label="کم کردن"
                     >
@@ -332,8 +331,8 @@ export function LineItems({
                         onPatch(i, { quantity: l.quantity + 1 });
                       }}
                       className="flex size-8 shrink-0 items-center justify-center rounded-md border
-                                 text-muted-foreground hover:border-blue-500 hover:text-blue-600
-                                 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                 text-muted-foreground hover:border-primary hover:text-primary
+                                 focus:outline-none focus:ring-1 focus:ring-primary"
                       aria-label="زیاد کردن"
                     >
                       <Plus className="size-3.5" />
@@ -353,7 +352,7 @@ export function LineItems({
                     className={`h-10 text-left text-base font-semibold tabular-nums ${
                       l.unitPrice
                         ? ""
-                        : "border-amber-500 bg-amber-50 placeholder:text-xs placeholder:font-normal placeholder:text-amber-600 dark:bg-amber-950/30"
+                        : "border-amber-600/60 bg-amber-600/10 placeholder:text-xs placeholder:font-normal placeholder:text-amber-600"
                     }`}
                     value={l.unitPrice}
                     onChange={(n) => onPatch(i, { unitPrice: n })}
@@ -372,7 +371,7 @@ export function LineItems({
                 </td>
 
                 <td className="p-2 text-end">
-                  <div className="text-base font-bold tabular-nums text-blue-700 dark:text-blue-400">
+                  <div className="text-base font-bold tabular-nums text-primary">
                     {money(lineNet(l))}
                   </div>
                   {disc > 0 && (

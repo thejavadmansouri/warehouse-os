@@ -82,8 +82,8 @@ export function InlineResults({
                     className={`size-2.5 shrink-0 rounded-full ${
                       inStock
                         ? lowStock
-                          ? "bg-amber-500"
-                          : "bg-emerald-500"
+                          ? "bg-amber-600"
+                          : "bg-emerald-600"
                         : "bg-muted-foreground/40"
                     }`}
                     aria-hidden
@@ -92,7 +92,7 @@ export function InlineResults({
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
                   {!!r.salePrice && (
-                    <span className="text-sm font-bold tabular-nums text-blue-700 dark:text-blue-400">
+                    <span className="text-sm font-bold tabular-nums text-primary">
                       {rial(r.salePrice)}
                     </span>
                   )}

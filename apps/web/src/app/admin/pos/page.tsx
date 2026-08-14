@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiException } from "@/lib/api-error-messages";
 import {
@@ -113,6 +113,8 @@ export default function PosPage() {
     carts, cart, activeId, setActiveId, addCart, closeCart,
     patch: patchCart, resetCurrent, ensureIdem, invalidateIdem, canAdd,
   } = useCartsContext();
+
+  const qc = useQueryClient();
 
   const { lines, customer, note, activeRow, errorLine } = cart;
   const invoiceDiscountInput = cart.discount;
@@ -293,13 +295,15 @@ export default function PosPage() {
   });
 
   /*
-   * شمارشِ فاکتورهای امروزِ همین مشتری — فقط تعداد لازم است، پس صفحه‌ی ۱ با
-   * `pageSize: 1` کافی است و meta.total عدد واقعی را می‌دهد.
+   * فاکتورهای امروزِ همین مشتری — یک کوئری واحد با `pageSize: 5` که هم عددِ
+   * چیپ (meta.total) و هم فهرستِ ۵ فاکتورِ پنل مشتری را سیر می‌کند. قبلاً دو
+   * کوئریِ جدا با pageSize متفاوت و کلیدِ یکسان می‌رفت که هیچ dedupe‌ای
+   * نمی‌شد؛ حالا داده‌اش به CustomerSummary هم پاس داده می‌شود.
    */
   const customerTodayInvoices = useQuery({
     queryKey: ["customer-today-count", customer?.id],
     queryFn: () =>
-      getInvoices({ customerId: customer!.id, from: startOfToday(), pageSize: 1 }),
+      getInvoices({ customerId: customer!.id, from: startOfToday(), pageSize: 5 }),
     enabled: !!customer?.id,
     staleTime: 30_000,
   });
@@ -607,11 +611,24 @@ export default function PosPage() {
        */
       setReceipt(inv);
       /*
+       * کشِ مشتریِ این فاکتور فوراً تازه شود: بدهی، مانده‌ی اعتبار و «امروز: n
+       * فاکتور» نباید تا staleTime (۳۰ ثانیه) قدیمی بمانند — فروشنده با همین
+       * عدد درباره‌ی سقفِ اعتبارِ خریدِ بعدی تصمیم می‌گیرد. id قبل از
+       * resetCurrent گرفته می‌شود چون فروشِ نقدیِ بدونِ قفل، مشتری را از سبد
+       * پاک می‌کند. (رویدادِ زنده‌ی sale.created هم همین کلیدها را تازه
+       * می‌کند، ولی این ضمانتِ محلی برای وقتی است که کانال قطع باشد.)
+       */
+      const soldCustomerId = customer?.id;
+      /*
        * قفلِ مشتری فقط برای حساب‌باز: اگر بخشی از پرداختِ این فاکتور نسیه بوده
        * (حتی ترکیبی)، مشتری روی تب می‌ماند برای خریدِ بعدی؛ فروشِ نقدی/کارت/چک
        * برمی‌گردد به «نقدی گذری».
        */
       resetCurrent();
+      if (soldCustomerId) {
+        qc.invalidateQueries({ queryKey: ["customer", soldCustomerId] });
+        qc.invalidateQueries({ queryKey: ["customer-today-count", soldCustomerId] });
+      }
       setShowPayment(false);
       setShowCheckout(false);
       focusScan();
@@ -1037,8 +1054,8 @@ export default function PosPage() {
 
         <Button
           variant="outline"
-          className="h-11 border-amber-400 text-amber-700 hover:bg-amber-50 hover:text-amber-800
-                     dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/40"
+          className="h-11 border-amber-600/50 text-amber-600 hover:bg-amber-600/10 hover:text-amber-600/80
+                     dark:border-amber-600/50 dark:text-amber-400 dark:hover:bg-amber-600/10 dark:hover:text-amber-300"
           onClick={() => setShowOpenAccounts(true)}
         >
           <Wallet className="size-4" />
@@ -1068,13 +1085,12 @@ export default function PosPage() {
             onPatch={patchLine}
             onRemove={removeLine}
           />
-        </div>
-
-        {/*
-          ستون مشتری و جمع.
-          کارت‌ها اسکرول می‌شوند و دکمه‌ها ثابت پایین می‌مانند — قبلاً همه در یک
-          ستون بودند و وقتی محتوا بلند می‌شد (هشدار قیمت، خلاصه‌ی تخفیف، توضیح)
-          از پایین سرریز می‌کرد و روی نوار کلیدها می‌افتاد.
+        </div>        {/* ستون مشتری و جمع.
+          فقط «خلاصه اقلام» اسکرول می‌شود؛ مبلغ نهایی بیرون از ناحیه‌ی اسکرول و
+          ثابت پایین ستون است — تنها عددی که فروشنده بلند می‌خواند نباید با
+          اسکرول از دید برود. قبلاً همه در یک ستون بودند و وقتی محتوا بلند می‌شد
+          (هشدار قیمت، خلاصه‌ی تخفیف، توضیح) از پایین سرریز می‌کرد و روی نوار
+          کلیدها می‌افتاد.
         */}
         <div className="flex min-h-0 w-80 shrink-0 flex-col gap-3">
           {/*
@@ -1083,6 +1099,8 @@ export default function PosPage() {
           */}
           <CustomerSummary
             customer={customer}
+            todayCount={customerTodayInvoices.data?.meta?.total ?? 0}
+            recentInvoices={customerTodayInvoices.data?.data ?? []}
             onOpenFullProfile={() => window.open(`/admin/customers/${customer?.id}`, "_blank")}
             onShowTodayPurchases={() => setShowTodayPurchases(true)}
           />
@@ -1098,71 +1116,72 @@ export default function PosPage() {
             </Button>
           )}
 
+          {/* ناحیه‌ی اسکرول — فقط خلاصه اقلام (جمع، تخفیف‌ها، توضیح) */}
           <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
-          <div className="shrink-0 rounded-lg border bg-card p-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">جمع اقلام</span>
-              <span className="tabular-nums">{money(grossSubtotal)}</span>
-            </div>
-
-            {linesDiscountTotal > 0 && (
-              <div className="mt-1 flex justify-between text-sm">
-                <span className="text-muted-foreground">تخفیف ردیف‌ها</span>
-                <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                  − {money(linesDiscountTotal)}
-                </span>
+            <div className="shrink-0 rounded-lg border bg-card p-3">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">جمع اقلام</span>
+                <span className="tabular-nums">{money(grossSubtotal)}</span>
               </div>
-            )}
 
-            <div className="mt-2 flex items-start justify-between gap-2">
-              <span className="flex items-center gap-1 pt-2 text-sm text-muted-foreground">
-                <Percent className="size-3.5" /> تخفیف فاکتور <Key>F6</Key>
-              </span>
-              <DiscountField
-                id="invoice-discount"
-                value={invoiceDiscountInput}
-                base={subtotal}
-                onChange={(d) => {
-                  invalidateIdem();
-                  setInvoiceDiscountInput(d);
-                }}
+              {linesDiscountTotal > 0 && (
+                <div className="mt-1 flex justify-between text-sm">
+                  <span className="text-muted-foreground">تخفیف ردیف‌ها</span>
+                  <span className="font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                    − {money(linesDiscountTotal)}
+                  </span>
+                </div>
+              )}
+
+              <div className="mt-2 flex items-start justify-between gap-2">
+                <span className="flex items-center gap-1 pt-2 text-sm text-muted-foreground">
+                  <Percent className="size-3.5" /> تخفیف فاکتور <Key>F6</Key>
+                </span>
+                <DiscountField
+                  id="invoice-discount"
+                  value={invoiceDiscountInput}
+                  base={subtotal}
+                  onChange={(d) => {
+                    invalidateIdem();
+                    setInvoiceDiscountInput(d);
+                  }}
+                />
+              </div>
+
+              {totalDiscount > 0 && (
+                <div className="mt-2 flex justify-between border-t pt-2 text-xs text-muted-foreground">
+                  <span>مجموع تخفیف</span>
+                  <span className="tabular-nums">
+                    {money(totalDiscount)} ({toFa(effectivePercent)}٪)
+                  </span>
+                </div>
+              )}
+
+              <Input
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                maxLength={300}
+                placeholder="توضیح روی فاکتور (اختیاری)"
+                className="mt-3 h-9 text-sm"
               />
             </div>
-
-            {totalDiscount > 0 && (
-              <div className="mt-2 flex justify-between border-t pt-2 text-xs text-muted-foreground">
-                <span>مجموع تخفیف</span>
-                <span className="tabular-nums">
-                  {money(totalDiscount)} ({toFa(effectivePercent)}٪)
-                </span>
-              </div>
-            )}
-
-            {/* مبلغ نهایی تنها عددی است که فروشنده بلند می‌خواند — باید از
-                فاصله‌ی یک متری هم خوانده شود. */}
-            <div className="mt-3 rounded-lg bg-blue-600 px-3 py-2.5 text-white dark:bg-blue-700">
-              <div className="flex items-baseline justify-between">
-                <span className="text-sm font-medium text-blue-100">مبلغ نهایی</span>
-                <span className="text-2xl font-bold tabular-nums">{money(total)}</span>
-              </div>
-              <p className="text-end text-[11px] text-blue-200">ریال</p>
-            </div>
-
-            <Input
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              maxLength={300}
-              placeholder="توضیح روی فاکتور (اختیاری)"
-              className="mt-3 h-9 text-sm"
-            />
           </div>
+
+          {/* مبلغ نهایی — بیرون از ناحیه‌ی اسکرول، ثابت پایین ستون. تنها عددی
+              که فروشنده بلند می‌خواند باید از فاصله‌ی یک متری هم خوانده شود. */}
+          <div className="shrink-0 rounded-lg bg-primary px-3 py-2.5 text-primary-foreground">
+            <div className="flex items-baseline justify-between">
+              <span className="text-sm font-medium text-primary-foreground/80">مبلغ نهایی</span>
+              <span className="text-2xl font-bold tabular-nums">{money(total)}</span>
+            </div>
+            <p className="text-end text-[11px] text-primary-foreground/70">ریال</p>
           </div>
 
         </div>
       </div>
 
       {zeroPriceCount > 0 && (
-        <p className="shrink-0 rounded-md border border-amber-500 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-500">
+        <p className="shrink-0 rounded-md border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-xs text-amber-600 dark:border-amber-600/40 dark:bg-amber-600/10 dark:text-amber-400">
           {toFa(zeroPriceCount)} ردیف قیمت ندارد. تا قیمتشان وارد نشود فاکتور ثبت نمی‌شود.
         </p>
       )}

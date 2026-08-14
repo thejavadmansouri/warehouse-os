@@ -47,9 +47,17 @@ import { RealtimeModule } from './realtime/realtime.module';
     RealtimeModule,
     ShopModule,
     ScheduleModule.forRoot(),
+    /*
+     * فقط عکس‌های محصول عمومی سرو می‌شوند؛ عکس‌های انبار (inventory-photos و
+     * inventory-logs) از اینجا حذف شدند و فقط از طریق endpoint احرازشده‌ی
+     * GET /uploads/photo/:assetId (گیت‌دارِ MANAGER/ADMIN) در دسترس‌اند —
+     * همان بایت‌ها نباید بدون توکن در دسترس باشند. rootPath روی زیرپوشه‌ی
+     * products است تا URLهای ذخیره‌شده در دیتابیس ( /storage/products/... )
+     * دست‌نخورده بمانند.
+     */
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'storage'),
-      serveRoot: '/storage',
+      rootPath: join(__dirname, '..', 'storage', 'products'),
+      serveRoot: '/storage/products',
     }),
     PrismaModule,
     AuthModule,

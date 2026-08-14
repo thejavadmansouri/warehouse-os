@@ -358,9 +358,8 @@ export function CheckoutFlow({
             <div className="min-h-32">
               {/* ناشناس: Enter همان اسم یا شماره را ثبت می‌کند، نه گذری. */}
               {isNewCustomer && (
-                <div className="rounded-lg border border-blue-500 bg-blue-50 p-3 text-center
-                                dark:bg-blue-950/30">
-                  <p className="text-sm font-semibold text-blue-800 dark:text-blue-300">
+                <div className="rounded-lg border border-primary/40 bg-primary/10 p-3 text-center">
+                  <p className="text-sm font-semibold text-primary">
                     مشتری تازه:{" "}
                     {looksLikePhone ? toFa(typedPhone) : debounced.trim()}
                   </p>
@@ -502,8 +501,8 @@ export function CheckoutFlow({
                             onClick={() => { setCustomDue(""); setCreditDays(d); }}
                             className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
                               active
-                                ? "border-blue-600 bg-blue-600 text-white"
-                                : "hover:border-blue-500 hover:text-blue-600"
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "hover:border-primary hover:text-primary"
                             }`}
                           >
                             {d === 0 ? "همان روز" : `${toFa(d)} روز`}
@@ -518,8 +517,8 @@ export function CheckoutFlow({
                       }
                       className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
                         customDue
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "hover:border-blue-500 hover:text-blue-600"
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "hover:border-primary hover:text-primary"
                       }`}
                     >
                       سفارشی
@@ -536,13 +535,13 @@ export function CheckoutFlow({
 
                 <div className="flex items-center justify-between border-t pt-3">
                   <span className="text-sm text-muted-foreground">سررسید</span>
-                  <span className="text-base font-semibold tabular-nums text-blue-700 dark:text-blue-400">
+                  <span className="text-base font-semibold tabular-nums text-primary">
                     {faDate(dueDate.toISOString())}
                   </span>
                 </div>
 
                 {credit.data?.exceeded && (
-                  <p className="rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-400">
+                  <p className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
                     ⚠️ این فروش {rial(credit.data.exceededBy)} از سقف اعتبار
                     مشتری عبور می‌کند. ثبت می‌شود، ولی حواستان باشد.
                   </p>

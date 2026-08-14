@@ -46,14 +46,14 @@ export function CartTabs({
             onClick={() => onSelect(c.id)}
             className={`group flex shrink-0 cursor-pointer items-center gap-2 rounded-t-lg border-b-2 px-3 py-2 transition-colors ${
               active
-                ? "border-b-blue-600 bg-blue-50 dark:bg-blue-950/40"
+                ? "border-b-primary bg-primary/10"
                 : "border-b-transparent hover:bg-muted"
             }`}
           >
             <span
               className={`flex size-5 items-center justify-center rounded-full text-[11px] font-bold ${
                 active
-                  ? "bg-blue-600 text-white"
+                  ? "bg-primary text-primary-foreground"
                   : "bg-muted-foreground/20 text-muted-foreground"
               }`}
             >
@@ -110,7 +110,7 @@ export function CartTabs({
           onClick={onAdd}
           title="فاکتور جدید (Ctrl+T)"
           className="flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-2 text-sm text-muted-foreground
-                     hover:bg-blue-50 hover:text-blue-700 dark:hover:bg-blue-950/40 dark:hover:text-blue-400"
+                     hover:bg-primary/10 hover:text-primary"
         >
           <Plus className="size-4" />
           فاکتور جدید

@@ -190,10 +190,9 @@ export function PaymentDialog({
                           key={d}
                           type="button"
                           onClick={() => { setCustomDue(""); setCreditDays(d); }}
-                          className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
-                            active
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "hover:border-blue-500 hover:text-blue-600"
+                          className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${                              active
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "hover:border-primary hover:text-primary"
                           }`}
                         >
                           {d === 0 ? "همان روز" : `${toFa(d)} روز`}
@@ -206,10 +205,9 @@ export function PaymentDialog({
                     onClick={() =>
                       setCustomDue((v) => v || new Date().toISOString().slice(0, 10))
                     }
-                    className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
-                      customDue
-                        ? "border-blue-600 bg-blue-600 text-white"
-                        : "hover:border-blue-500 hover:text-blue-600"
+                    className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${                        customDue
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "hover:border-primary hover:text-primary"
                     }`}
                   >
                     سفارشی
@@ -226,7 +224,7 @@ export function PaymentDialog({
 
               <div className="flex items-center justify-between border-t pt-3">
                 <span className="text-sm text-muted-foreground">سررسید</span>
-                <span className="text-base font-semibold tabular-nums text-blue-700 dark:text-blue-400">
+                <span className="text-base font-semibold tabular-nums text-primary">
                   {faDate(dueDate.toISOString())}
                 </span>
               </div>

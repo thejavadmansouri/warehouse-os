@@ -27,8 +27,7 @@ export const viewport: Viewport = {
   themeColor: "#0f1729",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // کاربر می‌تواند بزرگ‌نمایی کند (WCAG 1.4.4) — حذفِ maximumScale و userScalable
 };
 
 export default function RootLayout({
