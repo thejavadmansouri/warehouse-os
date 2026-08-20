@@ -78,7 +78,8 @@ function endOfDay(iso: string): string {
   return d.toISOString();
 }
 
-export default function InvoicesPage() {
+/** داخلِ صفحه‌ی «اسناد» سرتیترِ خودش را نشان نمی‌دهد. */
+export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const canManage = useAuthStore((s) => s.hasRole("ADMIN", "MANAGER"));
 
@@ -138,6 +139,7 @@ export default function InvoicesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="فاکتورها"
         description="همه‌ی فاکتورهای فروش — جست‌وجو بر اساس نام مشتری، شماره فاکتور یا تلفن."
         icon={FileText}
@@ -420,4 +422,10 @@ export default function InvoicesPage() {
       />
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function InvoicesPage() {
+  return <InvoicesPanel />;
 }

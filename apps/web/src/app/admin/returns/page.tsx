@@ -28,7 +28,8 @@ const REFUND_LABELS: Record<string, string> = {
   CREDIT: "کسر از حساب",
 };
 
-export default function ReturnsPage() {
+/** داخلِ صفحه‌ی «اسناد» سرتیترِ خودش را نشان نمی‌دهد. */
+export function ReturnsPanel({ embedded }: { embedded?: boolean } = {}) {
   const list = useQuery({
     queryKey: ["returns"],
     queryFn: () => getReturns({ limit: 50 }),
@@ -37,6 +38,7 @@ export default function ReturnsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="برگشت از فروش (مرجوعی)"
         description="تاریخچه‌ی مرجوعی‌ها. ثبت مرجوعی از دل فاکتور در «فاکتورهای امروز» انجام می‌شود."
         icon={Undo2}
@@ -102,4 +104,10 @@ export default function ReturnsPage() {
       )}
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function ReturnsPage() {
+  return <ReturnsPanel />;
 }

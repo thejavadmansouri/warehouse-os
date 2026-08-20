@@ -26,7 +26,8 @@ import type { Customer } from "@/lib/types";
 
 import { CustomerPicker } from "../pos/_components/customer-picker";
 
-export default function ReceiptsPage() {
+/** داخلِ صفحه‌ی «اسناد» سرتیترِ خودش را نشان نمی‌دهد. */
+export function ReceiptsPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
 
   const [customer, setCustomer] = React.useState<Customer | null>(null);
@@ -57,6 +58,7 @@ export default function ReceiptsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="دریافت وجه از بدهکار"
         description="ثبت پرداخت مشتری بابت فاکتورهای نسیه"
         icon={HandCoins}
@@ -168,4 +170,10 @@ export default function ReceiptsPage() {
       />
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function ReceiptsPage() {
+  return <ReceiptsPanel />;
 }

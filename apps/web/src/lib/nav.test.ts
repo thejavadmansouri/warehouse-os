@@ -42,7 +42,8 @@ describe("ساختار منو", () => {
     const pinned = pinnedOf(filterNavByRole(NAV_SECTIONS, "SALES")).map((i) => i.href);
     expect(pinned).toContain("/admin/pos");
     expect(pinned).toContain("/admin/customers");
-    expect(pinned).toContain("/admin/invoices");
+    // فاکتور حالا یک تب داخلِ «اسناد» است، نه یک مقصدِ جدا.
+    expect(pinned).toContain("/admin/documents");
     // گزارش برای فروشنده نیست.
     expect(pinned).not.toContain("/admin/reports");
   });

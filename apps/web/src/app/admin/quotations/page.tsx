@@ -88,7 +88,8 @@ function remaining(minutes: number): string {
   return `${toFa(m)} دقیقه`;
 }
 
-export default function QuotationsPage() {
+/** داخلِ صفحه‌ی «اسناد» سرتیترِ خودش را نشان نمی‌دهد. */
+export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = React.useState("ACTIVE");
@@ -242,6 +243,7 @@ export default function QuotationsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="پیش‌فاکتورها"
         description="قیمت‌هایی که به مشتری داده شده و هنوز فروش نشده‌اند"
         icon={FileClock}
@@ -586,4 +588,10 @@ export default function QuotationsPage() {
       />
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function QuotationsPage() {
+  return <QuotationsPanel />;
 }

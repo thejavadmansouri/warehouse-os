@@ -12,10 +12,7 @@ import {
   Users,
   ShoppingCart,
   BarChart3,
-  HandCoins,
-  FileClock,
   Store,
-  Undo2,
   Files,
   FileText,
   Wallet,
@@ -76,9 +73,14 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: ["ADMIN", "MANAGER", "SALES"],
       },
       {
-        title: "فاکتورها",
-        href: "/admin/invoices",
-        icon: FileText,
+        /*
+         * چهار سندِ فروش یک صفحه شدند و نوعِ سند یک تب است، نه ردیفِ منو.
+         * قبلاً «فاکتورها» اینجا سنجاق بود و بقیه زیرِ «بیشتر» — یعنی برای
+         * دیدنِ مرجوعیِ همان مشتری باید جای دیگری می‌گشتی.
+         */
+        title: "اسناد",
+        href: "/admin/documents",
+        icon: Files,
         roles: ["ADMIN", "MANAGER", "SALES"],
       },
       {
@@ -109,36 +111,19 @@ export const NAV_SECTIONS: NavSection[] = [
     icon: LayoutGrid,
     items: [
       {
-        // اسنادِ فروشی که هر روز باز نمی‌شوند — فاکتور خودش بالا سنجاق است.
-        title: "اسناد فروش",
-        icon: Files,
-        roles: ["ADMIN", "MANAGER", "SALES"],
-        children: [
-          {
-            title: "پیش‌فاکتورها",
-            href: "/admin/quotations",
-            icon: FileClock,
-            roles: ["ADMIN", "MANAGER", "SALES"],
-          },
-          {
-            title: "مرجوعی‌ها",
-            href: "/admin/returns",
-            icon: Undo2,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "تاریخچه دریافت‌ها",
-            href: "/admin/receipts",
-            icon: HandCoins,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "داشبورد",
-            href: "/admin",
-            icon: LayoutDashboard,
-            roles: ["ADMIN", "MANAGER"],
-          },
-        ],
+        /*
+         * داشبورد تا دیروز داخلِ هابِ «اسناد فروش» دفن بود — جایی که هیچ‌کس
+         * دنبالِ نمای کلی نمی‌گردد.
+         *
+         * سنجاق هم نمی‌شود: صفحه‌ی فرودِ ادمین صندوق است نه داشبورد
+         * (`landingPathForRole`)، و پنج تا از شش کارتش در گزارش‌ها › «یک نگاه»
+         * تکرار شده‌اند. تا وقتی آن دوگانگی حل نشده، ردیفِ دائمی در بالای منو
+         * نمی‌گیرد.
+         */
+        title: "داشبورد",
+        href: "/admin",
+        icon: LayoutDashboard,
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         /*
