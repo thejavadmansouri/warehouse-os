@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { BarcodeService } from '../barcode/barcode.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { inLockOrder } from '../common/lock-order';
 import { randomUUID } from 'crypto';
 
 /**
@@ -417,7 +418,9 @@ export class LocationsService {
     await this.prisma.$transaction(async (tx) => {
       // ۱) خالی کردنِ موجودی طبق تصمیم — از تک‌نقطه‌ی تغییر موجودی (قانون ۱).
       if (stock.units > 0) {
-        for (const r of stock.rows) {
+        // ترتیبِ ثابتِ قفل‌گیری — حذفِ یک قفسه ممکن است ده‌ها کالا را هم‌زمان
+        // با فروشِ همان کالاها در صندوق جابه‌جا کند.
+        for (const r of inLockOrder(stock.rows)) {
           if (opts!.stockAction === 'transfer') {
             await this.operation.execute(
               {

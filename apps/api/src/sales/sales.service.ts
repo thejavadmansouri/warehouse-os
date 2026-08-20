@@ -18,6 +18,7 @@ import { normalizePersian } from '../engine/utils/persian-normalize';
 import { normalizePhone } from '../common/phone.util';
 import { INT4_MAX } from '../common/money';
 import { computeChequeCharge, MAX_CHARGE_RATIO } from '../common/cheque-charge';
+import { inLockOrder } from '../common/lock-order';
 import { LedgerService } from './ledger.service';
 import { EventsGateway } from '../realtime/events.gateway';
 
@@ -467,11 +468,27 @@ export class SalesService {
           ? await this.systemLocations.unregisteredStock(tx, dto.warehouseId)
           : null;
 
-        // هر ردیف از مسیر تک‌نقطه‌ی تغییر موجودی رد می‌شود (قانون ۱).
-        // tx پاس داده می‌شود تا همه‌ی ردیف‌ها در یک تراکنش بمانند.
-        for (let i = 0; i < dto.lines.length; i++) {
-          const line = dto.lines[i];
-          const locationId = line.locationId ?? fallbackLocationId!;
+        /*
+         * هر ردیف از مسیر تک‌نقطه‌ی تغییر موجودی رد می‌شود (قانون ۱).
+         * tx پاس داده می‌شود تا همه‌ی ردیف‌ها در یک تراکنش بمانند.
+         *
+         * پیمایش به **ترتیبِ قفل‌گیری** است نه ترتیبی که صندوق فرستاده: دو
+         * صندوقِ هم‌زمان با اقلامِ مشترکِ معکوس، وگرنه روی سطرهای `Inventory`
+         * قفلِ متقابل می‌گیرند و یکی با deadlock کشته می‌شود.
+         *
+         * `index` همان اندیسِ اصلیِ کلاینت می‌ماند — خطای کمبودِ موجودی با آن
+         * سطر را قرمز می‌کند، و آن سطر جای خودش در سبد است نه در این ترتیب.
+         */
+        const orderedLines = inLockOrder(
+          dto.lines.map((line, index) => ({
+            line,
+            index,
+            locationId: line.locationId ?? fallbackLocationId!,
+          })),
+          (l) => ({ productId: l.line.productId, locationId: l.locationId }),
+        );
+
+        for (const { line, index: i, locationId } of orderedLines) {
           try {
             await this.operation.execute(
               {
@@ -662,7 +679,10 @@ export class SalesService {
         restocked.map(r => [r.saleLogId, r._sum.quantity ?? 0]),
       );
 
-      for (const line of lines) {
+      // ترتیبِ ثابتِ قفل‌گیری — ابطالِ هم‌زمانِ دو فاکتور با اقلامِ مشترک
+      // نباید به deadlock برسد. `findMany` بدون `orderBy` ترتیبِ تضمین‌شده‌ای
+      // هم ندارد، پس اینجا حتی ترتیبِ پایداری وجود نداشت که رویش حساب کنیم.
+      for (const line of inLockOrder(lines)) {
         const remaining = line.quantity - (restockedQty.get(line.id) ?? 0);
         if (remaining <= 0) continue;
 

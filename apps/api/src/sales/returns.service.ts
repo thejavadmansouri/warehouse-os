@@ -10,6 +10,7 @@ import { Prisma, InvoiceStatus, PaymentMethod, LedgerEntryType, Role } from '@pr
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { LedgerService } from './ledger.service';
+import { inLockOrder } from '../common/lock-order';
 
 import { CreateReturnDto } from './dto/create-return.dto';
 import { EventsGateway } from '../realtime/events.gateway';
@@ -394,7 +395,8 @@ export class ReturnsService {
         });
 
         // حرکتِ انبار فقط برای اقلامِ سالم — از تک‌نقطه‌ی تغییرِ موجودی (قانون ۱).
-        for (const l of lineData) {
+        // پیمایش به ترتیبِ ثابتِ قفل‌گیری تا مرجوعی‌های هم‌زمان deadlock نسازند.
+        for (const l of inLockOrder(lineData)) {
           if (!l.restock) continue;
           await this.operation.execute(
             {

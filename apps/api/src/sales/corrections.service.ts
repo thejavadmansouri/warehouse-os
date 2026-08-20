@@ -10,6 +10,7 @@ import { Prisma, InvoiceStatus, LedgerEntryType, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { LedgerService } from './ledger.service';
+import { inLockOrder } from '../common/lock-order';
 import { EventsGateway } from '../realtime/events.gateway';
 
 import { CreateCorrectionDto } from './dto/create-correction.dto';
@@ -342,7 +343,8 @@ export class CorrectionsService {
         });
 
         // ----- جبران موجودی: تعداد زیاد شد → کسر بیشتر؛ کم شد → برگشت. -----
-        for (const l of lineData) {
+        // به ترتیبِ ثابتِ قفل‌گیری، مثل خودِ فاکتور.
+        for (const l of inLockOrder(lineData)) {
           const diff = l.newQuantity - l.oldQuantity;
           if (diff === 0) continue;
 

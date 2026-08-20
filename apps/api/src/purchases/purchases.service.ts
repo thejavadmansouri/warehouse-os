@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { SystemLocationsService } from '../inventory/system-locations.service';
 import { INT4_MAX } from '../common/money';
+import { inLockOrder } from '../common/lock-order';
 
 import {
   CreatePurchaseDto,
@@ -177,12 +178,22 @@ export class PurchasesService {
           ? await this.systemLocations.staging(tx, dto.warehouseId)
           : null;
 
-        for (const line of dto.lines) {
+        // ترتیبِ ثابتِ قفل‌گیری. مکان اینجا resolve می‌شود چون ردیفِ بی‌مکان
+        // قفلِ «انبار موقت» را می‌گیرد، نه قفلِ مکانی که نفرستاده.
+        const orderedLines = inLockOrder(
+          dto.lines.map((line) => ({
+            line,
+            locationId: line.locationId ?? stagingId!,
+          })),
+          (l) => ({ productId: l.line.productId, locationId: l.locationId }),
+        );
+
+        for (const { line, locationId } of orderedLines) {
           await this.operation.execute(
             {
               type:'IN',
               productId: line.productId,
-              locationId: line.locationId ?? stagingId!,
+              locationId,
               quantity: line.quantity,
               unitPrice: line.unitPrice,
               purchaseId: purchase.id,
@@ -257,8 +268,14 @@ export class PurchasesService {
         where:{ purchaseId: id, action:'IN' },
       });
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+      // ترتیبِ ثابتِ قفل‌گیری؛ `lineIndex` همان اندیسِ ردیف در سندِ خرید
+      // می‌ماند تا پیامِ خطا به کالای درست اشاره کند.
+      const orderedLines = inLockOrder(
+        lines.map((line, index) => ({ line, index })),
+        (l) => l.line,
+      );
+
+      for (const { line, index: i } of orderedLines) {
         try {
           await this.operation.execute(
             {
