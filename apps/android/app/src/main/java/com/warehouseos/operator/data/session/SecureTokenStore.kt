@@ -38,6 +38,16 @@ class SecureTokenStore @Inject constructor(
         }
     }
 
+    /**
+     * Swap just the JWT (sliding-session refresh). Keeps the cached user fields
+     * — only the token rotated, the identity behind it did not.
+     */
+    override fun updateToken(token: String) {
+        if (token.isBlank() || token == cachedToken) return
+        cachedToken = token
+        prefs.edit { putString(KEY_TOKEN, token) }
+    }
+
     fun cachedUser(): AuthUser? {
         val id = prefs.getString(KEY_USER_ID, null) ?: return null
         val role = prefs.getString(KEY_ROLE, null) ?: return null

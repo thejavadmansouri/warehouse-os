@@ -1,5 +1,10 @@
 import { Controller, Get, Post, Body, UseGuards, Patch, Param } from '@nestjs/common';
 import { UsersService } from './users.service';
+import {
+  ChangePasswordDto,
+  ChangeRoleDto,
+  CreateUserDto,
+} from './dto/user.dto';
 
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -31,18 +36,14 @@ export class UsersController {
   @Roles(Role.ADMIN)
   @Post()
   create(
-    @Body() body:any
-  ){
-
+    @Body() body: CreateUserDto,
+  ) {
     return this.service.create({
-
-      username:body.username,
-      password:body.password,
-      fullName:body.fullName,
-      role:body.role
-
+      username: body.username,
+      password: body.password,
+      fullName: body.fullName,
+      role: body.role,
     });
-
   }
 
 
@@ -51,15 +52,10 @@ export class UsersController {
   @Roles(Role.ADMIN)
   @Patch(':id/role')
   changeRole(
-    @Param('id') id:string,
-    @Body() body:{role:Role}
-  ){
-
-    return this.service.changeRole(
-      id,
-      body.role
-    );
-
+    @Param('id') id: string,
+    @Body() body: ChangeRoleDto,
+  ) {
+    return this.service.changeRole(id, body.role);
   }
 
 
@@ -68,15 +64,10 @@ export class UsersController {
   @Roles(Role.ADMIN)
   @Patch(':id/password')
   changePassword(
-    @Param('id') id:string,
-    @Body() body:{password:string}
-  ){
-
-    return this.service.changePassword(
-      id,
-      body.password
-    );
-
+    @Param('id') id: string,
+    @Body() body: ChangePasswordDto,
+  ) {
+    return this.service.changePassword(id, body.password);
   }
 
 

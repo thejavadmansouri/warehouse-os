@@ -47,11 +47,15 @@ import com.warehouseos.operator.ui.components.SecondaryButton
  * Location scan screen (Epic 5). Camera barcode/QR scanning via [BarcodeScanner],
  * with a camera-permission flow and an always-available manual-entry fallback so
  * the operator is never blocked. On detection it returns the raw barcode.
+ *
+ * Scanning a shelf leads straight to voice entry — the worker is never asked to
+ * pick a mode. That screen already covers both ways in: speak the product, or
+ * type it. Both search the same on-device catalog.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun ScanScreen(
-    onScanned: (String) -> Unit,
+    onVoice: (String) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -62,7 +66,7 @@ fun ScanScreen(
 
     val reportBarcode: (String) -> Unit = { value ->
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-        onScanned(value)
+        onVoice(value)
     }
 
     Scaffold(

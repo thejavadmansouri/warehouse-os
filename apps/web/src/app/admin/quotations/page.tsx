@@ -377,7 +377,7 @@ export default function QuotationsPage() {
                         <td className="p-2">
                           <Input
                             dir="ltr"
-                            className="h-8 w-20 text-left tabular-nums"
+                            className="h-8 w-20 text-right tabular-nums"
                             value={qty(l.quantity)}
                             onChange={(e) =>
                               patchEditLine(i, { quantity: parseNum(e.target.value) })
@@ -386,7 +386,7 @@ export default function QuotationsPage() {
                         </td>
                         <td className="p-2">
                           <MoneyInput
-                            className="h-8 w-32 text-left text-sm tabular-nums"
+                            className="h-8 w-32 text-right text-sm tabular-nums"
                             value={l.unitPrice}
                             onChange={(n) => patchEditLine(i, { unitPrice: n })}
                           />

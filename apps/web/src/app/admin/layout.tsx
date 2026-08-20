@@ -72,15 +72,24 @@ export default function AdminLayout({
   return (
     <CartsProvider>
     <div className="flex min-h-screen bg-background">
-      {/* سایدبار ثابت سمت راست (RTL: اولین فرزند flex در راست قرار می‌گیرد) */}
-      <aside
-        className={cn(
-          "sticky top-0 hidden h-screen shrink-0 border-l bg-sidebar transition-[width] duration-200 lg:block",
-          collapsed ? "w-[72px]" : "w-64"
-        )}
-      >
-        <AdminSidebar collapsed={collapsed} />
-      </aside>
+      {/*
+        سایدبار ثابت سمت راست (RTL: اولین فرزند flex در راست قرار می‌گیرد).
+
+        روی صندوق اصلاً رندر نمی‌شود. صندوق یک ابزارِ تمام‌صفحه است، نه یک صفحه
+        داخل پنل: هر پیکسلی که سایدبار می‌گیرد یعنی یک ردیف کالای کم‌تر در سبد.
+        دسترسی به منو از دست نمی‌رود — دکمه‌ی «منو» در نوار بالا آن را به‌صورت
+        روکش باز می‌کند.
+      */}
+      {!isPos && (
+        <aside
+          className={cn(
+            "sticky top-0 hidden h-screen shrink-0 border-l bg-sidebar transition-[width] duration-200 lg:block",
+            collapsed ? "w-[72px]" : "w-64"
+          )}
+        >
+          <AdminSidebar collapsed={collapsed} />
+        </aside>
+      )}
 
       {/* محتوای اصلی */}
       <div className="flex min-w-0 flex-1 flex-col">

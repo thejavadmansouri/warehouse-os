@@ -200,7 +200,7 @@ export default function PricingPage() {
                           dir="ltr"
                           inputMode="numeric"
                           placeholder="قیمت را وارد کنید"
-                          className={`h-10 text-left text-base font-semibold tabular-nums ${
+                          className={`h-10 text-right text-base font-semibold tabular-nums ${
                             sale === null && draft === undefined
                               ? "border-amber-500 bg-amber-50 placeholder:text-xs placeholder:font-normal placeholder:text-amber-600 dark:bg-amber-950/30"
                               : ""

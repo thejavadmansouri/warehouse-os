@@ -100,7 +100,7 @@ export function QuotationDialog({
               <span className="text-sm text-muted-foreground">یا</span>
               <Input
                 dir="ltr"
-                className="h-9 w-28 text-left tabular-nums"
+                className="h-9 w-28 text-right tabular-nums"
                 placeholder="دقیقه"
                 value={custom}
                 onChange={(e) => setCustom(e.target.value.replace(/\D/g, ""))}

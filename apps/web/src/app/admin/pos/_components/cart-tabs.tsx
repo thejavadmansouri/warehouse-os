@@ -80,6 +80,17 @@ export function CartTabs({
               ) : (
                 <span className="whitespace-nowrap text-muted-foreground">خالی</span>
               )}
+              {c.openAccountId && (
+                <span
+                  className={`ms-1.5 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${
+                    active
+                      ? "border-amber-500/60 bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                      : "border-amber-500/40 text-amber-600/80 dark:text-amber-400/80"
+                  }`}
+                >
+                  حساب باز
+                </span>
+              )}
             </span>
 
             {/*

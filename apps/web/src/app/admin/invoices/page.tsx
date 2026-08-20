@@ -14,6 +14,7 @@ import {
   MoreVertical,
   ChevronLeft,
   ChevronRight,
+  PencilLine,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -42,6 +43,7 @@ import { StatusBadge } from "@/components/status-badge";
 import { Money } from "@/components/money";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReturnDialog } from "@/app/admin/pos/_components/return-dialog";
+import { CorrectionDialog } from "@/app/admin/pos/_components/correction-dialog";
 import { getInvoices, cancelInvoice } from "@/lib/api";
 import { faDate, toFa, rial } from "@/lib/format";
 import { useAuthStore } from "@/lib/auth-store";
@@ -55,10 +57,19 @@ import { useAuthStore } from "@/lib/auth-store";
  */
 const STATUS_TABS = [
   { key: "", label: "همه" },
+  // فاکتورهای جاریِ حساب‌های باز — تا تسویه نهایی نشده‌اند.
+  { key: "OPEN", label: "حساب باز" },
   { key: "CONFIRMED", label: "تأییدشده" },
   { key: "RETURNED", label: "مرجوع‌شده" },
   { key: "CANCELLED", label: "باطل‌شده" },
 ] as const;
+
+/** امروز به‌صورت «YYYY-MM-DD» محلی — ورودیِ فیلترهای تاریخ. */
+function todayIso(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 /** پایانِ همان روز به‌صورت ISO — تا فیلترِ «تا تاریخ» کلِ آن روز را هم بگیرد. */
 function endOfDay(iso: string): string {
@@ -75,10 +86,13 @@ export default function InvoicesPage() {
   const [status, setStatus] = React.useState("");
   const [from, setFrom] = React.useState("");
   const [to, setTo] = React.useState("");
+  /** «مانده‌دار» — پایه‌ی پیگیریِ وصول، پرکاربردترین فیلترِ این صفحه. */
+  const [hasDue, setHasDue] = React.useState(false);
   const [page, setPage] = React.useState(1);
 
-  // مرجوعی و ابطال — از همین‌جا روی هر فاکتوری با سرچ، نه فقط فاکتورهای امروز.
+  // مرجوعی، اصلاحیه و ابطال — از همین‌جا روی هر فاکتوری با سرچ، نه فقط فاکتورهای امروز.
   const [returning, setReturning] = React.useState<string | null>(null);
+  const [correcting, setCorrecting] = React.useState<string | null>(null);
   const [cancelling, setCancelling] = React.useState<{ id: string; number: number; total: number } | null>(null);
 
   const doCancel = useMutation({
@@ -100,14 +114,15 @@ export default function InvoicesPage() {
 
   React.useEffect(() => {
     setPage(1);
-  }, [debouncedQ, status, from, to]);
+  }, [debouncedQ, status, from, to, hasDue]);
 
   const list = useQuery({
-    queryKey: ["invoices-list", debouncedQ, status, from, to, page],
+    queryKey: ["invoices-list", debouncedQ, status, from, to, hasDue, page],
     queryFn: () =>
       getInvoices({
         q: debouncedQ || undefined,
         status: status || undefined,
+        hasDue: hasDue ? ("true" as const) : undefined,
         from: from || undefined,
         // تا پایانِ همان روز، وگرنه فاکتورهای بعدازظهرِ روزِ «تا» جا می‌مانند.
         to: to ? endOfDay(to) : undefined,
@@ -154,6 +169,53 @@ export default function InvoicesPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/*
+        فیلترهای آماده.
+
+        به‌جای چند آیتمِ منو که هرکدام یک «گزارشِ» ازپیش‌پخته بودند، همان کار با
+        یک کلیک روی همین صفحه انجام می‌شود — و برخلافِ آن آیتم‌ها، بعدش قابلِ
+        دستکاری است: بازه را عوض کن، وضعیت را عوض کن.
+      */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">فیلتر سریع:</span>
+        {(
+          [
+            ["امروز", () => { const t = todayIso(); setFrom(t); setTo(t); }],
+            ["مانده‌دار", () => setHasDue(true)],
+            ["حساب باز", () => setStatus("OPEN")],
+            ["مرجوع‌شده", () => setStatus("RETURNED")],
+          ] as const
+        ).map(([label, apply]) => (
+          <button
+            key={label}
+            type="button"
+            onClick={apply}
+            className="h-8 rounded-full border px-3 text-xs font-medium transition-colors hover:border-primary hover:text-primary"
+          >
+            {label}
+          </button>
+        ))}
+
+        {(hasDue || from || to || status) && (
+          <button
+            type="button"
+            onClick={() => { setHasDue(false); setFrom(""); setTo(""); setStatus(""); }}
+            className="h-8 rounded-full border border-dashed px-3 text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+          >
+            پاک‌کردن فیلترها
+          </button>
+        )}
+
+        {hasDue && (
+          <span className="inline-flex h-8 items-center gap-1 rounded-full bg-amber-600/10 px-3 text-xs font-medium text-amber-700 dark:text-amber-400">
+            فقط مانده‌دار
+            <button type="button" onClick={() => setHasDue(false)} aria-label="حذف فیلتر">
+              ✕
+            </button>
+          </span>
+        )}
       </div>
 
       {/* بازه‌ی تاریخ — «مشتری می‌گوید فلان روز خریدم» را همین‌جا پیدا کن. */}
@@ -260,24 +322,35 @@ export default function InvoicesPage() {
                             <Printer className="size-4" /> چاپ
                           </DropdownMenuItem>
 
-                          {canManage && inv.status !== "CANCELLED" && (
+                          {/*
+                            مرجوعی و اصلاحیه روی فاکتورِ نهایی و روی فاکتورِ جاریِ
+                            حساب باز؛ ابطال اما فقط روی نهایی — فاکتورِ حساب باز
+                            با اصلاح/مرجوعی خالی می‌شود، نه با ابطال.
+                          */}
+                          {canManage &&
+                            (inv.status === "CONFIRMED" || inv.status === "OPEN") && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={() => setReturning(inv.id)}>
                                 <Undo2 className="size-4" /> مرجوعی
                               </DropdownMenuItem>
-                              <DropdownMenuItem
-                                variant="destructive"
-                                onClick={() =>
-                                  setCancelling({
-                                    id: inv.id,
-                                    number: inv.number,
-                                    total: inv.total,
-                                  })
-                                }
-                              >
-                                <Ban className="size-4" /> ابطال فاکتور
+                              <DropdownMenuItem onClick={() => setCorrecting(inv.id)}>
+                                <PencilLine className="size-4" /> اصلاحیه
                               </DropdownMenuItem>
+                              {inv.status === "CONFIRMED" && (
+                                <DropdownMenuItem
+                                  variant="destructive"
+                                  onClick={() =>
+                                    setCancelling({
+                                      id: inv.id,
+                                      number: inv.number,
+                                      total: inv.total,
+                                    })
+                                  }
+                                >
+                                  <Ban className="size-4" /> ابطال فاکتور
+                                </DropdownMenuItem>
+                              )}
                             </>
                           )}
                         </DropdownMenuContent>
@@ -318,6 +391,12 @@ export default function InvoicesPage() {
       <ReturnDialog
         invoiceId={returning}
         onClose={() => setReturning(null)}
+        onDone={() => qc.invalidateQueries({ queryKey: ["invoices-list"] })}
+      />
+
+      <CorrectionDialog
+        invoiceId={correcting}
+        onClose={() => setCorrecting(null)}
         onDone={() => qc.invalidateQueries({ queryKey: ["invoices-list"] })}
       />
 

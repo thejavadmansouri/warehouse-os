@@ -7,19 +7,22 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { toast } from "sonner";
 import { ApiException } from "@/lib/api-error-messages";
 import {
-  Trash2, Send, User, Percent, CreditCard, Search, FileClock, ReceiptText, Wallet,
+  Trash2, Send, User, Percent, CreditCard, Search, FileClock,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   createInvoice,
-  createPickTasks,
   createQuotation,
+  createWorkTask,
+  ensureOpenAccount,
   getCustomer,
   getInvoices,
+  getPosStock,
   getQuotation,
   getWarehouses,
+  getWorkTasks,
   locateProducts,
   resolveForSale,
 } from "@/lib/api";
@@ -32,14 +35,18 @@ import type {
   LocateResult,
   PaymentInput,
   StockLocation,
+  WorkTask,
 } from "@/lib/types";
+import { highlightMatches } from "@/lib/pos-search/highlight";
+import { tokenizeQuery } from "@/lib/pos-search/normalize";
+import { usePosCatalog } from "@/lib/pos-search/use-pos-catalog";
 
 import { LocationPicker } from "./_components/location-picker";
 import { CartTabs } from "./_components/cart-tabs";
 import { CheckoutFlow } from "./_components/checkout-flow";
 import { CurrentCustomerChip } from "./_components/current-customer-chip";
 import { CustomerSummary } from "./_components/customer-summary";
-import { InlineResults } from "./_components/inline-results";
+import { InlineResults, type SearchResultRow } from "./_components/inline-results";
 import { OpenAccounts } from "./_components/open-accounts";
 import { CustomerPicker } from "./_components/customer-picker";
 import { DiscountField } from "./_components/discount-input";
@@ -57,6 +64,7 @@ import { RecentInvoices } from "./_components/recent-invoices";
 import { SaleReceiptDialog } from "./_components/sale-receipt-dialog";
 import { TodayPurchasesDialog } from "./_components/today-purchases-dialog";
 import { WorkerPicker } from "./_components/worker-picker";
+import { WorkTasksPanel } from "./_components/work-tasks-panel";
 import {
   NO_DISCOUNT,
   discountToRial,
@@ -65,6 +73,7 @@ import {
 } from "./_lib/discount";
 import { type Cart } from "./_lib/carts";
 import { useCartsContext } from "./_lib/carts-context";
+import { usePosUiStore } from "./_lib/pos-ui-store";
 
 /** ابتدای امروز به‌صورت ISO — برای شمارش «فاکتورهای امروز» مشتریِ جاری. */
 function startOfToday(): string {
@@ -126,8 +135,13 @@ export default function PosPage() {
   );
   const setCustomer = useCallback(
     // جدا کردنِ مشتری، قفل را هم باز می‌کند — قفلِ بی‌مشتری بی‌معناست.
+    // حساب باز هم جدا می‌شود: ادامهی فاکتورِ یک حساب بدونِ همان مشتری بی‌معناست.
     (c: Customer | null) =>
-      patchCart(c ? { customer: c } : { customer: null, customerLocked: false }),
+      patchCart(
+        c
+          ? { customer: c }
+          : { customer: null, customerLocked: false, openAccountId: null }
+      ),
     [patchCart]
   );
   const toggleCustomerLock = useCallback(
@@ -168,8 +182,19 @@ export default function PosPage() {
   const [searchSeed, setSearchSeed] = useState("");
   const [showQuotation, setShowQuotation] = useState(false);
   const [showWorkerPicker, setShowWorkerPicker] = useState(false);
-  const [showRecent, setShowRecent] = useState(false);
-  const [showOpenAccounts, setShowOpenAccounts] = useState(false);
+  /*
+   * «حساب باز»، «کارهای انبار» و «فاکتورهای امروز» دکمه‌های‌شان را در نوار
+   * بالای مشترک (AdminTopbar) کنار ساعت دارند؛ خودِ دیالوگ‌ها همچنان اینجا
+   * رندر می‌شوند. باز/بسته‌بودنشان در pos-ui-store زندگی می‌کند تا topbar
+   * بتواند بازشان کند بدون اینکه منطق‌شان از این صفحه بیرون برود. میان‌برهای
+   * F3 و F10 هم همین setterها را می‌زنند — دست‌نخورده.
+   */
+  const showWorkTasks = usePosUiStore((s) => s.workTasksOpen);
+  const setShowWorkTasks = usePosUiStore((s) => s.workTasks);
+  const showRecent = usePosUiStore((s) => s.recentOpen);
+  const setShowRecent = usePosUiStore((s) => s.recent);
+  const showOpenAccounts = usePosUiStore((s) => s.openAccountsOpen);
+  const setShowOpenAccounts = usePosUiStore((s) => s.openAccounts);
   const [showCheckout, setShowCheckout] = useState(false);
   /** فاکتورِ تازه‌ثبت‌شده — تا وقتی خودش بسته نشود، رسیدش روی صفحه می‌ماند. */
   const [receipt, setReceipt] = useState<Invoice | null>(null);
@@ -208,6 +233,27 @@ export default function PosPage() {
    */
 
   const warehouses = useQuery({ queryKey: ["warehouses"], queryFn: getWarehouses });
+
+  /*
+   * کارهایِ ارسال‌شده به کارگر + پیشرفت زنده.
+   *
+   * رویدادِ work-task.progress (use-live-events) همین کلید را invalidate می‌کند،
+   * پس با هر تیکِ کارگر، نوارِ سبز در پنل و چیپِ روی فاکتور جلو می‌رود. نگاشتِ
+   * invoiceId → کارها برای چیپِ پیشرفتِ داخل «فاکتورهای امروز» ساخته می‌شود.
+   */
+  const workTasks = useQuery({
+    queryKey: ["work-tasks", warehouseId],
+    queryFn: () => getWorkTasks({ warehouseId }),
+    enabled: !!warehouseId,
+    staleTime: 10_000,
+  });
+  const tasksByInvoice = useMemo(() => {
+    const map: Record<string, WorkTask[]> = {};
+    for (const t of workTasks.data ?? []) {
+      if (t.invoiceId) (map[t.invoiceId] ??= []).push(t);
+    }
+    return map;
+  }, [workTasks.data]);
 
   /**
    * هیچ انباری تعریف نشده.
@@ -320,17 +366,53 @@ export default function PosPage() {
    */
   const liveEnabled = !liveDismissed && liveQuery.trim().length >= 3;
 
+  /**
+   * جست‌وجوی زنده: محلی وقتی کاتالوگ آماده است، وگرنه سرور.
+   *
+   * کاتالوگِ لوکال (IndexedDB-در-حافظه) یک‌بار موقعِ باز شدنِ صندوق بارگذاری
+   * می‌شود؛ تا آن لحظه از همان سرچِ سرورِ قدیمی استفاده می‌شود تا جعبه‌ی سرچ
+   * هرگز «مرده» نباشد. بعد از آماده‌شدن، سرچ بدون هیچ رفت‌وبرگشتِ شبکه و
+   * بدونِ مشکلِ کهنگیِ کش انجام می‌شود — دلیلِ اصلیِ کندیِ قبلی.
+   *
+   * موجودی/قفسه عمداً در کاتالوگِ لوکال نیست: آن دو فقط لحظه‌ی انتخاب، تازه از
+   * سرور گرفته می‌شوند (`onPickRow`) تا فروش هرگز روی عددِ کهنه انجام نشود.
+   */
+  const posCatalog = usePosCatalog();
+  const useLocalSearch = posCatalog.ready;
+
   const liveResults = useQuery({
     queryKey: ["pos-inline", liveQuery],
     queryFn: () => locateProducts(liveQuery.trim()),
-    enabled: liveEnabled,
+    enabled: liveEnabled && !useLocalSearch,
     placeholderData: keepPreviousData,
   });
 
-  const liveList = useMemo(
-    () => (liveEnabled ? (liveResults.data ?? []) : []),
-    [liveEnabled, liveResults.data]
+  const localHits = useMemo(
+    () => (useLocalSearch && liveEnabled ? posCatalog.search(liveQuery) : []),
+    [useLocalSearch, liveEnabled, posCatalog, liveQuery]
   );
+
+  const queryTokens = useMemo(() => tokenizeQuery(liveQuery), [liveQuery]);
+
+  const liveList = useMemo((): SearchResultRow[] => {
+    if (!liveEnabled) return [];
+    if (useLocalSearch) {
+      return localHits.map((item) => ({
+        kind: "unknown" as const,
+        id: item.id,
+        nameSegments: highlightMatches(item.name, queryTokens),
+        name: item.name,
+        sku: item.sku,
+        salePrice: item.salePrice ?? null,
+      }));
+    }
+    return (liveResults.data ?? []).map((r) => ({
+      kind: "known" as const,
+      id: r.id,
+      nameSegments: highlightMatches(r.name, queryTokens),
+      result: r,
+    }));
+  }, [liveEnabled, useLocalSearch, localHits, liveResults.data, queryTokens]);
 
   // با عوض‌شدن متن، انتخاب باید از نو شروع شود.
   useEffect(() => {
@@ -344,6 +426,9 @@ export default function PosPage() {
     setLiveHighlight(-1);
     setLiveDismissed(false);
   }, []);
+
+  /** id ردیفی که در حال دریافت موجودیِ تازه است (برای اسپینر روی همان ردیف). */
+  const [pickingId, setPickingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!warehouseId && warehouses.data?.length) setWarehouseId(warehouses.data[0].id);
@@ -410,22 +495,6 @@ export default function PosPage() {
   );
   const canCheckout =
     activeLines.length > 0 && zeroPriceCount === 0 && !noWarehouse;
-
-  /** رفتن به تسویه — از Enterِ خانه‌ی خالیِ اسکن یا F2. */
-  const startCheckout = useCallback(() => {
-    if (!activeLines.length) return;
-    if (noWarehouse) {
-      toast.error("هیچ انباری تعریف نشده — اول یک انبار بسازید");
-      return;
-    }
-    if (zeroPriceCount > 0) {
-      toast.error(
-        `${toFa(zeroPriceCount)} ردیف قیمت ندارد — قبل از ثبت قیمتشان را وارد کنید`
-      );
-      return;
-    }
-    setShowCheckout(true);
-  }, [lines.length, zeroPriceCount, noWarehouse]);
 
   // ---------- افزودن ردیف ----------
 
@@ -561,6 +630,36 @@ export default function PosPage() {
     [addLine, focusScan]
   );
 
+  /**
+   * انتخاب یک ردیف از لیستِ زنده.
+   *
+   * ردیفِ «known» (سرچِ سرور، حالتِ گذرا تا کاتالوگ بارگذاری شود) از قبل
+   * موجودی دارد — مستقیم به سبد اضافه می‌شود. ردیفِ «unknown» (سرچِ لوکال)
+   * موجودی ندارد؛ قبل از افزودن، یک بار موجودیِ تازه از سرور گرفته می‌شود تا
+   * فروش هرگز روی عددِ کهنه انجام نشود.
+   */
+  const onPickRow = useCallback(
+    async (row: SearchResultRow) => {
+      if (row.kind === "known") {
+        addFromLocate(row.result);
+        closeLive();
+        return;
+      }
+      if (pickingId) return; // یک انتخاب در حال پردازش — از دوبار زدن جلوگیری کن.
+      setPickingId(row.id);
+      try {
+        const fresh = await getPosStock(row.id);
+        addFromLocate(fresh);
+        closeLive();
+      } catch (e) {
+        toast.error(e instanceof ApiException ? e.message : "دریافت موجودی ناموفق بود");
+      } finally {
+        setPickingId(null);
+      }
+    },
+    [addFromLocate, closeLive, pickingId]
+  );
+
   // ---------- ویرایش ردیف ----------
 
   const patchLine = (i: number, p: Partial<Line>) => {
@@ -578,15 +677,42 @@ export default function PosPage() {
   // ---------- ثبت ----------
 
   const submit = useMutation({
-    mutationFn: ({ payments, dueDate }: SubmitArgs = {}) => {
+    mutationFn: async ({ payments, dueDate }: SubmitArgs = {}) => {
+      /*
+       * قاعده‌ی واحدِ «برد و پول نداد» — یک مکانیزم، نه دو.
+       *
+       * تا حالا دکمه‌ی «حساب باز» در تسویه فقط روشِ پرداخت CREDIT می‌فرستاد و
+       * فاکتور CONFIRMED (نسیه) می‌شد، در حالی که همان نام از مسیر F3 فاکتورِ
+       * OPEN روی تبِ مشتری می‌ساخت — یک اسم، دو رفتار، و فاکتوری که در
+       * پرونده‌ی حساب دیده نمی‌شد.
+       *
+       * حالا مرز روی «پول» است، نه روی مسیر:
+       *   هیچ پولی گرفته نشد → می‌رود روی تبِ مشتری (فاکتور OPEN).
+       *   بخشی گرفته شد      → فاکتور نهایی، باقی‌مانده با سررسید.
+       *
+       * چون اینجا اعمال می‌شود نه داخل دیالوگ‌ها، هم دکمه‌ی سریع و هم فرمِ
+       * پرداختِ ترکیبی (F7) یک رفتار دارند.
+       */
+      const paidNow = (payments ?? [])
+        .filter((p) => p.method !== "CREDIT")
+        .reduce((sum, p) => sum + p.amount, 0);
+
+      const allOnAccount =
+        !!payments?.length && paidNow === 0 && total > 0 && !!customer;
+
+      let accountId = cart.openAccountId ?? undefined;
+      if (!accountId && allOnAccount) {
+        accountId = (await ensureOpenAccount(customer!.id)).id;
+      }
+
       return createInvoice({
         idempotencyKey: ensureIdem(),
         warehouseId,
         customerId: customer?.id ?? null,
         discount: invoiceDiscount || undefined,
         note: note.trim() || undefined,
-        // فقط برای حساب‌باز پر است؛ در بقیه‌ی روش‌ها سررسیدی وجود ندارد.
-        dueDate,
+        // روی حساب باز سررسید در تسویه ساخته می‌شود، نه حالا.
+        dueDate: accountId ? undefined : dueDate,
         lines: activeLines.map((l) => ({
           productId: l.productId,
           // قفسه‌ی خالی یعنی «کالا هنوز ثبت نشده» — سرور خودش مکان سیستمی را
@@ -597,7 +723,10 @@ export default function PosPage() {
           // درصد فقط در UI زندگی می‌کند؛ سرور ریال می‌گیرد.
           discount: lineDiscount(l) || undefined,
         })),
-        payments,
+        // روی حساب باز هیچ پرداختی ثبت نمی‌شود — مشتری جنس را می‌برد و پول در
+        // تسویه می‌آید. فاکتور OPEN می‌شود و به همان حساب وصل می‌شود.
+        accountId,
+        payments: accountId ? undefined : payments,
       });
     },
     onSuccess: (inv) => {
@@ -619,6 +748,14 @@ export default function PosPage() {
        * می‌کند، ولی این ضمانتِ محلی برای وقتی است که کانال قطع باشد.)
        */
       const soldCustomerId = customer?.id;
+      // وضعیتِ خودِ فاکتور می‌گوید روی حساب نشسته یا نه — چه از F3 آمده باشد،
+      // چه همین حالا حسابش باز شده باشد.
+      if (inv.status === "OPEN") {
+        qc.invalidateQueries({ queryKey: ["open-accounts"] });
+        if (cart.openAccountId) {
+          qc.invalidateQueries({ queryKey: ["open-account", cart.openAccountId] });
+        }
+      }
       /*
        * قفلِ مشتری فقط برای حساب‌باز: اگر بخشی از پرداختِ این فاکتور نسیه بوده
        * (حتی ترکیبی)، مشتری روی تب می‌ماند برای خریدِ بعدی؛ فروشِ نقدی/کارت/چک
@@ -669,6 +806,30 @@ export default function PosPage() {
     },
   });
 
+  /** رفتن به تسویه — از Enterِ خانه‌ی خالیِ اسکن یا F2. */
+  const startCheckout = useCallback(() => {
+    if (!activeLines.length) return;
+    if (noWarehouse) {
+      toast.error("هیچ انباری تعریف نشده — اول یک انبار بسازید");
+      return;
+    }
+    if (zeroPriceCount > 0) {
+      toast.error(
+        `${toFa(zeroPriceCount)} ردیف قیمت ندارد — قبل از ثبت قیمتشان را وارد کنید`
+      );
+      return;
+    }
+    /*
+     * فروش روی حساب باز گام پرداخت ندارد — پول در تسویه می‌آید. Enter یعنی
+     * همین‌جا ثبتِ فاکتورِ جاری (OPEN) روی همان حساب.
+     */
+    if (cart.openAccountId) {
+      submit.mutate({});
+      return;
+    }
+    setShowCheckout(true);
+  }, [activeLines.length, noWarehouse, zeroPriceCount, cart.openAccountId, submit]);
+
   /**
    * F8 — همین سبد را به‌عنوان پیش‌فاکتور ثبت کن.
    * موجودی دست نمی‌خورد؛ فقط قیمت برای مدت مشخصی نگه داشته می‌شود.
@@ -709,19 +870,23 @@ export default function PosPage() {
   });
 
 
-  /** ارسال لوکیشن ردیف‌ها به گوشی کارگر (به یک کارگر مشخص یا همه) + پیام اختیاری. */
+  /**
+   * ارسال سبد/کالا به گوشی کارگر به‌عنوان یک کارِ چندقلمی (به یک کارگر یا همه)
+   * + پیام اختیاری. `idempotencyKey` تازه یعنی هر دکمه‌ی «ارسال» یک کارِ مستقل
+   * می‌سازد؛ دوباره‌زدنِ همان دکمه (double-click/retry شبکه) تکراری نمی‌سازد.
+   */
   const sendToWorker = useMutation({
     mutationFn: (args: { assignedToId: string | null; note?: string }) =>
-      createPickTasks({
+      createWorkTask({
         warehouseId,
         assignedToId: args.assignedToId,
-        lines: workerLinesRef.current.map((l) => ({
-          ...l,
-          note: args.note?.trim() || undefined,
-        })),
+        note: args.note?.trim() || undefined,
+        idempotencyKey: uuid(),
+        lines: workerLinesRef.current,
       }),
-    onSuccess: (tasks) => {
-      toast.success(`${toFa(tasks.length)} کالا برای کارگر فرستاده شد`);
+    onSuccess: (task) => {
+      toast.success(`${toFa(task.totalItems)} کالا برای کارگر فرستاده شد`);
+      qc.invalidateQueries({ queryKey: ["work-tasks"] });
       setShowWorkerPicker(false);
       focusScan();
     },
@@ -769,7 +934,7 @@ export default function PosPage() {
 
   const anyDialogOpen =
     !!pickerStock || showCustomer || showPayment || showSearch || showQuotation ||
-    showWorkerPicker || showRecent || showCheckout || showOpenAccounts || !!receipt ||
+    showWorkerPicker || showWorkTasks || showRecent || showCheckout || showOpenAccounts || !!receipt ||
     showTodayPurchases;
 
   useEffect(() => {
@@ -781,6 +946,7 @@ export default function PosPage() {
         setShowSearch(false);
         setShowQuotation(false);
         setShowWorkerPicker(false);
+        setShowWorkTasks(false);
         setShowRecent(false);
         setShowOpenAccounts(false);
         // CheckoutFlow خودش Esc را مدیریت می‌کند (گام دوم → گام اول)، پس اینجا
@@ -906,9 +1072,11 @@ export default function PosPage() {
         </div>
       )}
 
-      {/* نوار اسکن — همیشه فوکوس دارد */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
+      {/* نوار اسکن — همیشه فوکوس دارد. min-w-0 روی جستجو و سقفِ عرضِ چیپِ مشتری
+          کنار هم تضمین می‌کنند اسمِ بلندِ مشتری هرگز اسکن‌بار را له نکند؛
+          flex-wrap هم پناهِ آخر برای پنجره‌های خیلی باریک است. */}
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={scanRef}
@@ -963,8 +1131,7 @@ export default function PosPage() {
 
               // ردیفی با ↓ انتخاب شده → همان را بردار.
               if (liveHighlight >= 0 && liveList[liveHighlight]) {
-                addFromLocate(liveList[liveHighlight]);
-                closeLive();
+                onPickRow(liveList[liveHighlight]);
                 return;
               }
 
@@ -1009,15 +1176,16 @@ export default function PosPage() {
                 ? "بارکد یا نام کالا… یا Enter برای تسویه"
                 : "بارکد را اسکن کنید یا نام کالا را بنویسید…"
             }
-            className="h-11 pe-10 text-base"
+            className="h-9 pe-10 text-sm"
           />
 
           <InlineResults
-            results={liveList}
+            rows={liveList}
             highlight={liveHighlight}
-            loading={liveResults.isFetching}
+            loading={useLocalSearch ? false : liveResults.isFetching}
+            pickingId={pickingId}
             onHover={setLiveHighlight}
-            onPick={(r) => { addFromLocate(r); closeLive(); }}
+            onPick={onPickRow}
             onSendToWorker={(r) => { openWorkerForResult(r); closeLive(); }}
           />
         </div>
@@ -1045,33 +1213,16 @@ export default function PosPage() {
         <select
           value={warehouseId}
           onChange={(e) => { setWarehouseId(e.target.value); invalidateIdem(); }}
-          className="h-11 rounded-md border bg-background px-3 text-sm"
+          className="h-9 rounded-md border bg-background px-3 text-sm"
         >
           {warehouses.data?.map((w) => (
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}
         </select>
-
-        <Button
-          variant="outline"
-          className="h-11 border-amber-600/50 text-amber-600 hover:bg-amber-600/10 hover:text-amber-600/80
-                     dark:border-amber-600/50 dark:text-amber-400 dark:hover:bg-amber-600/10 dark:hover:text-amber-300"
-          onClick={() => setShowOpenAccounts(true)}
-        >
-          <Wallet className="size-4" />
-          حساب باز <Key>F3</Key>
-        </Button>
-
-        {/* سبز عمدی است: تنها دکمه‌ی «نگاه به گذشته» بین ابزارهای فروش، و
-            فروشنده باید بدون خواندن متن پیدایش کند. */}
-        <Button
-          className="h-11 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700
-                     dark:bg-emerald-600 dark:hover:bg-emerald-500"
-          onClick={() => setShowRecent(true)}
-        >
-          <ReceiptText className="size-4" />
-          فاکتورهای امروز <Key>F10</Key>
-        </Button>
+        {/* سه دکمه‌ی «حساب باز / کارهای انبار / فاکتورهای امروز» به نوار بالای
+            مشترک (کنار ساعت) منتقل شدند؛ اینجا فقط اسکن، چیپ مشتری و انبار
+            می‌مانند تا فضای نوار اسکن بازتر شود. میان‌برهای F3 و F10 همان‌جا
+            که بودند، دست‌نخورده. */}
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3">
@@ -1109,7 +1260,7 @@ export default function PosPage() {
           {!customer && (
             <Button
               variant="outline"
-              className="h-11 w-full justify-center gap-2"
+              className="h-9 w-full justify-center gap-2"
               onClick={() => setShowCustomer(true)}
             >
               <User className="size-4" /> انتخاب مشتری <Key>F4</Key>
@@ -1189,12 +1340,12 @@ export default function PosPage() {
       {/*
         نوارِ عملیاتِ اصلی — پایینِ صفحه، ۴ باکسِ هم‌اندازه در یک ردیف. «تسویه»
         تنها دکمه‌ی توپُرِ آبی است (عملِ نهایی)؛ سه‌تای دیگر outlineِ کم‌رنگ‌ترند
-        تا سلسله‌مراتب روشن باشد. همه h-14 و flex-1 تا عرض برابر بگیرند.
+        تا سلسله‌مراتب روشن باشد. همه h-11 و flex-1 تا عرض برابر بگیرند.
       */}
       <div className="flex shrink-0 items-stretch gap-2">
         <Button
           variant="outline"
-          className="h-14 flex-1 gap-2"
+          className="h-11 flex-1 gap-2"
           disabled={!lines.length || sendToWorker.isPending}
           onClick={openWorkerForCart}
         >
@@ -1205,7 +1356,7 @@ export default function PosPage() {
 
         <Button
           variant="outline"
-          className="h-14 flex-1 gap-2"
+          className="h-11 flex-1 gap-2"
           disabled={!lines.length || saveQuotation.isPending}
           onClick={() => setShowQuotation(true)}
         >
@@ -1214,7 +1365,7 @@ export default function PosPage() {
 
         <Button
           variant="outline"
-          className="h-14 flex-1 gap-2"
+          className="h-11 flex-1 gap-2"
           disabled={!lines.length}
           onClick={() => setShowPayment(true)}
         >
@@ -1222,7 +1373,7 @@ export default function PosPage() {
         </Button>
 
         <Button
-          className="h-14 flex-1 gap-2 text-base"
+          className="h-11 flex-1 gap-2 text-sm font-semibold"
           disabled={!canCheckout || submit.isPending}
           onClick={startCheckout}
         >
@@ -1235,13 +1386,20 @@ export default function PosPage() {
         نوار کلیدها — در صندوق‌های فروش واقعی این نوار همیشه پایین صفحه است تا
         فروشنده‌ی تازه‌کار هم بدون آموزش با کیبورد کار کند.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
+      {/*
+        یک خط، همیشه.
+
+        با flex-wrap این نوار روی پنجره‌ی باریک به دو-سه خط می‌شکست و هر خطش
+        مستقیماً از ارتفاعِ سبد کم می‌کرد — یعنی دو ردیف کالای کم‌تر. حالا اگر جا
+        نشد افقی اسکرول می‌شود و ارتفاعش ثابت می‌ماند.
+      */}
+      <div className="flex shrink-0 items-center gap-x-4 overflow-x-auto whitespace-nowrap rounded-lg border bg-muted/40 px-3 py-1.5 text-xs text-muted-foreground">
         {(
           [
             ["Enter", "بارکد / تسویه"],
             ["Tab", "تعداد ← قیمت"],
             ["F2", "تسویه"],
-            ["F3", "جست‌وجو"],
+            ["F3", "حساب باز"],
             ["F4", "مشتری"],
             ["F6", "تخفیف"],
             ["F7", "پرداخت ترکیبی"],
@@ -1316,7 +1474,7 @@ export default function PosPage() {
         customer={customer}
         pending={submit.isPending}
         onCustomerChange={(c) => { setCustomer(c); invalidateIdem(); }}
-        onSubmit={(payments, dueDate) => submit.mutate({ payments, dueDate })}
+        onSubmit={(payments) => submit.mutate({ payments })}
         onOpenFullPayment={() => { setShowCheckout(false); setShowPayment(true); }}
         onClose={() => { setShowCheckout(false); focusScan(); }}
       />
@@ -1324,29 +1482,34 @@ export default function PosPage() {
       <OpenAccounts
         open={showOpenAccounts}
         onClose={() => { setShowOpenAccounts(false); focusScan(); }}
-        onPick={(d) => {
+        onContinue={(account) => {
           /*
-             فهرست بدهکاران فقط خلاصه دارد، نه پرونده‌ی کامل مشتری. همین حداقل
-             کافی است تا سبد به نامش بسته شود؛ سقف اعتبار و بقیه را کوئریِ
-             `customerDetail` بلافاصله می‌آورد.
+             «ادامهی فاکتور» — صندوق را روی همان حساب باز میگذارد: مشتریِ حساب
+             روی سبد مینشیند، قفل میشود، و این تب به همان حساب وصل میشود تا
+             فاکتورِ این نوبت OPEN ثبت شود و داخل همان حساب بیاید.
           */
-          setCustomer({
-            id: d.id,
-            firstName: d.fullName,
-            lastName: null,
-            fullName: d.fullName,
-            phones: [],
-          });
-          invalidateIdem();
-          setShowOpenAccounts(false);
-          focusScan();
+          getCustomer(account.customerId)
+            .then((c) => {
+              setCustomer(c);
+              patchCart({ openAccountId: account.id, customerLocked: true });
+              invalidateIdem();
+              toast.success(`فروش به «${account.customerName}» روی حساب باز — جنسها را اسکن کنید`);
+            })
+            .catch(() => toast.error("بارگذاری مشتری حساب ناموفق بود"));
         }}
       />
 
       <RecentInvoices
         open={showRecent}
         warehouseId={warehouseId}
+        tasksByInvoice={tasksByInvoice}
         onClose={() => { setShowRecent(false); focusScan(); }}
+      />
+
+      <WorkTasksPanel
+        open={showWorkTasks}
+        warehouseId={warehouseId}
+        onClose={() => { setShowWorkTasks(false); focusScan(); }}
       />
 
       <PaymentDialog
@@ -1354,6 +1517,8 @@ export default function PosPage() {
         total={total}
         hasCustomer={!!customer}
         customerCreditDays={customer?.creditDays}
+        customerChequeRateBp={customerDetail.data?.chequeRateBp}
+        customerChequeRateMode={customerDetail.data?.chequeRateMode}
         onConfirm={(payments, dueDate) => submit.mutate({ payments, dueDate })}
         onClose={() => { setShowPayment(false); focusScan(); }}
       />

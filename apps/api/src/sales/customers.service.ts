@@ -56,6 +56,13 @@ export class CustomersService {
     pageSize = 50,
     sortBy: CustomerSort = 'name',
     categoryId?: string,
+    /**
+     * فقط کسانی که مانده‌ی بدهی دارند.
+     *
+     * مانده ستونی روی `Customer` نیست، پس این فیلتر همان مسیرِ «مرتب‌سازی بر
+     * اساس بدهی» را لازم دارد: اول مانده‌ی همه‌ی منطبق‌ها، بعد فیلتر، بعد صفحه.
+     */
+    onlyDebtors = false,
   ) {
 
     const sort = (CUSTOMER_SORTS as readonly string[]).includes(sortBy)
@@ -92,7 +99,8 @@ export class CustomersService {
      * می‌شود — وگرنه ترتیبِ صفحه‌ها درست از آب درنمی‌آمد. هم‌نام‌ها با نام
      * کامل از هم جدا می‌شوند تا ترتیبِ صفحه‌ها ثابت بماند.
      */
-    if (sort === 'dueDesc' || sort === 'dueAsc') {
+    // فیلترِ بدهکار هم مثل مرتب‌سازیِ بدهی، پیش از صفحه‌بندی به مانده نیاز دارد.
+    if (sort === 'dueDesc' || sort === 'dueAsc' || onlyDebtors) {
       const matched = await this.prisma.customer.findMany({
         where,
         select:{ id:true, firstName:true, lastName:true },
@@ -115,11 +123,22 @@ export class CustomersService {
           due: balances.get(m.id) ?? 0,
           fullName: [m.firstName, m.lastName].filter(Boolean).join(' '),
         }))
-        .sort((a, b) =>
-          sort === 'dueDesc'
-            ? b.due - a.due || a.fullName.localeCompare(b.fullName, 'fa')
-            : a.due - b.due || a.fullName.localeCompare(b.fullName, 'fa')
-        );
+        .filter(o => (onlyDebtors ? o.due > 0 : true))
+        .sort((a, b) => {
+          // وقتی فقط فیلترِ بدهکار روشن است و ترتیبِ خواسته‌شده بدهی نیست،
+          // همان ترتیبِ الفبایی حفظ می‌شود.
+          if (sort === 'dueDesc') {
+            return b.due - a.due || a.fullName.localeCompare(b.fullName, 'fa');
+          }
+          if (sort === 'dueAsc') {
+            return a.due - b.due || a.fullName.localeCompare(b.fullName, 'fa');
+          }
+          return a.fullName.localeCompare(b.fullName, 'fa');
+        });
+
+      // با فیلترِ بدهکار، «کل» دیگر شمارشِ کوئری نیست — تعدادِ بعد از فیلتر است،
+      // وگرنه صفحه‌بندی صفحه‌های خالی می‌سازد.
+      const matchedTotal = onlyDebtors ? ordered.length : total;
 
       const slice = ordered.slice((page - 1) * pageSize, page * pageSize);
       const customers = slice.length
@@ -138,7 +157,7 @@ export class CustomersService {
             ...this.withFullName(c),
             summary:{ totalDue: balances.get(c.id) ?? 0 },
           })),
-        meta: this.meta(total, page, pageSize),
+        meta: this.meta(matchedTotal, page, pageSize),
       };
     }
 
@@ -216,7 +235,7 @@ export class CustomersService {
     const [summary, purchased] = await Promise.all([
       this.ledger.summary(id),
       this.prisma.saleInvoice.aggregate({
-        where:{ customerId:id, status:'CONFIRMED' },
+        where:{ customerId:id, status:{ not:'CANCELLED' } },
         _sum:{ total:true },
       }),
     ]);
@@ -265,6 +284,8 @@ export class CustomersService {
         note: input.note ?? null,
         smsOptOut: input.smsOptOut ?? false,
         creditLimit: input.creditLimit ?? 0,
+        chequeRateBp: input.chequeRateBp ?? 0,
+        ...(input.chequeRateMode ? { chequeRateMode: input.chequeRateMode } : {}),
         creditDays: input.creditDays ?? 0,
         phones:{ create: phones },
       },
@@ -312,6 +333,8 @@ export class CustomersService {
         ...(input.note !== undefined ? { note: input.note } : {}),
         ...(input.smsOptOut !== undefined ? { smsOptOut: input.smsOptOut } : {}),
         ...(input.creditLimit !== undefined ? { creditLimit: input.creditLimit } : {}),
+        ...(input.chequeRateBp !== undefined ? { chequeRateBp: input.chequeRateBp } : {}),
+        ...(input.chequeRateMode !== undefined ? { chequeRateMode: input.chequeRateMode } : {}),
         ...(input.creditDays !== undefined ? { creditDays: input.creditDays } : {}),
       },
       include:{ phones:true },
@@ -431,8 +454,9 @@ export class CustomersService {
     const startLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const startNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
+    // باطل‌نشده = خرید. فاکتورِ روی تب هم خرید است؛ فقط هنوز پولش نیامده.
     const confirmed = {
-      status: 'CONFIRMED' as const,
+      status: { not: 'CANCELLED' as const },
       customerId: id,
     };
 

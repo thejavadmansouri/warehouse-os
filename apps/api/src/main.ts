@@ -66,6 +66,9 @@ async function bootstrap() {
       return cb(null, ok);
     },
     credentials: true,
+    // Sliding-session refresh token rides on this header; browsers can only read
+    // it if it's explicitly exposed (native clients like the worker app already can).
+    exposedHeaders: ['X-Refreshed-Token'],
   });
 
   // The Windows service passes PORT, and the installer opens the firewall for

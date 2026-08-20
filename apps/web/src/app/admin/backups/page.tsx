@@ -253,7 +253,7 @@ export default function BackupsPage() {
             <label className="mb-1 block text-sm font-medium">محل ذخیره</label>
             <Input
               dir="ltr"
-              className="text-left"
+              className="text-right"
               placeholder="D:\backups\warehouse"
               value={draft.destination}
               onChange={(e) => setDraft({ ...draft, destination: e.target.value })}

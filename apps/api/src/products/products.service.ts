@@ -1076,11 +1076,17 @@ export class ProductsService {
     return ids.map((id) => byId.get(id)).filter(Boolean);
   }
 
-  // «یافتن کالا»: سرچ قوی + آدرسِ دقیق. برای هر نتیجه، مکان‌هایی که موجودی دارد
-  // (نام/کد/مسیرِ کامل + تعداد) و مجموع کل را ضمیمه می‌کند. برای مدیر/فروشنده/کارگر:
-  // اسم را می‌زند → اگر موجود باشد، دقیقاً می‌گوید کجاست.
-  async searchWithStock(query: string) {
-    const products = (await this.search(query)) as unknown as Array<{
+  /**
+   * ضمیمه‌کردنِ موجودیِ زنده (به‌ازای هر مکان + جمعِ کل) به یک لیستِ محصول.
+   * مشترک بینِ `searchWithStock` (چند نتیجه) و `productStock` (یک محصولِ
+   * مشخص، برای لحظه‌ی افزودن به سبد در POS) — یک‌بار نوشته شده تا این دو
+   * هیچ‌وقت در تعریفِ «موجودی» از هم جدا نشوند.
+   *
+   * عمداً `purchasePrice` را برنمی‌گرداند: این مسیر به نقشِ SALES هم باز است
+   * و بهای خرید نباید دستِ فروشنده باشد (حاشیه‌ی سود لو نرود).
+   */
+  private async attachStock<
+    T extends {
       id: string;
       name: string;
       sku: string;
@@ -1090,7 +1096,8 @@ export class ProductsService {
       brand?: { name: string } | null;
       vehicleModel?: { name: string } | null;
       prices?: { salePrice: number | null }[];
-    }>;
+    },
+  >(products: T[]) {
     if (products.length === 0) return [];
 
     const ids = products.map((p) => p.id);
@@ -1107,7 +1114,7 @@ export class ProductsService {
       byProduct.set(row.productId, arr);
     }
 
-    const mapped = products.map((p) => {
+    return products.map((p) => {
       const rows = byProduct.get(p.id) ?? [];
       return {
         id: p.id,
@@ -1131,6 +1138,26 @@ export class ProductsService {
         })),
       };
     });
+  }
+
+  // «یافتن کالا»: سرچ قوی + آدرسِ دقیق. برای هر نتیجه، مکان‌هایی که موجودی دارد
+  // (نام/کد/مسیرِ کامل + تعداد) و مجموع کل را ضمیمه می‌کند. برای مدیر/فروشنده/کارگر:
+  // اسم را می‌زند → اگر موجود باشد، دقیقاً می‌گوید کجاست.
+  async searchWithStock(query: string) {
+    const products = (await this.search(query)) as unknown as Array<{
+      id: string;
+      name: string;
+      sku: string;
+      unit: string | null;
+      partNumber: string | null;
+      salePrice: number | null;
+      brand?: { name: string } | null;
+      vehicleModel?: { name: string } | null;
+      prices?: { salePrice: number | null }[];
+    }>;
+    if (products.length === 0) return [];
+
+    const mapped = await this.attachStock(products);
 
     // کالاهایی که موجودی (و آدرس) دارند بالای لیست بیایند؛ ترتیب ربط در هر گروه حفظ می‌شود.
     return mapped
@@ -1141,6 +1168,32 @@ export class ProductsService {
         return aStock - bStock || a.i - b.i;
       })
       .map((x) => x.r);
+  }
+
+  /**
+   * موجودیِ زنده‌ی یک محصولِ مشخص — لحظه‌ی افزودنِ نتیجه‌ی سرچِ لوکالِ POS به
+   * سبد. کاتالوگِ لوکالِ مرورگر (`pos-catalog`) موجودی/قفسه ندارد — عمداً،
+   * چون کش‌شدنِ آن یعنی فروش روی یک عددِ ممکن‌است‌کهنه. این endpoint دقیقاً
+   * لحظه‌ی pick صدا زده می‌شود تا آن عدد همیشه تازه باشد.
+   */
+  async productStock(productId: string) {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        unit: true,
+        partNumber: true,
+        brand: { select: { name: true } },
+        vehicleModel: { select: { name: true } },
+        prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } },
+      },
+    });
+    if (!product) throw new NotFoundException('کالا پیدا نشد');
+
+    const [mapped] = await this.attachStock([{ ...product, salePrice: null }]);
+    return mapped;
   }
 
 
@@ -1343,5 +1396,92 @@ export class ProductsService {
 
     // BOM (\uFEFF) برای اینکه اکسل فارسی رو درست نمایش بده
     return '\uFEFF' + [header.join(','), ...rows].join('\n');
+  }
+
+  /**
+   * کاتالوگ سبک برای اپ کارگر. همان توکن‌های سرور (searchTokens) ارسال می‌شود
+   * تا موتور آفلاین گوشی دقیقاً هم‌راستای جستجوی POS باشد.
+   *
+   * - فیلدها عمداً کم: بدون عکس، قیمت، موجودی و توضیحات (حجم دانلود).
+   * - `updatedSince` (ISO) برای sync افزایشی: فقط ردیف‌های تغییرکرده/جدید.
+   * - حذف‌شده‌ها (deletedAt) باز هم می‌آیند تا گوشی آن‌ها را از کش خود پاک کند.
+   */
+  /**
+   * کاتالوگ سبک، صفحه‌بندی‌شده و incremental (بر اساس updatedAt).
+   *
+   * [includePrice] فقط برای مسیر POS روشن می‌شود: قیمتِ فروشِ روز را هم می‌دهد تا
+   * سرچِ لوکالِ صندوق قیمت را آنی نشان دهد. اپ کارگر آن را نمی‌خواهد و صدا نمی‌زند،
+   * پس شکلِ پاسخِ کارگر بایت‌به‌بایت دست‌نخورده می‌ماند.
+   */
+  async catalog(
+    page: number = 1,
+    limit: number = 500,
+    updatedSince?: string,
+    includePrice = false,
+  ) {
+    const since = updatedSince ? new Date(updatedSince) : undefined;
+    if (since && Number.isNaN(since.getTime())) {
+      throw new BadRequestException('updatedSince معتبر نیست');
+    }
+
+    const where: Prisma.ProductWhereInput = since
+      ? { OR: [{ updatedAt: { gt: since } }, { deletedAt: { gt: since } }] }
+      : {};
+
+    const [total, rows] = await Promise.all([
+      this.prisma.product.count({ where }),
+      this.prisma.product.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { updatedAt: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          partNumber: true,
+          unit: true,
+          isActive: true,
+          searchTokens: true,
+          updatedAt: true,
+          deletedAt: true,
+          brand: { select: { name: true } },
+          vehicleModel: { select: { name: true } },
+          barcodes: { select: { barcode: true } },
+          // آخرین ردیفِ قیمت (ProductPrice جدولِ تاریخچه است) — همان الگویی که
+          // locate/findAll استفاده می‌کنند تا عددِ قیمت همه‌جا یکی باشد.
+          ...(includePrice
+            ? { prices: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { salePrice: true } } }
+            : {}),
+        },
+      }),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(total / limit));
+    return {
+      products: rows.map((p) => {
+        const priced = p as typeof p & { prices?: { salePrice: number | null }[] };
+        return {
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          partNumber: p.partNumber,
+          unit: p.unit,
+          isActive: p.isActive && !p.deletedAt,
+          searchTokens: p.searchTokens,
+          barcodes: p.barcodes.map((b) => b.barcode),
+          brand: p.brand?.name ?? null,
+          vehicleModel: p.vehicleModel?.name ?? null,
+          updatedAt: p.updatedAt.toISOString(),
+          deleted: !!p.deletedAt,
+          ...(includePrice ? { salePrice: priced.prices?.[0]?.salePrice ?? null } : {}),
+        };
+      }),
+      page,
+      limit,
+      total,
+      totalPages,
+      hasMore: page < totalPages,
+    };
   }
 }

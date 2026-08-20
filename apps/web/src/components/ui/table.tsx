@@ -70,7 +70,10 @@ function TableHead({ className, ...props }: React.ComponentProps<"th">) {
     <th
       data-slot="table-head"
       className={cn(
-        "text-muted-foreground h-11 px-3 text-left align-middle text-xs font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
+        /* text-start (نه text-left): در RTL یعنی راست — هدر باید با مقادیرِ
+           ارث‌برده از dir=rtl هم‌تراز باشد؛ text-left هدر را چپ می‌نشاند و
+           مقدارِ راست‌چین هیچ‌وقت زیر هدرش نمی‌نشست. */
+        "text-muted-foreground h-11 px-3 text-start align-middle text-xs font-medium whitespace-nowrap [&:has([role=checkbox])]:pr-0 [&>[role=checkbox]]:translate-y-[2px]",
         className
       )}
       {...props}

@@ -25,8 +25,20 @@ export class QueryInvoicesDto {
    * (مرجوعی وضعیتِ فاکتور را عوض نمی‌کند): فاکتورهایی که دستِ‌کم یک مرجوعی خورده‌اند.
    */
   @IsOptional()
-  @IsIn(['CONFIRMED', 'CANCELLED', 'RETURNED'])
+  @IsIn(['OPEN', 'CONFIRMED', 'CANCELLED', 'RETURNED'])
   status?:string;
+
+
+  /** فروشنده‌ی ثبت‌کننده‌ی فاکتور. */
+  @IsOptional()
+  @IsString()
+  userId?:string;
+
+
+  /** فقط فاکتورهایی که هنوز مانده دارند. */
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  hasDue?:string;
 
 
   @IsOptional()

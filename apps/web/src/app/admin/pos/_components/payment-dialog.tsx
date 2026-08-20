@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/jalali-date-input";
 import { MoneyInput } from "@/components/money-input";
 import { Button } from "@/components/ui/button";
 import { faDate, money, toFa, rial, PAYMENT_LABELS } from "@/lib/format";
 import type { PaymentInput, PaymentMethod } from "@/lib/types";
 
+import { ChequeFields } from "@/components/cheque-fields";
 import { CREDIT_TERMS } from "./checkout-flow";
 
 const METHODS: PaymentMethod[] = ["CASH", "CARD", "CHEQUE", "CREDIT"];
@@ -24,6 +24,8 @@ export function PaymentDialog({
   total,
   hasCustomer,
   customerCreditDays,
+  customerChequeRateBp,
+  customerChequeRateMode,
   onConfirm,
   onClose,
 }: {
@@ -32,6 +34,9 @@ export function PaymentDialog({
   hasCustomer: boolean;
   /** مهلت پیش‌فرضِ خودِ مشتری — فقط برای نمایش چیپِ فعالِ اولیه. */
   customerCreditDays?: number | null;
+  /** نرخِ پیشنهادیِ فروشِ مدت‌دار — اول مشتری، وگرنه فروشگاه. */
+  customerChequeRateBp?: number;
+  customerChequeRateMode?: "FLAT" | "MONTHLY";
   /** `dueDate` فقط وقتی مهلت/سررسیدِ نسیه صراحتاً انتخاب شده باشد پر می‌شود. */
   onConfirm: (payments: PaymentInput[], dueDate?: string) => void;
   onClose: () => void;
@@ -109,7 +114,7 @@ export function PaymentDialog({
 
                 <MoneyInput
                   autoFocus={i === 0}
-                  className="h-9 flex-1 text-left tabular-nums"
+                  className="h-9 flex-1 text-right tabular-nums"
                   value={r.amount}
                   onChange={(n) => patch(i, { amount: n })}
                 />
@@ -126,42 +131,13 @@ export function PaymentDialog({
               </div>
 
               {r.method === "CHEQUE" && (
-                <div className="mt-3 grid grid-cols-3 gap-2">
-                  <Input
-                    placeholder="شماره چک"
-                    value={r.cheque?.number ?? ""}
-                    onChange={(e) =>
-                      patch(i, {
-                        cheque: { ...(r.cheque ?? { dueDate: "" }), number: e.target.value },
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder="بانک"
-                    value={r.cheque?.bankName ?? ""}
-                    onChange={(e) =>
-                      patch(i, {
-                        cheque: {
-                          ...(r.cheque ?? { number: "", dueDate: "" }),
-                          bankName: e.target.value,
-                        },
-                      })
-                    }
-                  />
-                  {/* سررسید چک شمسی وارد می‌شود — فروشنده تاریخ میلادی را از
-                      کسی نمی‌شنود و روی خود چک هم شمسی نوشته شده. */}
-                  <JalaliDateInput
-                    value={r.cheque?.dueDate?.slice(0, 10) ?? ""}
-                    onChange={(iso) =>
-                      patch(i, {
-                        cheque: {
-                          ...(r.cheque ?? { number: "" }),
-                          dueDate: iso,
-                        },
-                      })
-                    }
-                  />
-                </div>
+                <ChequeFields
+                  base={r.amount}
+                  value={r.cheque}
+                  defaultRateBp={customerChequeRateBp}
+                  defaultRateMode={customerChequeRateMode}
+                  onChange={(cheque) => patch(i, { cheque })}
+                />
               )}
             </div>
           ))}
@@ -264,6 +240,25 @@ export function PaymentDialog({
               <span className="tabular-nums">{rial(Math.abs(remaining))}</span>
             </div>
           </div>
+
+          {/*
+            همان قاعده‌ای که در صندوق هم برقرار است، صریح گفته می‌شود:
+            هیچ پولی گرفته نشد → می‌رود روی تبِ مشتری؛ بخشی گرفته شد → فاکتور
+            نهایی و باقی‌مانده با سررسید. تصمیم در یک جا گرفته می‌شود
+            (submit در صفحه‌ی صندوق)؛ اینجا فقط نتیجه‌اش را می‌گوید.
+          */}
+          {paid === 0 && credit > 0 && (
+            <p className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+              هیچ مبلغی دریافت نشده — این فروش روی حساب بازِ مشتری ثبت می‌شود و
+              سرِ تسویه یک‌جا حساب می‌گردد.
+            </p>
+          )}
+          {paid > 0 && credit > 0 && (
+            <p className="text-xs text-muted-foreground">
+              بخشی دریافت شد، پس فاکتور نهایی می‌شود و {rial(credit)} با سررسید
+              روی حساب مشتری می‌ماند.
+            </p>
+          )}
 
           {needsCustomer && (
             <p className="text-sm text-destructive">

@@ -131,6 +131,8 @@ export const PAYMENT_LABELS: Record<string, string> = {
 };
 
 export const INVOICE_STATUS_LABELS: Record<string, string> = {
+  // فاکتورِ جاریِ یک حساب باز — تا تسویه نهایی نشده.
+  OPEN: "حساب باز",
   CONFIRMED: "تأیید شده",
   CANCELLED: "باطل شده",
 };

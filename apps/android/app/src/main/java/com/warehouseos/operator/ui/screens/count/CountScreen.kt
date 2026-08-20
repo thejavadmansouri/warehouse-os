@@ -199,6 +199,18 @@ private fun ColumnScope.CountingPhase(
         modifier = Modifier.fillMaxWidth(),
     )
 
+    if (state.offline) {
+        Text(
+            text = "آفلاین — شمارش در صف ثبت شد؛ پس از اتصال به سرور همگام می‌شود",
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color(0xFF1565C0),
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+        )
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -323,6 +335,8 @@ private fun CountItemRow(item: CountedItem) {
 }
 
 private fun statusLabel(item: CountedItem): String = when {
+    // Offline-queued items carry no server review status yet.
+    item.reviewStatus == null -> "در صف"
     !item.matched -> "تطبیق نشد"
     item.reviewStatus == "CONFIRMED" -> "تأیید"
     item.reviewStatus == "NEEDS_REVIEW" -> "بازبینی"
@@ -331,6 +345,7 @@ private fun statusLabel(item: CountedItem): String = when {
 }
 
 private fun statusColor(item: CountedItem): Color = when {
+    item.reviewStatus == null -> Color(0xFF1565C0) // queued (offline)
     !item.matched -> Color(0xFFC62828)
     item.reviewStatus == "CONFIRMED" -> Color(0xFF2E7D32)
     item.reviewStatus == "NEEDS_REVIEW" -> Color(0xFFF57C00)

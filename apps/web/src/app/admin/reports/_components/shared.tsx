@@ -126,6 +126,63 @@ export function SummaryCard({
   );
 }
 
+/**
+ * کارتِ «یک نگاه» — عدد به‌علاوه‌ی یک درِ ورودی.
+ *
+ * تفاوتش با `SummaryCard` همین کلیک است. کارتی که فقط عدد نشان می‌دهد، کاربر را
+ * می‌گذارد وسطِ راه: «۳ مشتری معوق» را می‌بیند و بعد باید خودش دنبالِ فهرستش
+ * بگردد. اینجا کلیک همان فهرست را با همان بازه‌ی تاریخ باز می‌کند.
+ */
+export function DrillCard({
+  label,
+  value,
+  hint,
+  tone,
+  small,
+  onClick,
+}: {
+  label: string;
+  value: string;
+  /** یک خط توضیحِ ریز زیر عدد — تعداد، درصد، یا معنیِ عدد. */
+  hint?: string;
+  tone?: "default" | "success" | "warning" | "danger";
+  /** برای مقادیرِ متنی (نام کالا/مشتری) که با فونتِ درشتِ عددی بد می‌شکنند. */
+  small?: boolean;
+  onClick: () => void;
+}) {
+  const toneClass =
+    tone === "success"
+      ? "text-emerald-600"
+      : tone === "warning"
+        ? "text-amber-600"
+        : tone === "danger"
+          ? "text-destructive"
+          : "text-foreground";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group rounded-lg border bg-card p-4 text-start transition-colors
+                 hover:border-primary hover:bg-primary/5
+                 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+    >
+      <p className="flex items-center gap-1 text-sm text-muted-foreground">
+        {label}
+        <ChevronLeft className="size-3.5 opacity-0 transition-opacity group-hover:opacity-70" />
+      </p>
+      <p
+        className={`mt-1 whitespace-nowrap tabular-nums ${toneClass} ${
+          small ? "truncate text-base font-semibold" : "text-xl font-bold"
+        }`}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{hint}</p>}
+    </button>
+  );
+}
+
 /** ردیف جمع، چسبیده به پایین جدول — نه انتهای اسکرول. */
 export function StickyTotal({ label, value }: { label: string; value: string }) {
   return (

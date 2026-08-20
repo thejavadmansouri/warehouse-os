@@ -1,16 +1,20 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import type { Express } from 'express';
+import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
 import { UploadsService } from './uploads.service';
 
 /** Minimal valid JPEG header (FF D8 FF) padded to the 12-byte sniff minimum. */
 const jpegMagic = Buffer.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 
+/** یک JPEG واقعی — برای مسیرهایی که باید از مرحله‌ی sharp هم رد شوند. */
+let realJpeg: Buffer;
+
 function makeFile(over: Partial<Express.Multer.File> = {}): Express.Multer.File {
   return {
-    buffer: jpegMagic,
-    size: jpegMagic.length,
+    buffer: realJpeg ?? jpegMagic,
+    size: (realJpeg ?? jpegMagic).length,
     mimetype: 'image/jpeg',
     ...over,
   } as unknown as Express.Multer.File;
@@ -37,6 +41,16 @@ describe('UploadsService', () => {
 
   describe('uploadPendingOperationPhoto validation', () => {
     const id = '11111111-1111-4111-8111-111111111111';
+
+    beforeAll(async () => {
+      // از آنجا که اعتبارسنجیِ sharp حالا قبل از جستجوی عملیات اجرا می‌شود،
+      // تستِ «عملیات پیدا نشد» به یک تصویرِ واقعاً قابل‌پردازش نیاز دارد.
+      realJpeg = await sharp({
+        create: { width: 4, height: 4, channels: 3, background: { r: 255, g: 0, b: 0 } },
+      })
+        .jpeg()
+        .toBuffer();
+    });
 
     it('rejects a missing file', async () => {
       await expect(

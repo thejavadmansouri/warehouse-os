@@ -58,8 +58,13 @@ export const DiscountField = forwardRef<
             dir="ltr"
             disabled={disabled}
             inputMode="numeric"
-            className={`min-w-0 flex-1 text-left tabular-nums ${
-              compact ? "h-10" : "h-10 w-28"
+            /*
+              در سبد `h-7` — هم‌قدِ خانه‌های تعداد و قیمت. با `h-10` این فیلد
+              بلندترین چیزِ ردیف بود و ارتفاعِ کلِ ردیف را تعیین می‌کرد؛ یعنی
+              روی هر صفحه چند قلم کم‌تر دیده می‌شد.
+            */
+            className={`min-w-0 flex-1 text-right tabular-nums ${
+              compact ? "h-7" : "h-10 w-28"
             } ${clipped ? "border-amber-600/70" : ""}`}
             value={value.value ? toFa(value.value) : ""}
             onChange={(e) => {
@@ -74,8 +79,8 @@ export const DiscountField = forwardRef<
             ref={ref}
             id={id}
             disabled={disabled}
-            className={`min-w-0 flex-1 text-left tabular-nums ${
-              compact ? "h-10" : "h-10 w-28"
+            className={`min-w-0 flex-1 text-right tabular-nums ${
+              compact ? "h-7" : "h-10 w-28"
             } ${clipped ? "border-amber-600/70" : ""}`}
             value={value.value}
             onChange={(n) => onChange({ ...value, value: Math.max(0, n) })}
@@ -89,7 +94,7 @@ export const DiscountField = forwardRef<
           title={isPercent ? "تبدیل به مبلغ ریالی" : "تبدیل به درصد"}
           aria-label={isPercent ? "حالت درصد — برای ریال کلیک کنید" : "حالت ریال — برای درصد کلیک کنید"}
           /* عرض ثابت: وگرنه «٪» و «ریال» دو عرض متفاوت می‌سازند و ستون ناهموار می‌شود. */
-          className={`w-14 shrink-0 rounded-md border text-xs font-medium transition-colors
+          className={`${compact ? "h-7 w-10" : "w-14"} shrink-0 rounded-md border text-xs font-medium transition-colors
                       hover:border-primary hover:text-primary focus:outline-none
                       focus:ring-2 focus:ring-primary disabled:opacity-50 ${
                         isPercent

@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { getShopSettings, updateShopSettings } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import type { ShopSettings } from "@/lib/types";
+import { bpToPercent, percentToBp } from "@/lib/cheque-charge";
+import { faToEn } from "@/lib/format";
 
 const EMPTY: ShopSettings = {
   name: "",
@@ -22,6 +24,8 @@ const EMPTY: ShopSettings = {
   cardNumber: "",
   cardHolder: "",
   footer: "",
+  chequeRateBp: 0,
+  chequeRateMode: "MONTHLY",
 };
 
 /**
@@ -36,7 +40,7 @@ export default function ShopSettingsPage() {
   const [form, setForm] = React.useState<ShopSettings | null>(null);
 
   const value = form ?? settings.data ?? EMPTY;
-  const set = (k: keyof ShopSettings, v: string) =>
+  const set = <K extends keyof ShopSettings>(k: K, v: ShopSettings[K]) =>
     setForm({ ...value, [k]: v });
 
   const save = useMutation({
@@ -55,6 +59,8 @@ export default function ShopSettingsPage() {
         cardNumber: value.cardNumber,
         cardHolder: value.cardHolder,
         footer: value.footer,
+        chequeRateBp: value.chequeRateBp,
+        chequeRateMode: value.chequeRateMode,
       }),
     onSuccess: () => {
       toast.success("مشخصات مغازه ذخیره شد");
@@ -88,7 +94,7 @@ export default function ShopSettingsPage() {
         <Field label="تلفن">
           <Input
             dir="ltr"
-            className="text-left"
+            className="text-right"
             value={value.phone}
             onChange={(e) => set("phone", e.target.value)}
             placeholder="۰۲۱…"
@@ -102,11 +108,62 @@ export default function ShopSettingsPage() {
           />
         </Field>
 
+        {/*
+          پیش‌فرضِ فروشِ مدت‌دار.
+
+          این فقط پیشنهادِ صندوق است: هر مشتری می‌تواند نرخِ خودش را داشته باشد و
+          فروشنده سرِ هر چک هم می‌تواند عوضش کند. صفر یعنی «هیچ سودی پیشنهاد نده».
+        */}
+        <div className="rounded-lg border bg-muted/20 p-4">
+          <p className="mb-1 text-sm font-medium">تفاوت فروش مدت‌دار (چک)</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            پیش‌فرضِ فروشگاه. اگر برای مشتری نرخِ جداگانه‌ای ثبت شده باشد، آن
+            می‌چربد. صفر یعنی سودی پیشنهاد نشود.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="نرخ (درصد)">
+              <Input
+                dir="ltr"
+                className="text-right tabular-nums"
+                inputMode="decimal"
+                value={bpToPercent(value.chequeRateBp)}
+                onChange={(e) => set("chequeRateBp", percentToBp(faToEn(e.target.value)))}
+                placeholder="۲.۵"
+              />
+            </Field>
+
+            <Field label="نحوه‌ی محاسبه">
+              <div className="flex gap-1">
+                {(
+                  [
+                    ["MONTHLY", "درصد در ماه"],
+                    ["FLAT", "درصد ثابت"],
+                  ] as const
+                ).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => set("chequeRateMode", mode)}
+                    className={`h-9 flex-1 rounded-md border text-sm font-medium transition-colors ${
+                      value.chequeRateMode === mode
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hover:border-primary hover:text-primary"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="شماره کارت">
             <Input
               dir="ltr"
-              className="text-left tabular-nums"
+              className="text-right tabular-nums"
               value={value.cardNumber}
               onChange={(e) => set("cardNumber", e.target.value)}
               placeholder="6037…"

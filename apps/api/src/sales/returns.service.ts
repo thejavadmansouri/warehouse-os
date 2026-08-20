@@ -1,10 +1,11 @@
 import {
   Injectable,
   BadRequestException,
+  ForbiddenException,
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, InvoiceStatus, PaymentMethod, LedgerEntryType } from '@prisma/client';
+import { Prisma, InvoiceStatus, PaymentMethod, LedgerEntryType, Role } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
@@ -88,6 +89,7 @@ export class ReturnsService {
         total: true,
         dueAmount: true,
         customerId: true,
+        accountId: true,
         customer: { select: { id: true, firstName: true, lastName: true } },
       },
     });
@@ -158,8 +160,21 @@ export class ReturnsService {
           : null,
       },
       lines,
-      /** فاکتور باطل‌شده اصلاً قابلِ مرجوعی نیست. */
-      returnable: invoice.status === InvoiceStatus.CONFIRMED,
+      /**
+       * فاکتورِ باطل‌شده قابلِ مرجوعی نیست. فاکتورِ جاریِ حساب باز هست: مشتری جنس
+       * را برده و هنوز تسویه نکرده، و پس‌دادنِ یک قلم پیش از تسویه رایج‌ترین
+       * حالتِ پیشخوان است. قبلاً همین‌جا بسته بود و فروشنده مجبور می‌شد اول کلِ
+       * حساب را تسویه کند تا بتواند دو قلم را برگرداند.
+       */
+      returnable:
+        invoice.status === InvoiceStatus.CONFIRMED ||
+        invoice.status === InvoiceStatus.OPEN,
+      /**
+       * روی حساب باز هنوز هیچ پولی پرداخت نشده، پس تنها برگشتِ معنادار «کسر از
+       * حساب» است. کلاینت با همین پرچم روش را قفل می‌کند تا نقد پیشنهاد ندهد.
+       */
+      isOpenAccount: invoice.status === InvoiceStatus.OPEN,
+      accountId: invoice.accountId,
     };
   }
 
@@ -168,7 +183,7 @@ export class ReturnsService {
    * ثبت یک مرجوعی. همه‌چیز در یک تراکنش: یا کلِ سند با حرکت‌های انبار و دفتر
    * ثبت می‌شود، یا هیچ‌کدام.
    */
-  async createReturn(dto: CreateReturnDto, userId?: string) {
+  async createReturn(dto: CreateReturnDto, userId?: string, role?: Role) {
 
     // ---- بررسی‌های ارزان، پیش از تراکنش ----
 
@@ -222,6 +237,7 @@ export class ReturnsService {
             customerId: true,
             warehouseId: true,
             dueAmount: true,
+            accountId: true,
           },
         });
 
@@ -232,12 +248,42 @@ export class ReturnsService {
           });
         }
 
+        const isOpenAccount = invoice.status === InvoiceStatus.OPEN;
+
         // فاکتور باطل‌شده موجودی‌اش قبلاً کامل برگشته و بدهی‌اش صفر شده — مرجوعی
-        // رویش یعنی دوباره‌کاری و عددِ غلط.
-        if (invoice.status !== InvoiceStatus.CONFIRMED) {
+        // رویش یعنی دوباره‌کاری و عددِ غلط. فاکتورِ جاریِ حساب باز اما مرجوعی
+        // می‌خورد (پایین، فقط به‌صورت کسر از حساب).
+        if (!isOpenAccount && invoice.status !== InvoiceStatus.CONFIRMED) {
           throw new ConflictException({
             error: 'INVOICE_NOT_RETURNABLE',
             message: 'فاکتور باطل‌شده قابلِ مرجوعی نیست',
+          });
+        }
+
+        /*
+         * روی حساب باز مشتری هنوز یک ریال هم نداده و کلِ مبلغ بدهیِ اوست. پس
+         * «برگشتِ وجه از صندوق» یعنی پول دادن بابت جنسی که پولش گرفته نشده —
+         * تنها برگشتِ درست، کم‌کردن از همان بدهی است.
+         */
+        if (isOpenAccount && dto.refundMethod !== PaymentMethod.CREDIT) {
+          throw new BadRequestException({
+            error: 'OPEN_ACCOUNT_REFUND_MUST_BE_CREDIT',
+            message:
+              'روی حساب باز هنوز پولی پرداخت نشده — برگشت فقط به‌صورت کسر از حساب ثبت می‌شود',
+          });
+        }
+
+        /*
+         * صندوق‌دار (SALES) فقط روی حساب باز مرجوعی می‌زند.
+         *
+         * آنجا هیچ پولی از صندوق بیرون نمی‌رود — فقط بدهیِ خودِ مشتری کم می‌شود،
+         * و این همان کاری است که پشتِ پیشخوان لازم است و نباید منتظرِ مدیر بماند.
+         * روی فاکتورِ نهایی اما برگشت می‌تواند نقد باشد؛ آن یکی دستِ مدیر می‌ماند.
+         */
+        if (role === Role.SALES && !isOpenAccount) {
+          throw new ForbiddenException({
+            error: 'RETURN_REQUIRES_MANAGER',
+            message: 'مرجوعیِ فاکتورِ نهایی را فقط مدیر ثبت می‌کند',
           });
         }
 

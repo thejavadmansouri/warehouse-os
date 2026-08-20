@@ -1,34 +1,56 @@
 package com.warehouseos.operator.ui.screens.voice
 
+import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.warehouseos.operator.data.remote.ApiResult
-import com.warehouseos.operator.data.remote.dto.VoiceResponseDto
+import com.warehouseos.operator.data.local.CatalogProductEntity
+import com.warehouseos.operator.data.photo.PhotoStore
+import com.warehouseos.operator.data.repository.CatalogRepository
 import com.warehouseos.operator.data.repository.OutboxRepository
-import com.warehouseos.operator.data.repository.SessionRepository
-import com.warehouseos.operator.data.repository.VoiceRepository
-import com.warehouseos.operator.data.sync.SyncScheduler
+import com.warehouseos.operator.data.repository.PhotoRepository
+import com.warehouseos.operator.data.search.LocalVoiceParser
 import com.warehouseos.operator.data.speech.SpeechToTextProvider
-import com.warehouseos.operator.data.speech.SttError
 import com.warehouseos.operator.data.speech.SttEvent
+import com.warehouseos.operator.data.speech.toUserMessage
+import com.warehouseos.operator.data.sync.SyncScheduler
 import com.warehouseos.operator.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
 import javax.inject.Inject
 
-enum class VoicePhase { INPUT, PREVIEWING, CONFIRM, SELECT, NOT_FOUND, SUBMITTING, SUCCESS }
+/**
+ * Steps of the capture loop. There is deliberately no SUCCESS step: a saved item
+ * drops the worker straight back to INPUT with a transient notice, so a shelf of
+ * 50 items costs 50 confirmations instead of 100 taps.
+ */
+enum class VoicePhase { INPUT, PREVIEWING, CONFIRM, SELECT, NOT_FOUND, SUBMITTING }
 
-data class ProductChoice(val id: String, val name: String, val sku: String?)
+data class ProductChoice(
+    val id: String,
+    val name: String,
+    val sku: String?,
+    val unit: String? = null,
+)
+
+/** Transient "saved" notice with a short undo window. */
+data class SavedNotice(
+    val clientRequestId: String,
+    val productName: String,
+    val quantity: Int,
+    val withPhoto: Boolean,
+    /** Set once undo has been attempted, so the UI stops offering it. */
+    val undoResult: String? = null,
+)
 
 data class VoiceUiState(
     val isListening: Boolean = false,
@@ -41,7 +63,9 @@ data class VoiceUiState(
     val selectionMessage: String? = null,
     val choices: List<ProductChoice> = emptyList(),
     val searchResults: List<ProductChoice> = emptyList(),
-    val successText: String? = null,
+    /** Local path of the captured photo, so the worker can verify it before saving. */
+    val photoPath: String? = null,
+    val lastSaved: SavedNotice? = null,
     val error: String? = null,
     // Parsed voice fields, kept so a "new product request" can be pre-filled.
     val recognizedName: String = "",
@@ -50,28 +74,57 @@ data class VoiceUiState(
 )
 
 /**
- * Voice stock-in flow. STT → server `preview` proposes a product (no commit) →
- * worker confirms. Confirm now writes to the local OUTBOX (offline-first) and
- * triggers a background sync; stock is applied only after a manager approves.
+ * Voice stock-in — local-first.
+ *
+ * Mic → Google STT (needs internet; mobile data is enough) → text → LOCAL parse
+ * + LOCAL catalog search → worker confirms → outbox → manager approves.
+ *
+ * The shop server is deliberately NOT on this path. It lives on the shop LAN, so
+ * from mobile data out in the warehouse it is unreachable and asking it first
+ * only bought a timeout before falling back to exactly this local match. The raw
+ * transcript rides along in the outbox row: the server re-parses and re-matches
+ * it at sync time and a manager approves, so the on-device match is an assist,
+ * never the source of truth.
  */
 @HiltViewModel
 class VoiceEntryViewModel @Inject constructor(
     private val speech: SpeechToTextProvider,
-    private val voiceRepository: VoiceRepository,
-    private val sessionRepository: SessionRepository,
     private val outboxRepository: OutboxRepository,
+    private val photoRepository: PhotoRepository,
+    private val photoStore: PhotoStore,
     private val syncScheduler: SyncScheduler,
-    savedStateHandle: SavedStateHandle,
+    private val catalogRepository: CatalogRepository,
+    private val savedState: SavedStateHandle,
 ) : ViewModel() {
 
-    val barcode: String = savedStateHandle.get<String>(Routes.ARG_BARCODE).orEmpty()
+    val barcode: String = savedState.get<String>(Routes.ARG_BARCODE).orEmpty()
 
     private val _uiState = MutableStateFlow(VoiceUiState())
     val uiState: StateFlow<VoiceUiState> = _uiState.asStateFlow()
 
+    /** Photos still waiting for a Wi-Fi window — shown in the header. */
+    val pendingPhotoCount: StateFlow<Int> = photoRepository.pendingCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+
     private var listenJob: Job? = null
     private var searchJob: Job? = null
+    private var matchJob: Job? = null
+    private var noticeJob: Job? = null
     private var pendingProductId: String? = null
+
+    /**
+     * Full-resolution capture, held until the operation exists to attach it to.
+     *
+     * Kept in [SavedStateHandle], not a plain field: launching the camera puts this
+     * app in the background, and on a low-RAM phone the process is often killed
+     * there. A plain field would come back null and the photo would be discarded
+     * without a word — the exact silent loss this queue exists to prevent.
+     */
+    private var pendingCaptureFile: File?
+        get() = savedState.get<String>(KEY_CAPTURE_PATH)?.let(::File)
+        set(value) {
+            savedState[KEY_CAPTURE_PATH] = value?.absolutePath
+        }
 
     // ---------- Speech to text ----------
     fun startListening() {
@@ -87,12 +140,12 @@ class VoiceEntryViewModel @Inject constructor(
                         _uiState.update {
                             it.copy(isListening = false, partialText = "", transcript = event.text)
                         }
-                        if (event.text.isNotBlank()) runPreview() // fast path; confirm screen is the safety gate
+                        if (event.text.isNotBlank()) resolveProduct() // confirm step is the safety gate
                     }
 
                     is SttEvent.Error ->
                         _uiState.update {
-                            it.copy(isListening = false, partialText = "", error = messageFor(event.kind))
+                            it.copy(isListening = false, partialText = "", error = event.kind.toUserMessage())
                         }
                 }
             }
@@ -109,112 +162,162 @@ class VoiceEntryViewModel @Inject constructor(
         _uiState.update { it.copy(transcript = text, error = null) }
     }
 
-    // ---------- Preview (propose, no commit) ----------
-    fun runPreview() {
+    // ---------- Resolve: local parse + local catalog match (no network) ----------
+    /**
+     * Turns the transcript (spoken or typed) into a product proposal using only
+     * on-device data, so this works on mobile data, on the shop Wi-Fi, or with no
+     * connectivity at all once the catalog is on the phone.
+     */
+    fun resolveProduct() {
         val text = _uiState.value.transcript.trim()
         if (text.isBlank()) return
-        val sessionId = sessionRepository.sessionId.value
-        if (sessionId.isNullOrBlank()) {
-            _uiState.update { it.copy(error = "شیفت فعال نیست. به صفحه‌ی اصلی برگردید") }
+
+        val parsed = LocalVoiceParser.parse(text)
+        if (parsed.productQuery.isBlank()) {
+            _uiState.update {
+                it.copy(
+                    phase = VoicePhase.INPUT,
+                    quantity = parsed.quantity,
+                    unit = parsed.unit,
+                    error = "نام کالا در گفته‌ی شما شنیده نشد — دوباره بگویید یا دستی وارد کنید",
+                )
+            }
             return
         }
+
         _uiState.update { it.copy(phase = VoicePhase.PREVIEWING, error = null) }
-        viewModelScope.launch {
-            when (val result = voiceRepository.preview(barcode, text, sessionId)) {
-                is ApiResult.Success -> applyPreview(result.data)
-                ApiResult.Unauthorized -> failInput("نشست شما منقضی شده. دوباره وارد شوید")
-                is ApiResult.NetworkError -> failInput("اتصال به سرور برقرار نشد. شبکه را بررسی کنید")
-                is ApiResult.ServerError -> failInput(result.message)
-            }
+        matchJob?.cancel()
+        matchJob = viewModelScope.launch {
+            applyHits(catalogRepository.search(parsed.productQuery), parsed)
         }
     }
 
-    private fun applyPreview(dto: VoiceResponseDto) {
-        val qty = dto.extractQuantity()
-        val unit = dto.extractUnit()
-        // Retain parsed fields for a possible new-product request prefill.
-        _uiState.update {
-            it.copy(
-                recognizedName = dto.extractProductName(),
-                recognizedBrand = dto.extractBrand(),
-                recognizedVehicle = dto.extractVehicle(),
-            )
-        }
+    /**
+     * One hit → propose it for confirmation. Several → let the worker pick. None →
+     * offer manual search / a new-product request. Nothing is ever committed here.
+     */
+    private fun applyHits(hits: List<CatalogProductEntity>, parsed: LocalVoiceParser.Result) {
         when {
-            dto.success && dto.needConfirm == true && dto.product != null -> {
-                // Guard against confidently showing an unrelated product: if the
-                // best match is weak, treat it as "not found" instead of a proposal.
-                val confidence = dto.suggestions
-                    ?.firstOrNull { it.product?.id == dto.product.id }?.confidence
-                    ?: dto.suggestions?.firstOrNull()?.confidence
-                if (confidence != null && confidence < CONFIDENCE_THRESHOLD) {
-                    pendingProductId = null
-                    _uiState.update {
-                        it.copy(phase = VoicePhase.NOT_FOUND, quantity = qty, unit = unit, error = null)
-                    }
-                } else {
-                    pendingProductId = dto.product.id
-                    _uiState.update {
-                        it.copy(
-                            phase = VoicePhase.CONFIRM,
-                            proposalName = dto.product.name,
-                            quantity = qty,
-                            unit = unit,
-                            error = null,
-                        )
-                    }
-                }
-            }
-
-            dto.needSelection == true -> {
+            hits.isEmpty() -> {
                 pendingProductId = null
-                val choices = dto.suggestions.orEmpty().mapNotNull { s ->
-                    s.product?.let { ProductChoice(it.id, it.name, it.sku) }
-                }
                 _uiState.update {
                     it.copy(
-                        phase = VoicePhase.SELECT,
-                        selectionMessage = dto.message ?: "محصول را انتخاب کنید",
-                        choices = choices,
-                        searchResults = emptyList(),
-                        quantity = qty,
-                        unit = unit,
+                        phase = VoicePhase.NOT_FOUND,
+                        quantity = parsed.quantity,
+                        unit = parsed.unit,
+                        recognizedName = parsed.productQuery,
+                        choices = emptyList(),
                         error = null,
                     )
                 }
             }
 
-            else -> failInput("پاسخ نامعتبر از سرور")
+            hits.size == 1 -> {
+                val product = hits.first()
+                pendingProductId = product.id
+                _uiState.update {
+                    it.copy(
+                        phase = VoicePhase.CONFIRM,
+                        proposalName = product.name,
+                        quantity = parsed.quantity,
+                        unit = parsed.unit ?: product.unit,
+                        recognizedName = parsed.productQuery,
+                        error = null,
+                    )
+                }
+            }
+
+            else -> {
+                pendingProductId = null
+                _uiState.update {
+                    it.copy(
+                        phase = VoicePhase.SELECT,
+                        selectionMessage = "چند کالا پیدا شد — مورد درست را انتخاب کنید",
+                        choices = hits.map { hit -> hit.toChoice() },
+                        searchResults = emptyList(),
+                        quantity = parsed.quantity,
+                        unit = parsed.unit,
+                        recognizedName = parsed.productQuery,
+                        error = null,
+                    )
+                }
+            }
         }
     }
 
-    private fun failInput(message: String) {
-        _uiState.update { it.copy(phase = VoicePhase.INPUT, error = message) }
-    }
+    private fun CatalogProductEntity.toChoice() =
+        ProductChoice(id = id, name = name, sku = sku, unit = unit)
 
-    // ---------- Manual selection / search ----------
+    // ---------- Manual selection / typed search ----------
+    // The always-available fallback: no mic permission, no internet for STT, or
+    // speech simply mis-heard — the worker types and the same local engine answers.
+    /**
+     * Picking from the list moves to CONFIRM rather than saving outright, so the
+     * quantity can still be corrected and a photo attached. Committing straight
+     * from the list would make both impossible on the multi-match path.
+     */
     fun selectChoice(choice: ProductChoice) {
         pendingProductId = choice.id
-        _uiState.update { it.copy(proposalName = choice.name) }
-        confirm()
+        _uiState.update {
+            it.copy(
+                phase = VoicePhase.CONFIRM,
+                proposalName = choice.name,
+                unit = it.unit ?: choice.unit,
+                error = null,
+            )
+        }
     }
 
     fun onSearchQuery(query: String) {
         searchJob?.cancel()
-        if (query.isBlank()) {
+        val q = query.trim()
+        if (q.length < 2) {
             _uiState.update { it.copy(searchResults = emptyList()) }
             return
         }
         searchJob = viewModelScope.launch {
-            delay(350) // debounce
-            when (val result = voiceRepository.search(query.trim())) {
-                is ApiResult.Success ->
-                    _uiState.update {
-                        it.copy(searchResults = result.data.map { p -> ProductChoice(p.id, p.name, p.sku) })
-                    }
-                else -> Unit // search failures stay quiet; the list just doesn't update
-            }
+            delay(150) // debounce — local search is instant, no server round-trip
+            val hits = catalogRepository.search(q)
+            _uiState.update { state -> state.copy(searchResults = hits.map { it.toChoice() }) }
         }
+    }
+
+    // ---------- Quantity ----------
+    // Voice mis-hears «سه تا» as «سی تا» often enough that a correction step is
+    // mandatory; without it the worker has to redo the whole utterance.
+    fun incQuantity() = _uiState.update {
+        it.copy(quantity = (it.quantity + 1).coerceAtMost(MAX_QTY))
+    }
+
+    fun decQuantity() = _uiState.update {
+        it.copy(quantity = (it.quantity - 1).coerceAtLeast(1))
+    }
+
+    // ---------- Photo ----------
+    /** Creates the capture target and returns the URI the camera writes into. */
+    fun prepareCapture(): Uri {
+        pendingCaptureFile?.let(photoStore::deleteCapture) // replace an unused one
+        val file = photoStore.createCaptureFile()
+        pendingCaptureFile = file
+        return photoStore.captureUri(file)
+    }
+
+    /** Camera returned. [saved] is false when the worker backed out. */
+    fun onPhotoCaptured(saved: Boolean) {
+        val file = pendingCaptureFile
+        if (saved && file != null) {
+            _uiState.update { it.copy(photoPath = file.absolutePath) }
+        } else {
+            clearCapture()
+        }
+    }
+
+    fun removePhoto() = clearCapture()
+
+    private fun clearCapture() {
+        pendingCaptureFile?.let(photoStore::deleteCapture)
+        pendingCaptureFile = null
+        _uiState.update { it.copy(photoPath = null) }
     }
 
     // ---------- Confirm = enqueue locally (offline-first) ----------
@@ -222,36 +325,92 @@ class VoiceEntryViewModel @Inject constructor(
     // after a manager approves — so a worker is never blocked by connectivity.
     fun confirm() {
         val productId = pendingProductId ?: return
-        val qty = _uiState.value.quantity
-        val name = _uiState.value.proposalName.ifBlank { "کالا" }
+        val state = _uiState.value
+        val quantity = state.quantity
+        val name = state.proposalName.ifBlank { "کالا" }
         _uiState.update { it.copy(phase = VoicePhase.SUBMITTING, error = null) }
+
         viewModelScope.launch {
-            outboxRepository.enqueue(
+            val clientRequestId = outboxRepository.enqueue(
                 type = "IN",
                 locationBarcode = barcode,
-                voiceText = _uiState.value.transcript.ifBlank { null },
+                // The raw sentence goes with it: the server re-parses and re-matches
+                // it at sync time, and the manager reads it while reviewing.
+                voiceText = state.transcript.ifBlank { null },
                 productId = productId,
-                quantity = qty,
-                unit = _uiState.value.unit,
+                quantity = quantity,
+                unit = state.unit,
             )
-            syncScheduler.requestSync()
-            _uiState.update {
-                it.copy(
-                    phase = VoicePhase.SUCCESS,
-                    successText = "$name × $qty در صف ثبت شد — پس از تأیید مدیر اعمال می‌شود",
-                )
+
+            // Compress + queue the photo against the operation's idempotency key.
+            // A failure here must not lose the operation — it is already captured.
+            val capture = pendingCaptureFile
+            val photoQueued = if (capture != null) {
+                photoRepository.attach(clientRequestId, Uri.fromFile(capture))
+                    .also { photoStore.deleteCapture(capture) }
+            } else {
+                false
             }
+            pendingCaptureFile = null
+            pendingProductId = null
+
+            syncScheduler.requestSync()
+
+            // Straight back to a clean INPUT, carrying only the transient notice.
+            _uiState.value = VoiceUiState(
+                lastSaved = SavedNotice(
+                    clientRequestId = clientRequestId,
+                    productName = name,
+                    quantity = quantity,
+                    withPhoto = photoQueued,
+                ),
+            )
+            scheduleNoticeDismiss()
         }
     }
 
-    private fun failConfirm(message: String) {
-        val back = if (_uiState.value.choices.isNotEmpty()) VoicePhase.SELECT else VoicePhase.CONFIRM
-        _uiState.update { it.copy(phase = back, error = message) }
+    /**
+     * Undo is best-effort by design: once the outbox row has synced, the operation
+     * lives on the server and only a manager can reverse it. Say so rather than
+     * pretending the tap worked.
+     */
+    fun undoLastSaved() {
+        val saved = _uiState.value.lastSaved ?: return
+        noticeJob?.cancel()
+        viewModelScope.launch {
+            val removed = outboxRepository.discard(saved.clientRequestId)
+            _uiState.update {
+                it.copy(
+                    lastSaved = saved.copy(
+                        undoResult = if (removed) {
+                            "ثبت لغو شد"
+                        } else {
+                            "به سرور ارسال شده — لغو از پنل مدیر"
+                        },
+                    ),
+                )
+            }
+            scheduleNoticeDismiss()
+        }
+    }
+
+    fun dismissSavedNotice() {
+        noticeJob?.cancel()
+        _uiState.update { it.copy(lastSaved = null) }
+    }
+
+    private fun scheduleNoticeDismiss() {
+        noticeJob?.cancel()
+        noticeJob = viewModelScope.launch {
+            delay(NOTICE_MS)
+            _uiState.update { it.copy(lastSaved = null) }
+        }
     }
 
     // ---------- Reset helpers ----------
     fun cancelToInput() {
         pendingProductId = null
+        clearCapture()
         _uiState.update {
             it.copy(
                 phase = VoicePhase.INPUT,
@@ -261,13 +420,6 @@ class VoiceEntryViewModel @Inject constructor(
                 selectionMessage = null,
             )
         }
-    }
-
-    /** Same shelf, next item — clear the transcript and proposal. */
-    fun nextItem() {
-        pendingProductId = null
-        listenJob?.cancel()
-        _uiState.value = VoiceUiState()
     }
 
     /** Warm the speech engine when the screen opens so the first tap is instant. */
@@ -287,38 +439,17 @@ class VoiceEntryViewModel @Inject constructor(
         }
     }
 
-    private fun VoiceResponseDto.extractQuantity(): Int =
-        quantity ?: parsed?.get("quantity")?.jsonPrimitive?.intOrNull ?: 1
-
-    private fun VoiceResponseDto.extractUnit(): String? =
-        parsed?.get("unit")?.jsonPrimitive?.contentOrNull
-
-    private fun VoiceResponseDto.extractProductName(): String =
-        parsed?.get("productName")?.jsonPrimitive?.contentOrNull.orEmpty()
-
-    private fun VoiceResponseDto.extractBrand(): String =
-        parsed?.get("brand")?.jsonPrimitive?.contentOrNull.orEmpty()
-
-    private fun VoiceResponseDto.extractVehicle(): String =
-        (parsed?.get("vehicleModel") ?: parsed?.get("vehicleFamily"))
-            ?.jsonPrimitive?.contentOrNull.orEmpty()
-
-    private fun messageFor(kind: SttError): String = when (kind) {
-        SttError.NO_PERMISSION -> "دسترسی به میکروفون داده نشده است"
-        SttError.NO_NETWORK -> "برای تشخیص گفتار به اینترنت نیاز است. متن را دستی وارد کنید"
-        SttError.NO_SPEECH -> "صدایی شنیده نشد. دوباره تلاش کنید"
-        SttError.UNAVAILABLE -> "تشخیص گفتار روی این دستگاه در دسترس نیست"
-        SttError.ENGINE_FAILURE -> "خطا در تشخیص گفتار. دوباره تلاش کنید"
-    }
-
     override fun onCleared() {
         listenJob?.cancel()
         searchJob?.cancel()
+        matchJob?.cancel()
+        noticeJob?.cancel()
         super.onCleared()
     }
 
     private companion object {
-        // Below this backend confidence (0–100), don't present a single proposal.
-        const val CONFIDENCE_THRESHOLD = 60.0
+        const val KEY_CAPTURE_PATH = "pending_capture_path"
+        const val MAX_QTY = 9999
+        const val NOTICE_MS = 5_000L
     }
 }

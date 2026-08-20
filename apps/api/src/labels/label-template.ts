@@ -310,10 +310,43 @@ ${BARCODE_SCRIPT}
 
 }
 
+/** کاغذهای پشتیبانی‌شده برای برگه‌ی لیبل. */
+export type LabelPaper = 'A4' | 'A5' | 'A6';
+
+const PAPER_WIDTH_MM: Record<LabelPaper, number> = {
+  A4: 210,
+  A5: 148,
+  A6: 105,
+};
+
+const SHEET_MARGIN_MM = 8;
+const SHEET_LABEL_W_MM = 50;
+const SHEET_GAP_MM = 5;
+
+/**
+ * بیشترین ستونی که روی این کاغذ جا می‌شود.
+ *
+ * سه ستونِ ثابت روی A4 درست بود ولی روی A5 و A6 از لبه بیرون می‌زد و مرورگر
+ * ستونِ آخر را می‌بُرید — چیزی که فقط بعد از چاپ معلوم می‌شد.
+ */
+export function sheetColumnsFor(paper: LabelPaper): number {
+  const usable = PAPER_WIDTH_MM[paper] - 2 * SHEET_MARGIN_MM;
+  return Math.max(
+    1,
+    Math.floor((usable + SHEET_GAP_MM) / (SHEET_LABEL_W_MM + SHEET_GAP_MM)),
+  );
+}
+
 export function buildSheetLabelHtml(
   labels: LabelData[],
-  columns = 3,
+  columns?: number,
+  paper: LabelPaper = 'A4',
 ): string {
+
+  // ستونِ خواسته‌شده هیچ‌وقت از چیزی که جا می‌شود بیشتر نمی‌شود؛ وگرنه کاربر
+  // عددی می‌فرستد و برگه‌ی بریده تحویل می‌گیرد.
+  const maxCols = sheetColumnsFor(paper);
+  const cols = Math.max(1, Math.min(columns ?? maxCols, maxCols));
 
   const cards = labels.map(labelBlock).join('\n');
 
@@ -329,8 +362,8 @@ export function buildSheetLabelHtml(
 <style>
 
 @page {
-  size: A4;
-  margin: 8mm;
+  size: ${paper};
+  margin: ${SHEET_MARGIN_MM}mm;
 }
 
 
@@ -353,9 +386,9 @@ body {
 
   display:grid;
 
-  grid-template-columns:repeat(${columns}, 50mm);
+  grid-template-columns:repeat(${cols}, ${SHEET_LABEL_W_MM}mm);
 
-  gap:5mm;
+  gap:${SHEET_GAP_MM}mm;
 
 }
 

@@ -12,7 +12,12 @@ export type RealtimeEventType =
   | 'sale.canceled'
   | 'stock.changed'
   | 'receipt.created'
-  | 'return.created';
+  | 'return.created'
+  | 'correction.created'
+  | 'work-task.progress'
+  | 'open-account.created'
+  | 'open-account.settled'
+  | 'cheque.updated';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
@@ -21,6 +26,8 @@ export interface RealtimeEvent {
   customerId?: string | null;
   invoiceId?: string | null;
   productId?: string | null;
+  /** Task که پیشرفتش عوض شده — فقط id، جزئیات از REST می‌آید. */
+  taskId?: string | null;
   /** زمان تولید رویداد (ISO) — سرور پر می‌کند اگر خالی باشد. */
   at?: string;
 }

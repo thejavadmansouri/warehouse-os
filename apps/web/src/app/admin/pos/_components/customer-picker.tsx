@@ -122,7 +122,7 @@ export function CustomerPicker({
               </label>
               <Input
                 dir="ltr"
-                className="text-left"
+                className="text-right"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="۰۹۱۲…"

@@ -28,6 +28,51 @@ export class ProductsController {
   ) {}
 
 
+  /**
+   * کاتالوگ سبک برای اپ کارگر (دانلود آفلاین). فقط فیلدهای لازم برای
+   * انتخاب/سرچ را برمی‌گرداند — بدون عکس، قیمت یا موجودی تا حجم کم بماند.
+   * `searchTokens` همان توکن‌های سمت سرور است تا موتور جستجوی آفلاین گوشی
+   * دقیقاً همان نتایج POS را بدهد.
+   */
+  @Get('catalog')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  catalog(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('updatedSince') updatedSince?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(2000, Math.max(1, parseInt(limit ?? '500', 10) || 500));
+    return this.productsService.catalog(
+      pageNum,
+      limitNum,
+      updatedSince?.trim() || undefined,
+    );
+  }
+
+  /**
+   * کاتالوگ صندوق فروش: مثل `catalog` ولی با `salePrice`، تا سرچِ لوکالِ POS
+   * قیمت را آنی نشان دهد. دسترسی دقیقاً مثل `locate` که همین حالا هم قیمت را به
+   * این نقش‌ها می‌دهد — نه بیشتر. اپ کارگر این مسیر را صدا نمی‌زند.
+   */
+  @Get('pos-catalog')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
+  posCatalog(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('updatedSince') updatedSince?: string,
+  ) {
+    const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
+    const limitNum = Math.min(2000, Math.max(1, parseInt(limit ?? '500', 10) || 500));
+    return this.productsService.catalog(
+      pageNum,
+      limitNum,
+      updatedSince?.trim() || undefined,
+      true,
+    );
+  }
+
+
   @Get()
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   findAll(
@@ -62,6 +107,18 @@ export class ProductsController {
     @Query('q') q: string
   ) {
     return this.productsService.searchWithStock(q);
+  }
+
+  /**
+   * موجودیِ زنده‌ی یک محصول — POS لوکال این را دقیقاً لحظه‌ی افزودن به سبد صدا
+   * می‌زند (کاتالوگِ کش‌شده‌ی مرورگر موجودی ندارد). دسترسی دقیقاً مثل `locate`.
+   */
+  @Get(':id/pos-stock')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
+  posStock(
+    @Param('id') id: string
+  ) {
+    return this.productsService.productStock(id);
   }
 
 

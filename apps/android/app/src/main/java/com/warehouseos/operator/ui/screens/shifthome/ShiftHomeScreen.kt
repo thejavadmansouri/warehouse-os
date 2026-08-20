@@ -17,15 +17,21 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.Warehouse
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,7 +57,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.warehouseos.operator.R
+import com.warehouseos.operator.data.local.OutboxEntity
+import com.warehouseos.operator.data.local.OutboxType
 import com.warehouseos.operator.ui.components.ActionCard
+import com.warehouseos.operator.ui.components.BrandMark
 import com.warehouseos.operator.ui.components.BannerType
 import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.PrimaryButton
@@ -72,6 +81,7 @@ fun ShiftHomeScreen(
     onLocate: () -> Unit,
     onMyWork: () -> Unit,
     onPickTasks: () -> Unit,
+    onWorkTasks: () -> Unit,
     onSettings: () -> Unit,
     onLogout: () -> Unit,
     viewModel: ShiftHomeViewModel = hiltViewModel(),
@@ -79,7 +89,10 @@ fun ShiftHomeScreen(
     val sessionId by viewModel.sessionId.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
+    val pendingPhotoCount by viewModel.pendingPhotoCount.collectAsState()
     val pendingPickCount by viewModel.pendingPickCount.collectAsState()
+    val pendingWorkCount by viewModel.pendingWorkCount.collectAsState()
+    val failedItems by viewModel.failedItems.collectAsState()
     var showLogoutConfirm by remember { mutableStateOf(false) }
 
     Scaffold(
@@ -129,17 +142,39 @@ fun ShiftHomeScreen(
                 )
             }
 
+            // Photos are Wi-Fi-only, so they can legitimately sit while operations
+            // sync over mobile data. Naming the reason stops it reading as "stuck".
+            if (pendingPhotoCount > 0) {
+                StatusBanner(
+                    text = "$pendingPhotoCount عکس در انتظار وای‌فای مغازه",
+                    type = BannerType.Info,
+                    icon = Icons.Filled.PhotoCamera,
+                    modifier = Modifier.padding(top = Dimens.gapSmall),
+                )
+            }
+
             // Scrollable: the action grid plus the greeting, sync banner and primary
             // CTA overflow a short phone, and without this the last row and the
             // "شروع شیفت جدید" button are silently clipped off the bottom.
+            //
+            // Top-aligned, NOT centered: centering inside a scrolling column makes
+            // the content jump as banners appear and disappear, and on a short
+            // phone it pushes the primary CTA below the fold on first paint.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
                     .verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
             ) {
+                if (failedItems.isNotEmpty()) {
+                    FailedSyncSection(
+                        items = failedItems,
+                        onRetry = viewModel::retryFailed,
+                        onDiscard = viewModel::discardFailed,
+                    )
+                }
+
                 if (sessionId == null) {
                     NoSessionContent(
                         isStarting = uiState.isStarting,
@@ -155,7 +190,9 @@ fun ShiftHomeScreen(
                         onLocate = onLocate,
                         onMyWork = onMyWork,
                         onPickTasks = onPickTasks,
+                        onWorkTasks = onWorkTasks,
                         pendingPickCount = pendingPickCount,
+                        pendingWorkCount = pendingWorkCount,
                         onNewShift = viewModel::startShift,
                     )
                 }
@@ -250,12 +287,7 @@ private fun NoSessionContent(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.padding(Dimens.gapLarge * 2),
         ) {
-            Icon(
-                Icons.Filled.Warehouse,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(Dimens.iconHuge),
-            )
+            BrandMark(size = Dimens.iconHuge)
             Text(
                 text = "شیفت کاری خود را آغاز کنید",
                 style = MaterialTheme.typography.headlineSmall,
@@ -286,6 +318,57 @@ private fun NoSessionContent(
     }
 }
 
+/**
+ * One home action. A data class rather than nested Pair/Triple so the subtitle
+ * travels with its card — the previous version looked the subtitle up by
+ * matching on the Persian title, which silently broke on any label change.
+ */
+private data class HomeAction(
+    val title: String,
+    val subtitle: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val onClick: () -> Unit,
+    val badge: Int? = null,
+)
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = Dimens.gapSmall),
+    )
+}
+
+@Composable
+private fun ActionGrid(actions: List<HomeAction>, highlightBadged: Boolean) {
+    actions.chunked(2).forEach { row ->
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Dimens.gap),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = Dimens.gap),
+        ) {
+            row.forEach { action ->
+                ActionCard(
+                    title = action.title,
+                    icon = action.icon,
+                    onClick = action.onClick,
+                    subtitle = action.subtitle,
+                    badge = action.badge,
+                    highlighted = highlightBadged && (action.badge ?: 0) > 0,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            // Odd count → empty spacer keeps the row's card widths even.
+            if (row.size == 1) Spacer(Modifier.weight(1f))
+        }
+    }
+}
+
 @Composable
 private fun ActiveSessionContent(
     isStarting: Boolean,
@@ -295,7 +378,9 @@ private fun ActiveSessionContent(
     onLocate: () -> Unit,
     onMyWork: () -> Unit,
     onPickTasks: () -> Unit,
+    onWorkTasks: () -> Unit,
     pendingPickCount: Int,
+    pendingWorkCount: Int,
     onNewShift: () -> Unit,
 ) {
     StatusBanner(
@@ -313,56 +398,55 @@ private fun ActiveSessionContent(
     )
     Spacer(Modifier.height(Dimens.gapLarge))
 
-    // 2-column grid of secondary actions. The pick-task card glows and carries a
-    // badge when work is waiting.
-    val cards = buildList {
+    // Split by who is waiting, not by feature. Work someone else queued for this
+    // worker is time-sensitive and goes first; the tools they reach for on their
+    // own initiative sit below. A flat grid of six equal cards made an idle
+    // "یافتن کالا" look as urgent as five picks a seller is standing there for.
+    val waiting = buildList {
         add(
-            Triple(
-                "کار برداشت",
-                Icons.Filled.Inventory2,
-                onPickTasks,
-            ) to (pendingPickCount to true),
+            HomeAction(
+                title = "کار برداشت",
+                subtitle = if (pendingPickCount > 0) {
+                    "${faNum(pendingPickCount)} کالا در انتظار"
+                } else {
+                    "کالاهای درخواستی فروشنده"
+                },
+                icon = Icons.Filled.Inventory2,
+                onClick = onPickTasks,
+                badge = pendingPickCount,
+            ),
         )
-        add(Triple("انبارگردانی", Icons.Filled.Checklist, onCount) to (null to false))
-        if (onSell != null) {
-            add(Triple("فروش کالا", Icons.Filled.ShoppingCart, onSell) to (null to false))
-        }
-        add(Triple("یافتن کالا", Icons.Filled.Search, onLocate) to (null to false))
-        add(Triple("کارهای من", Icons.Filled.History, onMyWork) to (null to false))
+        add(
+            HomeAction(
+                title = "کارهای انبار",
+                subtitle = if (pendingWorkCount > 0) {
+                    "${faNum(pendingWorkCount)} کار در جریان"
+                } else {
+                    "کارهای ارسالی از POS"
+                },
+                icon = Icons.Filled.Assignment,
+                onClick = onWorkTasks,
+                badge = pendingWorkCount,
+            ),
+        )
     }
 
-    cards.chunked(2).forEach { row ->
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Dimens.gap),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = Dimens.gap),
-        ) {
-            row.forEach { (card, badgeInfo) ->
-                val badge = badgeInfo.first
-                val highlighted = badgeInfo.second && (badge ?: 0) > 0
-                ActionCard(
-                    title = card.first,
-                    icon = card.second,
-                    onClick = card.third,
-                    subtitle = when (card.first) {
-                        "کار برداشت" ->
-                            if ((badge ?: 0) > 0) "${faNum(badge!!)} کالا در انتظار"
-                            else "کالاهای درخواستی فروشنده"
-                        "انبارگردانی" -> "شمارش موجودی"
-                        "فروش کالا" -> "ثبت فروش از انبار"
-                        "یافتن کالا" -> "آدرس دقیق قفسه"
-                        else -> "ثبت‌ها و تأییدها"
-                    },
-                    badge = badge,
-                    highlighted = highlighted,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            // Odd count → empty spacer keeps the row's card widths even.
-            if (row.size == 1) Spacer(Modifier.weight(1f))
+    val tools = buildList {
+        add(HomeAction("انبارگردانی", "شمارش موجودی", Icons.Filled.Checklist, onCount))
+        add(HomeAction("یافتن کالا", "آدرس دقیق قفسه", Icons.Filled.Search, onLocate))
+        if (onSell != null) {
+            add(HomeAction("فروش کالا", "ثبت فروش از انبار", Icons.Filled.ShoppingCart, onSell))
         }
+        add(HomeAction("کارهای من", "ثبت‌ها و تأییدها", Icons.Filled.History, onMyWork))
     }
+
+    SectionLabel(
+        text = if (waiting.any { (it.badge ?: 0) > 0 }) "در انتظار شما" else "کارهای ارجاعی",
+    )
+    ActionGrid(actions = waiting, highlightBadged = true)
+
+    SectionLabel(text = "ابزارها")
+    ActionGrid(actions = tools, highlightBadged = false)
 
     TextButton(
         onClick = onNewShift,
@@ -382,3 +466,85 @@ private fun ActiveSessionContent(
 private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
 private fun faNum(n: Int): String =
     n.toString().map { if (it.isDigit()) FA_DIGITS[it - '0'] else it }.joinToString("")
+
+/**
+ * ردیف‌هایی که سرور رد کرده (FAILED). بدون این بخش، یک خطای دائمی بی‌صدا
+ * هرگز ثبت نمی‌شود و کارگر فکر می‌کند کارش انجام شده. هر ردیف پیام خطای
+ * سرور + دکمه‌های «تلاش دوباره» و «حذف» دارد.
+ */
+@Composable
+private fun FailedSyncSection(
+    items: List<OutboxEntity>,
+    onRetry: (OutboxEntity) -> Unit,
+    onDiscard: (OutboxEntity) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = Dimens.gapLarge),
+        verticalArrangement = Arrangement.spacedBy(Dimens.gapSmall),
+    ) {
+        StatusBanner(
+            text = "${faNum(items.size)} مورد در ارسال با خطا مواجه شد",
+            type = BannerType.Error,
+            icon = Icons.Filled.ErrorOutline,
+        )
+        items.forEach { item ->
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
+                    contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(start = Dimens.cardPadding, end = Dimens.gapSmall, top = Dimens.gapSmall, bottom = Dimens.gapSmall),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = Dimens.gapSmall),
+                    ) {
+                        Text(
+                            text = item.label(),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = item.lastError ?: "خطای نامشخص",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    IconButton(onClick = { onRetry(item) }) {
+                        Icon(
+                            Icons.Filled.Refresh,
+                            contentDescription = "تلاش دوباره",
+                            modifier = Modifier.size(Dimens.iconSmall),
+                        )
+                    }
+                    IconButton(onClick = { onDiscard(item) }) {
+                        Icon(
+                            Icons.Filled.Delete,
+                            contentDescription = "حذف",
+                            modifier = Modifier.size(Dimens.iconSmall),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** برچسب فارسیِ کوتاه برای یک ردیف صف — بر اساس نوع عملیات. */
+private fun OutboxEntity.label(): String {
+    val shelf = locationBarcode.takeIf { it.isNotBlank() }
+    val where = shelf?.let { " · قفسه $it" } ?: ""
+    return when (type) {
+        OutboxType.NEW_PRODUCT_REQUEST -> "درخواست کالای جدید$where"
+        OutboxType.IN -> "ثبت کالا$where"
+        OutboxType.COUNT -> "انبارگردانی$where"
+        OutboxType.WORK_TASK_TICK -> "تیک کار انبار"
+        else -> "عملیات$where"
+    }
+}

@@ -22,10 +22,15 @@ import { CustomerCategoriesService } from './customer-categories.service';
 import { ReceiptsService } from './receipts.service';
 import { QuotationsService } from './quotations.service';
 import { ReturnsService } from './returns.service';
+import { CorrectionsService } from './corrections.service';
 import { LedgerService } from './ledger.service';
+import { OpenAccountsService } from './open-accounts.service';
+import { StatementsService } from './statements.service';
+import { ChequesService } from './cheques.service';
 
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { CreateReturnDto } from './dto/create-return.dto';
+import { CreateCorrectionDto } from './dto/create-correction.dto';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import {
   ConvertQuotationDto,
@@ -54,7 +59,10 @@ const STATEMENT_LABELS: Record<string, string> = {
   INVOICE_CANCELLED: 'ابطال فاکتور',
   RETURN: 'برگشت کالا',
   CHEQUE_BOUNCED: 'چک برگشتی',
+  CHEQUE_CASHED: 'وصول چک برگشتی',
+  FINANCE_CHARGE: 'تفاوت فروش مدت‌دار',
   ADJUSTMENT: 'اصلاح حساب',
+  CORRECTION: 'اصلاحیه‌ی فاکتور',
 };
 
 interface StatementOutRow {
@@ -115,7 +123,11 @@ export class SalesController {
     private readonly receipts: ReceiptsService,
     private readonly quotations: QuotationsService,
     private readonly returns: ReturnsService,
+    private readonly corrections: CorrectionsService,
     private readonly ledger: LedgerService,
+    private readonly openAccounts: OpenAccountsService,
+    private readonly statements: StatementsService,
+    private readonly cheques: ChequesService,
   ) {}
 
 
@@ -295,14 +307,19 @@ export class SalesController {
 
   // ---------- برگشت از فروش (مرجوعی) ----------
 
-  // ثبت مرجوعی — مثل ابطال، فقط مدیر: وجه/بدهی برمی‌گردد و موجودی جابه‌جا می‌شود.
-  @Roles(Role.ADMIN, Role.MANAGER)
+  /*
+   * ثبت مرجوعی. روی فاکتورِ نهایی مثل ابطال فقط مدیر — چون وجه می‌تواند نقداً از
+   * صندوق برگردد. روی فاکتورِ جاریِ حساب باز اما صندوق‌دار هم می‌تواند: آنجا
+   * برگشت اجباراً «کسر از حساب» است و پولی از صندوق بیرون نمی‌رود. تفکیکِ دقیق
+   * در خودِ سرویس انجام می‌شود، چون فقط آنجا وضعیتِ فاکتور معلوم است.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('returns')
   createReturn(
     @Body() dto: CreateReturnDto,
     @Req() req: any,
   ){
-    return this.returns.createReturn(dto, req.user?.userId);
+    return this.returns.createReturn(dto, req.user?.userId, req.user?.role);
   }
 
 
@@ -338,6 +355,67 @@ export class SalesController {
   }
 
 
+  // ---------- اصلاحیه‌ی فاکتور ----------
+
+  /**
+   * ردیف‌های قابل‌اصلاحِ یک فاکتور — «قبلی (وضعیتِ فعلی)» برای فرمِ اصلاحیه.
+   * فاکتورهای نهایی و فاکتورِ جاریِ حساب باز؛ فقط باطل‌شده نه.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('invoices/:id/correctable')
+  correctable(
+    @Param('id') id: string,
+  ){
+    return this.corrections.correctableLines(id);
+  }
+
+
+  /**
+   * ثبت اصلاحیه — سندِ جدا با شماره و دلیلِ اجباری؛ فاکتور اصلی دست نمی‌خورد.
+   * قیمت/تعداد را تصحیح می‌کند و دفتر و موجودی را جبران می‌کند.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('corrections')
+  createCorrection(
+    @Body() dto: CreateCorrectionDto,
+    @Req() req: any,
+  ){
+    return this.corrections.createCorrection(dto, req.user?.userId, req.user?.role);
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('corrections')
+  listCorrections(
+    @Query('warehouseId') warehouseId?: string,
+    @Query('customerId') customerId?: string,
+    @Query('invoiceId') invoiceId?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ){
+    return this.corrections.findAll({
+      warehouseId,
+      customerId,
+      invoiceId,
+      from,
+      to,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+    });
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('corrections/:id')
+  getCorrection(
+    @Param('id') id: string,
+  ){
+    return this.corrections.findOne(id);
+  }
+
+
   // ---------- مشتری ----------
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
@@ -348,6 +426,7 @@ export class SalesController {
     @Query('pageSize') pageSize?: string,
     @Query('sortBy') sortBy?: string,
     @Query('categoryId') categoryId?: string,
+    @Query('onlyDebtors') onlyDebtors?: string,
   ){
     return this.customers.search(
       q,
@@ -355,6 +434,7 @@ export class SalesController {
       pageSize ? Number(pageSize) : 50,
       sortBy as CustomerSort | undefined,
       categoryId,
+      onlyDebtors === 'true',
     );
   }
 
@@ -492,6 +572,116 @@ export class SalesController {
   }
 
 
+  // ---------- چرخه‌ی چک ----------
+
+  /*
+   * وضعیتِ چک پول جابه‌جا می‌کند (برگشت بدهی را برمی‌گرداند)، پس مثل ابطال و
+   * مرجوعیِ فاکتورِ نهایی دستِ مدیر است. صندوق‌دار چک‌ها را می‌بیند ولی
+   * وضعیتشان را عوض نمی‌کند.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('cheques/:id/deposit')
+  depositCheque(
+    @Param('id') id: string,
+  ){
+    return this.cheques.deposit(id);
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('cheques/:id/cash')
+  cashCheque(
+    @Param('id') id: string,
+    @Req() req: any,
+  ){
+    return this.cheques.cash(id, req.user?.userId);
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('cheques/:id/bounce')
+  bounceCheque(
+    @Param('id') id: string,
+    @Body() body: { reason?: string },
+    @Req() req: any,
+  ){
+    return this.cheques.bounce(id, body?.reason, req.user?.userId);
+  }
+
+
+  // ---------- حساب باز (فاکتور کلیِ جاری) ----------
+
+  /**
+   * فهرست حساب‌های بازِ فعال — برای دکمه‌ی «حساب باز» در صندوق.
+   * هر حساب: مشتری، جمع کل، تعداد نوبت‌ها، اولین/آخرین خرید.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('open-accounts')
+  listOpenAccounts(){
+    return this.openAccounts.list();
+  }
+
+
+  /**
+   * پرونده‌ی یک حساب باز — همه‌ی فاکتورهای بازِ مشتری با ردیف‌هایشان.
+   * همین خوراکِ «با یک تیک همه‌ی آنچه برده» در صندوق است.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('open-accounts/:id')
+  getOpenAccount(
+    @Param('id') id: string,
+  ){
+    return this.openAccounts.get(id);
+  }
+
+
+  /**
+   * برگه‌ی تجمیعیِ کلِ حساب — خوراکِ چاپِ «فاکتور کلی».
+   *
+   * برخلافِ پرونده، فاکتورهای تسویه‌شده را هم می‌آورد؛ وگرنه دقیقاً بعد از
+   * تسویه — همان لحظه‌ای که مشتری برگه می‌خواهد — خالی برمی‌گشت.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('open-accounts/:id/sheet')
+  openAccountSheet(
+    @Param('id') id: string,
+  ){
+    return this.openAccounts.sheet(id);
+  }
+
+
+  /**
+   * بازکردن حساب برای مشتری (یا ادامه‌ی حسابِ موجود).
+   * idempotent: اگر حسابِ بازِ فعالی دارد همان را برمی‌گرداند.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('customers/:id/open-account')
+  ensureOpenAccount(
+    @Param('id') id: string,
+  ){
+    return this.openAccounts.ensureOpen(id);
+  }
+
+
+  /**
+   * تسویه‌ی حساب باز — همه‌ی فاکتورهای بازِ حساب CONFIRMED می‌شوند و حساب
+   * SETTLED. بدهی در لحظه‌ی هر نوبت در دفتر بود؛ پول از مسیرِ «دریافت» گرفته
+   * می‌شود.
+   */
+  /*
+   * تسویه پولی جابه‌جا نمی‌کند — فقط نوبت‌ها را نهایی می‌کند و بدهی از قبل در
+   * دفتر بوده. مشتری پشتِ پیشخوان ایستاده، پس صندوق‌دار هم باید بتواند ببندد.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('open-accounts/:id/settle')
+  settleOpenAccount(
+    @Param('id') id: string,
+    @Req() req: any,
+  ){
+    return this.openAccounts.settle(id, req.user?.userId);
+  }
+
+
   // ---------- حساب باز و مطالبات ----------
 
   /**
@@ -539,6 +729,23 @@ export class SalesController {
    * format=excel فایل xlsx با سرستون‌های فارسی می‌دهد.
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  /**
+   * صورت‌حسابِ کاملِ مشتری — همه‌ی کالاهایی که برده و همه‌ی مبالغی که پرداخته،
+   * با جزئیاتِ هر قلم و هر پرداخت (شاملِ چک).
+   *
+   * جدا از `statement` که گردشِ حسابِ دفتری است و قلمِ کالا ندارد.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('customers/:id/full-statement')
+  fullStatement(
+    @Param('id') id: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ){
+    return this.statements.fullStatement(id, { startDate, endDate });
+  }
+
+
   @Get('customers/:id/statement')
   async statement(
     @Param('id') id: string,

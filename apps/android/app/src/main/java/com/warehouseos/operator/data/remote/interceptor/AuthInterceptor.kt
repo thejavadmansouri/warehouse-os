@@ -37,6 +37,13 @@ class AuthInterceptor @Inject constructor(
         }
 
         val response = chain.proceed(request)
+
+        // Sliding session: the server re-issues a fresh token past its half-life
+        // and returns it here. Persist it so the worker never has to re-login.
+        response.header(HEADER_REFRESHED_TOKEN)?.let { refreshed ->
+            if (refreshed.isNotBlank()) tokenProvider.updateToken(refreshed)
+        }
+
         if (response.code == 401) {
             authEventBus.emit(AuthEvent.Unauthorized)
         }
@@ -46,4 +53,8 @@ class AuthInterceptor @Inject constructor(
     // POST auth/login carries no token and must never be short-circuited.
     private fun okhttp3.Request.isAuthFree(): Boolean =
         url.encodedPath.endsWith("/auth/login")
+
+    private companion object {
+        const val HEADER_REFRESHED_TOKEN = "X-Refreshed-Token"
+    }
 }

@@ -3,5 +3,7 @@
     <color name="brand_orange">#F57C00</color>
     <color name="brand_blue">#2563EB</color>
     <color name="surface_light">#F8FAFC</color>
-    <color name="ic_launcher_background">#2563EB</color>
+    <!-- The Kardo mark is drawn for a white ground (same as the web icon);
+         on the old blue it lost the navy strokes. -->
+    <color name="ic_launcher_background">#FFFFFF</color>
 </resources>

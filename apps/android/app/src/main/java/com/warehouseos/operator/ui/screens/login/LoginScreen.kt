@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.warehouseos.operator.R
 import com.warehouseos.operator.ui.components.BannerType
+import com.warehouseos.operator.ui.components.BrandMark
 import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.StatusBanner
@@ -67,14 +68,7 @@ fun LoginScreen(
             .padding(Dimens.screenPadding),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Icon(
-            Icons.Filled.Warehouse,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier
-                .padding(top = Dimens.gapLarge)
-                .size(56.dp),
-        )
+        BrandMark(size = 88.dp)
         Text(
             text = stringResource(R.string.customer_name),
             style = MaterialTheme.typography.headlineMedium,

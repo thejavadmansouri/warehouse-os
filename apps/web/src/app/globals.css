@@ -91,7 +91,10 @@
   --radius: 0.75rem;
 
   /* Light background — near-white, faint blue cast */
-  --background: oklch(0.985 0.004 250);
+  /* گرم‌کردن زمینه (پیشنهاد ۴): hue از ۲۵۰ (ته‌آبی) به ۸۸ (ته‌کرم).
+     کرومای 0.006 → 0.008 (نسخهٔ آشکارتر — مقایسه در docs/pos-palette-preview.html).
+     بازگشت به سرد: oklch(0.985 0.004 250) */
+  --background: oklch(0.985 0.008 88);
   --foreground: oklch(0.23 0.02 256);
 
   --card: oklch(1 0 0);
@@ -104,10 +107,11 @@
   --primary: oklch(0.55 0.19 254);
   --primary-foreground: oklch(0.99 0.005 250);
 
-  --secondary: oklch(0.965 0.012 252);
+  /* hue 88 — هم‌خانواده با پس‌زمینهٔ گرم (قبلی: 252) */
+  --secondary: oklch(0.968 0.008 88);
   --secondary-foreground: oklch(0.33 0.05 256);
 
-  --muted: oklch(0.968 0.008 252);
+  --muted: oklch(0.97 0.008 88);
   --muted-foreground: oklch(0.53 0.02 256);
 
   /* Accent: same brand blue (used for icons/highlights across pages) */
@@ -122,13 +126,16 @@
      warning=بدهی/سررسید، info=خنثیِ آبی. */
   --success: oklch(0.6 0.14 155);
   --success-foreground: oklch(0.99 0 0);
-  --warning: oklch(0.7 0.16 70);
+  /* warning روی زمینهٔ روشن باید ≥ 4.5:1 باشد. مقدار قبلی (0.7) فقط ~2.8:1
+     داشت و زیر حد AA بود؛ L=0.555 معادل amber-700 است (~5:1). */
+  --warning: oklch(0.555 0.16 60);
   --warning-foreground: oklch(0.3 0.05 70);
   --info: oklch(0.6 0.13 235);
   --info-foreground: oklch(0.99 0 0);
 
-  --border: oklch(0.925 0.007 252);
-  --input: oklch(0.925 0.007 252);
+  /* hue 88 — گرم (قبلی: 252) */
+  --border: oklch(0.928 0.008 88);
+  --input: oklch(0.928 0.008 88);
   /* Lighter/brighter than --primary and far from --destructive red */
   --ring: oklch(0.64 0.15 254);
 
@@ -203,6 +210,19 @@
   --sidebar-ring: oklch(0.72 0.13 254);
 }
 
+/*
+ * هشدار/بدهی در حالت روشن: amber-600 (~3.1:1) و orange-600 (~3.6:1) روی سفید
+ * زیر حد AA (4.5:1) هستند؛ در حالت روشن به amber-700 / orange-700 (~5:1) تیره
+ * می‌شوند. حالت تیره دست نمی‌خورد: کلاس‌های dark:text-amber-400 و مانند آن سر
+ * جایشان هستند و این قوانین فقط وقتی <html> کلاس .dark ندارد (حالت روشن) فعالند.
+ */
+:root:not(.dark) .text-amber-600 {
+  color: oklch(0.555 0.163 49); /* amber-700 — 5.07:1 روی سفید */
+}
+:root:not(.dark) .text-orange-600 {
+  color: oklch(0.553 0.195 38.4); /* orange-700 — 5.25:1 روی سفید */
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -226,11 +246,11 @@
     background: transparent;
   }
   .scroll-thin::-webkit-scrollbar-thumb {
-    background: oklch(0.85 0.01 250);
+    background: oklch(0.86 0.008 88);
     border-radius: 9999px;
   }
   .scroll-thin::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.75 0.02 250);
+    background: oklch(0.78 0.012 88);
   }
   .dark .scroll-thin::-webkit-scrollbar-thumb {
     background: oklch(0.36 0.02 252);

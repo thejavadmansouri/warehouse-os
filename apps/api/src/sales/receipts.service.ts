@@ -5,6 +5,8 @@ import {
 } from '@nestjs/common';
 import { PaymentMethod, LedgerEntryType } from '@prisma/client';
 
+import { computeChequeCharge, MAX_CHARGE_RATIO } from '../common/cheque-charge';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from './ledger.service';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
@@ -43,27 +45,79 @@ export class ReceiptsService {
    */
   async create(input: CreateReceiptInput, userId?: string) {
 
-    if (!input.amount || input.amount <= 0) {
+    /*
+     * سطرهای پرداخت — تسویه‌ی ترکیبی (نقد + کارت + چک) در یک رسید.
+     * شکلِ قدیمی (amount/method/cheque) همچنان پذیرفته می‌شود و به یک سطر
+     * تبدیل می‌گردد تا کلاینت‌های قدیمی نشکنند.
+     */
+    const rows =
+      input.payments && input.payments.length > 0
+        ? input.payments
+        : input.method && input.amount
+          ? [{ method: input.method, amount: input.amount, cheque: input.cheque, note: undefined as string | undefined }]
+          : [];
+
+    if (rows.length === 0) {
       throw new BadRequestException({
         error: 'INVALID_AMOUNT',
         message: 'مبلغ دریافتی باید بزرگ‌تر از صفر باشد',
       });
     }
 
-    // نسیه یعنی «پول ندادم» — به‌عنوان روش دریافت بی‌معناست.
-    if (input.method === PaymentMethod.CREDIT) {
-      throw new BadRequestException({
-        error: 'INVALID_METHOD',
-        message: 'نسیه روش دریافت وجه نیست',
-      });
-    }
+    rows.forEach((p, i) => {
+      // نسیه یعنی «پول ندادم» — به‌عنوان روش دریافت بی‌معناست.
+      if (p.method === PaymentMethod.CREDIT) {
+        throw new BadRequestException({
+          error: 'INVALID_METHOD',
+          paymentIndex: i,
+          message: 'نسیه روش دریافت وجه نیست',
+        });
+      }
 
-    if (input.method === PaymentMethod.CHEQUE && !input.cheque) {
-      throw new BadRequestException({
-        error: 'CHEQUE_DETAILS_REQUIRED',
-        message: 'برای دریافت چکی، مشخصات چک الزامی است',
+      if (!p.amount || p.amount <= 0) {
+        throw new BadRequestException({
+          error: 'INVALID_AMOUNT',
+          paymentIndex: i,
+          message: 'مبلغ دریافتی باید بزرگ‌تر از صفر باشد',
+        });
+      }
+
+      if (p.method === PaymentMethod.CHEQUE && !p.cheque) {
+        throw new BadRequestException({
+          error: 'CHEQUE_DETAILS_REQUIRED',
+          paymentIndex: i,
+          message: 'برای دریافت چکی، مشخصات چک الزامی است',
+        });
+      }
+    });
+
+    /*
+     * ---- تفاوتِ فروشِ مدت‌دار (سودِ چک) ----
+     *
+     * همان قرارداد مسیرِ فاکتور: `amount` هر سطر **پایه** است (چقدر از بدهی را
+     * می‌پوشاند)، و مبلغی که روی کاغذِ چک نوشته می‌شود پایه + سود است.
+     */
+    const priced = rows.map((p) => {
+      const c = p.cheque;
+      if (p.method !== PaymentMethod.CHEQUE || !c) {
+        return { ...p, charge: 0, rateBp: 0, months: 0 };
+      }
+
+      const rateBp = c.rateBp ?? 0;
+      const months = c.months ?? 0;
+      const computed = computeChequeCharge({
+        base: p.amount,
+        rateBp,
+        months,
+        mode: c.rateMode ?? 'MONTHLY',
       });
-    }
+      const charge = Math.min(c.charge ?? computed, p.amount * MAX_CHARGE_RATIO);
+
+      return { ...p, charge, rateBp, months, amount: p.amount + charge };
+    });
+
+    const financeCharge = priced.reduce((sum, p) => sum + p.charge, 0);
+    const amount = priced.reduce((sum, p) => sum + p.amount, 0);
 
     if (input.idempotencyKey) {
       const existing = await this.prisma.receipt.findUnique({
@@ -89,7 +143,12 @@ export class ReceiptsService {
       const debts = await tx.saleInvoice.findMany({
         where: {
           customerId: input.customerId,
-          status: 'CONFIRMED',
+          /*
+           * فاکتورِ جاریِ حساب باز هم باید پول بگیرد. وگرنه مشتری‌ای که فقط تب
+           * دارد، از صفحه‌ی «دریافت» پولش در دفتر می‌نشست ولی هیچ فاکتوری
+           * تسویه نمی‌شد — و مانده‌ی فاکتورها با مانده‌ی دفتر از هم می‌افتاد.
+           */
+          status: { not: 'CANCELLED' },
           dueAmount: { gt: 0 },
         },
         orderBy: { createdAt: 'asc' },
@@ -107,6 +166,24 @@ export class ReceiptsService {
        * تخصیص به فاکتورها سرِ جایش می‌ماند (تا بدانیم پول بابت کدام فاکتور
        * بوده)، ولی «چقدر بدهکار است» فقط یک منبع دارد.
        */
+      /*
+       * سود **قبل** از خواندنِ بدهی در دفتر می‌نشیند — ترتیبش اجباری است.
+       *
+       * مشتری ۱۰۰ میلیون بدهکار است و چکِ ۱۰۶ میلیونی می‌دهد. اگر اول رسید ثبت
+       * شود، مبلغ از بدهی بیشتر است و یا `AMOUNT_EXCEEDS_DEBT` می‌خورد یا با
+       * `allowOverpayment` مشتری را ۶ میلیون بستانکار می‌کند. با ثبتِ سود، بدهی
+       * اول ۱۰۶ می‌شود و بعد رسیدِ ۱۰۶ آن را صاف می‌کند.
+       */
+      if (financeCharge > 0) {
+        await this.ledger.record(tx, {
+          customerId: input.customerId,
+          type: LedgerEntryType.FINANCE_CHARGE,
+          amount: financeCharge,
+          userId: userId ?? null,
+          note: 'تفاوت فروش مدت‌دار (چک)',
+        });
+      }
+
       const totalDebt = await this.ledger.balance(input.customerId, tx);
 
       if (totalDebt <= 0) {
@@ -127,12 +204,12 @@ export class ReceiptsService {
        * صراحتاً `allowOverpayment` بفرستد؛ بدون آن همان خطای قبلی می‌آید تا
        * مبلغِ اشتباهِ تایپی بی‌سروصدا به بستانکاری تبدیل نشود.
        */
-      const overpayment = Math.max(0, input.amount - totalDebt);
+      const overpayment = Math.max(0, amount - totalDebt);
 
       if (overpayment > 0 && !input.allowOverpayment) {
         throw new BadRequestException({
           error: 'AMOUNT_EXCEEDS_DEBT',
-          amount: input.amount,
+          amount,
           totalDebt,
           overpayment,
           message: `مبلغ دریافتی از کل بدهی مشتری بیشتر است (بدهی: ${totalDebt})`,
@@ -143,24 +220,43 @@ export class ReceiptsService {
         data: {
           customerId: input.customerId,
           userId: userId ?? null,
-          amount: input.amount,
-          method: input.method,
+          amount,
+          // روشِ نخستین سطر — برای سازگاریِ گزارش‌های قدیمی؛ تفکیک در ReceiptPayment.
+          method: priced[0].method,
           note: input.note ?? null,
           idempotencyKey: input.idempotencyKey ?? null,
         },
       });
 
-      if (input.method === PaymentMethod.CHEQUE && input.cheque) {
-        await tx.cheque.create({
+      /*
+       * سطرهای پرداخت — همان الگوی Payment روی فاکتور. هر سطر چک، چکِ خودش را
+       * می‌سازد تا گزارش چک‌ها و «در جریان وصول» درست بمانند.
+       */
+      for (const p of priced) {
+        const payment = await tx.receiptPayment.create({
           data: {
             receiptId: receipt.id,
-            number: input.cheque.number,
-            bankName: input.cheque.bankName ?? null,
-            branch: input.cheque.branch ?? null,
-            holderName: input.cheque.holderName ?? null,
-            dueDate: new Date(input.cheque.dueDate),
+            method: p.method,
+            amount: p.amount,
+            note: p.note ?? null,
           },
         });
+
+        if (p.method === PaymentMethod.CHEQUE && p.cheque) {
+          await tx.cheque.create({
+            data: {
+              receiptPaymentId: payment.id,
+              number: p.cheque.number,
+              bankName: p.cheque.bankName ?? null,
+              branch: p.cheque.branch ?? null,
+              holderName: p.cheque.holderName ?? null,
+              dueDate: new Date(p.cheque.dueDate),
+              charge: p.charge,
+              rateBp: p.rateBp,
+              months: p.months,
+            },
+          });
+        }
       }
 
       /*
@@ -168,7 +264,7 @@ export class ReceiptsService {
        * چیزی که هنوز خریده نشده، فاکتوری وجود ندارد. حلقه وقتی فاکتورها تمام
        * شوند خودش می‌ایستد و مازاد فقط در دفتر می‌ماند.
        */
-      let remaining = input.amount;
+      let remaining = amount;
 
       for (const debt of debts) {
         if (remaining <= 0) break;
@@ -220,12 +316,14 @@ export class ReceiptsService {
       await this.ledger.record(tx, {
         customerId: input.customerId,
         type: LedgerEntryType.RECEIPT,
-        amount: -input.amount,
+        amount: -amount,
         receiptId: receipt.id,
         userId: userId ?? null,
         note: [
           `رسید ${receipt.number}`,
-          input.method === PaymentMethod.CHEQUE ? 'چک، تا وصول در جریان است' : '',
+          rows.some((p) => p.method === PaymentMethod.CHEQUE)
+            ? 'چک، تا وصول در جریان است'
+            : '',
           // پیش‌دریافت باید در گردش حساب دیده شود، وگرنه ماه بعد کسی نمی‌فهمد
           // چرا مانده منفی است.
           overpayment > 0 ? `شامل ${overpayment} پیش‌دریافت` : '',
@@ -253,7 +351,9 @@ export class ReceiptsService {
       include: {
         customer: { select: { id: true, firstName: true, lastName: true } },
         user: { select: { id: true, fullName: true } },
-        cheque: true,
+        payments: {
+          include: { cheque: true },
+        },
         allocations: {
           include: { invoice: { select: { id: true, number: true, total: true } } },
         },
@@ -285,11 +385,15 @@ export class ReceiptsService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.receipt.findMany({
         where,
-        include: {
-          customer: { select: { firstName: true, lastName: true } },
-          user: { select: { fullName: true } },
-          cheque: { select: { number: true, dueDate: true, status: true } },
+      include: {
+        customer: { select: { firstName: true, lastName: true } },
+        user: { select: { fullName: true } },
+        payments: {
+          include: {
+            cheque: { select: { number: true, dueDate: true, status: true } },
+          },
         },
+      },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,
         take: limit,

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowRight, Ban, Eye, Loader2, Printer, Undo2 } from "lucide-react";
+import { ArrowRight, Ban, Eye, Loader2, PencilLine, Printer, Undo2 } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -12,8 +12,10 @@ import { StatusBadge } from "@/components/status-badge";
 import { Money } from "@/components/money";
 import { cancelInvoice, getInvoice, getInvoices } from "@/lib/api";
 import { money, toFa, rial } from "@/lib/format";
-import type { Invoice } from "@/lib/types";
+import type { Invoice, WorkTask } from "@/lib/types";
 import { ReturnDialog } from "./return-dialog";
+import { CorrectionDialog } from "./correction-dialog";
+import { TaskProgressBar } from "./task-progress";
 
 /** ابتدای امروز به‌صورت ISO — سرور `from` را به‌عنوان تاریخ می‌گیرد. */
 function startOfToday(): string {
@@ -31,16 +33,20 @@ function startOfToday(): string {
 export function RecentInvoices({
   open,
   warehouseId,
+  tasksByInvoice,
   onClose,
 }: {
   open: boolean;
   warehouseId: string;
+  /** کارهای ارسال‌شده برای هر فاکتور — چیپِ پیشرفت روی ردیف فاکتور. */
+  tasksByInvoice?: Record<string, WorkTask[]>;
   onClose: () => void;
 }) {
   const qc = useQueryClient();
   const [cancelling, setCancelling] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [returning, setReturning] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState<string | null>(null);
 
   /*
    * ردیف‌های فاکتور در لیست نیستند (لیست سبک است)، پس برای «مشاهده» جزئیات
@@ -81,8 +87,8 @@ export function RecentInvoices({
         بستنِ مرجوعی دوباره برمی‌گردد. onClose فقط وقتی صدا زده می‌شود که کاربر
         خودش ببندد، نه وقتی برای مرجوعی موقتاً جمع شده. */}
     <Dialog
-      open={open && !returning}
-      onOpenChange={(v) => { if (!v && !returning) onClose(); }}
+      open={open && !returning && !correcting}
+      onOpenChange={(v) => { if (!v && !returning && !correcting) onClose(); }}
     >
       <DialogContent className="max-w-6xl">
         <DialogHeader>
@@ -164,14 +170,23 @@ export function RecentInvoices({
                   >
                     <Printer className="size-4" /> چاپ
                   </Button>
-                  {detail.data.status !== "CANCELLED" && (
-                    <Button
-                      variant="outline"
-                      className="w-fit"
-                      onClick={() => setReturning(detail.data!.id)}
-                    >
-                      <Undo2 className="size-4" /> مرجوعی
-                    </Button>
+                  {detail.data.status === "CONFIRMED" && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="w-fit"
+                        onClick={() => setReturning(detail.data!.id)}
+                      >
+                        <Undo2 className="size-4" /> مرجوعی
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-fit"
+                        onClick={() => setCorrecting(detail.data!.id)}
+                      >
+                        <PencilLine className="size-4" /> اصلاحیه
+                      </Button>
+                    </>
                   )}
                 </div>
               </>
@@ -227,6 +242,13 @@ export function RecentInvoices({
                         </td>
                         <td className="max-w-40 truncate p-2">
                           {inv.customer?.fullName ?? "نقدی گذری"}
+                          {!cancelled && (tasksByInvoice?.[inv.id]?.length ?? 0) > 0 && (
+                            <div className="mt-1 flex flex-col gap-1">
+                              {tasksByInvoice![inv.id]!.map((t) => (
+                                <TaskProgressBar key={t.id} task={t} compact />
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="p-2"><Money value={inv.total} /></td>
                         <td className="p-2">
@@ -257,7 +279,7 @@ export function RecentInvoices({
                               <Eye className="size-3.5" />
                               <span className="ms-1 text-xs">مشاهده</span>
                             </Button>
-                            {!cancelled && (
+                            {inv.status === "CONFIRMED" && (
                               <>
                                 <Button
                                   variant="ghost"
@@ -266,6 +288,14 @@ export function RecentInvoices({
                                 >
                                   <Undo2 className="size-3.5 text-amber-600" />
                                   <span className="ms-1 text-xs">مرجوعی</span>
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setCorrecting(inv.id)}
+                                >
+                                  <PencilLine className="size-3.5 text-primary" />
+                                  <span className="ms-1 text-xs">اصلاحیه</span>
                                 </Button>
                                 <Button
                                   variant="ghost"
@@ -295,6 +325,12 @@ export function RecentInvoices({
     <ReturnDialog
       invoiceId={returning}
       onClose={() => setReturning(null)}
+      onDone={() => qc.invalidateQueries({ queryKey: ["pos-recent-invoices"] })}
+    />
+
+    <CorrectionDialog
+      invoiceId={correcting}
+      onClose={() => setCorrecting(null)}
       onDone={() => qc.invalidateQueries({ queryKey: ["pos-recent-invoices"] })}
     />
 

@@ -137,7 +137,7 @@ export function BulkPriceDialog({
                 <Input
                   dir="ltr"
                   inputMode="numeric"
-                  className="h-10 text-left tabular-nums"
+                  className="h-10 text-right tabular-nums"
                   value={salePrice ? money(salePrice) : ""}
                   onChange={(e) => setSalePrice(parseNum(e.target.value))}
                   placeholder="بدون تغییر"
@@ -148,7 +148,7 @@ export function BulkPriceDialog({
                 <Input
                   dir="ltr"
                   inputMode="numeric"
-                  className="h-10 text-left tabular-nums"
+                  className="h-10 text-right tabular-nums"
                   value={purchasePrice ? money(purchasePrice) : ""}
                   onChange={(e) => setPurchasePrice(parseNum(e.target.value))}
                   placeholder="بدون تغییر"
@@ -164,7 +164,7 @@ export function BulkPriceDialog({
                 <Input
                   dir="ltr"
                   inputMode="numeric"
-                  className="h-10 text-left tabular-nums"
+                  className="h-10 text-right tabular-nums"
                   value={percent ? toFa(percent) : ""}
                   onChange={(e) => {
                     const raw = e.target.value.trim().startsWith("-") ? -1 : 1;

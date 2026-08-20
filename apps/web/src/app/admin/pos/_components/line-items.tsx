@@ -1,8 +1,7 @@
 "use client";
 
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MoneyInput } from "@/components/money-input";
 import { money, parseNum, qty, toFa } from "@/lib/format";
@@ -181,20 +180,20 @@ export function LineItems({
     // نام کالا truncate می‌شود. min-w هم هست تا در پنجره‌ی باریک به‌جای له‌شدن,
     // جدول افقی اسکرول شود.
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full min-w-[720px] table-fixed text-sm">
+      <table className="w-full min-w-[700px] table-fixed text-[13px]">
         <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
           <tr className="text-muted-foreground">
-            <th className="w-10 p-2" />
-            <th className="p-2 text-start font-medium">کالا</th>
-            <th className="w-32 p-2 text-start font-medium">تعداد</th>
-            <th className="w-36 p-2 text-start font-medium whitespace-nowrap">
+            <th className="w-8 px-1.5 py-1" />
+            <th className="px-2 py-1 text-start text-xs font-medium">کالا</th>
+            <th className="w-20 px-2 py-1 text-start text-xs font-medium">تعداد</th>
+            <th className="w-32 px-2 py-1 text-start text-xs font-medium whitespace-nowrap">
               قیمت واحد <span className="font-normal opacity-70">(ریال)</span>
             </th>
-            <th className="w-32 p-2 text-start font-medium">تخفیف</th>
+            <th className="w-28 px-2 py-1 text-start text-xs font-medium">تخفیف</th>
             {/* جمع آخرین ستون قبل از حذف است؛ در چیدمان راست‌به‌چپ اولین چیزی
                 است که با سرریز افقی بریده می‌شود، پس عرض کل باید جا شود. */}
-            <th className="w-36 p-2 text-end font-medium">جمع</th>
-            <th className="w-10 p-2" />
+            <th className="w-32 px-2 py-1 text-end text-xs font-medium">جمع</th>
+            <th className="w-8 px-1.5 py-1" />
           </tr>
         </thead>
         <tbody>
@@ -208,7 +207,7 @@ export function LineItems({
               <tr
                 key={l.key}
                 onClick={() => onActivate(i)}
-                className={`border-t border-e-2 align-top transition-colors ${
+                className={`border-t border-e-2 align-middle transition-colors ${
                   errorLine === i
                     ? "border-e-destructive bg-destructive/10"
                     : activeRow === i
@@ -220,7 +219,7 @@ export function LineItems({
                   l.included ? "" : "opacity-45"
                 }`}
               >
-                <td className="p-2">
+                <td className="px-1.5 py-0.5">
                   <input
                     type="checkbox"
                     checked={l.included}
@@ -232,82 +231,79 @@ export function LineItems({
                   />
                 </td>
 
-                <td className="p-2">
-                  <div className="truncate font-medium">{l.productName}</div>
-                  <div className="mt-0.5 flex items-center gap-1 text-xs">
-                    {l.locationId ? (
-                      <>
-                        <span className="truncate text-sky-700 dark:text-sky-400">
-                          {l.locationPath}
+                {/*
+                  نام و مشخصات در یک خط، نه دو.
+
+                  دو خطی‌بودن هر ردیف را ~۴۴ پیکسل می‌کرد و روی لپ‌تاپ فقط ۸-۹
+                  قلم در صفحه جا می‌شد؛ فروشنده برای دیدن ردیف‌های بعدی باید
+                  اسکرول می‌کرد. حالا نام truncate می‌شود و مشخصات (قفسه، موجودی،
+                  هشدارها) کنارش می‌نشیند — همان اطلاعات، نصفِ ارتفاع.
+                */}
+                <td className="px-2 py-0.5">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="truncate text-[13px] font-medium leading-tight">
+                      {l.productName}
+                    </span>
+                    <div className="flex shrink-0 items-center gap-1 text-[11px] leading-tight">
+                      {l.locationId ? (
+                        <>
+                          <span className="max-w-[10rem] truncate text-sky-700 dark:text-sky-400">
+                            {l.locationPath}
+                          </span>
+                          <span className="text-muted-foreground">·</span>
+                          <span className={`font-medium ${
+                            isOutOfStock
+                              ? "text-destructive"
+                              : isLowStock
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-emerald-600 dark:text-emerald-400"
+                          }`}>
+                            موجودی {qty(l.available)}
+                          </span>
+                          {isLowStock && !isOutOfStock && (
+                            <span className="rounded bg-amber-600/10 px-1 py-0.5 text-[10px] font-medium text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
+                              کم
+                            </span>
+                          )}
+                          {isOutOfStock && (
+                            <span className="rounded bg-destructive/10 px-1 py-0.5 text-[10px] font-medium text-destructive">
+                              ناموجود
+                            </span>
+                          )}
+                          {l.stranded && (
+                            <span
+                              title="قفسه‌ی این جنس حذف شده — همین‌طور فروخته می‌شود؛ بهتر است به یک قفسه‌ی معتبر منتقلش کنی."
+                              className="rounded bg-orange-500/10 px-1 py-0.5 text-[10px] font-medium text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
+                            >
+                              قفسه حذف‌شده
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="rounded bg-amber-600/10 px-1.5 py-0.5 font-medium text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
+                          در سیستم ثبت نشده
                         </span>
-                        <span className="text-muted-foreground">·</span>
-                        <span className={`font-medium ${
-                          isOutOfStock
-                            ? "text-destructive"
-                            : isLowStock
-                              ? "text-amber-600 dark:text-amber-400"
-                              : "text-emerald-600 dark:text-emerald-400"
-                        }`}>
-                          موجودی {qty(l.available)}
+                      )}
+                      {errorLine === i && (
+                        <span className="ms-1 rounded bg-destructive px-1.5 py-0.5 font-medium text-white">
+                          موجودی کافی نیست
                         </span>
-                        {isLowStock && !isOutOfStock && (
-                          <span className="rounded bg-amber-600/10 px-1 py-0.5 text-[10px] font-medium text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
-                            کم
-                          </span>
-                        )}
-                        {isOutOfStock && (
-                          <span className="rounded bg-destructive/10 px-1 py-0.5 text-[10px] font-medium text-destructive">
-                            ناموجود
-                          </span>
-                        )}
-                        {l.stranded && (
-                          <span
-                            title="قفسه‌ی این جنس حذف شده — همین‌طور فروخته می‌شود؛ بهتر است به یک قفسه‌ی معتبر منتقلش کنی."
-                            className="rounded bg-orange-500/10 px-1 py-0.5 text-[10px] font-medium text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
-                          >
-                            قفسه حذف‌شده
-                          </span>
-                        )}
-                      </>
-                    ) : (
-                      <span className="rounded bg-amber-600/10 px-1.5 py-0.5 font-medium text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
-                        در سیستم ثبت نشده
-                      </span>
-                    )}
-                    {errorLine === i && (
-                      <span className="ms-1 rounded bg-destructive px-1.5 py-0.5 font-medium text-white">
-                        موجودی کافی نیست
-                      </span>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </td>
 
-                <td className="p-2">
+                <td className="px-2 py-0.5">
                   {/*
-                    دکمه‌های ±: تغییر یکی‌یکی رایج‌ترین کار روی این ستون است و
-                    با ماوس نباید یعنی «کلیک، انتخاب متن، تایپ». خانه‌ی عدد هم
-                    سرِ جایش می‌ماند چون تعدادِ ۲۴ را کسی با ۲۴ کلیک نمی‌زند.
+                    بدون دکمه‌های ±: کار کیبوردمحور است — فروشنده عدد را تایپ
+                    می‌کند (یا از نوار اسکن با Enter تعدادِ ردیفِ فعال را می‌زند).
+                    دکمه‌های ± فقط فضای خانه را می‌خوردند تا جایی که عددِ دورقمی
+                    هم بریده می‌شد. حالا کلِ عرضِ ستون مالِ خودِ عدد است.
                   */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPatch(i, { quantity: Math.max(1, l.quantity - 1) });
-                      }}
-                      className="flex size-8 shrink-0 items-center justify-center rounded-md border
-                                 text-muted-foreground hover:border-primary hover:text-primary
-                                 disabled:opacity-40 focus:outline-none focus:ring-1 focus:ring-primary"
-                      disabled={l.quantity <= 1}
-                      aria-label="کم کردن"
-                    >
-                      <Minus className="size-3.5" />
-                    </button>
-
                   <Input
                     dir="ltr"
                     inputMode="numeric"
-                    className="h-10 text-center text-base tabular-nums"
+                    className="h-7 text-center text-sm tabular-nums"
                     value={toFa(l.quantity)}
                     /*
                       با فوکوس، کل محتوا انتخاب می‌شود.
@@ -323,24 +319,9 @@ export function LineItems({
                       onPatch(i, { quantity: Math.max(1, parseNum(e.target.value)) })
                     }
                   />
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPatch(i, { quantity: l.quantity + 1 });
-                      }}
-                      className="flex size-8 shrink-0 items-center justify-center rounded-md border
-                                 text-muted-foreground hover:border-primary hover:text-primary
-                                 focus:outline-none focus:ring-1 focus:ring-primary"
-                      aria-label="زیاد کردن"
-                    >
-                      <Plus className="size-3.5" />
-                    </button>
-                  </div>
                 </td>
 
-                <td className="p-2">
+                <td className="px-2 py-0.5">
                   {/*
                     بدون برچسبِ absolute روی فیلد: صفحه راست‌به‌چپ است و `end` روی
                     لبه‌ی چپ می‌نشیند — همان‌جا که عددِ dir=ltr شروع می‌شود و روی هم
@@ -348,8 +329,8 @@ export function LineItems({
                   */}
                   <MoneyInput
                     selectOnFocus
-                    placeholder="قیمت را وارد کنید"
-                    className={`h-10 text-left text-base font-semibold tabular-nums ${
+                    placeholder="قیمت"
+                    className={`h-7 text-right text-sm font-semibold tabular-nums ${
                       l.unitPrice
                         ? ""
                         : "border-amber-600/60 bg-amber-600/10 placeholder:text-xs placeholder:font-normal placeholder:text-amber-600"
@@ -361,7 +342,7 @@ export function LineItems({
                   />
                 </td>
 
-                <td className="p-2">
+                <td className="px-2 py-0.5">
                   <DiscountField
                     compact
                     value={l.discount}
@@ -370,27 +351,29 @@ export function LineItems({
                   />
                 </td>
 
-                <td className="p-2 text-end">
-                  <div className="text-base font-bold tabular-nums text-primary">
+                <td className="px-2 py-0.5 text-end">
+                  <div className="text-sm font-bold tabular-nums text-primary">
                     {money(lineNet(l))}
                   </div>
                   {disc > 0 && (
-                    <div className="text-[11px] tabular-nums text-emerald-600 dark:text-emerald-400">
+                    <div className="text-[10px] leading-tight tabular-nums text-emerald-600 dark:text-emerald-400">
                       <span className="text-muted-foreground line-through">{money(gross)}</span>
                       {" "}− {money(disc)}
                     </div>
                   )}
                 </td>
 
-                <td className="p-2">
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
+                <td className="px-1.5 py-0.5">
+                  <button
+                    type="button"
                     onClick={() => onRemove(i)}
-                    className="focus:outline-none focus:ring-1 focus:ring-destructive"
+                    className="flex size-6 items-center justify-center rounded text-destructive/70
+                               hover:bg-destructive/10 hover:text-destructive
+                               focus:outline-none focus:ring-1 focus:ring-destructive"
+                    aria-label="حذف ردیف"
                   >
-                    <Trash2 className="size-4 text-destructive" />
-                  </Button>
+                    <Trash2 className="size-3.5" />
+                  </button>
                 </td>
               </tr>
             );

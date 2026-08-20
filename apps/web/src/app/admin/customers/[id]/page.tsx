@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -19,6 +19,7 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
+  UserX,
 } from "lucide-react";
 
 import { LoadingState, ErrorState } from "@/components/states";
@@ -28,9 +29,11 @@ import { Input } from "@/components/ui/input";
 import { JalaliDateInput } from "@/components/jalali-date-input";
 import { StatusBadge } from "@/components/status-badge";
 import { CustomerCategoryBadge } from "@/components/customer-category-badge";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
 import {
   adjustBalance,
+  deactivateCustomer,
   getCustomer,
   getCustomerStats,
   getInvoices,
@@ -39,7 +42,8 @@ import {
   updateCustomer,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, money, parseNum, toFa } from "@/lib/format";
+import { faDate, faToEn, money, parseNum, toFa } from "@/lib/format";
+import { bpToPercent, percentToBp } from "@/lib/cheque-charge";
 import { useAuthStore } from "@/lib/auth-store";
 import { TakePayment } from "./_components/take-payment";
 import { EditCustomerDialog } from "./_components/edit-customer-dialog";
@@ -78,9 +82,30 @@ function endOfDay(iso: string): string {
  */
 export default function CustomerPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const qc = useQueryClient();
   const role = useAuthStore((s) => s.user?.role);
   const isManager = role === "ADMIN" || role === "MANAGER";
+
+  /** مشتریِ در حال غیرفعال‌سازی — تا تأییدِ مدیر، این‌جا می‌ماند. */
+  const [deactivating, setDeactivating] = React.useState(false);
+  const doDeactivate = useMutation({
+    mutationFn: () => deactivateCustomer(id),
+    onSuccess: () => {
+      toast.success("مشتری غیرفعال شد");
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["debtors"] });
+      // غیرفعال‌شده از فهرست‌ها حذف می‌شود — به لیست برگرد.
+      router.push("/admin/customers");
+    },
+    onError: (e) => {
+      toast.error(
+        e instanceof ApiException
+          ? e.message
+          : "غیرفعال‌سازی مشتری ناموفق بود"
+      );
+    },
+  });
 
   const customer = useQuery({
     queryKey: ["customer", id],
@@ -197,6 +222,15 @@ export default function CustomerPage() {
           </div>
         </div>
         <EditCustomerDialog customer={c} onDone={refresh} />
+        {isManager && (
+          <Button
+            variant="outline"
+            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setDeactivating(true)}
+          >
+            <UserX className="size-4" /> غیرفعال‌سازی
+          </Button>
+        )}
         {/* برگه‌ای که مشتری می‌خواهد ببرد — پنجره‌ی جدا تا این صفحه بماند. */}
         <Button
           variant="outline"
@@ -384,7 +418,13 @@ export default function CustomerPage() {
         </div>
       </Card>
 
-      <TakePayment customerId={id} totalDue={totalDue} onDone={refresh} />
+      <TakePayment
+        customerId={id}
+        totalDue={totalDue}
+        chequeRateBp={c.chequeRateBp}
+        chequeRateMode={c.chequeRateMode}
+        onDone={refresh}
+      />
 
       {/* فاکتورهای باز — همان‌هایی که این بدهی از آن‌ها آمده. */}
       {!!openInvoices.length && (
@@ -481,6 +521,24 @@ export default function CustomerPage() {
           )}
         </div>
       </Card>
+
+      {/* تأیید غیرفعال‌سازی — soft delete؛ سابقه‌ی فاکتورها و دفتر پاک نمی‌شود. */}
+      <ConfirmDialog
+        open={deactivating}
+        onOpenChange={(v) => { if (!v) setDeactivating(false); }}
+        title="غیرفعال‌سازی این مشتری؟"
+        description={
+          <>
+            مشتری از فهرست انتخاب‌ها و گزارش بدهکاران حذف می‌شود؛ رکورد و
+            سابقه‌ی فاکتورها و گردش حسابش پاک نمی‌شود. اگر هنوز بدهی یا
+            بستانکاری داشته باشد، این کار رد می‌شود.
+          </>
+        }
+        destructive
+        confirmText="بله، غیرفعال کن"
+        loading={doDeactivate.isPending}
+        onConfirm={() => doDeactivate.mutate()}
+      />
     </div>
   );
 }
@@ -646,10 +704,24 @@ function CreditSettings({
 }) {
   const [limit, setLimit] = React.useState(customer.creditLimit ?? 0);
   const [days, setDays] = React.useState(customer.creditDays ?? 0);
+  /** نرخِ فروشِ مدت‌دار، به درصد در ورودی و به پایه‌ی هزارم در ذخیره. */
+  const [ratePercent, setRatePercent] = React.useState(
+    bpToPercent(customer.chequeRateBp ?? 0),
+  );
+  const [rateMode, setRateMode] = React.useState<"FLAT" | "MONTHLY">(
+    customer.chequeRateMode ?? "MONTHLY",
+  );
+
+  const rateBp = percentToBp(faToEn(ratePercent));
 
   const save = useMutation({
     mutationFn: () =>
-      updateCustomer(customer.id, { creditLimit: limit, creditDays: days }),
+      updateCustomer(customer.id, {
+        creditLimit: limit,
+        creditDays: days,
+        chequeRateBp: rateBp,
+        chequeRateMode: rateMode,
+      }),
     onSuccess: () => {
       toast.success("تنظیمات اعتبار ذخیره شد");
       onDone();
@@ -659,7 +731,10 @@ function CreditSettings({
   });
 
   const dirty =
-    limit !== (customer.creditLimit ?? 0) || days !== (customer.creditDays ?? 0);
+    limit !== (customer.creditLimit ?? 0) ||
+    days !== (customer.creditDays ?? 0) ||
+    rateBp !== (customer.chequeRateBp ?? 0) ||
+    rateMode !== (customer.chequeRateMode ?? "MONTHLY");
 
   return (
     <Card className="p-4">
@@ -672,7 +747,7 @@ function CreditSettings({
           <label className="mb-1 block text-sm font-medium">سقف اعتبار (ریال)</label>
           <Input
             dir="ltr"
-            className="h-10 w-48 text-left tabular-nums"
+            className="h-10 w-48 text-right tabular-nums"
             value={limit ? money(limit) : ""}
             onChange={(e) => setLimit(parseNum(e.target.value))}
             placeholder="۰ = بدون سقف"
@@ -683,11 +758,57 @@ function CreditSettings({
           <label className="mb-1 block text-sm font-medium">مهلت پیش‌فرض (روز)</label>
           <Input
             dir="ltr"
-            className="h-10 w-32 text-left tabular-nums"
+            className="h-10 w-32 text-right tabular-nums"
             value={days ? toFa(days) : ""}
             onChange={(e) => setDays(parseNum(e.target.value))}
             placeholder="۰"
           />
+        </div>
+
+        {/*
+          نرخِ فروشِ مدت‌دار برای چکِ این مشتری.
+
+          به درصد گرفته می‌شود چون فروشنده «۲.۵ درصد» می‌گوید، و به پایه‌ی هزارم
+          ذخیره می‌شود چون اعشار در پول یعنی اختلافِ یک‌ریالی. صفر یعنی «از
+          پیش‌فرضِ فروشگاه استفاده کن».
+        */}
+        <div>
+          <label className="mb-1 block text-sm font-medium">
+            نرخ چک (درصد)
+          </label>
+          <Input
+            dir="ltr"
+            className="h-10 w-28 text-right tabular-nums"
+            inputMode="decimal"
+            value={ratePercent === "0" ? "" : ratePercent}
+            onChange={(e) => setRatePercent(e.target.value)}
+            placeholder="۰"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium">نحوه‌ی محاسبه</label>
+          <div className="flex gap-1">
+            {(
+              [
+                ["MONTHLY", "در ماه"],
+                ["FLAT", "ثابت"],
+              ] as const
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setRateMode(mode)}
+                className={`h-10 rounded-md border px-3 text-sm font-medium transition-colors ${
+                  rateMode === mode
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "hover:border-primary hover:text-primary"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <Button disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
@@ -697,7 +818,8 @@ function CreditSettings({
 
       <p className="mt-2 text-xs text-muted-foreground">
         سقف صفر یعنی «سقفی تعیین نشده». عبور از سقف جلوی فروش را نمی‌گیرد، فقط
-        سرِ تسویه هشدار می‌دهد.
+        سرِ تسویه هشدار می‌دهد. نرخ چکِ صفر یعنی پیش‌فرضِ فروشگاه — و سود هیچ‌وقت
+        خودکار روی فاکتور نمی‌نشیند، فروشنده سرِ هر چک تأییدش می‌کند.
       </p>
     </Card>
   );
@@ -822,7 +944,7 @@ function ManagerActions({
             <div className="flex gap-2">
               <Input
                 dir="ltr"
-                className="h-10 text-left tabular-nums"
+                className="h-10 text-right tabular-nums"
                 value={openingAmount ? money(openingAmount) : ""}
                 onChange={(e) => setOpeningAmount(parseNum(e.target.value))}
                 placeholder="۰"
@@ -845,7 +967,7 @@ function ManagerActions({
           <div className="flex gap-2">
             <Input
               dir="ltr"
-              className="h-10 w-36 text-left tabular-nums"
+              className="h-10 w-36 text-right tabular-nums"
               value={adjustAmount ? money(adjustAmount) : ""}
               onChange={(e) => setAdjustAmount(parseNum(e.target.value))}
               placeholder="۰"

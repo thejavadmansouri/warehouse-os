@@ -39,8 +39,9 @@ model User {
   productRequestsReviewed ProductCreationRequest[] @relation("ProductRequestReviewer")
   saleInvoices            SaleInvoice[]            @relation("InvoiceSeller")
   saleInvoicesCancelled   SaleInvoice[]            @relation("InvoiceCanceller")
-  receiptsTaken           Receipt[]                @relation("ReceiptTaker")
-  saleReturns             SaleReturn[]             @relation("ReturnProcessor")
+  receiptsTaken          Receipt[]                @relation("ReceiptTaker")
+  saleReturns            SaleReturn[]             @relation("ReturnProcessor")
+  saleCorrections  SaleCorrection[]         @relation("CorrectionActor")
   purchases               PurchaseInvoice[]        @relation("PurchaseRecorder")
   purchasesCancelled      PurchaseInvoice[]        @relation("PurchaseCanceller")
   ledgerEntries           CustomerLedger[]         @relation("LedgerActor")
@@ -48,6 +49,9 @@ model User {
   pickTasksRequested      PickTask[]               @relation("PickRequester")
   pickTasksAssigned       PickTask[]               @relation("PickAssignee")
   pickTasksPicked         PickTask[]               @relation("PickPicker")
+  workTasksRequested      WorkTask[]               @relation("WorkTaskRequester")
+  workTasksAssigned       WorkTask[]               @relation("WorkTaskAssignee")
+  workTaskItemsDone       WorkTaskItem[]           @relation("WorkTaskItemDoneBy")
 }
 
 model Warehouse {
@@ -62,9 +66,11 @@ model Warehouse {
   locationTypes LocationType[]
   saleInvoices  SaleInvoice[]
   saleReturns   SaleReturn[]
+  saleCorrections SaleCorrection[]
   pickTasks     PickTask[]
   quotations    Quotation[]
   purchases     PurchaseInvoice[]
+  workTasks     WorkTask[]
 }
 
 model LocationType {
@@ -109,6 +115,8 @@ model Location {
   productRequests  ProductCreationRequest[]
   pickTasks        PickTask[]
   saleReturnLines  SaleReturnLine[]
+  saleCorrectionLines SaleCorrectionLine[]
+  workTaskItems       WorkTaskItem[]
 
   @@index([parentId])
   @@index([warehouseId])
@@ -221,6 +229,8 @@ model Product {
   pickTasks           PickTask[]
   quotationLines      QuotationLine[]
   saleReturnLines     SaleReturnLine[]
+  saleCorrectionLines SaleCorrectionLine[]
+  workTaskItems       WorkTaskItem[]
 
   @@index([searchTokens], type: Gin)
   @@index([labelPrintedAt])
@@ -346,14 +356,18 @@ model InventoryLog {
   invoice       SaleInvoice?      @relation(fields: [invoiceId], references: [id])
   saleReturn    SaleReturn?       @relation("ReturnMovement", fields: [saleReturnId], references: [id])
   purchase      PurchaseInvoice?  @relation(fields: [purchaseId], references: [id])
+  /// اصلاحیه‌ای که این حرکتِ جبرانی را ساخته (فقط برای حرکاتِ اصلاحیه). null برای بقیه.
+  correctionId  String?
+  correction    SaleCorrection?   @relation("CorrectionMovement", fields: [correctionId], references: [id])
   // ردیف‌های مرجوعی که این ردیفِ SALE را برمی‌گردانند (saleLogId به این اشاره دارد).
   returnLines   SaleReturnLine[]
+  // ردیف‌های اصلاحیه‌ای که همین ردیفِ SALE را تصحیح کرده‌اند (saleLogId).
+  correctionLines SaleCorrectionLine[]
 
   @@index([invoiceId])
   @@index([saleReturnId])
   @@index([purchaseId])
 }
-
 
 /// فاکتور خرید — ورودِ کالا از روی برگه‌ای که فروشنده همراه جنس می‌آورد.
 ///
@@ -762,19 +776,26 @@ model Customer {
   /// مهلت پرداخت پیش‌فرض این مشتری به روز. سررسید فاکتور از همین ساخته می‌شود
   /// تا فروشنده مجبور نباشد هر بار انتخابش کند؛ صفر یعنی سررسید همان روز.
   creditDays  Int      @default(0)
+  /// نرخِ تفاوتِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم (bp).
+  /// ۲۵۰ یعنی ۲.۵٪. عدد صحیح است نه اعشار — اعشار در پول یعنی اختلافِ یک‌ریالی
+  /// که هیچ‌وقت جمع نمی‌شود. صفر یعنی «از پیش‌فرضِ فروشگاه بگیر».
+  chequeRateBp   Int            @default(0)
+  chequeRateMode ChequeRateMode @default(MONTHLY)
   isActive    Boolean  @default(true) // Soft Delete (قانون ۵)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  category   CustomerCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  category CustomerCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  phones     CustomerPhone[]
-  invoices   SaleInvoice[]
-  messages   SmsMessage[]
-  receipts   Receipt[]
+  phones      CustomerPhone[]
+  invoices    SaleInvoice[]
+  openAccounts OpenAccount[]
+  messages    SmsMessage[]
+  receipts    Receipt[]
   quotations Quotation[]
   ledger     CustomerLedger[]
   returns    SaleReturn[]
+  corrections SaleCorrection[]
 
   @@index([searchName])
   @@index([lastName])
@@ -915,6 +936,84 @@ enum PickTaskStatus {
   CANCELLED
 }
 
+/// «کارِ کارگر» — یک لیست اقلام که فروشنده/مدیر برای یک کارگر می‌فرستد و کارگر
+/// آن‌ها را یکی‌یکی تیک می‌زند. پیشرفتِ هر Task در POS زنده نمایش داده می‌شود.
+///
+/// عمداً **هیچ ربطی به موجودی ندارد**: نه کسر، نه رزرو، نه هیچ حرکتِ لجر.
+/// صرفاً یک تابلوی کار است — موجودی فقط از مسیرِ خودش (فاکتور/خرید/…)
+/// تغییر می‌کند. اگر کارگر جنس را بیاورد ولی فروش نهایی نشود، هیچ عدد
+/// اشتباهی در انبار ثبت نشده (همان قانون PickTask).
+///
+/// به‌جای نگه‌داشتن پیشرفت، `doneItems/totalItems` همیشه از آیتم‌ها مشتق می‌شود —
+/// ستونِ ذخیره‌شده منبعِ دروغ می‌شود.
+model WorkTask {
+  id             String         @id @default(uuid())
+  status         WorkTaskStatus @default(PENDING)
+  warehouseId    String
+  /// ارجاع اختیاری به سند — فقط برای نمایش («فاکتور ۱۲۳۴»)، هیچ تأثیری روی سند.
+  invoiceId      String?
+  quotationId    String?
+  /// null = «هر کارگری که آزاد است».
+  assignedToId   String?
+  requestedById  String?
+  note           String?
+  /// کلید یکتای کلاینت؛ ارسال دوباره Task تکراری نمی‌سازد.
+  idempotencyKey String?        @unique
+  cancelReason   String?
+  cancelledAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
+  invoice     SaleInvoice?   @relation(fields: [invoiceId], references: [id])
+  quotation   Quotation?     @relation(fields: [quotationId], references: [id])
+  requestedBy User?          @relation("WorkTaskRequester", fields: [requestedById], references: [id])
+  assignedTo  User?          @relation("WorkTaskAssignee", fields: [assignedToId], references: [id])
+  items       WorkTaskItem[]
+
+  @@index([warehouseId, status, createdAt])
+  @@index([assignedToId, status])
+  @@index([invoiceId])
+}
+
+/// یک قلمِ کارِ کارگر — کالا + قفسه + تعداد + وضعیت تیک.
+///
+/// تیک آفلاین: کارگر گوشی‌اش را روی `clientMutationId` ثبت می‌کند و sync
+/// همان کلید را می‌فرستد؛ تکرارِ ارسال تیکِ دوباره نمی‌سازد.
+model WorkTaskItem {
+  id               String             @id @default(uuid())
+  taskId           String
+  productId        String
+  /// اختیاری — مثل PickTask: جنس ثبت‌نشده آدرس ندارد ولی کارگر پیدایش می‌کند.
+  locationId       String?
+  quantity         Int                @default(1)
+  status           WorkTaskItemStatus @default(PENDING)
+  /// ادعای اتمیک: اولی که تیک زد برنده است — دو کارگر نمی‌توانند یک قلم را دو بار بزنند.
+  doneById         String?
+  doneAt           DateTime?
+  clientMutationId String?            @unique // idempotency تیک آفلاین
+  createdAt        DateTime           @default(now())
+
+  task     WorkTask  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  product  Product   @relation(fields: [productId], references: [id])
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  doneBy   User?     @relation("WorkTaskItemDoneBy", fields: [doneById], references: [id])
+
+  @@index([taskId, status])
+}
+
+enum WorkTaskStatus {
+  PENDING // فرستاده شد، هنوز هیچ قلمی تیک نخورده
+  IN_PROGRESS // حداقل یک قلم تیک خورده
+  COMPLETED // همه‌ی قلم‌ها تیک خورده
+  CANCELLED
+}
+
+enum WorkTaskItemStatus {
+  PENDING
+  DONE
+}
+
 /// فاکتور فروش چندردیفی.
 /// ردیف‌های فاکتور جدول جدا ندارند: هر ردیف یک InventoryLog با action=SALE و
 /// invoiceId همین فاکتور است. پس موجودی و فاکتور از یک منبع واحد می‌آیند و
@@ -933,6 +1032,9 @@ model SaleInvoice {
   userId         String? // فروشنده
   subtotal       Int           @default(0) // جمع ردیف‌ها پیش از تخفیف
   discount       Int           @default(0) // تخفیف کل فاکتور (ریال)
+  /// تفاوتِ فروشِ مدت‌دار روی این فاکتور (سودِ چک).
+  /// total = subtotal − discount + financeCharge
+  financeCharge  Int @default(0)
   total          Int           @default(0) // مبلغ نهایی = subtotal - discount
   paidAmount     Int           @default(0) // جمع پرداخت‌های ثبت‌شده
   dueAmount      Int           @default(0) // مانده = total - paidAmount (نسیه)
@@ -944,6 +1046,10 @@ model SaleInvoice {
   /// null یعنی قیمت خرید در زمان فروش موجود نبوده.
   profit         Int?
   status         InvoiceStatus @default(CONFIRMED)
+  /// حساب بازِ مالکِ این فاکتور (فقط فاکتورهای OPEN). در تسویه همه‌ی فاکتورهای
+  /// بازِ یک حساب CONFIRMED می‌شوند و این رابطه دیگر برای فاکتور نهایی استفاده
+  /// نمی‌شود.
+  accountId      String?
   note           String?
   cancelReason   String?
   cancelledAt    DateTime?
@@ -955,11 +1061,14 @@ model SaleInvoice {
   warehouse   Warehouse           @relation(fields: [warehouseId], references: [id])
   user        User?               @relation("InvoiceSeller", fields: [userId], references: [id])
   cancelledBy User?               @relation("InvoiceCanceller", fields: [cancelledById], references: [id])
+  account     OpenAccount?        @relation(fields: [accountId], references: [id])
   lines       InventoryLog[]
   payments    Payment[]
   allocations ReceiptAllocation[]
   ledger      CustomerLedger[]
   returns     SaleReturn[]
+  corrections SaleCorrection[]
+  workTasks   WorkTask[]
 
   @@index([warehouseId, createdAt])
   @@index([customerId])
@@ -968,6 +1077,7 @@ model SaleInvoice {
 }
 
 enum InvoiceStatus {
+  OPEN // فاکتور جاریِ حساب باز — هنوز نهایی نشده، در تسویه CONFIRMED می‌شود
   CONFIRMED
   CANCELLED
 }
@@ -997,27 +1107,69 @@ enum PaymentMethod {
   CREDIT // نسیه (ثبت بدهی، بدون دریافت وجه)
 }
 
+/// حساب بازِ مشتری — «فاکتور کلی»ی که هنوز نهایی نشده.
+///
+/// هر نوبت خرید یک فاکتورِ OPEN جداگانه (با شماره و تاریخِ خودش) می‌سازد که به
+/// این حساب وصل است؛ مجموعِ آن فاکتورها همان چیزی است که فروشنده به مشتری نشان
+/// می‌دهد. قبل از تسویه، قیمت و مرجوعی آزاد است؛ در تسویه همه‌ی فاکتورهای باز
+/// CONFIRMED می‌شوند و خودِ حساب SETTLED.
+model OpenAccount {
+  id         String            @id @default(uuid())
+  /// شماره‌ی خوانای حساب — «فاکتور کلی» برای نمایش و چاپ.
+  number     Int               @unique @default(autoincrement())
+  customerId String
+  status     OpenAccountStatus @default(OPEN)
+  note       String?
+  settledAt  DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  customer Customer       @relation(fields: [customerId], references: [id])
+  invoices SaleInvoice[]
+
+  @@index([status])
+  @@index([customerId])
+}
+
+enum OpenAccountStatus {
+  OPEN
+  SETTLED
+  CANCELLED
+}
+
 /// جزئیات چک دریافتی.
 ///
-/// چک یا بابت یک فاکتور است (paymentId) یا بابت تسویه‌ی بدهی قبلی (receiptId).
-/// دقیقاً یکی از این دو باید پر باشد — سرویس این را کنترل می‌کند.
+/// چک یا بابت یک فاکتور است (paymentId) یا بابت سطر پرداختِ یک رسید
+/// (receiptPaymentId). دقیقاً یکی از این دو باید پر باشد — سرویس این را کنترل
+/// می‌کند.
 model Cheque {
-  id         String       @id @default(uuid())
-  paymentId  String?      @unique
-  receiptId  String?      @unique
-  number     String // شماره چک
-  bankName   String?
-  branch     String?
-  holderName String? // صاحب حساب، اگر با مشتری فرق دارد
-  dueDate    DateTime // تاریخ سررسید
-  status     ChequeStatus @default(IN_HAND)
-  settledAt  DateTime?
-  note       String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  id               String          @id @default(uuid())
+  paymentId        String?         @unique
+  receiptPaymentId String?         @unique
+  number           String // شماره چک
+  bankName         String?
+  branch           String?
+  holderName       String? // صاحب حساب، اگر با مشتری فرق دارد
+  dueDate          DateTime // تاریخ سررسید
+  /// تفاوتِ فروشِ مدت‌دار که داخلِ مبلغِ همین چک است.
+  ///
+  /// مبلغِ روی کاغذِ چک همان `Payment.amount` / `ReceiptPayment.amount` است —
+  /// دست نمی‌خورد، چون بانک دقیقاً همان را پاس می‌کند. این ستون فقط می‌گوید چه
+  /// سهمی از آن بابتِ مدت بوده، تا گزارشِ سود، حاشیه‌ی کالا را با درآمدِ مدت
+  /// قاطی نکند. مبلغِ پایه = amount − charge.
+  charge           Int             @default(0)
+  /// نرخ و مدتی که این عدد از آن ساخته شد — برای توضیح‌دادنِ رقم، نه محاسبه‌ی
+  /// دوباره‌اش. عددِ نهایی ذخیره شده تا تغییرِ بعدیِ قاعده، تاریخ را عوض نکند.
+  rateBp           Int             @default(0)
+  months           Int             @default(0)
+  status           ChequeStatus    @default(IN_HAND)
+  settledAt        DateTime?
+  note             String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
 
-  payment Payment? @relation(fields: [paymentId], references: [id])
-  receipt Receipt? @relation(fields: [receiptId], references: [id])
+  payment        Payment?        @relation(fields: [paymentId], references: [id])
+  receiptPayment ReceiptPayment? @relation(fields: [receiptPaymentId], references: [id])
 
   @@index([status, dueDate])
   @@index([number])
@@ -1032,7 +1184,9 @@ model Receipt {
   number         Int           @unique @default(autoincrement())
   customerId     String
   userId         String? // دریافت‌کننده
-  amount         Int // ریال
+  amount         Int // ریال — جمعِ سطرهای پرداخت
+  /// روشِ نخستینِ سطر پرداخت — برای سازگاریِ گزارش‌های قدیمی. تفکیک کامل در
+  /// ReceiptPayment است.
   method         PaymentMethod // نقد / کارت / چک — نسیه اینجا بی‌معناست
   note           String?
   /// کلید یکتای کلاینت؛ ارسال دوباره رسید تکراری نمی‌سازد.
@@ -1042,11 +1196,30 @@ model Receipt {
 
   customer    Customer            @relation(fields: [customerId], references: [id])
   user        User?               @relation("ReceiptTaker", fields: [userId], references: [id])
-  cheque      Cheque?
+  payments    ReceiptPayment[]
   allocations ReceiptAllocation[]
   ledger      CustomerLedger[]
 
   @@index([customerId, createdAt])
+}
+
+/// یک سطر پرداختِ یک رسید — مثل Payment روی فاکتور.
+///
+/// تسویه‌ی ترکیبی (نقد + کارت + چک) در یک رسید بدون فیلد جداگانه پشتیبانی
+/// می‌شود؛ هر سطر چک هم چکِ خودش را دارد (ReceiptPayment.cheque).
+model ReceiptPayment {
+  id        String        @id @default(uuid())
+  receiptId String
+  method    PaymentMethod
+  amount    Int // ریال
+  note      String?
+  createdAt DateTime      @default(now())
+
+  receipt Receipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  cheque  Cheque?
+
+  @@index([receiptId])
+  @@index([method])
 }
 
 /// دفتر حساب مشتری — تنها مرجعِ «مانده‌ی مشتری».
@@ -1075,30 +1248,37 @@ model CustomerLedger {
   receiptId  String?
   /// سند مرجوعی که این ردیفِ بستانکاری را ساخته (نوع RETURN). null برای بقیه.
   returnId   String?
+  /// اصلاحیه‌ای که این ردیفِ لجر را ساخته (نوع CORRECTION). null برای بقیه.
+  correctionId String?
   note       String?
   userId     String?
   createdAt  DateTime        @default(now())
 
-  customer   Customer     @relation(fields: [customerId], references: [id])
-  invoice    SaleInvoice? @relation(fields: [invoiceId], references: [id])
-  receipt    Receipt?     @relation(fields: [receiptId], references: [id])
-  saleReturn SaleReturn?  @relation(fields: [returnId], references: [id])
-  user       User?        @relation("LedgerActor", fields: [userId], references: [id])
+  customer   Customer        @relation(fields: [customerId], references: [id])
+  invoice    SaleInvoice?    @relation(fields: [invoiceId], references: [id])
+  receipt    Receipt?        @relation(fields: [receiptId], references: [id])
+  saleReturn SaleReturn?     @relation(fields: [returnId], references: [id])
+  correction SaleCorrection? @relation(fields: [correctionId], references: [id])
+  user       User?           @relation("LedgerActor", fields: [userId], references: [id])
 
   @@index([customerId, createdAt])
   @@index([invoiceId])
   @@index([receiptId])
   @@index([returnId])
+  @@index([correctionId])
 }
 
 enum LedgerEntryType {
-  OPENING // مانده‌ی اول دوره — بدهیِ پیش از نرم‌افزار
+  OPENING // مانده‌ی اولیه — بده‌ی پیش از نرم‌افزار
   INVOICE // بخش نسیه‌ی یک فاکتور فروش
   RECEIPT // دریافت وجه از مشتری
   INVOICE_CANCELLED // ابطال فاکتور — بدهی‌اش برمی‌گردد
   RETURN // برگشت کالا — بدهی کم می‌شود
   CHEQUE_BOUNCED // چک برگشت خورد — بدهی دوباره برقرار می‌شود
+  CHEQUE_CASHED // چکِ برگشتی بعداً وصول شد — اثر برگشت خنثی می‌شود
+  FINANCE_CHARGE // تفاوتِ فروشِ مدت‌دار روی چکِ بابتِ بدهیِ قبلی
   ADJUSTMENT // اصلاح دستی، همیشه با دلیل
+  CORRECTION // اصلاحیه‌ی فاکتور — تغییر قیمت/تعداد بعد از صدور
 }
 
 /// تخصیص یک رسید به فاکتورهای بدهکار.
@@ -1195,6 +1375,81 @@ model SaleReturnLine {
   @@index([saleLogId])
 }
 
+/// اصلاحیه‌ی فاکتور — سندِ جداگانه‌ای که قیمت/تعدادِ یک فاکتورِ نهایی را تصحیح می‌کند.
+///
+/// فاکتورِ اصلی **هرگز دست نمی‌خورد** (لجر append-only است): اصلاحیه یک سندِ
+/// مستقل با شماره‌ی خودش و دلیلِ اجباری است. هر ردیف به همان لاگِ SALEِ فاکتور
+/// قفل می‌شود و «تعداد/قیمتِ جدید» را نگه می‌دارد؛ اختلاف با اصل در دفتر
+/// (CORRECTION) و موجودی (IN/OUT جبرانی) ثبت می‌شود.
+///
+/// چرا به‌جای ویرایشِ فاکتور؟ ویرایش یعنی هر کسی بعداً نتواند ثابت کند فاکتورِ
+/// چاپ‌شده‌ی قبلی دقیقاً چه بود. با سندِ جدا، همه‌چیز قابل ردیابی است: فاکتور
+/// اصلی + تعدادی اصلاحیه.
+model SaleCorrection {
+  id             String   @id @default(uuid())
+  number         Int      @unique @default(autoincrement()) // شماره‌ی خوانای اصلاحیه
+  /// کلید یکتای کلاینت؛ ارسال دوباره اصلاحیه‌ی تکراری نمی‌سازد.
+  idempotencyKey String?  @unique
+  /// فاکتوری که این اصلاحیه برایش است — اجباری.
+  invoiceId      String
+  /// از فاکتور برداشته می‌شود؛ برای فروش نقدیِ گذری null است.
+  customerId     String?
+  warehouseId    String
+  userId         String?
+  /**
+   * تغییرِ خالصِ مبلغ فاکتور به ریال (مثبت = بیشتر، منفی = کمتر).
+   * = جمعِ Σ(newQty×newPrice − oldQty×oldPrice) روی ردیف‌ها.
+   */
+  amountAdjust   Int      @default(0)
+  reason         String
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  invoice   SaleInvoice            @relation(fields: [invoiceId], references: [id])
+  customer  Customer?              @relation(fields: [customerId], references: [id])
+  warehouse Warehouse              @relation(fields: [warehouseId], references: [id])
+  user      User?                  @relation("CorrectionActor", fields: [userId], references: [id])
+  lines     SaleCorrectionLine[]
+  ledger    CustomerLedger[]
+  movements InventoryLog[]         @relation("CorrectionMovement")
+
+  @@index([invoiceId])
+  @@index([customerId, createdAt])
+  @@index([warehouseId, createdAt])
+}
+
+/// یک قلمِ اصلاحیه — به یک ردیفِ SALE از فاکتورِ اصلی قفل می‌شود.
+///
+/// `oldQuantity/oldUnitPrice` همان‌هایی است که روی فاکتور ثبت شده بود؛
+/// `newQuantity/newUnitPrice` مقدارِ تصحیح‌شده است. اگر اختلافِ تعداد صفر باشد
+/// فقط مالی اصلاح می‌شود و هیچ حرکتی در انبار نمی‌خورد؛ اگر تعداد زیاد/کم شود،
+/// موجودی همان‌جا جبران می‌شود (INVALID برای زیادشدن، RETURN برای کم‌شدن).
+model SaleCorrectionLine {
+  id            String   @id @default(uuid())
+  correctionId  String
+  /// لاگِ SALE فاکتور که این اصلاحیه تصحیح می‌کند.
+  saleLogId     String
+  productId     String
+  /// مکانی که کالا از آن فروخته شده بود؛ جبرانِ موجودی به همین‌جا می‌خورد.
+  locationId    String
+  oldQuantity   Int
+  newQuantity   Int
+  oldUnitPrice  Int
+  newUnitPrice  Int
+  /// تغییرِ مبلغ همین قلم = newQty×newPrice − oldQty×oldPrice (ریال).
+  lineAdjust    Int
+  createdAt     DateTime @default(now())
+
+  correction SaleCorrection @relation(fields: [correctionId], references: [id], onDelete: Cascade)
+  saleLog    InventoryLog   @relation(fields: [saleLogId], references: [id])
+  product    Product        @relation(fields: [productId], references: [id])
+  location   Location       @relation(fields: [locationId], references: [id])
+
+  @@index([correctionId])
+  @@index([saleLogId])
+}
+
 /// پیش‌فاکتور — مشتری قیمت می‌گیرد ولی نمی‌خرد.
 ///
 /// عمداً جدول جدا دارد و **هیچ حرکتی در موجودی ثبت نمی‌کند**. ردیف‌های فاکتور
@@ -1222,6 +1477,7 @@ model Quotation {
   warehouse Warehouse       @relation(fields: [warehouseId], references: [id])
   user      User?           @relation("QuotationSeller", fields: [userId], references: [id])
   lines     QuotationLine[]
+  workTasks WorkTask[]
 
   @@index([warehouseId, createdAt])
   @@index([customerId])
@@ -1272,6 +1528,9 @@ model ShopSettings {
   cardHolder String   @default("")
   /// یک خط دلخواه پایین برگه (شرایط فروش، ساعت کار، …).
   footer     String   @default("")
+  /// پیش‌فرضِ نرخِ فروشِ مدت‌دار — وقتی خودِ مشتری نرخ ندارد.
+  chequeRateBp   Int            @default(0)
+  chequeRateMode ChequeRateMode @default(MONTHLY)
   updatedAt  DateTime @updatedAt
 
   @@map("ShopSettings")
@@ -1379,6 +1638,12 @@ enum BackupStatus {
   RUNNING
   SUCCESS
   FAILED
+}
+
+/// نرخِ سودِ فروشِ مدت‌دار چطور خوانده می‌شود.
+enum ChequeRateMode {
+  FLAT // یک درصدِ ثابت، بی‌ربط به مدت
+  MONTHLY // درصد در ماه — ساده، نه مرکب
 }
 
 enum ChequeStatus {

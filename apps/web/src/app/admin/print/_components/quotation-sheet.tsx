@@ -138,6 +138,8 @@ export function QuotationSheet({
           <div>مهر و امضای فروشنده</div>
           <div>امضای خریدار</div>
         </footer>
+
+        <div className="credit">نرم‌افزار کاردو</div>
       </div>
 
       <PrintStyles size={size} />

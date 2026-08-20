@@ -604,7 +604,9 @@ export default function ProductsListPage() {
             <span className="font-semibold text-foreground">
               {deleteTarget?.name}
             </span>{" "}
-            مطمئن هستید؟ این عمل قابل بازگشت نیست.
+            مطمئن هستید؟ محصول غیرفعال می‌شود و از فروش خارج می‌شود؛ سابقه‌ی
+            خرید، فروش و موجودی آن پاک نمی‌شود و بعداً می‌توانید دوباره
+            فعالش کنید.
           </>
         }
         confirmText="حذف"

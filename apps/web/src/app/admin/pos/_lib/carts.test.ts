@@ -105,4 +105,30 @@ describe("useCarts", () => {
     expect(result.current.cart.lines).toHaveLength(0);
     expect(result.current.cart.customer).toBeNull();
   });
+
+  /*
+   * فروشِ نوبت‌به‌نوبت روی حساب باز: بعد از ثبتِ هر فاکتورِ جاری، تب روی همان
+   * حساب می‌ماند تا نوبتِ بعدی هم به همان حساب برود. فقط با «جدا کردن مشتری»
+   * از حساب جدا می‌شود.
+   */
+  it("resetCurrent حساب باز را نگه می‌دارد و جداکردن مشتری آن را پاک می‌کند", () => {
+    const { result } = renderHook(() => useCarts());
+
+    act(() =>
+      result.current.patch({
+        customer: cus("علی"),
+        customerLocked: true,
+        openAccountId: "acc-1",
+      })
+    );
+    act(() => result.current.patch({ lines: [line("لنت")] }));
+    act(() => result.current.resetCurrent());
+    expect(result.current.cart.lines).toHaveLength(0);
+    expect(result.current.cart.openAccountId).toBe("acc-1");
+    expect(result.current.cart.customerLocked).toBe(true);
+
+    // جدا کردنِ مشتری → حساب هم جدا می‌شود.
+    act(() => result.current.patch({ customer: null, customerLocked: false, openAccountId: null }));
+    expect(result.current.cart.openAccountId).toBeNull();
+  });
 });

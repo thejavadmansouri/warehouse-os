@@ -112,6 +112,12 @@ fn open_main_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
         .inner_size(1280.0, 800.0)
         .min_inner_size(1024.0, 700.0)
         .center()
+        // روی دستگاهِ پیشخوان پنجره باید کلِ صفحه را بگیرد.
+        //
+        // maximized و نه fullscreen: نوارِ ویندوز باید در دسترس بماند (چاپگر،
+        // فایل‌ها، خودِ سرور). تمام‌صفحه‌ی واقعی با همان کلیدِ F11 و دکمه‌ی
+        // داخلِ برنامه در دسترس است، وقتی کسی واقعاً بخواهد.
+        .maximized(true)
         .resizable(true)
         .initialization_script(KEY_HANDLER)
         .build()?;

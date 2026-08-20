@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -10,6 +11,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { ChequeRateMode } from '@prisma/client';
 
 import { INT4_MAX } from '../../common/money';
 
@@ -86,6 +88,21 @@ export class CreateCustomerDto {
   @Max(3650)
   creditDays?:number;
 
+  /**
+   * نرخِ تفاوتِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم (bp).
+   * ۲۵۰ یعنی ۲.۵٪. صفر یعنی «از پیش‌فرضِ فروشگاه بگیر».
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  chequeRateBp?:number;
+
+
+  @IsOptional()
+  @IsEnum(ChequeRateMode)
+  chequeRateMode?:ChequeRateMode;
+
 
   @IsOptional()
   @IsArray()
@@ -149,4 +166,19 @@ export class UpdateCustomerDto {
   @Min(0)
   @Max(3650)
   creditDays?:number;
+
+  /**
+   * نرخِ تفاوتِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم (bp).
+   * ۲۵۰ یعنی ۲.۵٪. صفر یعنی «از پیش‌فرضِ فروشگاه بگیر».
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  chequeRateBp?:number;
+
+
+  @IsOptional()
+  @IsEnum(ChequeRateMode)
+  chequeRateMode?:ChequeRateMode;
 }

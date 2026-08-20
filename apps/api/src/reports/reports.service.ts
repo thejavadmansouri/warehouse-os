@@ -52,15 +52,24 @@ export class ReportsService {
     const { start, end } = range(q);
     const { page, limit, skip } = paging(q);
 
+    /*
+     * «فروش» یعنی هر فاکتورِ باطل‌نشده — چه نهایی، چه فاکتورِ جاریِ یک حساب باز.
+     * جنس از انبار رفته و بدهی در دفتر نشسته؛ بسته‌نشدنِ تب وضعیتِ وصول است، نه
+     * اینکه فروشی رخ نداده. با فیلترِ CONFIRMED، از وقتی هر فروشِ بدونِ پرداخت
+     * روی تب می‌نشیند، کلِ فروشِ نسیه از این گزارش غیب می‌شد.
+     */
     const where: Prisma.SaleInvoiceWhereInput = {
-      status: 'CONFIRMED',
+      status: { not: 'CANCELLED' },
       createdAt: { gte: start, lte: end },
     };
 
     const [agg, retAgg, total, invoices, chart] = await Promise.all([
       this.prisma.saleInvoice.aggregate({
         where,
-        _sum: { total: true },
+        // financeCharge جدا جمع می‌شود تا معلوم باشد چه سهمی از فروش، بهای کالا
+        // بوده و چه سهمی تفاوتِ فروشِ مدت‌دار. بدون این تفکیک، حاشیه‌ی قطعه با
+        // درآمدِ مدت قاطی می‌شود و «سود» عددی می‌شود که نمی‌شود ازش تصمیم گرفت.
+        _sum: { total: true, financeCharge: true },
         _avg: { total: true },
         _count: true,
       }),
@@ -96,7 +105,9 @@ export class ReportsService {
                SUM("total")::bigint AS amount,
                COUNT(*)::bigint     AS count
         FROM "SaleInvoice"
-        WHERE "status" = 'CONFIRMED'
+        -- همان قاعده‌ی summary: باطل‌نشده = فروش. با CONFIRMED تنها، ستون‌های
+        -- نمودار از جمعِ بالای صفحه کم‌تر می‌شدند و معلوم نبود چرا.
+        WHERE "status" <> 'CANCELLED'
           AND "createdAt" BETWEEN ${start} AND ${end}
         GROUP BY 1
         ORDER BY 1
@@ -117,6 +128,10 @@ export class ReportsService {
         netAmount: totalAmount - returnsAmount,
         invoiceCount: agg._count,
         averageInvoiceAmount: Math.round(agg._avg.total ?? 0),
+        /** سهمِ تفاوتِ فروشِ مدت‌دار (سودِ چک) از همین فروش. */
+        financeCharge: agg._sum.financeCharge ?? 0,
+        /** فروشِ خودِ کالا — بدونِ سودِ مدت. */
+        goodsAmount: totalAmount - (agg._sum.financeCharge ?? 0),
       },
       // برچسب شمسی سمت کلاینت ساخته می‌شود؛ سرور تاریخ خام می‌دهد.
       chartData: chart.map((r) => ({
@@ -157,8 +172,9 @@ export class ReportsService {
     const { page, limit, skip } = paging(q);
 
     const agg = await this.prisma.saleInvoice.aggregate({
-      where: { status: 'CONFIRMED', createdAt: { gte: start, lte: end } },
-      _sum: { total: true, profit: true },
+      // همان قاعده‌ی periodicSales: باطل‌نشده = فروش.
+      where: { status: { not: 'CANCELLED' }, createdAt: { gte: start, lte: end } },
+      _sum: { total: true, profit: true, financeCharge: true },
     });
 
     const rows = await this.prisma.$queryRaw<
@@ -201,15 +217,34 @@ export class ReportsService {
     `;
 
     const totalRevenue = agg._sum.total ?? 0;
+    const financeCharge = agg._sum.financeCharge ?? 0;
     const grossProfit = agg._sum.profit ?? 0;
+
+    /*
+     * بهای تمام‌شده از فروشِ **کالا** مشتق می‌شود، نه از کلِ فاکتور.
+     *
+     * `invoice.profit` فقط حاشیه‌ی کالاست (از قیمت خرید ردیف‌ها). اگر بهای
+     * تمام‌شده را از کلِ فاکتور کم کنیم، تفاوتِ فروشِ مدت‌دار به‌عنوان هزینه
+     * ظاهر می‌شود و هم بهای تمام‌شده متورم می‌شود هم درصدِ حاشیه غلط درمی‌آید.
+     */
+    const goodsRevenue = totalRevenue - financeCharge;
 
     return {
       summary: {
         totalRevenue,
-        totalCost: totalRevenue - grossProfit,
+        /** فروشِ خودِ کالا — پایه‌ی حاشیه. */
+        goodsRevenue,
+        /** تفاوتِ فروشِ مدت‌دار؛ هزینه‌ی خرید ندارد، پس تماماً سود است. */
+        financeCharge,
+        totalCost: goodsRevenue - grossProfit,
+        /** حاشیه‌ی کالا — همان چیزی که می‌گوید خرید و فروشِ قطعه می‌ارزد یا نه. */
         grossProfit,
         profitMarginPercent:
-          totalRevenue > 0 ? Number(((grossProfit / totalRevenue) * 100).toFixed(2)) : 0,
+          goodsRevenue > 0
+            ? Number(((grossProfit / goodsRevenue) * 100).toFixed(2))
+            : 0,
+        /** سودِ کل = حاشیه‌ی کالا + سودِ مدت. */
+        totalProfit: grossProfit + financeCharge,
       },
       costIsApproximate: true,
       items: {
@@ -291,7 +326,7 @@ export class ReportsService {
           ? { status: 'BOUNCED' }
           : { status: { in: ['IN_HAND', 'DEPOSITED'] } }; // سررسید پیش‌رو
 
-    const [rows, total, fromPayments, fromReceipts] = await Promise.all([
+    const [rows, total, fromPayments, fromReceiptPayments] = await Promise.all([
       this.prisma.cheque.findMany({
         where,
         include: {
@@ -308,11 +343,15 @@ export class ReportsService {
               },
             },
           },
-          receipt: {
+          receiptPayment: {
             select: {
-              number: true,
               amount: true,
-              customer: { select: { firstName: true, lastName: true } },
+              receipt: {
+                select: {
+                  number: true,
+                  customer: { select: { firstName: true, lastName: true } },
+                },
+              },
             },
           },
         },
@@ -325,7 +364,7 @@ export class ReportsService {
         where: { cheque: { is: where } },
         _sum: { amount: true },
       }),
-      this.prisma.receipt.aggregate({
+      this.prisma.receiptPayment.aggregate({
         where: { cheque: { is: where } },
         _sum: { amount: true },
       }),
@@ -337,7 +376,7 @@ export class ReportsService {
     return {
       summary: {
         totalCount: total,
-        totalAmount: (fromPayments._sum.amount ?? 0) + (fromReceipts._sum.amount ?? 0),
+        totalAmount: (fromPayments._sum.amount ?? 0) + (fromReceiptPayments._sum.amount ?? 0),
       },
       cheques: {
         data: rows.map((c) => ({
@@ -347,14 +386,14 @@ export class ReportsService {
           holderName:
             c.holderName ??
             fullName(c.payment?.invoice.customer) ??
-            fullName(c.receipt?.customer),
-          amount: c.payment?.amount ?? c.receipt?.amount ?? 0,
+            fullName(c.receiptPayment?.receipt.customer),
+          amount: c.payment?.amount ?? c.receiptPayment?.amount ?? 0,
           dueDate: c.dueDate,
           status: c.status,
           /** منبع چک: فروش یا تسویه‌ی بدهی. */
           source: c.payment ? 'INVOICE' : 'RECEIPT',
           invoiceNumber: c.payment?.invoice.number ?? null,
-          receiptNumber: c.receipt?.number ?? null,
+          receiptNumber: c.receiptPayment?.receipt.number ?? null,
         })),
         meta: meta(total, page, limit),
       },

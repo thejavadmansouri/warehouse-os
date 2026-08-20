@@ -132,6 +132,17 @@ export function InvoiceSheet({
                   <td className="num">− {money(inv.discount)}</td>
                 </tr>
               )}
+              {/*
+                سودِ مدت روی برگه صریح می‌آید، نه قاطیِ مبلغ.
+                مشتری باید بتواند ستون را جمع بزند و به همین عدد برسد؛ و «تفاوت
+                فروش مدت‌دار» چیزی است که خودش هم سرِ خرید قبولش کرده.
+              */}
+              {!!inv.financeCharge && inv.financeCharge > 0 && (
+                <tr>
+                  <td>تفاوت فروش مدت‌دار</td>
+                  <td className="num">+ {money(inv.financeCharge)}</td>
+                </tr>
+              )}
               <tr className="grand">
                 <td>مبلغ قابل پرداخت</td>
                 <td className="num">{money(inv.total)} ریال</td>
@@ -163,6 +174,8 @@ export function InvoiceSheet({
           <div>مهر و امضای فروشنده</div>
           <div>امضای خریدار</div>
         </footer>
+
+        <div className="credit">نرم‌افزار کاردو</div>
       </div>
 
       <PrintStyles size={size} />

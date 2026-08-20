@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Users,
   Search,
@@ -10,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  UserX,
 } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
@@ -25,11 +27,20 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 
-import { getActiveCustomerCategories, searchCustomersPaged, type CustomerSort } from "@/lib/api";
+import {
+  deactivateCustomer,
+  getActiveCustomerCategories,
+  searchCustomersPaged,
+  type CustomerSort,
+} from "@/lib/api";
+import { ApiException } from "@/lib/api-error-messages";
 import { toFa } from "@/lib/format";
 import { Money } from "@/components/money";
 import { CustomerCategoryBadge } from "@/components/customer-category-badge";
+import { useAuthStore } from "@/lib/auth-store";
+import type { Customer } from "@/lib/types";
 import { CreateCustomerDialog } from "./_components/create-customer-dialog";
 
 /**
@@ -49,12 +60,35 @@ const SORTS: { key: CustomerSort; label: string }[] = [
 const PAGE_SIZE = 50;
 
 export default function CustomersPage() {
+  const qc = useQueryClient();
+  const canManage = useAuthStore((s) => s.hasRole("ADMIN", "MANAGER"));
   const [q, setQ] = React.useState("");
   const [debounced, setDebounced] = React.useState("");
   const [sortBy, setSortBy] = React.useState<CustomerSort>("dueDesc");
   const [categoryId, setCategoryId] = React.useState("");
+  /** فقط کسانی که مانده‌ی بدهی دارند — پرکاربردترین سؤالِ این صفحه. */
+  const [onlyDebtors, setOnlyDebtors] = React.useState(false);
   const [page, setPage] = React.useState(1);
   const [showCreate, setShowCreate] = React.useState(false);
+
+  /** مشتریِ در حال غیرفعال‌سازی — تا تأییدِ مدیر، این‌جا می‌ماند. */
+  const [deactivating, setDeactivating] = React.useState<Customer | null>(null);
+  const doDeactivate = useMutation({
+    mutationFn: (id: string) => deactivateCustomer(id),
+    onSuccess: (c) => {
+      toast.success(`مشتری «${c.fullName}» غیرفعال شد`);
+      setDeactivating(null);
+      qc.invalidateQueries({ queryKey: ["customers"] });
+      qc.invalidateQueries({ queryKey: ["debtors"] });
+    },
+    onError: (e) => {
+      toast.error(
+        e instanceof ApiException
+          ? e.message
+          : "غیرفعال‌سازی مشتری ناموفق بود"
+      );
+    },
+  });
 
   /** دسته‌های فعال برای فیلتر. */
   const categories = useQuery({
@@ -70,10 +104,10 @@ export default function CustomersPage() {
   // جست‌وجو یا تغییر مرتب‌سازی یا فیلتر = فهرست از نو؛ برگرد به صفحه‌ی اول.
   React.useEffect(() => {
     setPage(1);
-  }, [debounced, sortBy, categoryId]);
+  }, [debounced, sortBy, categoryId, onlyDebtors]);
 
   const list = useQuery({
-    queryKey: ["customers", debounced, sortBy, categoryId, page],
+    queryKey: ["customers", debounced, sortBy, categoryId, onlyDebtors, page],
     queryFn: () =>
       searchCustomersPaged({
         q: debounced,
@@ -81,6 +115,7 @@ export default function CustomersPage() {
         pageSize: PAGE_SIZE,
         sortBy,
         categoryId: categoryId || undefined,
+        onlyDebtors: onlyDebtors || undefined,
       }),
     placeholderData: (prev) => prev,
   });
@@ -123,6 +158,24 @@ export default function CustomersPage() {
           ))}
         </select>
 
+        {/*
+          فیلترِ آماده به‌جای یک «گزارشِ بدهکاران» جدا.
+
+          همان سؤال است، ولی اینجا کنارِ جست‌وجو و دسته می‌نشیند و می‌شود
+          ترکیبش کرد: «بدهکارانِ دسته‌ی عمده‌فروش».
+        */}
+        <button
+          type="button"
+          onClick={() => setOnlyDebtors((v) => !v)}
+          className={`h-10 rounded-md border px-4 text-sm font-medium transition-colors ${
+            onlyDebtors
+              ? "border-amber-600 bg-amber-600/10 text-amber-700 dark:text-amber-400"
+              : "bg-background hover:border-primary hover:text-primary"
+          }`}
+        >
+          فقط بدهکاران
+        </button>
+
         <div className="flex gap-1">
           {SORTS.map((s) => (
             <button
@@ -158,6 +211,7 @@ export default function CustomersPage() {
                     <TableHead className="text-start">نام</TableHead>
                     <TableHead className="text-start">شماره</TableHead>
                     <TableHead className="text-end">بدهی (ریال)</TableHead>
+                    {canManage && <TableHead className="text-end">عملیات</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -189,6 +243,20 @@ export default function CustomersPage() {
                             <span className="tabular-nums text-muted-foreground">۰</span>
                           )}
                         </TableCell>
+                        {canManage && (
+                          <TableCell className="text-end">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                              onClick={() => setDeactivating(c)}
+                              aria-label={`غیرفعال‌سازی ${c.fullName}`}
+                              title="غیرفعال‌سازی"
+                            >
+                              <UserX className="size-4" />
+                            </Button>
+                          </TableCell>
+                        )}
                       </TableRow>
                     );
                   })}
@@ -231,6 +299,28 @@ export default function CustomersPage() {
         onDone={(created) => {
           setShowCreate(false);
           if (created) list.refetch();
+        }}
+      />
+
+      {/* تأیید غیرفعال‌سازی — soft delete؛ رکورد و سابقه‌ی فاکتورها پاک نمی‌شود. */}
+      <ConfirmDialog
+        open={!!deactivating}
+        onOpenChange={(v) => { if (!v) setDeactivating(null); }}
+        title={deactivating ? `غیرفعال‌سازی «${deactivating.fullName}»؟` : "غیرفعال‌سازی مشتری؟"}
+        description={
+          deactivating ? (
+            <>
+              این مشتری از فهرست انتخاب‌ها و گزارش بدهکاران حذف می‌شود؛ رکورد و
+              سابقه‌ی فاکتورهایش پاک نمی‌شود. اگر هنوز بدهی یا بستانکاری داشته
+              باشد، این کار رد می‌شود.
+            </>
+          ) : undefined
+        }
+        destructive
+        confirmText="بله، غیرفعال کن"
+        loading={doDeactivate.isPending}
+        onConfirm={() => {
+          if (deactivating) doDeactivate.mutate(deactivating.id);
         }}
       />
     </div>

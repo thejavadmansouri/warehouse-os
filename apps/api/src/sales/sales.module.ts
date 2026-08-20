@@ -7,7 +7,12 @@ import { CustomerCategoriesService } from './customer-categories.service';
 import { ReceiptsService } from './receipts.service';
 import { QuotationsService } from './quotations.service';
 import { ReturnsService } from './returns.service';
+import { CorrectionsService } from './corrections.service';
 import { LedgerService } from './ledger.service';
+import { OpenAccountsService } from './open-accounts.service';
+import { InvoiceEffectsService } from './invoice-effects.service';
+import { StatementsService } from './statements.service';
+import { ChequesService } from './cheques.service';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
@@ -28,7 +33,12 @@ import { SystemLocationsService } from '../inventory/system-locations.service';
     ReceiptsService,
     QuotationsService,
     ReturnsService,
+    CorrectionsService,
     LedgerService,
+    OpenAccountsService,
+    InvoiceEffectsService,
+    StatementsService,
+    ChequesService,
     InventoryOperationService,
     SystemLocationsService,
   ],
@@ -40,7 +50,12 @@ import { SystemLocationsService } from '../inventory/system-locations.service';
     ReceiptsService,
     QuotationsService,
     ReturnsService,
+    CorrectionsService,
     LedgerService,
+    OpenAccountsService,
+    InvoiceEffectsService,
+    StatementsService,
+    ChequesService,
   ],
 
 })

@@ -17,6 +17,7 @@ import { SystemLocationsService } from '../inventory/system-locations.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { normalizePhone } from '../common/phone.util';
 import { INT4_MAX } from '../common/money';
+import { computeChequeCharge, MAX_CHARGE_RATIO } from '../common/cheque-charge';
 import { LedgerService } from './ledger.service';
 import { EventsGateway } from '../realtime/events.gateway';
 
@@ -228,7 +229,8 @@ export class SalesService {
       });
     }
 
-    const total = subtotal - discount;
+    // با سودِ چک بالاتر می‌رود — پایین‌تر، بعد از حسابِ سطرهای پرداخت.
+    let total = subtotal - discount;
 
     // ستون‌های مبلغ از نوع Int هستند (INT4 پستگرس). اگر جلوی سرریز گرفته نشود،
     // Prisma با خطای خام می‌ترکد و مسیر فایل و متن کوئری به کلاینت درز می‌کند.
@@ -242,17 +244,108 @@ export class SalesService {
     }
 
 
-    // پیش‌فرض فروش نقدیِ گذری: اگر کلاینت اصلاً payments نفرستد، یعنی کل مبلغ
-    // نقد دریافت شده. این حالت رایج‌ترین فروش سر پیشخوان است و نباید کاربر را
-    // مجبور کند برای هر فاکتور ساده یک سطر پرداخت هم بفرستد.
-    // برای ثبت نسیه باید صراحتاً payments با method=CREDIT فرستاده شود.
+    // ---- حساب باز (فاکتور جاری) ----
+    const account = dto.accountId
+      ? await this.prisma.openAccount.findUnique({ where: { id: dto.accountId } })
+      : null;
+
+    if (dto.accountId && !account) {
+      throw new BadRequestException({
+        error: 'OPEN_ACCOUNT_NOT_FOUND',
+        message: 'حساب باز پیدا نشد',
+      });
+    }
+
+    if (account && account.status !== 'OPEN') {
+      throw new BadRequestException({
+        error: 'OPEN_ACCOUNT_NOT_OPEN',
+        message: 'این حساب باز تسویه شده است',
+      });
+    }
+
+    if (account && dto.customerId && dto.customerId !== account.customerId) {
+      throw new BadRequestException({
+        error: 'OPEN_ACCOUNT_CUSTOMER_MISMATCH',
+        message: 'مشتریِ فاکتور با مشتریِ حساب باز یکی نیست',
+      });
+    }
+
+    /*
+     * پیش‌فرض فروش نقدیِ گذری: اگر کلاینت اصلاً payments نفرستد، یعنی کل مبلغ
+     * نقد دریافت شده. این حالت رایج‌ترین فروش سر پیشخوان است و نباید کاربر را
+     * مجبور کند برای هر فاکتور ساده یک سطر پرداخت هم بفرستد.
+     * برای ثبت نسیه باید صراحتاً payments با method=CREDIT فرستاده شود.
+     *
+     * روی حساب باز هیچ پرداختی ثبت نمی‌شود — مشتری جنس را می‌برد و پول در
+     * تسویه می‌آید؛ پس کلِ مبلغ همان لحظه بدهیِ حساب می‌شود.
+     */
     const payments =
-      dto.payments && dto.payments.length > 0
-        ? dto.payments
-        : [{ method: PaymentMethod.CASH, amount: total, note: null as string | null }];
+      dto.accountId
+        ? []
+        : dto.payments && dto.payments.length > 0
+          ? dto.payments
+          : [
+              {
+                method: PaymentMethod.CASH,
+                amount: total,
+                note: null as string | null,
+                cheque: undefined,
+              },
+            ];
+
+    /*
+     * ---- تفاوتِ فروشِ مدت‌دار (سودِ چک) ----
+     *
+     * قرارداد با کلاینت: `amount` هر سطر **پایه** است، یعنی چقدر از خودِ صورتحساب
+     * را می‌پوشاند. سود جدا حساب می‌شود و مبلغی که روی کاغذِ چک نوشته می‌شود
+     * پایه + سود است. پس:
+     *
+     *     total     = subtotal − discount + Σ سود
+     *     مبلغِ چک   = پایه + سودِ همان چک
+     *     paidAmount = Σ مبلغِ چک‌ها و نقدها  →  با total می‌خواند
+     *
+     * سود فقط وقتی حساب می‌شود که فروشنده صریحاً نرخ فرستاده باشد. هیچ پیش‌فرضی
+     * از روی مشتری خوانده نمی‌شود — سودی که کسی انتخابش نکرده نباید روی فاکتور
+     * بنشیند.
+     */
+    const priced = payments.map((p) => {
+      const c = p.cheque;
+      if (p.method !== PaymentMethod.CHEQUE || !c) {
+        return { ...p, base: p.amount, charge: 0, rateBp: 0, months: 0 };
+      }
+
+      const rateBp = c.rateBp ?? 0;
+      const months = c.months ?? 0;
+      const computed = computeChequeCharge({
+        base: p.amount,
+        rateBp,
+        months,
+        mode: c.rateMode ?? 'MONTHLY',
+      });
+
+      // عددِ دستیِ فروشنده می‌چربد، ولی همان سقف رویش هست — نرخِ اشتباه‌تایپ‌شده
+      // و عددِ اشتباه‌تایپ‌شده هر دو باید یک‌جا گرفته شوند.
+      const charge = Math.min(
+        c.charge ?? computed,
+        p.amount * MAX_CHARGE_RATIO,
+      );
+
+      return { ...p, base: p.amount, charge, rateBp, months, amount: p.amount + charge };
+    });
+
+    const financeCharge = priced.reduce((sum, p) => sum + p.charge, 0);
+    total += financeCharge;
+
+    if (total > INT4_MAX) {
+      throw new BadRequestException({
+        error:'AMOUNT_TOO_LARGE',
+        max: INT4_MAX,
+        message:'مبلغ فاکتور با احتساب سود از حد مجاز بیشتر است',
+      });
+    }
 
     const paidAmount =
-      payments
+      priced
         .filter(p => p.method !== PaymentMethod.CREDIT)
         .reduce((sum, p) => sum + p.amount, 0);
 
@@ -268,8 +361,8 @@ export class SalesService {
     const dueAmount = total - paidAmount;
 
 
-    // نسیه بدون مشتری قابل پیگیری نیست.
-    if (dueAmount > 0 && !dto.customerId && !dto.customer) {
+    // نسیه بدون مشتری قابل پیگیری نیست. حساب باز از خودِ حساب مشتری دارد.
+    if (!dto.accountId && dueAmount > 0 && !dto.customerId && !dto.customer) {
       throw new BadRequestException({
         error:'CUSTOMER_REQUIRED_FOR_CREDIT',
         message:'برای فروش نسیه ثبت مشتری الزامی است',
@@ -301,11 +394,24 @@ export class SalesService {
 
       const invoiceId = await this.prisma.$transaction(async (tx) => {
 
-        const customerId = await this.resolveCustomer(tx, dto);
+        // روی حساب باز مشتری از خودِ حساب می‌آید — ساختِ مشتریِ inline معنا ندارد.
+        const customerId = dto.accountId
+          ? account!.customerId
+          : await this.resolveCustomer(tx, dto);
 
-        // سررسید فقط برای بخش نسیه معنا دارد. مهلت پیش‌فرض روی خود مشتری
-        // نشسته تا فروشنده مجبور نباشد هر بار انتخابش کند؛ اگر صراحتاً چیزی
-        // فرستاده شده باشد، همان می‌چربد.
+        /*
+         * سررسید فقط برای بخش نسیه معنا دارد. مهلت پیش‌فرض روی خود مشتری نشسته
+         * تا فروشنده مجبور نباشد هر بار انتخابش کند؛ اگر صراحتاً چیزی فرستاده
+         * شده باشد، همان می‌چربد.
+         *
+         * روی حساب باز هم سررسید همین‌جا تعیین می‌شود، نه در تسویه.
+         *
+         * قبلاً null می‌ماند و سررسید در لحظه‌ی تسویه ساخته می‌شد. حالا که هر
+         * فروشِ بدونِ پرداخت روی تب می‌نشیند، آن یعنی بدهیِ مشتری تا وقتی
+         * حسابش را نبندی هیچ‌وقت «معوق» نمی‌شود — کافی بود کسی تبش را باز نگه
+         * دارد تا برای همیشه از گزارشِ معوقات بیرون بماند. ساعت باید از لحظه‌ی
+         * بردنِ جنس شروع شود.
+         */
         const dueDate =
           dueAmount > 0 && customerId
             ? await this.resolveDueDate(tx, customerId, dto.dueDate)
@@ -319,13 +425,16 @@ export class SalesService {
             userId: userId ?? null,
             subtotal,
             discount,
+            financeCharge,
             total,
             paidAmount,
             dueAmount,
             dueDate,
             profit,
             note: dto.note ?? null,
-            status: InvoiceStatus.CONFIRMED,
+            // روی حساب باز فاکتور OPEN (جاری) ثبت می‌شود؛ در تسویه نهایی می‌شود.
+            status: dto.accountId ? InvoiceStatus.OPEN : InvoiceStatus.CONFIRMED,
+            accountId: dto.accountId ?? null,
           },
         });
 
@@ -344,7 +453,9 @@ export class SalesService {
             amount: dueAmount,
             invoiceId: invoice.id,
             userId: userId ?? null,
-            note: `فاکتور ${invoice.number}`,
+            note: dto.accountId
+              ? `فاکتور ${invoice.number} (حساب باز)`
+              : `فاکتور ${invoice.number}`,
           });
         }
 
@@ -404,7 +515,9 @@ export class SalesService {
         await this.learnPricesFromSale(tx, dto);
 
 
-        for (const p of payments) {
+        // `priced` نه `payments`: مبلغِ چک اینجا پایه + سود است، یعنی همان عددی
+        // که روی کاغذ نوشته می‌شود و بانک پاس می‌کند.
+        for (const p of priced) {
           const payment = await tx.payment.create({
             data:{
               invoiceId: invoice.id,
@@ -423,6 +536,10 @@ export class SalesService {
                 branch: p.cheque.branch ?? null,
                 holderName: p.cheque.holderName ?? null,
                 dueDate: new Date(p.cheque.dueDate),
+                // تفکیکِ سود از پایه — تا گزارشِ سود بتواند جدایشان کند.
+                charge: p.charge,
+                rateBp: p.rateBp,
+                months: p.months,
               },
             });
           }
@@ -616,6 +733,10 @@ export class SalesService {
 
     if (q.warehouseId) where.warehouseId = q.warehouseId;
     if (q.customerId) where.customerId = q.customerId;
+    if (q.userId) where.userId = q.userId;
+    // «مانده‌دار» یعنی هنوز پولش کامل نیامده — پایه‌ی پیگیریِ وصول.
+    if (q.hasDue === 'true') where.dueAmount = { gt: 0 };
+    else if (q.hasDue === 'false') where.dueAmount = { lte: 0 };
     // `RETURNED` وضعیتِ واقعیِ مدل نیست؛ یعنی «دستِ‌کم یک مرجوعی خورده». بقیه
     // وضعیت‌ها مستقیم روی status می‌نشینند.
     if (q.status === 'RETURNED') where.returns = { some: {} };

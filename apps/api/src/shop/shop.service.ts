@@ -14,6 +14,8 @@ export interface ShopSettingsInput {
   cardNumber?: string;
   cardHolder?: string;
   footer?: string;
+  chequeRateBp?: number;
+  chequeRateMode?: 'FLAT' | 'MONTHLY';
 }
 
 
@@ -51,6 +53,8 @@ export class ShopService {
         ? { cardHolder: input.cardHolder.trim() }
         : {}),
       ...(input.footer !== undefined ? { footer: input.footer.trim() } : {}),
+      ...(input.chequeRateBp !== undefined ? { chequeRateBp: input.chequeRateBp } : {}),
+      ...(input.chequeRateMode !== undefined ? { chequeRateMode: input.chequeRateMode } : {}),
     };
 
     return this.prisma.shopSettings.upsert({

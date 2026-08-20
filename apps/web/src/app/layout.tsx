@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/query-provider";
 import { ServiceWorkerRegister } from "@/components/sw-register";
@@ -49,6 +50,9 @@ export default function RootLayout({
           <QueryProvider>
             {children}
             <Toaster />
+            {/* toast های سونر (POS، فاکتورها، مشتری‌ها و…) — بدون mount شدنِ
+                این Toaster، همه‌ی پیام‌های موفقیت/خطای آن‌ها بی‌صدا ناپدید می‌شدند. */}
+            <SonnerToaster position="bottom-left" richColors closeButton />
             <ServiceWorkerRegister />
           </QueryProvider>
         </ThemeProvider>

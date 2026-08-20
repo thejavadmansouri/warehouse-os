@@ -57,6 +57,8 @@ const KEYS_BY_EVENT: Record<string, string[][]> = {
     ["rep"],
     ["products"],
   ],
+  // تیکِ کارگر → پنل «کارهای انبار» و چیپِ پیشرفت روی فاکتورها تازه شوند.
+  "work-task.progress": [["work-tasks"], ["pos-recent-invoices"]],
 };
 
 /**

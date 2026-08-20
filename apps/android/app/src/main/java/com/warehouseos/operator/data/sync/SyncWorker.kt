@@ -18,10 +18,15 @@ class SyncWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted params: WorkerParameters,
     private val outbox: OutboxRepository,
+    private val photoUploads: PhotoUploadScheduler,
 ) : CoroutineWorker(appContext, params) {
 
     override suspend fun doWork(): Result {
         val reachedServer = outbox.sync()
+        // Photos can only be accepted once their operation exists server-side, so
+        // they follow the drain rather than racing it. The photo job carries its
+        // own Wi-Fi constraint, so this stays a no-op out on mobile data.
+        if (reachedServer) photoUploads.requestUpload()
         return if (reachedServer) Result.success() else Result.retry()
     }
 }

@@ -703,7 +703,7 @@ export interface ApproveProductRequestDto {
 // =====================================================
 
 export type PaymentMethod = "CASH" | "CARD" | "CHEQUE" | "CREDIT";
-export type InvoiceStatus = "CONFIRMED" | "CANCELLED";
+export type InvoiceStatus = "OPEN" | "CONFIRMED" | "CANCELLED";
 export type PickTaskStatus = "PENDING" | "PICKED" | "CANCELLED";
 
 /** یک مکان با موجودی مثبت — فروش فقط از این مکان‌ها ممکن است. */
@@ -730,6 +730,32 @@ export interface LocateLocation {
 }
 
 /** GET /products/locate — کالا + خلاصه‌ی موجودی و آدرس قفسه، در یک درخواست. */
+/** One catalog row for the POS local search (GET /products/pos-catalog). */
+export interface PosCatalogRow {
+  id: string;
+  name: string;
+  sku: string | null;
+  partNumber: string | null;
+  unit: string | null;
+  isActive: boolean;
+  searchTokens: string[];
+  barcodes: string[];
+  brand: string | null;
+  vehicleModel: string | null;
+  salePrice: number | null;
+  updatedAt: string;
+  deleted: boolean;
+}
+
+export interface PosCatalogPage {
+  products: PosCatalogRow[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
 export interface LocateResult {
   id: string;
   name: string;
@@ -780,6 +806,9 @@ export interface Customer {
   creditLimit?: number;
   /** مهلت پرداخت پیش‌فرض به روز. */
   creditDays?: number;
+  /** نرخِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم. صفر = از فروشگاه. */
+  chequeRateBp?: number;
+  chequeRateMode?: "FLAT" | "MONTHLY";
   summary?: CustomerSummary;
   invoices?: InvoiceListRow[];
 }
@@ -833,7 +862,10 @@ export type LedgerEntryType =
   | "RECEIPT"
   | "INVOICE_CANCELLED"
   | "RETURN"
+  | "CORRECTION"
   | "CHEQUE_BOUNCED"
+  | "CHEQUE_CASHED"
+  | "FINANCE_CHARGE"
   | "ADJUSTMENT";
 
 export interface LedgerEntry {
@@ -879,6 +911,9 @@ export interface ShopSettings {
   cardNumber: string;
   cardHolder: string;
   footer: string;
+  /** پیش‌فرضِ نرخِ فروشِ مدت‌دار، به پایه‌ی هزارم. ۲۵۰ = ۲.۵٪ */
+  chequeRateBp: number;
+  chequeRateMode: "FLAT" | "MONTHLY";
 }
 
 /** یک مشتریِ دارای حساب باز، با تفکیک سنیِ بدهی‌اش. */
@@ -937,6 +972,21 @@ export interface ChequeInput {
   holderName?: string;
   /** ISO — تبدیل شمسی سمت کلاینت انجام می‌شود */
   dueDate: string;
+
+  /*
+   * تفاوتِ فروشِ مدت‌دار.
+   *
+   * قرارداد با سرور: `amount` سطرِ پرداخت **پایه** است (چقدر از صورتحساب/بدهی را
+   * می‌پوشاند). سود جدا می‌رود و مبلغی که روی کاغذِ چک نوشته می‌شود پایه + سود
+   * است. نفرستادنِ `rateBp` یعنی «بدونِ سود» — سرور هیچ پیش‌فرضی از روی مشتری
+   * برنمی‌دارد.
+   */
+  /** نرخ به پایه‌ی هزارم. ۲۵۰ = ۲.۵٪ */
+  rateBp?: number;
+  months?: number;
+  rateMode?: "FLAT" | "MONTHLY";
+  /** مبلغِ دستیِ سود، وقتی فروشنده گردش کرده. نیامدنش یعنی از نرخ حساب شود. */
+  charge?: number;
 }
 
 export interface PaymentInput {
@@ -966,6 +1016,268 @@ export interface CreateInvoiceDto {
   dueDate?: string;
   lines: InvoiceLineInput[];
   payments?: PaymentInput[];
+  /**
+   * حساب بازِ مالکِ این فاکتور. اگر پر باشد فاکتور OPEN (جاری) ثبت می‌شود،
+   * پرداختی نمی‌پذیرد، و مشتری باید همان مشتریِ حساب باشد. تا تسویه نهایی
+   * نمی‌شود.
+   */
+  accountId?: string;
+}
+
+/** یک ردیفِ فاکتورِ حساب باز — با تاریخِ دقیقِ همان قلم. */
+export interface OpenAccountLine {
+  id: string;
+  /** همان شناسه‌ای که مرجوعی و اصلاحیه رویش قفل می‌شوند. */
+  saleLogId: string;
+  invoiceId: string;
+  invoiceNumber: number;
+  productId: string;
+  productName: string;
+  unit: string | null;
+  /** آنچه در آن نوبت برداشته شد — دست‌نخورده می‌ماند. */
+  quantity: number;
+  returnedQuantity: number;
+  correctedQuantity: number;
+  /** آنچه واقعاً روی حساب مانده: برداشته + اصلاح − مرجوعی. */
+  effectiveQuantity: number;
+  /** قیمتِ فعلی (آخرین اصلاحیه، وگرنه قیمتِ فروش). */
+  unitPrice: number;
+  originalUnitPrice: number;
+  discount: number;
+  createdAt: string;
+}
+
+/** یک نوبتِ خرید (فاکتورِ OPEN) داخل حساب باز. */
+export interface OpenAccountInvoice {
+  id: string;
+  number: number;
+  /** ناخالص — آنچه در این نوبت برداشته شد. */
+  total: number;
+  /** خالص، پس از مرجوعی و اصلاحیه‌ی پیش از تسویه. */
+  netTotal: number;
+  discount: number;
+  note: string | null;
+  createdAt: string;
+  lines: OpenAccountLine[];
+}
+
+/** ردیفِ فهرستِ حساب‌های باز — صندوق و گزارش. */
+export interface OpenAccountSummary {
+  id: string;
+  number: number;
+  customerId: string;
+  customerName: string;
+  phone: string | null;
+  status: "OPEN" | "SETTLED" | "CANCELLED";
+  total: number;
+  invoiceCount: number;
+  firstVisit: string | null;
+  lastVisit: string | null;
+  createdAt: string;
+}
+
+/** پرونده‌ی کاملِ یک حساب باز — فاکتورهای باز با ردیف‌هایشان. */
+export interface OpenAccountDetail {
+  id: string;
+  number: number;
+  customerId: string;
+  customerName: string;
+  phone: string | null;
+  status: "OPEN" | "SETTLED" | "CANCELLED";
+  note: string | null;
+  settledAt: string | null;
+  createdAt: string;
+  /** آنچه مشتری باید بدهد — پس از مرجوعی و اصلاحیه. */
+  total: number;
+  /** آنچه برداشته شده بود، پیش از اسنادِ جبرانی. */
+  grossTotal: number;
+  invoiceCount: number;
+  invoices: OpenAccountInvoice[];
+}
+
+/** یک قلم روی برگه‌ی تجمیعیِ حساب. */
+export interface OpenAccountSheetLine {
+  id: string;
+  productName: string;
+  sku: string | null;
+  unit: string | null;
+  quantity: number;
+  returnedQuantity: number;
+  correctedQuantity: number;
+  effectiveQuantity: number;
+  unitPrice: number;
+  discount: number;
+  lineTotal: number;
+}
+
+/**
+ * برگه‌ی تجمیعیِ کلِ حساب باز — «فاکتور کلی»ی که مشتری سرِ تسویه می‌برد.
+ * برخلافِ پرونده، نوبت‌های تسویه‌شده را هم دارد.
+ */
+export interface OpenAccountSheet {
+  id: string;
+  number: number;
+  status: "OPEN" | "SETTLED" | "CANCELLED";
+  note: string | null;
+  settledAt: string | null;
+  createdAt: string;
+  customerName: string;
+  phone: string | null;
+  visits: {
+    id: string;
+    number: number;
+    createdAt: string;
+    discount: number;
+    note: string | null;
+    gross: number;
+    net: number;
+    lines: OpenAccountSheetLine[];
+  }[];
+  returns: {
+    id: string;
+    number: number;
+    createdAt: string;
+    refundAmount: number;
+    reason: string;
+    lines: {
+      id: string;
+      productName: string;
+      unit: string | null;
+      quantity: number;
+      unitRefund: number;
+      lineRefund: number;
+    }[];
+  }[];
+  corrections: {
+    id: string;
+    number: number;
+    createdAt: string;
+    amountAdjust: number;
+    reason: string;
+  }[];
+  payments: {
+    receiptNumber: number;
+    createdAt: string;
+    method: PaymentMethod;
+    amount: number;
+    cheque: { number: string; bankName: string | null; dueDate: string } | null;
+  }[];
+  totals: {
+    gross: number;
+    returns: number;
+    corrections: number;
+    net: number;
+    paid: number;
+    remaining: number;
+  };
+}
+
+// =====================================================
+// صورت‌حساب کاملِ مشتری — همه‌ی کالاها و همه‌ی پرداخت‌ها
+// =====================================================
+
+/** یک قلمِ خرید روی صورت‌حساب. */
+export interface FullStatementLine {
+  id: string;
+  productName: string;
+  sku: string | null;
+  unit: string | null;
+  /** آنچه آن روز برداشت — دست‌نخورده. */
+  quantity: number;
+  returnedQuantity: number;
+  correctedQuantity: number;
+  effectiveQuantity: number;
+  unitPrice: number;
+  originalUnitPrice: number;
+  discount: number;
+  lineTotal: number;
+}
+
+/** یک سطر پرداخت (سرِ خرید یا در رسید). */
+export interface FullStatementPaymentRow {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+  cheque: {
+    number: string;
+    bankName: string | null;
+    dueDate: string;
+    status: string;
+  } | null;
+}
+
+export interface FullStatementPurchase {
+  id: string;
+  number: number;
+  createdAt: string;
+  /** OPEN یعنی روی حساب باز و هنوز تسویه‌نشده. */
+  status: InvoiceStatus;
+  dueDate: string | null;
+  discount: number;
+  note: string | null;
+  total: number;
+  netTotal: number;
+  dueAmount: number;
+  lines: FullStatementLine[];
+  /** پولی که همان لحظه‌ی خرید داده. */
+  payments: FullStatementPaymentRow[];
+  returns: {
+    id: string;
+    number: number;
+    createdAt: string;
+    refundMethod: PaymentMethod;
+    refundAmount: number;
+    reason: string;
+    lines: {
+      id: string;
+      productName: string;
+      unit: string | null;
+      quantity: number;
+      unitRefund: number;
+      lineRefund: number;
+    }[];
+  }[];
+  corrections: {
+    id: string;
+    number: number;
+    createdAt: string;
+    amountAdjust: number;
+    reason: string;
+  }[];
+}
+
+export interface CustomerFullStatement {
+  customer: {
+    id: string;
+    fullName: string;
+    phones: string[];
+    address: string | null;
+    creditDays: number;
+    creditLimit: number;
+  };
+  range: { startDate: string | null; endDate: string | null };
+  purchases: FullStatementPurchase[];
+  /** پولی که بعداً بابت بدهی آورده. */
+  payments: {
+    id: string;
+    number: number;
+    createdAt: string;
+    amount: number;
+    note: string | null;
+    rows: FullStatementPaymentRow[];
+    appliedTo: { invoiceNumber: number | null; amount: number }[];
+  }[];
+  totals: {
+    purchasedGross: number;
+    purchasedNet: number;
+    returned: number;
+    corrections: number;
+    paidAtSale: number;
+    paidLater: number;
+    paidTotal: number;
+    openingBalance: number;
+    closingBalance: number;
+  };
 }
 
 export interface Invoice {
@@ -973,6 +1285,8 @@ export interface Invoice {
   number: number;
   subtotal: number;
   discount: number;
+  /** تفاوتِ فروشِ مدت‌دار (سودِ چک) روی این فاکتور. */
+  financeCharge?: number;
   total: number;
   paidAmount: number;
   dueAmount: number;
@@ -1044,6 +1358,67 @@ export interface PickTask {
 }
 
 // =====================================================
+// کارِ کارگر (WorkTask) — فقط تابلوی کار و پیشرفت؛ هیچ ربطی به موجودی ندارد
+// =====================================================
+
+export type WorkTaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type WorkTaskItemStatus = "PENDING" | "DONE";
+
+/** یک قلمِ کارِ کارگر — کالا + قفسه + تعداد + وضعیت تیک. */
+export interface WorkTaskItem {
+  id: string;
+  taskId: string;
+  status: WorkTaskItemStatus;
+  productId: string;
+  locationId?: string | null;
+  quantity: number;
+  doneById?: string | null;
+  doneAt?: string | null;
+  product?: { id: string; name: string; sku?: string | null; unit?: string | null } | null;
+  location?: { id: string; name: string; code: string; barcode: string; path: string } | null;
+  doneBy?: { id: string; fullName: string } | null;
+}
+
+/**
+ * کارِ کارگر — POS می‌فرستد، کارگر تیک می‌زند، مدیر پیشرفت را زنده می‌بیند.
+ * پیشرفت هرگز ذخیره نمی‌شود؛ `doneItems/totalItems` مشتق از آیتم‌هاست.
+ */
+export interface WorkTask {
+  id: string;
+  status: WorkTaskStatus;
+  warehouseId: string;
+  invoiceId?: string | null;
+  quotationId?: string | null;
+  assignedToId?: string | null;
+  note?: string | null;
+  cancelReason?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  doneItems: number;
+  totalItems: number;
+  invoice?: { number: number } | null;
+  quotation?: { number: number } | null;
+  requestedBy?: { id: string; fullName: string } | null;
+  assignedTo?: { id: string; fullName: string } | null;
+  /** فقط در جزئیات (GET /work-tasks/:id) می‌آید. */
+  items?: WorkTaskItem[];
+}
+
+/** یک تیکِ آفلاین که گوشیِ کارگر با sync می‌فرستد. */
+export interface WorkTaskSyncMutation {
+  clientMutationId: string;
+  taskId: string;
+  itemId: string;
+}
+
+export interface WorkTaskSyncResult {
+  clientMutationId: string;
+  taskId: string;
+  itemId: string;
+  status: "OK" | "ALREADY_DONE" | "TASK_CANCELLED" | "TASK_NOT_VISIBLE" | "ITEM_NOT_FOUND";
+}
+
+// =====================================================
 // گزارش‌ها — دقیقاً مطابق آنچه سرور برمی‌گرداند
 // =====================================================
 
@@ -1065,6 +1440,10 @@ export interface PeriodicSalesReport {
     netAmount: number;
     invoiceCount: number;
     averageInvoiceAmount: number;
+    /** سهمِ تفاوتِ فروشِ مدت‌دار (سودِ چک) از همین فروش. */
+    financeCharge: number;
+    /** فروشِ خودِ کالا — بدونِ سودِ مدت. */
+    goodsAmount: number;
   };
   /** تاریخ ISO است؛ برچسب شمسی سمت کلاینت ساخته می‌شود. */
   chartData: { date: string; amount: number; count: number }[];
@@ -1085,9 +1464,17 @@ export interface PeriodicSalesReport {
 export interface PeriodicProfitReport {
   summary: {
     totalRevenue: number;
+    /** فروشِ خودِ کالا — پایه‌ی حاشیه. */
+    goodsRevenue: number;
+    /** تفاوتِ فروشِ مدت‌دار؛ هزینه‌ی خرید ندارد، پس تماماً سود است. */
+    financeCharge: number;
     totalCost: number;
+    /** حاشیه‌ی کالا. */
     grossProfit: number;
+    /** درصدِ حاشیه روی فروشِ کالا، نه روی کلِ فاکتور. */
     profitMarginPercent: number;
+    /** سودِ کل = حاشیه‌ی کالا + سودِ مدت. */
+    totalProfit: number;
   };
   /** بهای تفکیکی از آخرین قیمت خرید می‌آید، نه قیمت لحظه‌ی فروش. */
   costIsApproximate: boolean;
@@ -1236,6 +1623,20 @@ export interface ReceiptAllocation {
   invoice: { id: string; number: number; total: number };
 }
 
+/** یک سطر پرداختِ رسید — تسویه‌ی ترکیبی (نقد+کارت+چک) در یک رسید. */
+export interface ReceiptPayment {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+  note?: string | null;
+  cheque?: {
+    number: string;
+    bankName?: string | null;
+    dueDate: string;
+    status: string;
+  } | null;
+}
+
 export interface Receipt {
   id: string;
   number: number;
@@ -1246,7 +1647,7 @@ export interface Receipt {
   customerName: string;
   customer?: { id: string; firstName: string; lastName?: string | null };
   user?: { fullName: string } | null;
-  cheque?: { number: string; dueDate: string; status: string } | null;
+  payments?: ReceiptPayment[];
   allocations?: ReceiptAllocation[];
 }
 
@@ -1278,8 +1679,11 @@ export interface ReturnableInvoice {
     customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
   };
   lines: ReturnableLine[];
-  /** فاکتورِ باطل‌شده قابلِ مرجوعی نیست. */
+  /** فاکتورِ باطل‌شده قابلِ مرجوعی نیست؛ نهایی و حساب‌باز هستند. */
   returnable: boolean;
+  /** روی حساب باز پولی پرداخت نشده — برگشت فقط «کسر از حساب». */
+  isOpenAccount: boolean;
+  accountId: string | null;
 }
 
 export interface CreateReturnDto {
@@ -1322,6 +1726,86 @@ export interface SaleReturnListRow {
   number: number;
   refundMethod: PaymentMethod;
   refundAmount: number;
+  reason: string;
+  createdAt: string;
+  invoice?: { id: string; number: number } | null;
+  customer?: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  user?: { id: string; fullName: string } | null;
+  _count?: { lines: number };
+}
+
+// ----- اصلاحیه فاکتور -----
+
+export interface CorrectableLine {
+  saleLogId: string;
+  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  location: { id: string; name: string; code: string; path: string };
+  /** تعدادِ فعلی (فروش + اثر اصلاحیه‌های قبلی). */
+  oldQuantity: number;
+  /** قیمتِ واحدِ فعلی (آخرین تصحیح‌شده). */
+  oldUnitPrice: number;
+  sold: number;
+  correctedBy: number;
+}
+
+export interface CorrectableInvoice {
+  invoice: {
+    id: string;
+    number: number;
+    status: InvoiceStatus;
+    total: number;
+    dueAmount: number;
+    accountId?: string | null;
+    customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  };
+  lines: CorrectableLine[];
+  /** نهایی و حساب‌باز اصلاحیه می‌خورند؛ باطل‌شده نه. */
+  correctable: boolean;
+  isOpenAccount: boolean;
+}
+
+export interface CreateCorrectionDto {
+  idempotencyKey?: string;
+  invoiceId: string;
+  /** دلیلِ اصلاحیه — اجباری. */
+  reason: string;
+  note?: string;
+  lines: { saleLogId: string; newQuantity: number; newUnitPrice: number }[];
+}
+
+export interface SaleCorrectionLine {
+  id: string;
+  correctionId: string;
+  saleLogId: string;
+  oldQuantity: number;
+  newQuantity: number;
+  oldUnitPrice: number;
+  newUnitPrice: number;
+  lineAdjust: number;
+  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  location: { id: string; name: string; code: string; path: string };
+}
+
+export interface SaleCorrection {
+  id: string;
+  number: number;
+  invoiceId: string;
+  amountAdjust: number;
+  reason: string;
+  note?: string | null;
+  createdAt: string;
+  invoice?: { id: string; number: number } | null;
+  customer?: (Customer & { fullName?: string }) | null;
+  warehouse?: { id: string; name: string; code: string } | null;
+  user?: { id: string; fullName: string; username?: string } | null;
+  lines?: SaleCorrectionLine[];
+  _count?: { lines: number };
+}
+
+export interface SaleCorrectionListRow {
+  id: string;
+  number: number;
+  amountAdjust: number;
   reason: string;
   createdAt: string;
   invoice?: { id: string; number: number } | null;

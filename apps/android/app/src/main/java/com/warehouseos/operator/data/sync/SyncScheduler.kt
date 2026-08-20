@@ -3,14 +3,24 @@ package com.warehouseos.operator.data.sync
 import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Asks for a background outbox sync. Repositories depend on this interface (not
+ * the concrete scheduler) so tests can fake the "sync later" call.
+ */
+interface SyncRequester {
+    fun requestSync()
+}
 
 /**
  * Requests an outbox sync (Epic 8). Enqueued as unique work with a network
@@ -20,10 +30,10 @@ import javax.inject.Singleton
 @Singleton
 class SyncScheduler @Inject constructor(
     @ApplicationContext context: Context,
-) {
+) : SyncRequester {
     private val workManager = WorkManager.getInstance(context)
 
-    fun requestSync() {
+    override fun requestSync() {
         val request = OneTimeWorkRequestBuilder<SyncWorker>()
             .setConstraints(
                 Constraints.Builder()
@@ -36,7 +46,32 @@ class SyncScheduler @Inject constructor(
         workManager.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
+    /**
+     * Periodic drain — the evening scenario: the worker walks back into the shop
+     * Wi-Fi at the end of the day and the outbox uploads WITHOUT opening the app.
+     * WorkManager fires the worker whenever the device is connected; it drains
+     * everything queued that day and goes back to sleep.
+     */
+    fun schedulePeriodic() {
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(PERIOD_MS, TimeUnit.MILLISECONDS)
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build(),
+            )
+            .build()
+        workManager.enqueueUniquePeriodicWork(
+            WORK_PERIODIC,
+            ExistingPeriodicWorkPolicy.UPDATE,
+            request,
+        )
+    }
+
     private companion object {
         const val WORK_NAME = "sync-outbox"
+        const val WORK_PERIODIC = "sync-outbox-periodic"
+        // 15 minutes — the minimum WorkManager allows; cheap because an empty
+        // outbox returns without a single network call.
+        const val PERIOD_MS = 15L * 60 * 1000
     }
 }

@@ -4,7 +4,7 @@ import * as React from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, ArrowRight, Printer, Ban, Undo2 } from "lucide-react";
+import { FileText, ArrowRight, Printer, Ban, Undo2, PencilLine } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState } from "@/components/states";
@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Money } from "@/components/money";
 import { StatusBadge } from "@/components/status-badge";
-import { getInvoice, getReturns, getReturnableLines } from "@/lib/api";
+import { getInvoice, getReturns, getReturnableLines, getCorrections } from "@/lib/api";
 import { faDate, formatDateTime, toFa, PAYMENT_LABELS } from "@/lib/format";
 
 /** یک ردیفِ برچسب/مقدار برای بلوکِ اطلاعات. */
@@ -49,6 +49,13 @@ export default function InvoiceDetailPage() {
   const returnsQ = useQuery({
     queryKey: ["invoice-returns", id],
     queryFn: () => getReturns({ invoiceId: id as string, limit: 100 }),
+    enabled: !!id,
+  });
+
+  // سندهای اصلاحیه‌ی همین فاکتور — ردِ رویدادهایِ تصحیح قیمت/تعداد.
+  const correctionsQ = useQuery({
+    queryKey: ["invoice-corrections", id],
+    queryFn: () => getCorrections({ invoiceId: id as string, limit: 100 }),
     enabled: !!id,
   });
 
@@ -98,6 +105,7 @@ export default function InvoiceDetailPage() {
 
   const inv = invoiceQ.data;
   const returns = returnsQ.data?.data ?? [];
+  const corrections = correctionsQ.data?.data ?? [];
   const isCancelled = inv.status === "CANCELLED";
 
   return (
@@ -339,6 +347,52 @@ export default function InvoiceDetailPage() {
                   <TableCell className="max-w-[16rem] truncate text-sm">{r.reason}</TableCell>
                   <TableCell className="font-semibold tabular-nums">
                     <Money value={r.refundAmount} tone="due" />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      )}
+
+      {/* سندهای اصلاحیه — ردِ رویدادهای تصحیح */}
+      {corrections.length > 0 && (
+        <Card className="overflow-hidden p-0">
+          <CardHeader className="p-4">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <PencilLine className="size-4 text-primary" />
+              اصلاحیه‌های این فاکتور
+            </CardTitle>
+          </CardHeader>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>شماره اصلاحیه</TableHead>
+                <TableHead>تاریخ</TableHead>
+                <TableHead>تعداد اقلام</TableHead>
+                <TableHead>دلیل</TableHead>
+                <TableHead className="text-start">اثر اصلاحیه</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {corrections.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium tabular-nums">
+                    {toFa(c.number)}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {faDate(c.createdAt)}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {toFa(c._count?.lines ?? 0)}
+                  </TableCell>
+                  <TableCell className="max-w-[16rem] truncate text-sm">{c.reason}</TableCell>
+                  <TableCell className="font-semibold tabular-nums">
+                    {c.amountAdjust > 0 ? (
+                      <Money value={c.amountAdjust} tone="due" />
+                    ) : (
+                      <Money value={-c.amountAdjust} tone="positive" />
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

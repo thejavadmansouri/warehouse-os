@@ -1,10 +1,15 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
-import { Menu, Moon, Sun, LogOut, UserCircle } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Menu, Moon, Sun, LogOut, UserCircle,
+  Wallet, ClipboardList, ReceiptText, Users,
+} from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
+import { usePosUiStore } from "@/app/admin/pos/_lib/pos-ui-store";
 import {
   Sheet,
   SheetContent,
@@ -21,6 +26,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { AdminSidebar, SidebarCollapseToggle } from "./admin-sidebar";
+import { FullscreenToggle } from "./fullscreen-toggle";
+import { cn } from "@/lib/utils";
 import { LiveClock } from "@/components/live-clock";
 import { NotificationBell } from "@/components/notification-bell";
 import { useAuthStore } from "@/lib/auth-store";
@@ -58,9 +65,17 @@ export function AdminTopbar({
   onToggleCollapse: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const [mobileOpen, setMobileOpen] = React.useState(false);
+
+  /*
+   * دکمه‌های عملیات فروش فقط وقتی دیده می‌شوند که پشت صندوق هستیم — خودِ
+   * دیالوگ‌های‌شان داخل صفحه‌ی POS رندر می‌شوند و این‌جا فقط سیگنالِ بازشدن
+   * به pos-ui-store می‌رود (منطق فروش به نوار مشترک تزریق نمی‌شود).
+   */
+  const isPos = pathname === "/admin/pos";
 
   const handleLogout = async () => {
     // نشستِ سمت سرور هم آزاد شود، وگرنه حساب تا ورود بعدی «اشغال» می‌ماند.
@@ -82,7 +97,11 @@ export function AdminTopbar({
           <Button
             variant="ghost"
             size="icon"
-            className="h-9 w-9 lg:hidden"
+            /*
+              روی صندوق سایدبارِ ثابت رندر نمی‌شود، پس این دکمه تنها راهِ رسیدن
+              به منوست و باید در هر اندازه‌ای دیده شود — نه فقط روی موبایل.
+            */
+            className={cn("h-9 w-9", !isPos && "lg:hidden")}
             title="منو"
           >
             <Menu className="h-5 w-5" />
@@ -96,17 +115,66 @@ export function AdminTopbar({
         </SheetContent>
       </Sheet>
 
-      {/* دکمه collapse سایدبار دسکتاپ */}
-      <div className="hidden lg:block">
-        <SidebarCollapseToggle collapsed={collapsed} onToggle={onToggleCollapse} />
-      </div>
+      {/* دکمه collapse سایدبار دسکتاپ — روی صندوق سایدباری نیست که جمع شود. */}
+      {!isPos && (
+        <div className="hidden lg:block">
+          <SidebarCollapseToggle collapsed={collapsed} onToggle={onToggleCollapse} />
+        </div>
+      )}
 
       <div className="flex-1" />
 
       {/* چیدمان راست‌به‌چپ است، پس هرچه بعد از فاصله‌انداز بیاید سمت چپ می‌نشیند. */}
+      {isPos && (
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant="outline"
+            className="h-9 border-amber-600/50 text-amber-600 hover:bg-amber-600/10 hover:text-amber-600/80
+                       dark:border-amber-600/50 dark:text-amber-400 dark:hover:bg-amber-600/10 dark:hover:text-amber-300"
+            onClick={() => usePosUiStore.getState().openAccounts(true)}
+            title="فهرست بدهکاران"
+          >
+            <Wallet className="size-4" />
+            <span className="hidden md:inline">حساب باز</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            className="h-9"
+            onClick={() => usePosUiStore.getState().workTasks(true)}
+            title="کارهای ارسال‌شده به کارگران انبار"
+          >
+            <ClipboardList className="size-4" />
+            <span className="hidden md:inline">کارهای انبار</span>
+          </Button>
+
+          {/* سبز عمدی است: تنها دکمه‌ی «نگاه به گذشته» بین ابزارهای فروش، و
+              فروشنده باید بدون خواندن متن پیدایش کند. */}
+          <Button
+            className="h-9 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700
+                       dark:bg-emerald-600 dark:hover:bg-emerald-500"
+            onClick={() => usePosUiStore.getState().recent(true)}
+            title="فاکتورهای ثبت‌شده‌ی امروز"
+          >
+            <ReceiptText className="size-4" />
+            <span className="hidden md:inline">فاکتورهای امروز</span>
+          </Button>
+
+          <Button asChild variant="outline" className="h-9">
+            <Link href="/admin/customers" title="پنل مشتری‌ها">
+              <Users className="size-4" />
+              <span className="hidden md:inline">مشتری‌ها</span>
+            </Link>
+          </Button>
+        </div>
+      )}
+
       <LiveClock />
 
       <NotificationBell />
+
+      {/* تمام‌صفحه فقط سرِ صندوق معنا دارد؛ جای دیگر فقط یک دکمه‌ی اضافه است. */}
+      {isPos && <FullscreenToggle />}
 
       <ThemeToggle />
 

@@ -1,4 +1,5 @@
 import { Controller, Post, Body, Get, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -12,6 +13,12 @@ export class AuthController {
   ) {}
 
 @Public()
+/*
+ * ضد brute-force: حداکثر ۵ تلاش ورود در دقیقه به ازای هر IP. فقط همین مسیر —
+ * بقیه‌ی API (به‌خصوص POS پرتردد) throttled نمی‌شود.
+ */
+@UseGuards(ThrottlerGuard)
+@Throttle({ default: { limit: 5, ttl: 60_000 } })
 @Post('login')
   async login(
     @Body() body:{

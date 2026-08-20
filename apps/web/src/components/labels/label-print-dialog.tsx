@@ -21,6 +21,14 @@ import {
   printAllStockLabelsPdf,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
+import { toFa } from "@/lib/format";
+import {
+  PAGE_MARGIN_MM,
+  LABEL_GAP_MM,
+  columnsFor,
+  labelsPerSheet,
+  type LabelPaper,
+} from "@/lib/label-sheet";
 import type { LocationLabel, ProductLabel } from "@/lib/types";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -49,10 +57,14 @@ export type LabelMode = "location" | "product";
 
 // پیش‌تنظیمات سایز لیبل — متغیر CSS روی کارت اعمال می‌شود
 const SIZE_PRESETS = [
-  { value: "5x3", label: "۵ × ۳ سانتی‌متر", w: "5cm", h: "3cm", qr: "1.7cm" },
-  { value: "4x2", label: "۴ × ۲ سانتی‌متر", w: "4cm", h: "2cm", qr: "1.1cm" },
-  { value: "6x4", label: "۶ × ۴ سانتی‌متر", w: "6cm", h: "4cm", qr: "2.5cm" },
+  // wMm/hMm همان اندازه‌اند، فقط عددی — چیدنِ ستون‌ها روی کاغذ حساب می‌خواهد
+  // و «5cm» رشته است.
+  { value: "5x3", label: "۵ × ۳ سانتی‌متر", w: "5cm", h: "3cm", qr: "1.7cm", wMm: 50, hMm: 30 },
+  { value: "4x2", label: "۴ × ۲ سانتی‌متر", w: "4cm", h: "2cm", qr: "1.1cm", wMm: 40, hMm: 20 },
+  { value: "6x4", label: "۶ × ۴ سانتی‌متر", w: "6cm", h: "4cm", qr: "2.5cm", wMm: 60, hMm: 40 },
 ] as const;
+
+const PAPER_OPTIONS: LabelPaper[] = ["A4", "A5", "A6"];
 
 type SizePreset = (typeof SIZE_PRESETS)[number];
 
@@ -195,8 +207,19 @@ export function LabelPrintDialog({
   const perItem = mode === "product" && !!items && items.length > 0;
   const itemsTotal = perItem ? items!.reduce((s, i) => s + (i.quantity || 0), 0) : 0;
   const [sizeKey, setSizeKey] = React.useState<string>("5x3");
+  /** کاغذی که لیبل‌ها رویش چاپ می‌شوند. چیدمان خودش را با آن وفق می‌دهد. */
+  const [paper, setPaper] = React.useState<LabelPaper>("A4");
   const sizePreset: SizePreset =
     SIZE_PRESETS.find((s) => s.value === sizeKey) ?? SIZE_PRESETS[0];
+
+  /*
+   * ستون‌ها از روی کاغذ و اندازه‌ی لیبل حساب می‌شوند، نه ثابت.
+   *
+   * شبکه‌ی روی صفحه واکنش‌گراست (۲ یا ۳ ستون بسته به پهنای پنجره) و به کاغذ
+   * ربطی ندارد؛ چیزی که روی کاغذ می‌رود با این عدد در استایلِ چاپ قفل می‌شود.
+   */
+  const printColumns = columnsFor(paper, sizePreset.wMm);
+  const perSheet = labelsPerSheet(paper, sizePreset.wMm, sizePreset.hMm);
 
   // ---- تنظیمات چاپِ محصول (PDF سمت سرور) ----
   const [copies, setCopies] = React.useState<number>(defaultCopies);
@@ -356,7 +379,23 @@ export function LabelPrintDialog({
               break-inside: avoid !important;
               page-break-inside: avoid !important;
             }
-            @page { margin: 5mm; }
+            /*
+              اندازه‌ی کاغذ از انتخابِ کاربر می‌آید، نه پیش‌فرضِ مرورگر.
+              بدون این، هر کسی که در دیالوگِ چاپِ ویندوز A5 می‌گذاشت، چیدمانِ
+              A4 را روی A5 می‌گرفت و ستونِ آخر بریده می‌شد.
+            */
+            @page { size: ${paper}; margin: ${PAGE_MARGIN_MM}mm; }
+
+            /*
+              شبکه‌ی چاپ، نه شبکه‌ی صفحه. روی صفحه ستون‌ها با پهنای پنجره عوض
+              می‌شوند؛ روی کاغذ باید دقیقاً همان تعدادی باشد که جا می‌شود.
+            */
+            .label-print-area .label-grid {
+              display: grid !important;
+              grid-template-columns: repeat(${printColumns}, ${sizePreset.w}) !important;
+              gap: ${LABEL_GAP_MM}mm !important;
+              justify-content: start !important;
+            }
           }
         `}</style>
 
@@ -388,6 +427,33 @@ export function LabelPrintDialog({
               </SelectContent>
             </Select>
           </div>
+          {/*
+            کاغذ. برای لیبلِ موقعیت همان چیزی است که انباردار در دستگاه می‌گذارد
+            — A6 برای چند قفسه، A4 برای یک ردیفِ کامل.
+          */}
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">کاغذ:</span>
+            <div className="flex gap-1">
+              {PAPER_OPTIONS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPaper(p)}
+                  className={`h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
+                    paper === p
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "hover:border-primary hover:text-primary"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <span className="text-[11px] text-muted-foreground">
+              {toFa(printColumns)} ستون · {toFa(perSheet)} لیبل در هر برگه
+            </span>
+          </div>
+
           {hasLabels ? (
             <Badge variant="secondary" className="gap-1">
               {mode === "location" ? (
@@ -520,7 +586,7 @@ export function LabelPrintDialog({
               icon={QrCode}
             />
           ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="label-grid grid grid-cols-2 gap-3 sm:grid-cols-3">
               {mode === "location"
                 ? locationLabels.map((l) => (
                     <LocationLabelCard

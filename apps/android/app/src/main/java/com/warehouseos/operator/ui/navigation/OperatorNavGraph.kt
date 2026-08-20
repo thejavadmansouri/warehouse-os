@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.warehouseos.operator.data.repository.StartupDestination
+import com.warehouseos.operator.ui.screens.catalog.CatalogSetupScreen
 import com.warehouseos.operator.ui.screens.count.CountScreen
 import com.warehouseos.operator.ui.screens.login.LoginScreen
 import com.warehouseos.operator.ui.screens.locate.LocateScreen
@@ -22,6 +23,7 @@ import com.warehouseos.operator.ui.screens.sales.SalesScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
+import com.warehouseos.operator.ui.screens.worktasks.WorkTasksScreen
 import com.warehouseos.operator.ui.screens.startup.StartupScreen
 import com.warehouseos.operator.ui.screens.voice.VoiceEntryScreen
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -97,17 +99,26 @@ fun OperatorNavGraph(
 
         composable(Routes.SHIFT_HOME) {
             ShiftHomeScreen(
-                onStockIn = { navController.navigate(Routes.SCAN) },
+                // Through the catalog gate, never straight to the camera: without a
+                // catalog on the phone, scanning a shelf leads nowhere useful.
+                onStockIn = { navController.navigate(Routes.CATALOG_SETUP) },
                 onCount = { navController.navigate(Routes.COUNT) },
                 onLocate = { navController.navigate(Routes.LOCATE) },
                 onMyWork = { navController.navigate(Routes.MY_WORK) },
                 onPickTasks = { navController.navigate(Routes.PICK_TASKS) },
+                onWorkTasks = { navController.navigate(Routes.WORK_TASKS) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onLogout = {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(0) { inclusive = true }
                     }
                 },
+            )
+        }
+
+        composable(Routes.WORK_TASKS) {
+            WorkTasksScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 
@@ -135,9 +146,22 @@ fun OperatorNavGraph(
             )
         }
 
+        composable(Routes.CATALOG_SETUP) {
+            CatalogSetupScreen(
+                // Replace itself in the back stack: pressing back from the camera
+                // should return home, not bounce through the gate again.
+                onReady = {
+                    navController.navigate(Routes.SCAN) {
+                        popUpTo(Routes.CATALOG_SETUP) { inclusive = true }
+                    }
+                },
+                onBack = { navController.popBackStack() },
+            )
+        }
+
         composable(Routes.SCAN) {
             ScanScreen(
-                onScanned = { barcode -> navController.navigate(Routes.voiceEntry(barcode)) },
+                onVoice = { barcode -> navController.navigate(Routes.voiceEntry(barcode)) },
                 onBack = { navController.popBackStack() },
             )
         }

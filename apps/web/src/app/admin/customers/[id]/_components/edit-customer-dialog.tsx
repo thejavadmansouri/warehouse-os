@@ -232,7 +232,7 @@ export function EditCustomerDialog({
                 <Input
                   dir="ltr"
                   inputMode="tel"
-                  className="h-9 flex-1 text-left tabular-nums"
+                  className="h-9 flex-1 text-right tabular-nums"
                   value={newPhone}
                   onChange={(e) => setNewPhone(e.target.value)}
                   placeholder="۰۹۱۲۳۴۵۶۷۸۹"
@@ -288,7 +288,7 @@ export function EditCustomerDialog({
                 <Input
                   dir="ltr"
                   inputMode="numeric"
-                  className="text-left tabular-nums"
+                  className="text-right tabular-nums"
                   value={nationalId}
                   onChange={(e) => setNationalId(e.target.value)}
                   placeholder="۱۰ رقمی — اختیاری"

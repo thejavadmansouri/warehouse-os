@@ -67,7 +67,8 @@ export class InventoryOperationService {
       allowNegative,
       invoiceId,
       saleReturnId,
-      purchaseId
+      purchaseId,
+      correctionId
     } = dto;
 
 
@@ -149,7 +150,10 @@ export class InventoryOperationService {
 
       // فاکتور خریدی که این ردیفِ IN را ساخته. مثل فروش، ردیف‌های سند خرید
       // همین رکوردهای لجرند؛ برای ورودِ دستی و صوتی و اسکن null می‌ماند.
-      purchaseId: purchaseId ?? null
+      purchaseId: purchaseId ?? null,
+
+      // اصلاحیه‌ای که این حرکتِ جبرانی را ساخته — فقط حرکاتِ اصلاحیه. برای بقیه null.
+      correctionId: correctionId ?? null
 
     };
 

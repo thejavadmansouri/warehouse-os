@@ -21,10 +21,20 @@ data class OutboxEntity(
     val attemptCount: Int = 0,
     val lastError: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
+    /** JSON payload for types whose body isn't representable in fixed columns (e.g. NEW_PRODUCT_REQUEST). */
+    val payload: String? = null,
 )
 
 object OutboxStatus {
     const val PENDING = "PENDING"
     const val SYNCED = "SYNCED"
     const val FAILED = "FAILED"
+}
+
+object OutboxType {
+    const val IN = "IN"
+    const val COUNT = "COUNT"
+    const val NEW_PRODUCT_REQUEST = "NEW_PRODUCT_REQUEST"
+    /** تیک یک قلمِ «کار انبار» — به POST /work-tasks/sync می‌رود، نه /sync/operations. */
+    const val WORK_TASK_TICK = "WORK_TASK_TICK"
 }

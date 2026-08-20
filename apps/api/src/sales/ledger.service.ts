@@ -21,6 +21,7 @@ export interface LedgerEntryInput {
   invoiceId?: string | null;
   receiptId?: string | null;
   returnId?: string | null;
+  correctionId?: string | null;
   note?: string | null;
   userId?: string | null;
 }
@@ -60,6 +61,7 @@ export class LedgerService {
         invoiceId: entry.invoiceId ?? null,
         receiptId: entry.receiptId ?? null,
         returnId: entry.returnId ?? null,
+        correctionId: entry.correctionId ?? null,
         note: entry.note ?? null,
         userId: entry.userId ?? null,
       },
@@ -96,7 +98,9 @@ export class LedgerService {
       this.prisma.saleInvoice.findMany({
         where: {
           customerId,
-          status: 'CONFIRMED',
+          // فاکتورِ جاریِ حساب باز هم بدهی است — بدونِ این، مشتریِ دارای تب
+          // مانده‌ی کل داشت ولی در هیچ سطلِ جاری/سررسید/معوق نمی‌آمد.
+          status: { not: 'CANCELLED' },
           dueAmount: { gt: 0 },
         },
         select: { dueAmount: true, dueDate: true },
@@ -111,7 +115,7 @@ export class LedgerService {
         where: {
           status: 'IN_HAND',
           OR: [
-            { receipt: { customerId } },
+            { receiptPayment: { receipt: { customerId } } },
             { payment: { invoice: { customerId } } },
           ],
         },
@@ -352,7 +356,7 @@ export class LedgerService {
     const openInvoices = await this.prisma.saleInvoice.findMany({
       where: {
         customerId: { in: ids },
-        status: 'CONFIRMED',
+        status: { not: 'CANCELLED' },
         dueAmount: { gt: 0 },
       },
       select: { customerId: true, dueAmount: true, dueDate: true },

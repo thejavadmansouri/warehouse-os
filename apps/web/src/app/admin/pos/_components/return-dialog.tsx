@@ -57,12 +57,20 @@ export function ReturnDialog({
   const invoice = data.data?.invoice;
   const hasCustomer = !!invoice?.customer;
   const owesMoney = (invoice?.dueAmount ?? 0) > 0;
+  /*
+   * فاکتورِ جاریِ یک حساب باز: مشتری جنس را برده و هنوز یک ریال هم نداده. پس
+   * «برگشت وجه از صندوق» یعنی پول دادن بابت جنسی که پولش گرفته نشده — سرور هم
+   * ردش می‌کند. روش روی «کسر از حساب» قفل می‌شود.
+   */
+  const isOpenAccount = data.data?.isOpenAccount ?? false;
 
   // پیش‌فرضِ روشِ برگشت: اگر مشتری بدهکار است → کسر از حساب؛ وگرنه نقد. بدون
   // مشتری اصلاً «کسر از حساب» معنا ندارد.
   const defaultMethod: PaymentMethod =
     hasCustomer && owesMoney ? "CREDIT" : "CASH";
-  const effectiveMethod: PaymentMethod = (method || defaultMethod) as PaymentMethod;
+  const effectiveMethod: PaymentMethod = isOpenAccount
+    ? "CREDIT"
+    : ((method || defaultMethod) as PaymentMethod);
 
   const lines = data.data?.lines ?? [];
 
@@ -143,6 +151,13 @@ export function ReturnDialog({
         {data.data && !data.data.returnable && (
           <p className="py-8 text-center text-sm text-muted-foreground">
             این فاکتور باطل شده و قابلِ مرجوعی نیست.
+          </p>
+        )}
+
+        {data.data?.returnable && isOpenAccount && (
+          <p className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            فاکتورِ جاریِ حساب باز — هنوز پولی پرداخت نشده، پس برگشت از بدهیِ همین
+            حساب کم می‌شود.
           </p>
         )}
 
@@ -257,13 +272,18 @@ export function ReturnDialog({
                     <Select
                       value={effectiveMethod}
                       onValueChange={(v) => setMethod(v as PaymentMethod)}
+                      disabled={isOpenAccount}
                     >
                       <SelectTrigger className="h-10">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CASH">نقد (از صندوق)</SelectItem>
-                        <SelectItem value="CARD">کارتخوان</SelectItem>
+                        <SelectItem value="CASH" disabled={isOpenAccount}>
+                          نقد (از صندوق)
+                        </SelectItem>
+                        <SelectItem value="CARD" disabled={isOpenAccount}>
+                          کارتخوان
+                        </SelectItem>
                         <SelectItem value="CREDIT" disabled={!hasCustomer}>
                           کسر از حساب مشتری
                         </SelectItem>

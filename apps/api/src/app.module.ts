@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ServeStaticModule } from '@nestjs/serve-static';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { join } from 'path';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
+import { TokenRefreshInterceptor } from './auth/token-refresh.interceptor';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -36,6 +38,7 @@ import { ProductRequestsModule } from './product-requests/product-requests.modul
 import { SalesModule } from './sales/sales.module';
 import { PurchasesModule } from './purchases/purchases.module';
 import { PickTasksModule } from './pick-tasks/pick-tasks.module';
+import { WorkTasksModule } from './work-tasks/work-tasks.module';
 import { ReportsModule } from './reports/reports.module';
 import { BackupsModule } from './backups/backups.module';
 
@@ -47,6 +50,12 @@ import { RealtimeModule } from './realtime/realtime.module';
     RealtimeModule,
     ShopModule,
     ScheduleModule.forRoot(),
+    /*
+     * محدودیت نرخ — فقط روی مسیر لاگین اعمال می‌شود (با @UseGuards و @Throttle
+     * روی خودِ endpoint). پیش‌فرضِ ماژول یک fallbackِ سخاوتمندانه است و هیچ
+     * مسیر دیگری را تحت فشار نمی‌گذارد؛ POSِ شلوغ نباید throttled شود.
+     */
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
     /*
      * فقط عکس‌های محصول عمومی سرو می‌شوند؛ عکس‌های انبار (inventory-photos و
      * inventory-logs) از اینجا حذف شدند و فقط از طریق endpoint احرازشده‌ی
@@ -88,6 +97,7 @@ LocationBuilderModule,
     SalesModule,
     PurchasesModule,
     PickTasksModule,
+    WorkTasksModule,
     ReportsModule,
     BackupsModule,
   ],
@@ -103,6 +113,12 @@ LocationBuilderModule,
     {
       provide: APP_GUARD,
       useClass: RolesGuard,
+    },
+    // Sliding session: re-issues a fresh token (same sid) past its half-life
+    // via the X-Refreshed-Token header so the worker app never has to re-login.
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TokenRefreshInterceptor,
     },
   ],
 })

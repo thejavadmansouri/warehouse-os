@@ -7,6 +7,7 @@ import { isNumericSku } from '../products/sku.util';
 import {
   buildThermalLabelHtml,
   buildSheetLabelHtml,
+  type LabelPaper,
   buildProductSheetLabelHtml,
   LabelData,
   ProductLabelData,
@@ -202,13 +203,15 @@ export class LabelsService {
 
   async bulkLocationLabelsPdf(
     ids: string[],
-    columns = 3,
+    columns?: number,
+    paper: LabelPaper = 'A4',
   ): Promise<string> {
     const labels = await this.bulkLocationLabels(ids);
 
     const html = buildSheetLabelHtml(
       labels,
       columns,
+      paper,
     );
 
     return html;
@@ -218,7 +221,8 @@ export class LabelsService {
   // چاپ کل زیرمجموعه یک موقعیت
   async treeLocationLabelsPdf(
     rootId: string,
-    columns = 3,
+    columns?: number,
+    paper: LabelPaper = 'A4',
   ): Promise<string> {
 
     const root =
@@ -289,6 +293,7 @@ export class LabelsService {
       buildSheetLabelHtml(
         labels,
         columns,
+        paper,
       );
 
 
@@ -296,7 +301,8 @@ export class LabelsService {
   }
     async childrenLocationLabelsPdf(
     parentId: string,
-    columns = 3,
+    columns?: number,
+    paper: LabelPaper = 'A4',
   ): Promise<string> {
 
     const parent =
@@ -351,6 +357,7 @@ export class LabelsService {
       buildSheetLabelHtml(
         labels,
         columns,
+        paper,
       );
 
 
@@ -358,7 +365,8 @@ export class LabelsService {
   }
   async rowShelvesLabelsPdf(
   rowId: string,
-  columns = 3,
+  columns?: number,
+  paper: LabelPaper = 'A4',
 ): Promise<string> {
 
   const row =
@@ -420,6 +428,7 @@ export class LabelsService {
     buildSheetLabelHtml(
       labels,
       columns,
+      paper,
     );
 
 
@@ -429,7 +438,8 @@ export class LabelsService {
   async filteredChildrenLabelsPdf(
     parentId: string,
     typeName: string,
-    columns = 3,
+    columns?: number,
+    paper: LabelPaper = 'A4',
   ): Promise<string> {
 
     const parent =
@@ -492,6 +502,7 @@ export class LabelsService {
       buildSheetLabelHtml(
         labels,
         columns,
+        paper,
       );
 
 

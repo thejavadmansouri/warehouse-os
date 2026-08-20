@@ -28,10 +28,17 @@ object Routes {
     const val LOCATE = "locate"
     const val MY_WORK = "my_work"
     const val PICK_TASKS = "pick_tasks"
+    const val WORK_TASKS = "work_tasks"
     const val SETTINGS = "settings"
 
-    // Voice entry receives the scanned barcode as a path argument (Epic 5 → 6).
+    // Barcode path argument — used by the voice entry screen.
     const val ARG_BARCODE = "barcode"
+
+    // Gate in front of stock-in: forwards to SCAN when the offline catalog is on
+    // the phone, otherwise downloads it first. The worker is never asked.
+    const val CATALOG_SETUP = "catalog_setup"
+
+    // Voice entry receives the scanned barcode as a path argument (Epic 5 → 6).
     const val VOICE_ENTRY = "voice_entry"
     const val VOICE_ENTRY_ROUTE = "$VOICE_ENTRY/{$ARG_BARCODE}"
 

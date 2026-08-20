@@ -28,6 +28,12 @@ export interface Cart {
    * است (دکمه‌ی قفل روی چیپِ مشتری)، نه وابسته به نوعِ پرداخت.
    */
   customerLocked: boolean;
+  /**
+   * حساب بازِ در جریانِ این تب. وقتی پر است، فاکتورِ این تب OPEN (جاری) ثبت
+   * می‌شود و به همان حساب وصل می‌شود — ادامه‌ی همان «فاکتور کلیِ» مشتری.
+   * بعد از ثبت، تب روی همان حساب می‌ماند تا نوبتِ بعدی هم به همان حساب برود.
+   */
+  openAccountId: string | null;
   discount: DiscountValue;
   note: string;
   activeRow: number;
@@ -41,6 +47,7 @@ function emptyCart(label: number): Cart {
     lines: [],
     customer: null,
     customerLocked: false,
+    openAccountId: null,
     discount: NO_DISCOUNT,
     note: "",
     activeRow: 0,
@@ -151,6 +158,9 @@ export function useCarts() {
       lines: [],
       customer: c.customerLocked ? c.customer : null,
       customerLocked: c.customerLocked,
+      // حساب بازِ ادامه‌دار بعد از هر ثبت روی تب می‌ماند تا نوبتِ بعدی هم
+      // به همان حساب برود؛ فقط با «جدا کردن مشتری» جدا می‌شود.
+      openAccountId: c.openAccountId,
       discount: NO_DISCOUNT,
       note: "",
       activeRow: 0,

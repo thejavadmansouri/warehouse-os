@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import {
   Bar,
   BarChart,
@@ -37,6 +38,9 @@ import {
 } from "@/components/ui/select";
 
 import {
+  bounceCheque,
+  cashCheque,
+  depositCheque,
   getChequesReport,
   getDebtors,
   getLowStock,
@@ -47,6 +51,8 @@ import {
   getSellerPerformance,
 } from "@/lib/api";
 import { faDate, money, qty, toFa } from "@/lib/format";
+import { ApiException } from "@/lib/api-error-messages";
+import { useAuthStore } from "@/lib/auth-store";
 
 import {
   CHART_COLOR,
@@ -56,12 +62,32 @@ import {
   PRESETS,
   presetDates,
   StickyTotal,
+  DrillCard,
   SummaryCard,
   faDayLabel,
   sum,
   t,
   type PresetRange,
 } from "./_components/shared";
+
+/**
+ * مقدارِ یک کارت وقتی کوئری هنوز نیامده یا خطا خورده.
+ *
+ * بدون این، کارت‌ها موقعِ بارگذاری «۰» نشان می‌دادند — و صفرِ دروغ بدتر از سه
+ * نقطه است: مدیر یک لحظه فکر می‌کند امروز هیچ فروشی نبوده.
+ */
+function kpi(
+  q: { isLoading: boolean; isError: boolean },
+  read: () => string,
+): string {
+  if (q.isLoading) return "…";
+  if (q.isError) return "—";
+  try {
+    return read();
+  } catch {
+    return "—";
+  }
+}
 
 const CHEQUE_STATUS_LABELS: Record<string, string> = {
   IN_HAND: "نزد ما",
@@ -87,7 +113,7 @@ function ScrollTable({
 }
 
 export default function ReportsPage() {
-  const [tab, setTab] = React.useState("sales");
+  const [tab, setTab] = React.useState("overview");
   const [preset, setPreset] = React.useState<PresetRange>("today");
   const [page, setPage] = React.useState(1);
   const [chequeStatus, setChequeStatus] = React.useState("UPCOMING");
@@ -102,23 +128,63 @@ export default function ReportsPage() {
   const sales = useQuery({
     queryKey: ["rep", "sales", dates, page],
     queryFn: () => getPeriodicSales({ ...dates, page, limit }),
-    enabled: tab === "sales",
+    enabled: tab === "sales" || tab === "overview",
   });
   const profit = useQuery({
     queryKey: ["rep", "profit", dates, page],
     queryFn: () => getPeriodicProfit({ ...dates, page, limit }),
-    enabled: tab === "profit",
+    enabled: tab === "profit" || tab === "overview",
   });
   const debtors = useQuery({
     queryKey: ["rep", "debtors", page],
     queryFn: () => getDebtors({ page, limit }),
-    enabled: tab === "debtors",
+    enabled: tab === "debtors" || tab === "overview",
   });
   const cheques = useQuery({
     queryKey: ["rep", "cheques", chequeStatus, page],
     queryFn: () => getChequesReport({ status: chequeStatus, page, limit }),
-    enabled: tab === "cheques",
+    enabled: tab === "cheques" || tab === "overview",
   });
+
+  /*
+   * چرخه‌ی چک.
+   *
+   * وضعیتِ چک پول جابه‌جا می‌کند: برگشت، بدهیِ مشتری را برمی‌گرداند. پس فقط مدیر
+   * می‌بیندش، و بعد از هر عمل مانده‌ی مشتری و مطالبات هم باید تازه شوند — نه فقط
+   * خودِ فهرستِ چک‌ها.
+   */
+  const qc = useQueryClient();
+  const canManage = useAuthStore((st) => st.hasRole("ADMIN", "MANAGER"));
+
+  const afterChequeAction = (msg: string) => {
+    toast.success(msg);
+    qc.invalidateQueries({ queryKey: ["rep"] });
+    qc.invalidateQueries({ queryKey: ["customer"] });
+    qc.invalidateQueries({ queryKey: ["statement"] });
+  };
+
+  const onError = (e: unknown) =>
+    toast.error(e instanceof ApiException ? e.message : "ثبت وضعیت چک ناموفق بود");
+
+  const deposit = useMutation({
+    mutationFn: (id: string) => depositCheque(id),
+    onSuccess: () => afterChequeAction("چک به بانک سپرده شد"),
+    onError,
+  });
+
+  const cash = useMutation({
+    mutationFn: (id: string) => cashCheque(id),
+    onSuccess: () => afterChequeAction("چک وصول شد"),
+    onError,
+  });
+
+  const bounce = useMutation({
+    mutationFn: (v: { id: string; reason?: string }) => bounceCheque(v.id, v.reason),
+    onSuccess: () => afterChequeAction("چک برگشتی ثبت شد — بدهی مشتری برگشت"),
+    onError,
+  });
+
+  const chequeBusy = deposit.isPending || cash.isPending || bounce.isPending;
   const products = useQuery({
     queryKey: ["rep", "products", perfType, dates, page],
     queryFn: () => getProductPerformance({ ...dates, type: perfType, page, limit }),
@@ -127,7 +193,7 @@ export default function ReportsPage() {
   const lowStock = useQuery({
     queryKey: ["rep", "low-stock", page],
     queryFn: () => getLowStock({ page, limit }),
-    enabled: tab === "low-stock",
+    enabled: tab === "low-stock" || tab === "overview",
   });
   const sellers = useQuery({
     queryKey: ["rep", "sellers", dates, page],
@@ -175,7 +241,8 @@ export default function ReportsPage() {
       )}
 
       <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-        <TabsList className="grid h-auto grid-cols-2 gap-1 p-1 md:grid-cols-4 lg:grid-cols-8">
+        <TabsList className="grid h-auto grid-cols-2 gap-1 p-1 md:grid-cols-5 lg:grid-cols-9">
+          <TabsTrigger value="overview" className="py-2 text-xs font-semibold">یک نگاه</TabsTrigger>
           <TabsTrigger value="sales" className="py-2 text-xs">فروش</TabsTrigger>
           <TabsTrigger value="profit" className="py-2 text-xs">سود</TabsTrigger>
           <TabsTrigger value="categories" className="py-2 text-xs">دسته مشتری</TabsTrigger>
@@ -187,6 +254,125 @@ export default function ReportsPage() {
         </TabsList>
 
         {/* ۱ — فروش دوره‌ای */}
+        {/* ---------- ۰ — یک نگاه ---------- */}
+        <TabsContent value="overview" className="space-y-4">
+          {/*
+            همه‌ی اعدادِ روز در یک صفحه، و هر کارت یک درِ ورودی.
+            تفاوتش با داشبوردِ قدیمی این است که کارت‌ها بن‌بست نیستند: کلیک روی
+            هرکدام همان فهرست را با **همین بازه‌ی تاریخِ بالای صفحه** باز می‌کند،
+            پس عددی که دیدی و فهرستی که می‌بینی همیشه یکی‌اند.
+          */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <DrillCard
+              label="فروش خالص"
+              value={kpi(sales, () => t(sales.data!.summary.netAmount))}
+              hint={
+                sales.data ? `${toFa(sales.data.summary.invoiceCount)} فاکتور` : undefined
+              }
+              onClick={() => setTab("sales")}
+            />
+            <DrillCard
+              label="سود کالا"
+              tone="success"
+              value={kpi(profit, () => t(profit.data!.summary.grossProfit))}
+              hint={
+                profit.data
+                  ? `حاشیه ٪${toFa(profit.data.summary.profitMarginPercent)}`
+                  : undefined
+              }
+              onClick={() => setTab("profit")}
+            />
+            <DrillCard
+              label="تفاوت فروش مدت‌دار"
+              value={kpi(profit, () => t(profit.data!.summary.financeCharge))}
+              hint="سودِ چک — جدا از حاشیه‌ی کالا"
+              onClick={() => setTab("profit")}
+            />
+            <DrillCard
+              label="میانگین هر فاکتور"
+              value={kpi(sales, () => t(sales.data!.summary.averageInvoiceAmount))}
+              onClick={() => setTab("sales")}
+            />
+
+            <DrillCard
+              label="مرجوعی"
+              value={kpi(sales, () => t(sales.data!.summary.returnsAmount))}
+              hint={
+                sales.data ? `${toFa(sales.data.summary.returnCount)} سند` : undefined
+              }
+              onClick={() => setTab("sales")}
+            />
+            <DrillCard
+              label="بدهی مشتریان"
+              tone="warning"
+              value={kpi(debtors, () => t(debtors.data!.summary.totalCreditBalance))}
+              onClick={() => setTab("debtors")}
+            />
+            <DrillCard
+              label="سررسید گذشته"
+              tone={
+                !debtors.isLoading && (debtors.data?.summary.overdue ?? 0) > 0
+                  ? "danger"
+                  : "default"
+              }
+              value={kpi(debtors, () => t(debtors.data!.summary.overdue))}
+              onClick={() => setTab("debtors")}
+            />
+            <DrillCard
+              label="چک در جریان"
+              value={kpi(cheques, () => t(cheques.data!.summary.totalAmount))}
+              hint={
+                cheques.data
+                  ? `${toFa(cheques.data.summary.totalCount)} فقره`
+                  : undefined
+              }
+              onClick={() => setTab("cheques")}
+            />
+
+            <DrillCard
+              label="اقلام زیر حد سفارش"
+              tone={
+                !lowStock.isLoading &&
+                (lowStock.data?.summary.totalLowStockItems ?? 0) > 0
+                  ? "warning"
+                  : "default"
+              }
+              value={kpi(lowStock, () =>
+                toFa(lowStock.data!.summary.totalLowStockItems),
+              )}
+              onClick={() => setTab("low-stock")}
+            />
+            <DrillCard
+              label="پرفروش‌ترین"
+              value={
+                products.data?.products.data[0]?.productName ??
+                (products.isLoading ? "…" : "—")
+              }
+              small
+              onClick={() => { setPerfType("TOP_SELLING"); setTab("products"); }}
+            />
+            <DrillCard
+              label="بدهکارترین مشتری"
+              value={debtors.data?.debtors.data[0]?.customerName ?? "—"}
+              small
+              onClick={() => setTab("debtors")}
+            />
+            <DrillCard
+              label="فروشندگان"
+              value={
+                sellers.data ? `${toFa(sellers.data.sellers.data.length)} نفر` : "—"
+              }
+              small
+              onClick={() => setTab("sellers")}
+            />
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            همه‌ی این اعداد بر اساس بازه‌ی انتخاب‌شده‌ی بالای صفحه‌اند. روی هر
+            کارت بزنید تا فهرستِ پشتش با همان بازه باز شود.
+          </p>
+        </TabsContent>
+
         <TabsContent value="sales" className="space-y-4">
           {sales.isLoading ? <LoadingState /> : sales.isError ? (
             <ErrorState onRetry={() => sales.refetch()} />
@@ -208,6 +394,16 @@ export default function ReportsPage() {
                 <SummaryCard label="تعداد فاکتور" value={toFa(sales.data.summary.invoiceCount)} />
                 <SummaryCard label="تعداد مرجوعی" value={toFa(sales.data.summary.returnCount)} />
                 <SummaryCard label="میانگین هر فاکتور" value={t(sales.data.summary.averageInvoiceAmount)} />
+                {/*
+                  تفکیکِ سودِ مدت از بهای کالا. تا وقتی صفر است نشان داده نمی‌شود
+                  تا کارتِ خالی صفحه را شلوغ نکند.
+                */}
+                {sales.data.summary.financeCharge > 0 && (
+                  <SummaryCard
+                    label="تفاوت فروش مدت‌دار"
+                    value={t(sales.data.summary.financeCharge)}
+                  />
+                )}
               </div>
 
               {sales.data.chartData.length > 1 && (
@@ -284,12 +480,33 @@ export default function ReportsPage() {
                 <ExportButton endpoint="/reports/periodic-profit" params={dates} fileName="سود" />
               </div>
 
+              {/*
+                حاشیه‌ی کالا و سودِ مدت جدا نشان داده می‌شوند.
+                بدونِ تفکیک معلوم نیست پول از خرید و فروشِ قطعه درمی‌آید یا از
+                فروشِ مدت‌دار — و آن دو تصمیم‌های کاملاً متفاوتی می‌سازند.
+                «فروش کالا» پایه‌ی درصدِ حاشیه است، نه کلِ فاکتور.
+              */}
               <div className="grid gap-4 md:grid-cols-4">
-                <SummaryCard label="فروش کل" value={t(profit.data.summary.totalRevenue)} />
+                <SummaryCard label="فروش کالا" value={t(profit.data.summary.goodsRevenue)} />
                 <SummaryCard label="بهای تمام‌شده" value={t(profit.data.summary.totalCost)} />
-                <SummaryCard label="سود ناخالص" value={t(profit.data.summary.grossProfit)} tone="success" />
-                <SummaryCard label="حاشیه سود" value={`٪${toFa(profit.data.summary.profitMarginPercent)}`} />
+                <SummaryCard label="سود کالا" value={t(profit.data.summary.grossProfit)} tone="success" />
+                <SummaryCard label="حاشیه سود کالا" value={`٪${toFa(profit.data.summary.profitMarginPercent)}`} />
               </div>
+
+              {profit.data.summary.financeCharge > 0 && (
+                <div className="grid gap-4 md:grid-cols-3">
+                  <SummaryCard
+                    label="تفاوت فروش مدت‌دار"
+                    value={t(profit.data.summary.financeCharge)}
+                  />
+                  <SummaryCard label="فروش کل" value={t(profit.data.summary.totalRevenue)} />
+                  <SummaryCard
+                    label="سود کل"
+                    value={t(profit.data.summary.totalProfit)}
+                    tone="success"
+                  />
+                </div>
+              )}
 
               {profit.data.costIsApproximate && (
                 <p className="rounded-md border-e-4 border-e-amber-600 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
@@ -596,6 +813,7 @@ export default function ReportsPage() {
                       <TableHead>سررسید</TableHead>
                       <TableHead>وضعیت</TableHead>
                       <TableHead className="text-start">مبلغ</TableHead>
+                      {canManage && <TableHead className="text-start">عملیات</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -611,6 +829,74 @@ export default function ReportsPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="font-bold tabular-nums">{money(c.amount)}</TableCell>
+
+                        {canManage && (
+                          <TableCell>
+                            {/*
+                              فقط عملیاتی که از این وضعیت ممکن است نشان داده
+                              می‌شود؛ دکمه‌ی غیرفعال یعنی فروشنده باید حدس بزند
+                              چرا کار نمی‌کند. سرور هم همین قواعد را دوباره
+                              بررسی می‌کند.
+                            */}
+                            <div className="flex items-center gap-1">
+                              {c.status === "IN_HAND" && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs"
+                                  disabled={chequeBusy}
+                                  onClick={() => deposit.mutate(c.id)}
+                                >
+                                  به بانک
+                                </Button>
+                              )}
+
+                              {c.status !== "CASHED" && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-emerald-600 hover:text-emerald-700"
+                                  disabled={chequeBusy}
+                                  onClick={() => {
+                                    const extra =
+                                      c.status === "BOUNCED"
+                                        ? " این چک برگشتی است؛ با وصول، بدهی دوباره کم می‌شود."
+                                        : "";
+                                    if (
+                                      !window.confirm(
+                                        `چک ${toFa(c.number)} به مبلغ ${money(c.amount)} وصول شد؟${extra}`
+                                      )
+                                    )
+                                      return;
+                                    cash.mutate(c.id);
+                                  }}
+                                >
+                                  وصول شد
+                                </Button>
+                              )}
+
+                              {(c.status === "IN_HAND" || c.status === "DEPOSITED") && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                                  disabled={chequeBusy}
+                                  onClick={() => {
+                                    const reason = window.prompt(
+                                      `چک ${toFa(c.number)} برگشت خورد. بدهی ${money(c.amount)} به حساب مشتری برمی‌گردد.\n\nدلیل (اختیاری):`,
+                                      "کسر موجودی"
+                                    );
+                                    // لغوِ پنجره یعنی «نه» — رشته‌ی خالی یعنی «بدون دلیل».
+                                    if (reason === null) return;
+                                    bounce.mutate({ id: c.id, reason: reason || undefined });
+                                  }}
+                                >
+                                  برگشت خورد
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

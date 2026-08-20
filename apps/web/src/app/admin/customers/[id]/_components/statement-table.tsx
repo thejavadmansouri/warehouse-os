@@ -18,7 +18,10 @@ const ENTRY_LABELS: Record<LedgerEntryType, string> = {
   INVOICE_CANCELLED: "ابطال فاکتور",
   RETURN: "برگشت کالا",
   CHEQUE_BOUNCED: "چک برگشتی",
+  CHEQUE_CASHED: "وصول چک برگشتی",
+  FINANCE_CHARGE: "تفاوت فروش مدت‌دار",
   ADJUSTMENT: "اصلاح حساب",
+  CORRECTION: "اصلاحیه‌ی فاکتور",
 };
 
 /**

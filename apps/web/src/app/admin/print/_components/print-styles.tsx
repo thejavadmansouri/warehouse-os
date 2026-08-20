@@ -28,20 +28,25 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           margin: 16px auto;
           background: #fff;
           color: #000;
-          font-family: Vazirmatn, Tahoma, sans-serif;
+          /* نامِ دقیقِ @font-face در globals.css «Vazirmatn Variable» است؛
+             «Vazirmatn» بدون Variable با هیچ فونتِ وب‌فونتی تطبیق نمی‌خورد و روی
+             ماشینِ مشتری به Tahoma می‌افتاد. */
+          font-family: "Vazirmatn Variable", Tahoma, sans-serif;
+          /* وزن ۵۰۰ بدنه: در چاپِ جوهر، وزن ۴۰۰ کم‌رنگ دیده می‌شود. */
+          font-weight: 500;
           box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
         }
         .sheet.a4 {
           width: 210mm;
           min-height: 297mm;
           padding: 14mm;
-          font-size: 12px;
+          font-size: 13px;
         }
         .sheet.a5 {
           width: 148mm;
           min-height: 210mm;
           padding: 10mm;
-          font-size: 10.5px;
+          font-size: 11.5px;
         }
 
         .void {
@@ -160,6 +165,17 @@ export function PrintStyles({ size }: { size: PaperSize }) {
         }
         .muted {
           color: #475569;
+        }
+
+        /* اعتبارِ نرم‌افزار، گوشه‌ی پایین‌چپ — عمداً ریز و کم‌رنگ تا شبیه
+           تبلیغ نشود و حواس از محتوای رسمی برگه پرت نشود. */
+        .credit {
+          position: absolute;
+          bottom: 3mm;
+          left: 8mm;
+          font-size: 7px;
+          font-weight: 400;
+          color: #94a3b8;
         }
 
         @media print {

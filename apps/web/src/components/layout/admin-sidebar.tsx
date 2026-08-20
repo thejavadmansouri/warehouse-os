@@ -169,6 +169,29 @@ function SidebarSection({
     if (containsActive) setOpen(true);
   }, [containsActive]);
 
+  /*
+   * بخشِ سنجاق‌شده سرتیتر ندارد و جمع نمی‌شود.
+   *
+   * کارهای هرروزه نباید پشتِ یک سرتیترِ دیگر باشند؛ سرتیتر برای چیزی است که
+   * ماهی یک بار باز می‌شود. ردیف‌هایش هم بدونِ تورفتگی می‌آیند تا واقعاً «بالای»
+   * منو دیده شوند، نه زیرمجموعه‌ی چیزی.
+   */
+  if (section.pinned) {
+    return (
+      <div className="flex flex-col gap-1">
+        {section.items.map((item) => (
+          <NavTree
+            key={item.href ?? item.title}
+            item={item}
+            collapsed={collapsed}
+            isActive={isActive}
+            onNavigate={onNavigate}
+          />
+        ))}
+      </div>
+    );
+  }
+
   if (collapsed) {
     return (
       <div className="flex flex-col gap-1">

@@ -6,13 +6,12 @@ import { Banknote, CreditCard, Check, Clock, UserRound } from "lucide-react";
 
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { JalaliDateInput } from "@/components/jalali-date-input";
 import { MoneyInput } from "@/components/money-input";
 import { toast } from "sonner";
 
 import { createCustomer, creditCheck, searchCustomers } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, faToEn, money, toFa, rial } from "@/lib/format";
+import { faToEn, money, toFa, rial } from "@/lib/format";
 import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
 
 /**
@@ -21,7 +20,8 @@ import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
  * فروشنده پشت پیشخوان دستش روی کیبورد و اسکنر است، نه ماوس. برای همین کل این
  * جریان با Enter جلو می‌رود و با Esc عقب. دو گام است، نه بیشتر:
  *
- *   ۱) مشتری  — تایپ کن و ↑↓ + Enter انتخاب کن؛ Enter روی خالی یعنی «نقدی گذری».
+ *   ۱) مشتری  — نام، فامیل و شماره را پر کن؛ Enter یعنی «ادامه» (مشتریِ موجود
+ *               انتخاب می‌شود یا تازه ثبت می‌شود؛ همه خالی = نقدی گذری).
  *   ۲) پرداخت — کلید ۱..۳ روش را عوض می‌کند، Enter فاکتور را ثبت می‌کند.
  *
  * پرداخت ترکیبی و چک عمداً اینجا نیست: آن حالت نادر است و فرم مفصل خودش را
@@ -67,27 +67,25 @@ export function CheckoutFlow({
   customer: Customer | null;
   pending: boolean;
   onCustomerChange: (c: Customer | null) => void;
-  /** `dueDate` فقط برای حساب‌باز پر می‌شود. */
-  onSubmit: (payments: PaymentInput[], dueDate?: string) => void;
+  /*
+   * فقط سطرهای پرداخت. سررسید از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ
+   * مشتری می‌نشیند و سررسیدش در تسویه ساخته می‌شود. سررسیدِ دستی جای خودش را
+   * دارد — فرمِ پرداختِ ترکیبی (F7)، آنجا که بخشی از پول واقعاً گرفته می‌شود.
+   */
+  onSubmit: (payments: PaymentInput[]) => void;
   /** فرار به فرم پرداخت کامل (ترکیبی/چک). */
   onOpenFullPayment: () => void;
   onClose: () => void;
 }) {
   const [step, setStep] = useState<Step>("customer");
-  const [q, setQ] = useState("");
+  /* سه فیلدِ مشتری — همان شکلِ فرمِ «مشتری جدید» در صفحه‌ی مشتریان. */
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   const [debounced, setDebounced] = useState("");
   const [highlight, setHighlight] = useState(0);
   const [method, setMethod] = useState<PaymentMethod>("CARD");
   const [received, setReceived] = useState(0);
-  /** مهلت پرداختِ همین فروش. null یعنی «هنوز دست نخورده، از مشتری بگیر». */
-  const [creditDays, setCreditDays] = useState<number | null>(null);
-  /**
-   * سررسیدِ دستی (ISO). وقتی پر باشد بر مهلتِ روزشمار می‌چربد.
-   *
-   * لازم است چون مشتری گاهی تاریخ می‌گوید نه مدت — «چک را می‌دهم پانزدهم
-   * مهر»، نه «چهل روز دیگر». اجبار به تبدیلِ ذهنی یعنی خطا.
-   */
-  const [customDue, setCustomDue] = useState("");
 
   const searchRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -111,22 +109,35 @@ export function CheckoutFlow({
      * برگشت و عوضش کرد.
      */
     setStep(customer ? "payment" : "customer");
-    setQ("");
+    setFirstName("");
+    setLastName("");
+    setPhone("");
     setDebounced("");
     setHighlight(0);
     setMethod("CARD");
     setReceived(total);
-    setCreditDays(null);
-    setCustomDue("");
     // عمداً به `customer` وابسته نیست: اگر بود، انتخاب مشتری در گام اول
     // بلافاصله همین افکت را دوباره اجرا می‌کرد و حالت را از نو می‌ریخت.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, total]);
 
+  /**
+   * کوئریِ جست‌وجو از هر سه فیلد ساخته می‌شود — جست‌وجوی سمت سرور روی نام،
+   * فامیل و شماره کار می‌کند، پس با هم فرستاده می‌شوند.
+   */
+  const query = useMemo(
+    () =>
+      [firstName, lastName, phone]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" "),
+    [firstName, lastName, phone]
+  );
+
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(q), 250);
+    const t = setTimeout(() => setDebounced(query), 250);
     return () => clearTimeout(t);
-  }, [q]);
+  }, [query]);
 
   const results = useQuery({
     queryKey: ["checkout-customers", debounced],
@@ -154,20 +165,6 @@ export function CheckoutFlow({
   const shortPaid = method !== "CREDIT" && received < total;
   const canSubmit = !pending && !creditNeedsCustomer && !shortPaid && lineCount > 0;
 
-  /**
-   * مهلت مؤثر: چیزی که فروشنده انتخاب کرده، وگرنه مهلت همیشگیِ خودِ مشتری.
-   * این‌طور فروشنده در حالت عادی هیچ چیزی انتخاب نمی‌کند.
-   */
-  const effectiveDays = creditDays ?? customer?.creditDays ?? 0;
-
-  /** سررسید = پایانِ روزِ n اُم. پایان روز، وگرنه صبحِ همان روز «معوق» می‌شود. */
-  const dueDate = useMemo(() => {
-    const d = customDue ? new Date(customDue) : new Date();
-    if (!customDue) d.setDate(d.getDate() + effectiveDays);
-    d.setHours(23, 59, 59, 999);
-    return d;
-  }, [effectiveDays, customDue]);
-
   /*
    * هشدار اعتبار — فقط وقتی واقعاً حساب‌باز انتخاب شده.
    *
@@ -180,50 +177,43 @@ export function CheckoutFlow({
     enabled: open && step === "payment" && method === "CREDIT" && !!customer?.id,
   });
 
-  /**
-   * آنچه تایپ شده شماره‌ی تلفن است، نه اسم.
-   *
-   * فروشنده اغلب اسم مشتری را نمی‌داند ولی شماره‌اش را دارد. تا حالا این حالت
-   * می‌افتاد روی «نقدی گذری» و شماره برای همیشه از دست می‌رفت — یعنی همان
-   * مشتری دفعه‌ی بعد هم گذری می‌شد و هیچ‌وقت سابقه‌ای نداشت.
-   *
-   * ارقام فارسی هم پذیرفته می‌شود و ۹۸+ به صفر برمی‌گردد، چون همان شکلِ
-   * نرمال‌شده‌ای است که سرور ذخیره می‌کند.
-   */
-  const typedDigits = faToEn(debounced).replace(/\D/g, "");
-  const typedPhone = typedDigits.replace(/^98/, "0").replace(/^9/, "09");
-  const looksLikePhone =
-    /^[\d\s+\-()۰-۹]+$/.test(debounced.trim()) && typedDigits.length >= 10;
-  /**
-   * چیزی تایپ شده که به هیچ مشتریِ موجودی نمی‌خورد — چه اسم، چه شماره.
-   *
-   * تا حالا هر دو حالت می‌افتاد روی «نقدی گذری» و آنچه فروشنده تایپ کرده بود
-   * دور ریخته می‌شد. یعنی همان مشتری دفعه‌ی بعد هم گذری می‌شد و هیچ‌وقت سابقه
-   * و حسابی پیدا نمی‌کرد.
-   */
-  const isNewCustomer =
-    debounced.trim().length > 0 && !results.isFetching && list.length === 0;
+  /** شماره‌ی تلفنِ نرمال‌شده (۰۹۱۲…). ارقام فارسی هم پذیرفته می‌شود. */
+  const normalizedPhone = useMemo(() => {
+    const digits = faToEn(phone)
+      .replace(/\D/g, "")
+      .replace(/^98/, "0")
+      .replace(/^9/, "09");
+    return digits;
+  }, [phone]);
+
+  /** نامِ تایپ‌شده برای پیش‌نمایشِ مشتریِ تازه. */
+  const typedName = [firstName, lastName]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  /** چیزی تایپ شده که به هیچ مشتریِ موجودی نمی‌خورد — چه اسم، چه فامیل، چه شماره. */
+  const hasInput = debounced.trim().length > 0;
+  const isNewCustomer = hasInput && !results.isFetching && list.length === 0;
 
   const quickCreate = useMutation({
     mutationFn: () => {
-      // شماره تایپ شده: اسم همان شماره می‌شود، چون چیز دیگری از او نمی‌دانیم
-      // و یک نامِ ساختگی بعداً فقط گیج‌کننده است.
-      if (looksLikePhone) {
-        return createCustomer({
-          firstName: toFa(typedPhone),
-          phones: [{ phone: typedPhone, isPrimary: true }],
-        });
-      }
+      const first = firstName.trim();
+      const last = lastName.trim();
 
-      // اسم تایپ شده: تا اولین فاصله نام، بقیه فامیل. جداکردنشان لازم است
-      // چون جست‌وجو و مرتب‌سازیِ فهرست مشتریان روی فامیل کار می‌کند.
-      const typed = debounced.trim().replace(/\s+/g, " ");
-      const sp = typed.indexOf(" ");
-      return createCustomer(
-        sp > 0
-          ? { firstName: typed.slice(0, sp), lastName: typed.slice(sp + 1) }
-          : { firstName: typed }
-      );
+      // نام الزامی است (سمت سرور). اگر فقط فامیل یا فقط شماره تایپ شده، همان
+      // را به‌عنوان نام می‌بریم تا Enter هر لحظه کار کند — سیاستِ قبلی که
+      // «شماره‌ی تنها» هم مشتری می‌ساخت حفظ می‌شود.
+      const fallback =
+        first || last || (normalizedPhone ? toFa(normalizedPhone) : "");
+
+      return createCustomer({
+        firstName: fallback,
+        ...(first && last ? { lastName: last } : {}),
+        ...(normalizedPhone
+          ? { phones: [{ phone: normalizedPhone, isPrimary: true }] }
+          : {}),
+      });
     },
     onSuccess: (c) => {
       onCustomerChange(c);
@@ -231,7 +221,7 @@ export function CheckoutFlow({
     },
     onError: (e: unknown) =>
       toast.error(
-        e instanceof ApiException ? e.message : "ثبت مشتری با شماره ناموفق بود"
+        e instanceof ApiException ? e.message : "ثبت مشتری ناموفق بود"
       ),
   });
 
@@ -241,12 +231,11 @@ export function CheckoutFlow({
     return [{ method, amount: total }];
   };
 
-  /** سررسید فقط برای حساب‌باز فرستاده می‌شود. */
-  const submit = () =>
-    onSubmit(
-      buildPayments(),
-      method === "CREDIT" ? dueDate.toISOString() : undefined
-    );
+  /*
+   * سررسید دیگر از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ مشتری می‌نشیند و
+   * سررسیدش در تسویه ساخته می‌شود.
+   */
+  const submit = () => onSubmit(buildPayments());
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     // Escape اینجا نیست: Radix آن را روی document می‌گیرد و preventDefaultِ
@@ -342,26 +331,52 @@ export function CheckoutFlow({
 
         {step === "customer" ? (
           <div className="flex flex-col gap-3 p-5">
-            <label className="flex items-center gap-2 text-sm font-medium">
+            <div className="flex items-center gap-2 text-sm font-medium">
               <UserRound className="size-4" /> مشتری
-            </label>
-            <Input
-              ref={searchRef}
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              /* کوتاه نگه داشته شده: متن بلندتر در این عرض از سرِ خودش بریده می‌شد.
-                 راهنمای «Enter = نقدی» زیرِ همین فیلد آمده است. */
-              placeholder="نام یا شماره تماس مشتری"
-              className="h-12 text-base"
-            />
+            </div>
+
+            {/* سه فیلدِ مشتری — همان چیدمانِ فرمِ «مشتری جدید» در صفحه‌ی مشتریان. */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">نام</label>
+                <Input
+                  ref={searchRef}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="الزامی"
+                  className="h-11 text-base"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">نام خانوادگی</label>
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="h-11 text-base"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                شماره تماس <span className="text-muted-foreground">(اختیاری)</span>
+              </label>
+              <Input
+                dir="ltr"
+                className="h-11 text-right text-base"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="۰۹۱۲…"
+              />
+            </div>
 
             <div className="min-h-32">
-              {/* ناشناس: Enter همان اسم یا شماره را ثبت می‌کند، نه گذری. */}
+              {/* ناشناس: Enter همان مشخصاتِ تایپ‌شده را ثبت می‌کند، نه گذری. */}
               {isNewCustomer && (
                 <div className="rounded-lg border border-primary/40 bg-primary/10 p-3 text-center">
                   <p className="text-sm font-semibold text-primary">
                     مشتری تازه:{" "}
-                    {looksLikePhone ? toFa(typedPhone) : debounced.trim()}
+                    {typedName || (normalizedPhone ? toFa(normalizedPhone) : "")}
                   </p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {quickCreate.isPending
@@ -371,9 +386,10 @@ export function CheckoutFlow({
                 </div>
               )}
 
-              {!debounced.trim() && (
+              {!hasInput && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
-                  برای فروش نقدی، فقط Enter بزنید — یا نام/شماره‌ی مشتری را بنویسید
+                  برای فروش نقدی، فقط Enter بزنید — یا مشخصات مشتری (نام، فامیل،
+                  شماره) را بنویسید
                 </p>
               )}
 
@@ -406,8 +422,15 @@ export function CheckoutFlow({
 
             <FooterHint
               hints={[
-                ["Enter", list.length && debounced.trim() ? "انتخاب و ادامه" : "بدون مشتری، ادامه"],
-                ["↑↓", "جابه‌جایی"],
+                [
+                  "Enter",
+                  hasInput
+                    ? list.length
+                      ? "انتخاب و ادامه"
+                      : "ثبت مشتری و ادامه"
+                    : "بدون مشتری، ادامه",
+                ],
+                ["↑↓", "جابه‌جایی در نتایج"],
                 ["Esc", "بازگشت به سبد"],
               ]}
             />
@@ -464,7 +487,7 @@ export function CheckoutFlow({
                 <div className="flex items-center gap-3">
                   <MoneyInput
                     ref={amountRef}
-                    className="h-11 w-40 text-left text-lg tabular-nums"
+                    className="h-11 w-40 text-right text-lg tabular-nums"
                     value={received}
                     onChange={setReceived}
                   />
@@ -479,66 +502,25 @@ export function CheckoutFlow({
             {/*
               پنل حساب‌باز.
 
-              عمداً فقط سه چیز: مهلت، سررسید، و هشدار اعتبار. فروشنده نباید
-              حسابداری بداند — بدهی و سررسید را خودِ سیستم می‌سازد.
+              چیپ‌های «مهلت پرداخت» و سررسیدِ دستی برداشته شدند: این فروش روی تبِ
+              مشتری می‌نشیند و فاکتورش تا تسویه سررسید ندارد — سررسید در لحظه‌ی
+              تسویه از مهلتِ خودِ مشتری ساخته می‌شود. کنترلی که هیچ اثری ندارد،
+              بدتر از نبودنش است.
+
+              می‌ماند هشدار اعتبار، که تنها چیزی است که فروشنده باید همین‌جا بداند.
             */}
             {method === "CREDIT" && customer && (
-              <div className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-3">
-                <div>
-                  <span className="mb-2 block text-sm text-muted-foreground">
-                    مهلت پرداخت
-                  </span>
-                  {/* چیپ به‌جای کشویی: انتخاب یک‌کلیکی، و همه‌ی گزینه‌ها هم‌زمان دیده می‌شوند. */}
-                  <div className="flex flex-wrap gap-1.5">
-                    {[...new Set([...CREDIT_TERMS, customer?.creditDays ?? 0])]
-                      .sort((a, b) => a - b)
-                      .map((d) => {
-                        const active = !customDue && effectiveDays === d;
-                        return (
-                          <button
-                            key={d}
-                            type="button"
-                            onClick={() => { setCustomDue(""); setCreditDays(d); }}
-                            className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
-                              active
-                                ? "border-primary bg-primary text-primary-foreground"
-                                : "hover:border-primary hover:text-primary"
-                            }`}
-                          >
-                            {d === 0 ? "همان روز" : `${toFa(d)} روز`}
-                          </button>
-                        );
-                      })}
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setCustomDue((v) => v || new Date().toISOString().slice(0, 10))
-                      }
-                      className={`h-9 rounded-md border px-3 text-sm font-medium transition-colors ${
-                        customDue
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "hover:border-primary hover:text-primary"
-                      }`}
-                    >
-                      سفارشی
-                    </button>
-                  </div>
-                </div>
-
-                {customDue && (
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-muted-foreground">تاریخ سررسید</span>
-                    <JalaliDateInput value={customDue} onChange={setCustomDue} />
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between border-t pt-3">
-                  <span className="text-sm text-muted-foreground">سررسید</span>
-                  <span className="text-base font-semibold tabular-nums text-primary">
-                    {faDate(dueDate.toISOString())}
-                  </span>
-                </div>
+              <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+                <p className="text-sm">
+                  روی حساب بازِ{" "}
+                  <span className="font-semibold">{customer.fullName}</span> ثبت
+                  می‌شود — پول در تسویه گرفته می‌شود.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {customer.creditDays
+                    ? `مهلت این مشتری ${toFa(customer.creditDays)} روز است و سررسید هنگام تسویه حساب می‌شود.`
+                    : "سررسید هنگام تسویه، از مهلتِ خودِ مشتری حساب می‌شود."}
+                </p>
 
                 {credit.data?.exceeded && (
                   <p className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">

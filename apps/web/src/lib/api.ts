@@ -304,6 +304,32 @@ export function locateProducts(q: string): Promise<T.LocateResult[]> {
   return apiFetch<T.LocateResult[]>(`/products/locate?${qs.toString()}`);
 }
 
+/**
+ * One page of the POS product catalog (lean rows + sale price) for the
+ * in-browser local search. Paginated + incremental by `updatedSince` so a
+ * refresh only pulls what changed. Stock and location are deliberately NOT here
+ * — those are fetched fresh when a product is actually picked, so the seller
+ * never acts on a stale stock number.
+ */
+/**
+ * Fresh stock/location for ONE product, fetched at the moment the seller picks
+ * a result from the local catalog search (which has no stock data by design —
+ * caching it would mean selling against a number that can go stale).
+ */
+export function getPosStock(productId: string): Promise<T.LocateResult> {
+  return apiFetch<T.LocateResult>(`/products/${productId}/pos-stock`);
+}
+
+export function getPosCatalog(
+  page: number,
+  limit: number,
+  updatedSince?: string,
+): Promise<T.PosCatalogPage> {
+  const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (updatedSince) qs.set("updatedSince", updatedSince);
+  return apiFetch<T.PosCatalogPage>(`/products/pos-catalog?${qs.toString()}`);
+}
+
 // طبق بخش ۶.۳ — GET /products/:id
 export function getProduct(id: string): Promise<T.Product> {
   return apiFetch<T.Product>(`/products/${encodeURIComponent(id)}`);
@@ -1130,6 +1156,10 @@ export function getInvoices(params: {
   to?: string;
   page?: number;
   pageSize?: number;
+  /** فروشنده‌ی ثبت‌کننده. */
+  userId?: string;
+  /** فقط فاکتورهای مانده‌دار ("true") یا فقط تسویه‌شده‌ها ("false"). */
+  hasDue?: "true" | "false";
   /** ردیف‌های فاکتور (اقلام) هم در پاسخ بیایند — برای کاردکس مشتری. */
   includeLines?: boolean;
 } = {}): Promise<{ data: T.Invoice[]; meta: { total: number; page: number; pageSize: number; pageCount: number } }> {
@@ -1181,6 +1211,40 @@ export function getReturn(id: string): Promise<T.SaleReturn> {
   return apiFetch<T.SaleReturn>(`/sales/returns/${encodeURIComponent(id)}`);
 }
 
+// ----- اصلاحیه فاکتور -----
+
+/** ردیف‌های قابل‌اصلاحِ یک فاکتور — وضعیت فعلی هر قلم (فروش + اصلاحیه‌های قبلی). */
+export function getCorrectableLines(invoiceId: string): Promise<T.CorrectableInvoice> {
+  return apiFetch<T.CorrectableInvoice>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/correctable`
+  );
+}
+
+// POST /sales/corrections — ثبت اصلاحیه: سندِ جدا با شماره‌ی خودش و دلیلِ اجباری.
+export function createCorrection(dto: T.CreateCorrectionDto): Promise<T.SaleCorrection> {
+  return apiFetch<T.SaleCorrection>("/sales/corrections", { method: "POST", body: dto });
+}
+
+export function getCorrections(params: {
+  warehouseId?: string;
+  customerId?: string;
+  invoiceId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<{ data: T.SaleCorrectionListRow[]; meta: T.ReportMeta }> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+  }
+  return apiFetch(`/sales/corrections?${qs.toString()}`);
+}
+
+export function getCorrection(id: string): Promise<T.SaleCorrection> {
+  return apiFetch<T.SaleCorrection>(`/sales/corrections/${encodeURIComponent(id)}`);
+}
+
 export type CustomerSort = "name" | "newest" | "dueDesc" | "dueAsc";
 
 /**
@@ -1194,6 +1258,8 @@ export function searchCustomersPaged(params: {
   sortBy?: CustomerSort;
   /** فیلتر بر اساس دسته — فقط مشتری‌های یک دسته. */
   categoryId?: string;
+  /** فقط کسانی که مانده‌ی بدهی دارند. */
+  onlyDebtors?: boolean;
 }): Promise<{
   data: T.Customer[];
   meta: { total: number; page: number; pageSize: number; pageCount: number };
@@ -1243,11 +1309,24 @@ export function updateCustomer(
     smsOptOut?: boolean;
     creditLimit?: number;
     creditDays?: number;
+    /** نرخِ فروشِ مدت‌دار به پایه‌ی هزارم. ۲۵۰ = ۲.۵٪ */
+    chequeRateBp?: number;
+    chequeRateMode?: "FLAT" | "MONTHLY";
   }
 ): Promise<T.Customer> {
   return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body,
+  });
+}
+
+/**
+ * غیرفعال‌سازی مشتری — soft delete (رکورد پاک نمی‌شود، فقط از انتخاب‌ها می‌افتد).
+ * فقط ADMIN/MANAGER. مشتریِ دارای مانده (بدهی یا بستانکاری) توسط سرور رد می‌شود.
+ */
+export function deactivateCustomer(id: string): Promise<T.Customer> {
+  return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
@@ -1320,6 +1399,81 @@ export function getOpenAccounts(
   return apiFetch(`/sales/debtors?${qs.toString()}`);
 }
 
+/**
+ * صورت‌حسابِ کاملِ مشتری — همه‌ی کالاها و همه‌ی پرداخت‌ها با جزئیات.
+ * بدونِ بازه یعنی از اول تا امروز.
+ */
+export function getCustomerFullStatement(
+  id: string,
+  range: { startDate?: string; endDate?: string } = {},
+): Promise<T.CustomerFullStatement> {
+  const qs = new URLSearchParams();
+  if (range.startDate) qs.set("startDate", range.startDate);
+  if (range.endDate) qs.set("endDate", range.endDate);
+  const q = qs.toString();
+  return apiFetch(
+    `/sales/customers/${encodeURIComponent(id)}/full-statement${q ? `?${q}` : ""}`,
+  );
+}
+
+// ----- چرخه‌ی چک -----
+
+/** به بانک سپرده شد — فقط وضعیت، بدون اثر مالی. */
+export function depositCheque(id: string): Promise<unknown> {
+  return apiFetch(`/sales/cheques/${encodeURIComponent(id)}/deposit`, {
+    method: "POST",
+  });
+}
+
+/** وصول شد. اگر چک قبلاً برگشت خورده باشد، اثر برگشت خنثی می‌شود. */
+export function cashCheque(id: string): Promise<unknown> {
+  return apiFetch(`/sales/cheques/${encodeURIComponent(id)}/cash`, {
+    method: "POST",
+  });
+}
+
+/** برگشت خورد — بدهی مشتری برمی‌گردد. */
+export function bounceCheque(id: string, reason?: string): Promise<unknown> {
+  return apiFetch(`/sales/cheques/${encodeURIComponent(id)}/bounce`, {
+    method: "POST",
+    body: JSON.stringify({ reason }),
+  });
+}
+
+// ----- حساب باز (فاکتور کلیِ جاری) -----
+
+/** فهرستِ حساب‌های بازِ فعال — دکمه‌ی «حساب باز» در صندوق. */
+export function listOpenAccounts(): Promise<T.OpenAccountSummary[]> {
+  return apiFetch("/sales/open-accounts");
+}
+
+/** پرونده‌ی یک حساب باز — همه‌ی فاکتورهای باز با ردیف‌هایشان. */
+export function getOpenAccount(id: string): Promise<T.OpenAccountDetail> {
+  return apiFetch(`/sales/open-accounts/${encodeURIComponent(id)}`);
+}
+
+/**
+ * برگه‌ی تجمیعیِ کلِ حساب — برای چاپ.
+ * فاکتورهای تسویه‌شده را هم می‌آورد، پس بعد از تسویه هم کار می‌کند.
+ */
+export function getOpenAccountSheet(id: string): Promise<T.OpenAccountSheet> {
+  return apiFetch(`/sales/open-accounts/${encodeURIComponent(id)}/sheet`);
+}
+
+/** باز کردن حساب برای مشتری (idempotent). */
+export function ensureOpenAccount(customerId: string): Promise<T.OpenAccountDetail> {
+  return apiFetch(`/sales/customers/${encodeURIComponent(customerId)}/open-account`, {
+    method: "POST",
+  });
+}
+
+/** تسویه — همه‌ی فاکتورهای بازِ حساب CONFIRMED می‌شوند. */
+export function settleOpenAccount(id: string): Promise<T.OpenAccountDetail> {
+  return apiFetch(`/sales/open-accounts/${encodeURIComponent(id)}/settle`, {
+    method: "POST",
+  });
+}
+
 export function getReceivablesSummary(): Promise<T.ReceivablesSummary> {
   return apiFetch("/sales/receivables/summary");
 }
@@ -1378,6 +1532,10 @@ export function createCustomer(body: {
   categoryId?: string;
   note?: string;
   phones?: { phone: string; label?: string; isPrimary?: boolean }[];
+  /** حساب باز — سقف اعتبار (۰ = بدون سقف). */
+  creditLimit?: number;
+  /** حساب باز — مهلت پرداخت به روز. */
+  creditDays?: number;
 }): Promise<T.Customer> {
   return apiFetch<T.Customer>("/sales/customers", { method: "POST", body });
 }
@@ -1457,6 +1615,53 @@ export function getPickTasks(params: {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) qs.set(k, String(v));
   return apiFetch<T.PickTask[]>(`/pick-tasks?${qs.toString()}`);
+}
+
+// ----- کارِ کارگر (WorkTask) — فقط تابلوی کار و پیشرفت؛ هیچ ربطی به موجودی -----
+
+/**
+ * POST /work-tasks — ساخت کارِ کارگر از سبد/فاکتور. موجودی دست نمی‌خورد.
+ * `idempotencyKey` یکتا ارسالِ دوباره را بی‌اثر می‌کند (دبل‌کلیک یا retry شبکه).
+ */
+export function createWorkTask(body: {
+  warehouseId: string;
+  invoiceId?: string | null;
+  /** null یا نبود = «هر کارگری»؛ مقدار = آن کارگر مشخص. */
+  assignedToId?: string | null;
+  note?: string;
+  idempotencyKey: string;
+  lines: {
+    productId: string;
+    /** نبودنش یعنی کالا در سیستم ثبت نشده — کارگر خودش پیدایش می‌کند. */
+    locationId?: string;
+    quantity: number;
+  }[];
+}): Promise<T.WorkTask> {
+  return apiFetch<T.WorkTask>("/work-tasks", { method: "POST", body });
+}
+
+/** GET /work-tasks — همه‌ی کارها با پیشرفت (نمای مدیر/فروشنده برای POS). */
+export function getWorkTasks(params: {
+  status?: T.WorkTaskStatus;
+  warehouseId?: string;
+  invoiceId?: string;
+} = {}): Promise<T.WorkTask[]> {
+  const qs = new URLSearchParams();
+  for (const [k, v] of Object.entries(params)) if (v) qs.set(k, String(v));
+  return apiFetch<T.WorkTask[]>(`/work-tasks?${qs.toString()}`);
+}
+
+/** GET /work-tasks/:id — جزئیات کامل با آیتم‌ها. */
+export function getWorkTask(id: string): Promise<T.WorkTask> {
+  return apiFetch<T.WorkTask>(`/work-tasks/${encodeURIComponent(id)}`);
+}
+
+/** POST /work-tasks/:id/cancel — لغو کارِ در انتظار/در جریان. */
+export function cancelWorkTask(id: string, reason?: string): Promise<T.WorkTask> {
+  return apiFetch<T.WorkTask>(`/work-tasks/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    body: reason ? { reason } : undefined,
+  });
 }
 
 // =====================================================
@@ -1700,11 +1905,19 @@ export function cancelPurchase(id: string, reason: string): Promise<T.Purchase> 
 export function createReceipt(body: {
   idempotencyKey?: string;
   customerId: string;
-  amount: number;
-  method: T.PaymentMethod;
   note?: string;
   /** ثبت مازاد به‌عنوان پیش‌دریافت — فقط بعد از تأیید صریح کاربر. */
   allowOverpayment?: boolean;
+  /** سطرهای پرداخت — تسویه‌ی ترکیبی (نقد+کارت+چک) در یک رسید. */
+  payments: {
+    method: T.PaymentMethod;
+    amount: number;
+    note?: string;
+    cheque?: T.ChequeInput;
+  }[];
+  /** شکلِ قدیمیِ تک‌روشه — فقط برای سازگاری؛ ترجیحاً از `payments` استفاده کنید. */
+  amount?: number;
+  method?: T.PaymentMethod;
   cheque?: T.ChequeInput;
 }): Promise<T.Receipt> {
   return apiFetch<T.Receipt>("/sales/receipts", { method: "POST", body });

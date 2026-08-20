@@ -61,6 +61,19 @@
                     seller sends work. No FCM is reachable on this network." />
         </service>
 
+        <!-- Lets the camera app write the capture straight into app-private
+             storage: the photo never touches shared/external storage, so it is
+             not visible to the gallery or to other apps. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:authorities="${applicationId}.androidx-startup"

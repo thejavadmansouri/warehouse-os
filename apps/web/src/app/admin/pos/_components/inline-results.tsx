@@ -1,10 +1,25 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { MapPin, Send, Package, AlertTriangle } from "lucide-react";
+import { Loader2, MapPin, Send, Package, AlertTriangle } from "lucide-react";
 
 import { qty, toFa, rial } from "@/lib/format";
 import type { LocateResult } from "@/lib/types";
+import type { HighlightSegment } from "@/lib/pos-search/highlight";
+
+/**
+ * One live-search row.
+ *
+ * "known" rows carry stock/location straight from the server (today's
+ * fallback search, still used until the local catalog finishes loading).
+ * "unknown" rows come from the instant LOCAL catalog search, which never
+ * carries stock — caching stock client-side would mean selling off a number
+ * that can go stale. Picking an "unknown" row triggers a fresh fetch (see
+ * `pickingId`) before it can join the cart.
+ */
+export type SearchResultRow =
+  | { kind: "known"; id: string; nameSegments: HighlightSegment[]; result: LocateResult }
+  | { kind: "unknown"; id: string; nameSegments: HighlightSegment[]; name: string; sku: string | null; salePrice: number | null };
 
 /**
  * نتایج زنده‌ی جست‌وجو، همان زیر نوار اسکن.
@@ -18,17 +33,20 @@ import type { LocateResult } from "@/lib/types";
  * دستی ↓ نزده، Enter مسیر بارکد را می‌رود.
  */
 export function InlineResults({
-  results,
+  rows,
   highlight,
   loading,
+  pickingId,
   onPick,
   onSendToWorker,
   onHover,
 }: {
-  results: LocateResult[];
+  rows: SearchResultRow[];
   highlight: number;
   loading: boolean;
-  onPick: (r: LocateResult) => void;
+  /** id of the row currently resolving a fresh-stock fetch, if any. */
+  pickingId: string | null;
+  onPick: (r: SearchResultRow) => void;
   onSendToWorker: (r: LocateResult) => void;
   onHover: (i: number) => void;
 }) {
@@ -42,7 +60,7 @@ export function InlineResults({
       [highlight]?.scrollIntoView({ block: "nearest" });
   }, [highlight]);
 
-  if (!loading && results.length === 0) return null;
+  if (!loading && rows.length === 0) return null;
 
   return (
     <div
@@ -50,50 +68,67 @@ export function InlineResults({
       className="absolute inset-x-0 top-full z-30 mt-1 max-h-[60vh] overflow-y-auto rounded-lg
                  border bg-popover p-1 shadow-lg"
     >
-      {loading && results.length === 0 && (
+      {loading && rows.length === 0 && (
         <p className="py-4 text-center text-sm text-muted-foreground">
           در حال جست‌وجو…
         </p>
       )}
 
-      {results.map((r, i) => {
-        const inStock = r.totalStock > 0;
-        const lowStock = r.totalStock > 0 && r.totalStock <= 5;
-        const shelf = r.locations[0]?.path || r.locations[0]?.name || "";
+      {rows.map((row, i) => {
+        const known = row.kind === "known" ? row.result : null;
+        const inStock = !!known && known.totalStock > 0;
+        const lowStock = !!known && known.totalStock > 0 && known.totalStock <= 5;
+        const shelf = known ? known.locations[0]?.path || known.locations[0]?.name || "" : "";
+        const salePrice = known ? known.salePrice : row.kind === "unknown" ? row.salePrice : null;
+        const sku = known ? known.sku : row.kind === "unknown" ? row.sku : null;
+        const isPicking = pickingId === row.id;
 
         return (
           <div
-            key={r.id}
+            key={row.id}
             data-row
             onMouseEnter={() => onHover(i)}
             className={`flex items-center justify-between gap-3 rounded-md px-3 py-2.5 text-right transition-colors ${
               i === highlight ? "bg-primary/10 ring-1 ring-primary" : "hover:bg-muted/50"
-            }`}
+            } ${isPicking ? "opacity-60" : ""}`}
           >
             <button
               type="button"
-              onClick={() => onPick(r)}
-              className="min-w-0 flex-1 text-right focus:outline-none"
+              onClick={() => onPick(row)}
+              disabled={pickingId !== null}
+              className="min-w-0 flex-1 text-right focus:outline-none disabled:cursor-wait"
             >
               {/* ردیف اول: نام + قیمت + وضعیت موجودی */}
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={`size-2.5 shrink-0 rounded-full ${
-                      inStock
-                        ? lowStock
-                          ? "bg-amber-600"
-                          : "bg-emerald-600"
-                        : "bg-muted-foreground/40"
-                    }`}
-                    aria-hidden
-                  />
-                  <span className="truncate font-semibold text-sm">{r.name}</span>
+                  {known && (
+                    <span
+                      className={`size-2.5 shrink-0 rounded-full ${
+                        inStock ? (lowStock ? "bg-amber-600" : "bg-emerald-600") : "bg-muted-foreground/40"
+                      }`}
+                      aria-hidden
+                    />
+                  )}
+                  <span className="truncate font-semibold text-sm">
+                    {row.nameSegments.map((seg, si) =>
+                      seg.matched ? (
+                        <mark
+                          key={si}
+                          className="rounded-sm bg-transparent px-0 text-destructive dark:text-red-400"
+                        >
+                          {seg.text}
+                        </mark>
+                      ) : (
+                        <span key={si}>{seg.text}</span>
+                      ),
+                    )}
+                  </span>
+                  {isPicking && <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />}
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  {!!r.salePrice && (
+                  {!!salePrice && (
                     <span className="text-sm font-bold tabular-nums text-primary">
-                      {rial(r.salePrice)}
+                      {rial(salePrice)}
                     </span>
                   )}
                 </div>
@@ -103,7 +138,7 @@ export function InlineResults({
               <div className="mt-1 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground min-w-0">
                   <span className="truncate">
-                    کد {toFa(r.sku ?? "—")}
+                    کد {toFa(sku ?? "—")}
                   </span>
                   {shelf && (
                     <>
@@ -117,35 +152,33 @@ export function InlineResults({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  {inStock ? (
-                    <span className={`flex items-center gap-1 text-xs font-medium ${
-                      lowStock
-                        ? "text-amber-600 dark:text-amber-400"
-                        : "text-emerald-600 dark:text-emerald-400"
-                    }`}>
-                      {lowStock ? (
-                        <AlertTriangle className="size-3" />
-                      ) : (
+                  {known ? (
+                    inStock ? (
+                      <span className={`flex items-center gap-1 text-xs font-medium ${
+                        lowStock ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"
+                      }`}>
+                        {lowStock ? <AlertTriangle className="size-3" /> : <Package className="size-3" />}
+                        موجودی {qty(known.totalStock)}
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <Package className="size-3" />
-                      )}
-                      موجودی {qty(r.totalStock)}
-                    </span>
+                        بدون موجودی
+                      </span>
+                    )
                   ) : (
-                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                      <Package className="size-3" />
-                      بدون موجودی
-                    </span>
+                    // "unknown" (local-search) row — stock is checked fresh only
+                    // at the moment of picking, so no possibly-stale number here.
+                    <span className="text-xs text-muted-foreground">برای موجودی انتخاب کنید</span>
                   )}
                 </div>
               </div>
-
-
             </button>
 
-            {inStock && (
+            {known && inStock && (
               <button
                 type="button"
-                onClick={() => onSendToWorker(r)}
+                onClick={() => onSendToWorker(known)}
                 title="ارسال آدرس این کالا به کارگر"
                 className="flex shrink-0 items-center gap-1 rounded-md border px-2 py-1.5 text-xs
                            text-muted-foreground hover:border-primary hover:text-primary

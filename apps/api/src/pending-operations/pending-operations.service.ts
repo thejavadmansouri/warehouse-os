@@ -197,6 +197,27 @@ export class PendingOperationsService {
       throw new BadRequestException('این عملیات قبلاً رد شده است');
     }
 
+    // A COUNT is a cycle-count record captured offline, NOT a stock movement.
+    // Approving it only confirms the recorded number — it must never touch the
+    // ledger. The claim is still atomic (idempotent under a double-click), and an
+    // unmatched product is allowed (the manager may have counted something the
+    // catalog doesn't have yet); the raw voiceText stays for correction.
+    if (op.type === 'COUNT') {
+      const countProductId = override?.productId ?? op.productId;
+      const countQuantity = override?.quantity ?? op.quantity;
+      await this.prisma.pendingOperation.updateMany({
+        where: { id, status: 'PENDING' },
+        data: {
+          status: 'APPROVED',
+          productId: countProductId ?? undefined,
+          quantity: countQuantity,
+          reviewedById: reviewerId ?? null,
+          reviewedAt: new Date(),
+        },
+      });
+      return this.prisma.pendingOperation.findUnique({ where: { id } });
+    }
+
     const productId = override?.productId ?? op.productId;
     if (!productId) {
       throw new BadRequestException('قبل از تأیید، محصول را مشخص کنید');

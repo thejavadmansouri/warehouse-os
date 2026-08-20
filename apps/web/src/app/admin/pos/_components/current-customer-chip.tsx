@@ -48,7 +48,7 @@ export function CurrentCustomerChip({
 }) {
   return (
     <div
-      className="flex h-12 shrink-0 items-center gap-2 rounded-md border bg-card px-3"
+      className="flex h-12 min-w-0 max-w-64 items-center gap-2 rounded-md border bg-card px-3"
       title="مشتریِ قفل‌شده — بعد از ثبت فاکتور می‌ماند"
     >
       <User className="size-4 shrink-0 text-muted-foreground" />
@@ -66,7 +66,10 @@ export function CurrentCustomerChip({
             }
             className="flex min-w-0 items-center gap-1"
           >
-            <span className="max-w-36 truncate text-sm font-semibold hover:underline">
+            <span
+              title={name}
+              className="max-w-36 truncate text-sm font-semibold hover:underline"
+            >
               {name}
             </span>
           </button>
@@ -100,10 +103,11 @@ export function CurrentCustomerChip({
           </button>
         </div>
 
-        {/* خط دوم: شماره + امروز + مانده */}
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
+        {/* خط دوم: شماره + امروز + مانده — شماره همانی است که اول کوچک می‌شود تا
+            «امروز» و «مانده» تا آخرین لحظه دیده شوند. */}
+        <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
           {primaryPhone && (
-            <span className="truncate" dir="ltr">
+            <span className="min-w-0 flex-1 truncate" dir="ltr">
               {toFa(primaryPhone)}
             </span>
           )}

@@ -22,6 +22,9 @@ type Entry = readonly [label: string, tone: Tone];
 
 const MAPS: Record<string, Record<string, Entry>> = {
   invoice: {
+    // فاکتورِ جاریِ یک حساب باز — هنوز تسویه نشده. بدونِ این، فهرستِ فاکتورها
+    // کلمه‌ی خامِ «OPEN» را نشان می‌داد.
+    OPEN: ["حساب باز", "warning"],
     CONFIRMED: ["تأیید شده", "success"],
     CANCELLED: ["باطل شده", "danger"],
   },
@@ -31,11 +34,16 @@ const MAPS: Record<string, Record<string, Entry>> = {
     CANCELLED: ["باطل شده", "neutral"],
     EXPIRED: ["منقضی", "neutral"],
   },
+  /*
+   * این نگاشت با enumِ واقعیِ دیتابیس یکی است: IN_HAND | DEPOSITED | CASHED |
+   * BOUNCED. قبلاً SETTLED و CANCELLED داشت که اصلاً وجود ندارند، و DEPOSITED و
+   * CASHED را نداشت — یعنی چکِ وصول‌شده کلمه‌ی خامِ «CASHED» را نشان می‌داد.
+   */
   cheque: {
-    IN_HAND: ["در جریان وصول", "info"],
-    SETTLED: ["وصول شد", "success"],
+    IN_HAND: ["نزد ما", "info"],
+    DEPOSITED: ["به بانک سپرده شد", "warning"],
+    CASHED: ["وصول شد", "success"],
     BOUNCED: ["برگشت خورد", "danger"],
-    CANCELLED: ["باطل", "neutral"],
   },
 };
 

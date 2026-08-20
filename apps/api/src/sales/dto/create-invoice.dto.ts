@@ -6,12 +6,15 @@ import {
   ValidateNested,
   ArrayMinSize,
   ArrayMaxSize,
+  Max,
   Min,
   IsEnum,
   IsDateString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { PaymentMethod } from '@prisma/client';
+import { ChequeRateMode as ChequeRateModeEnum, PaymentMethod } from '@prisma/client';
+
+import type { ChequeRateMode } from '../../common/cheque-charge';
 
 
 /** یک ردیف فاکتور: کالا، مکانی که از آن کم می‌شود، تعداد و قیمت واحد. */
@@ -76,6 +79,42 @@ export class ChequeDto {
   /** تاریخ سررسید (ISO). تبدیل شمسی/میلادی سمت کلاینت انجام می‌شود. */
   @IsDateString()
   dueDate:string;
+
+
+  /**
+   * نرخِ تفاوتِ فروشِ مدت‌دار، به پایه‌ی هزارم (bp). ۲۵۰ = ۲.۵٪
+   *
+   * نفرستادنش یعنی «بدونِ سود» — عمداً هیچ پیش‌فرضی از روی مشتری خوانده نمی‌شود.
+   * سودی که فروشنده صریحاً انتخاب نکرده نباید بی‌صدا روی فاکتور بنشیند.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  rateBp?:number;
+
+
+  /** تعدادِ ماه. در حالتِ FLAT بی‌اثر است. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  months?:number;
+
+
+  @IsOptional()
+  @IsEnum(ChequeRateModeEnum)
+  rateMode?:ChequeRateMode;
+
+
+  /**
+   * مبلغِ سود، اگر فروشنده دستی گردش کرده باشد («۶۰۰ هزار گرد کردم»).
+   * نیامدنش یعنی از نرخ و ماه حساب شود. سرور در هر حالت سقف را رعایت می‌کند.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  charge?:number;
 }
 
 
@@ -146,6 +185,16 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   customerId?:string;
+
+
+  /**
+   * حساب باز: وقتی فرستاده شود، فاکتور با وضعیت OPEN روی همین حساب ثبت می‌شود
+   * (فاکتور جاری — تا تسویه نهایی نمی‌شود). پرداخت در این مسیر پذیرفته نمی‌شود؛
+   * پول در تسویه می‌آید. مشتری باید همان مشتریِ حساب باشد.
+   */
+  @IsOptional()
+  @IsString()
+  accountId?:string;
 
 
   @IsOptional()

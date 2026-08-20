@@ -12,6 +12,7 @@ import {
 import type { Response } from 'express';
 
 import { Role } from '@prisma/client';
+import type { LabelPaper } from './label-template';
 
 import { Roles } from '../auth/roles.decorator';
 
@@ -106,6 +107,8 @@ export class LabelsController {
     dto: {
       ids: string[];
       columns?: number;
+      /** کاغذ خروجی. نیامدنش یعنی A4. */
+      paper?: LabelPaper;
     },
 
     @Res() res: Response,
@@ -115,7 +118,8 @@ export class LabelsController {
     const html =
       await this.service.bulkLocationLabelsPdf(
         dto.ids,
-        dto.columns ?? 3,
+        dto.columns,
+        dto.paper,
       );
 
 
@@ -138,6 +142,8 @@ export class LabelsController {
     dto: {
       locationId: string;
       columns?: number;
+      /** کاغذ خروجی. نیامدنش یعنی A4. */
+      paper?: LabelPaper;
     },
 
     @Res() res: Response,
@@ -147,7 +153,8 @@ export class LabelsController {
     const html =
       await this.service.childrenLocationLabelsPdf(
         dto.locationId,
-        dto.columns ?? 3,
+        dto.columns,
+        dto.paper,
       );
 
 
@@ -170,6 +177,8 @@ export class LabelsController {
     dto: {
       locationId: string;
       columns?: number;
+      /** کاغذ خروجی. نیامدنش یعنی A4. */
+      paper?: LabelPaper;
     },
 
     @Res() res: Response,
@@ -179,7 +188,8 @@ export class LabelsController {
     const html =
       await this.service.treeLocationLabelsPdf(
         dto.locationId,
-        dto.columns ?? 3,
+        dto.columns,
+        dto.paper,
       );
 
 
@@ -202,6 +212,8 @@ export class LabelsController {
     dto: {
       rowId: string;
       columns?: number;
+      /** کاغذ خروجی. نیامدنش یعنی A4. */
+      paper?: LabelPaper;
     },
 
     @Res() res: Response,
@@ -211,7 +223,8 @@ export class LabelsController {
     const html =
       await this.service.rowShelvesLabelsPdf(
         dto.rowId,
-        dto.columns ?? 3,
+        dto.columns,
+        dto.paper,
       );
 
 
@@ -228,6 +241,8 @@ export class LabelsController {
       parentId: string;
       type: string;
       columns?: number;
+      /** کاغذ خروجی. نیامدنش یعنی A4. */
+      paper?: LabelPaper;
     },
 
     @Res() res: Response,
@@ -238,7 +253,8 @@ export class LabelsController {
       await this.service.filteredChildrenLabelsPdf(
         dto.parentId,
         dto.type,
-        dto.columns ?? 3,
+        dto.columns,
+        dto.paper,
       );
 
 
