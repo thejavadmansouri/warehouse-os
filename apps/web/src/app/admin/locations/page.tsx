@@ -13,6 +13,7 @@ import {
   Pencil,
   Loader2,
   Search,
+  Layers,
 } from "lucide-react";
 
 import {
@@ -56,6 +57,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LabelPrintDialog } from "@/components/labels/label-print-dialog";
+import { BulkGenerateDialog } from "./_components/bulk-generate-dialog";
 
 // ---------------------------------------------------------------------------
 // Context — انتخاب چندتایی، درخواست حذف، چاپ لیبل (تا در سراسر درخت در دسترس باشد)
@@ -87,17 +89,22 @@ const childrenKey = (parentId: string | null, warehouseId?: string) => [
 function InlineAdd({
   warehouseId,
   parentId,
+  parentCode,
+  parentName,
   parentDepth,
   types,
 }: {
   warehouseId: string;
   parentId: string | null;
+  parentCode: string;
+  parentName: string;
   parentDepth: number | null;
   types: LocationType[];
 }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
+  const [bulkOpen, setBulkOpen] = React.useState(false);
   const [typeId, setTypeId] = React.useState<string>("");
   const [name, setName] = React.useState("");
   const nameRef = React.useRef<HTMLInputElement>(null);
@@ -150,14 +157,37 @@ function InlineAdd({
     );
   }
 
+  const bulkDialog = (
+    <BulkGenerateDialog
+      open={bulkOpen}
+      onOpenChange={setBulkOpen}
+      warehouseId={warehouseId}
+      parentId={parentId}
+      parentDepth={parentDepth}
+      parentCode={parentCode}
+      parentName={parentName}
+      types={types}
+    />
+  );
+
   if (!open) {
     return (
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-1 py-1 pr-2 text-sm text-primary hover:underline"
-      >
-        <Plus className="size-4" /> افزودن
-      </button>
+      <div className="flex items-center gap-3 py-1 pr-2">
+        <button
+          onClick={() => setOpen(true)}
+          className="flex items-center gap-1 text-sm text-primary hover:underline"
+        >
+          <Plus className="size-4" /> افزودن
+        </button>
+        {/* ساختِ چند صد قفسه یکی‌یکی ممکن نیست — همان‌جایی که «افزودن» هست. */}
+        <button
+          onClick={() => setBulkOpen(true)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-primary hover:underline"
+        >
+          <Layers className="size-4" /> ساخت گروهی
+        </button>
+        {bulkDialog}
+      </div>
     );
   }
 
@@ -195,6 +225,7 @@ function InlineAdd({
       <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>
         بستن
       </Button>
+      {bulkDialog}
     </div>
   );
 }
@@ -204,12 +235,17 @@ function InlineAdd({
 // ---------------------------------------------------------------------------
 function ChildrenList({
   parentId,
+  parentCode,
+  parentName,
   warehouseId,
   parentDepth,
   types,
   depth,
 }: {
   parentId: string | null;
+  /** کد و نامِ والد فقط برای پیش‌نمایشِ ساختِ گروهی لازم‌اند. */
+  parentCode: string;
+  parentName: string;
   warehouseId: string;
   parentDepth: number | null;
   types: LocationType[];
@@ -250,6 +286,8 @@ function ChildrenList({
           <InlineAdd
             warehouseId={warehouseId}
             parentId={parentId}
+            parentCode={parentCode}
+            parentName={parentName}
             parentDepth={parentDepth}
             types={types}
           />
@@ -332,6 +370,8 @@ function LocationNode({
       {open ? (
         <ChildrenList
           parentId={node.id}
+          parentCode={node.code ?? ""}
+          parentName={node.name}
           warehouseId={warehouseId}
           parentDepth={node.type?.depth ?? null}
           types={types}
@@ -400,6 +440,8 @@ function WarehouseNode({
           ) : (
             <ChildrenList
               parentId={null}
+              parentCode={wh.code}
+              parentName={wh.name}
               warehouseId={wh.id}
               parentDepth={null}
               types={types}
