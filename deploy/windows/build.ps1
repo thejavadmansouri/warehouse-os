@@ -256,6 +256,7 @@ $scriptsOut = Join-Path $payload 'scripts'
 New-Item -ItemType Directory -Force -Path $scriptsOut | Out-Null
 Copy-Item (Join-Path $here 'first-run.ps1')  $scriptsOut
 Copy-Item (Join-Path $here 'services.ps1')   $scriptsOut
+Copy-Item (Join-Path $here 'update.ps1')     $scriptsOut
 
 Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
 

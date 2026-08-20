@@ -11,7 +11,7 @@
 ; and `backups` belong to the customer and the installer never touches them.
 
 #define AppName "Warehouse OS"
-#define AppVersion "0.2.0"
+#define AppVersion "0.3.0"
 #define AppRoot "C:\WarehouseOS"
 
 [Setup]
