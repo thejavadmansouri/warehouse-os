@@ -64,7 +64,11 @@ function statusLabel(s: string): string {
   return s === "APPROVED" ? "تأیید شده" : s === "REJECTED" ? "رد شده" : "در انتظار بررسی";
 }
 
-export default function ProductRequestsPage() {
+/**
+ * وقتی داخلِ کارتابل رندر می‌شود سرتیترِ خودش را نشان نمی‌دهد — کارتابل یک
+ * سرتیتر دارد و تب‌ها زیرش می‌نشینند.
+ */
+export function ProductRequestsPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -154,6 +158,7 @@ export default function ProductRequestsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="درخواست‌های افزودن کالا"
         description="کالاهایی که کارگر درخواست افزودن آن‌ها را داده است. تأیید = ساخت کالا و ثبت موجودی."
         actions={
@@ -365,4 +370,10 @@ export default function ProductRequestsPage() {
       </Dialog>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی و بوکمارک‌ها نباید بشکنند. */
+export default function ProductRequestsPage() {
+  return <ProductRequestsPanel />;
 }

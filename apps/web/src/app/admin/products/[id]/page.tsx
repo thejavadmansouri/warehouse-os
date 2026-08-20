@@ -38,6 +38,8 @@ import { LoadingState, ErrorState, EmptyState } from "@/components/states";
 import { LabelPrintDialog } from "@/components/labels/label-print-dialog";
 import { ProductFormDialog } from "../_components/product-form-dialog";
 import { ProductKardex } from "../_components/product-kardex";
+import { ProductStock } from "../_components/product-stock";
+import { ProductPrices } from "../_components/product-prices";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,6 +50,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { Product } from "@/lib/types";
 
 interface InfoRowProps {
@@ -220,6 +223,35 @@ export default function ProductDetailPage() {
         }
       />
 
+      {/*
+        صفحه‌ی کالا تنها جای حقیقت درباره‌ی یک کالاست: مشخصات، موجودی، گردش و
+        قیمت — همه زیر یک آدرس.
+        قبلاً کاردکس صفحه‌ی جدای خودش را هم داشت (`/admin/inventory/kardex`) که
+        چیزی جز یک انتخابگر کالا + همین کامپوننت نبود، و موجودیِ به‌تفکیکِ قفسه
+        فقط در صندوق فروش دیده می‌شد.
+        در چاپ، تب‌ها معنا ندارند؛ فقط مشخصات چاپ می‌شود.
+      */}
+      <Tabs defaultValue="info" className="print:hidden">
+        <TabsList>
+          <TabsTrigger value="info">مشخصات</TabsTrigger>
+          <TabsTrigger value="stock">موجودی</TabsTrigger>
+          <TabsTrigger value="kardex">کاردکس</TabsTrigger>
+          <TabsTrigger value="prices">قیمت‌ها</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="stock" className="mt-4">
+          <ProductStock productId={product.id} />
+        </TabsContent>
+
+        <TabsContent value="kardex" className="mt-4">
+          <ProductKardex productId={product.id} />
+        </TabsContent>
+
+        <TabsContent value="prices" className="mt-4">
+          <ProductPrices productId={product.id} />
+        </TabsContent>
+
+        <TabsContent value="info" className="mt-4">
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 print:hidden">
         {/* ستون چپ: عکس + آپلود */}
         <div className="flex flex-col gap-6 lg:col-span-1">
@@ -497,10 +529,8 @@ export default function ProductDetailPage() {
         </div>
       </div>
 
-      {/* کاردکس — گردش کالا با مانده‌ی متحرک */}
-      <div className="print:hidden">
-        <ProductKardex productId={product.id} />
-      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* دیالوگ ویرایش */}
       <ProductFormDialog

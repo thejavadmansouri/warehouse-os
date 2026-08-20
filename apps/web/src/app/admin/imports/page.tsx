@@ -43,7 +43,8 @@ const REQUIRED_COLUMNS: { key: string; label: string }[] = [
   { key: "purchasePrice", label: "قیمت خرید" },
 ];
 
-export default function ImportsPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function ImportsPanel({ embedded }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
 
   const [file, setFile] = React.useState<File | null>(null);
@@ -112,6 +113,7 @@ export default function ImportsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="ورود اکسل"
         description="بارگذاری فایل اکسل محصولات و وارد کردن دسته‌ای"
         icon={FileSpreadsheet}
@@ -287,4 +289,10 @@ export default function ImportsPage() {
       ) : null}
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function ImportsPage() {
+  return <ImportsPanel />;
 }

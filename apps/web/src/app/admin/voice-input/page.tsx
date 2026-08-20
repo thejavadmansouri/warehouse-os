@@ -739,7 +739,8 @@ function ExplanationStat({
   );
 }
 
-export default function VoiceInputPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function VoiceInputPanel({ embedded }: { embedded?: boolean } = {}) {
   const user = useAuthStore((s) => s.user);
   if (!user || !["ADMIN", "MANAGER", "STAFF"].includes(user.role)) {
     return (
@@ -757,6 +758,7 @@ export default function VoiceInputPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="مانیتور ورودی صوتی"
         description="مشاهده‌ی زنده‌ی خروجی موتور تشخیص گفتار برای ثبت موجودی و انبارگردانی"
         icon={Mic}
@@ -782,4 +784,10 @@ export default function VoiceInputPage() {
       </Tabs>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function VoiceInputPage() {
+  return <VoiceInputPanel />;
 }

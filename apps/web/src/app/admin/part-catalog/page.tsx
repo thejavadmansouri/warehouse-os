@@ -70,7 +70,8 @@ function toDto(f: FormState): CreatePartCatalogDto {
   };
 }
 
-export default function PartCatalogPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function PartCatalogPanel({ embedded }: { embedded?: boolean } = {}) {
   const { toast } = useToast();
   const qc = useQueryClient();
 
@@ -173,6 +174,7 @@ export default function PartCatalogPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="کاتالوگ قطعات"
         description="مدیریت قطعاتی که موتور تشخیص گفتار آن‌ها را شناسایی می‌کند"
         icon={ListTree}
@@ -389,4 +391,10 @@ export default function PartCatalogPage() {
       />
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function PartCatalogPage() {
+  return <PartCatalogPanel />;
 }

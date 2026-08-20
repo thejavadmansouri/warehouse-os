@@ -57,7 +57,8 @@ const TRIGGER_LABELS: Record<string, string> = {
   ON_CLOSE: "پیش از بستن",
 };
 
-export default function BackupsPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function BackupsPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
 
   const status = useQuery({
@@ -163,6 +164,7 @@ export default function BackupsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="پشتیبان‌گیری"
         description="زمان‌بندی، محل ذخیره و سابقه‌ی بک‌آپ‌ها"
         icon={DatabaseBackup}
@@ -457,4 +459,10 @@ export default function BackupsPage() {
       </p>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function BackupsPage() {
+  return <BackupsPanel />;
 }

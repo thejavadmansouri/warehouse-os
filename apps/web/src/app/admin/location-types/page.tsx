@@ -86,7 +86,8 @@ function TableSkeleton() {
   );
 }
 
-export default function LocationTypesPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function LocationTypesPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
@@ -163,6 +164,7 @@ export default function LocationTypesPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="انواع موقعیت"
         description="تعریف سطوح موقعیت هر انبار (مثلاً طبقه، ردیف، ستون، باکس) با ترتیب عمق"
         icon={Layers}
@@ -354,4 +356,10 @@ export default function LocationTypesPage() {
       </Dialog>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function LocationTypesPage() {
+  return <LocationTypesPanel />;
 }

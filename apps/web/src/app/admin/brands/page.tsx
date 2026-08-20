@@ -51,7 +51,8 @@ const brandSchema = z.object({
 
 type BrandFormValues = z.infer<typeof brandSchema>;
 
-export default function BrandsPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function BrandsPanel({ embedded }: { embedded?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
@@ -134,6 +135,7 @@ export default function BrandsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="مدیریت برندها"
         description="لیست برندهای قطعات و لوازم یدکی ثبت‌شده در سیستم"
         icon={Tags}
@@ -266,4 +268,10 @@ export default function BrandsPage() {
       </Dialog>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function BrandsPage() {
+  return <BrandsPanel />;
 }

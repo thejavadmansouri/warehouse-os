@@ -1,28 +1,19 @@
 // پیکربندی ناوبری سایدبار — طبق پیوست نقش‌های مجاز هر endpoint
 import type { Role } from "./types";
 import {
-  BadgeDollarSign,
   LayoutDashboard,
   LayoutGrid,
   Package,
-  Tag,
-  Car,
   MapPin,
   Boxes,
   ArrowLeftRight,
   ClipboardList,
   ClipboardCheck,
-  Mic,
   Users,
-  FileSpreadsheet,
-  BookAudio,
-  Layers,
   ShoppingCart,
   BarChart3,
   HandCoins,
   FileClock,
-  DatabaseBackup,
-  Tags,
   Store,
   Undo2,
   Files,
@@ -32,7 +23,6 @@ import {
   LibraryBig,
   Settings,
   PackagePlus,
-  ScrollText,
 } from "lucide-react";
 
 export interface NavItem {
@@ -151,42 +141,22 @@ export const NAV_SECTIONS: NavSection[] = [
         ],
       },
       {
-        title: "کاتالوگ",
-        icon: LibraryBig,
+        /*
+         * محصولات دیگر هابِ چندشاخه نیست: صفحه‌ی کالا خودش مشخصات، موجودی،
+         * کاردکس و تاریخچه‌ی قیمت را دارد، و قیمت‌گذاریِ گروهی از نوارِ ابزارِ
+         * همین فهرست باز می‌شود. «کار» آیتمِ منو نمی‌شود.
+         */
+        title: "محصولات",
+        href: "/admin/products",
+        icon: Package,
         roles: ["ADMIN", "MANAGER", "STAFF"],
-        children: [
-          {
-            title: "محصولات",
-            href: "/admin/products",
-            icon: Package,
-            roles: ["ADMIN", "MANAGER", "STAFF"],
-          },
-          {
-            // قیمت‌گذاری فقط برای مدیر — انباردار نباید قیمت بگذارد.
-            title: "قیمت‌گذاری",
-            href: "/admin/pricing",
-            icon: BadgeDollarSign,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "برندها",
-            href: "/admin/brands",
-            icon: Tag,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "مدل‌های خودرو",
-            href: "/admin/vehicle-models",
-            icon: Car,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "کاتالوگ قطعات",
-            href: "/admin/part-catalog",
-            icon: BookAudio,
-            roles: ["ADMIN", "MANAGER"],
-          },
-        ],
+      },
+      {
+        // چهار جدولِ مرجع که ماهی یک بار باز می‌شوند، یک ردیف بس است.
+        title: "داده‌های پایه",
+        href: "/admin/base-data",
+        icon: LibraryBig,
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         title: "انبار",
@@ -203,13 +173,6 @@ export const NAV_SECTIONS: NavSection[] = [
             title: "لاگ موجودی",
             href: "/admin/inventory/logs",
             icon: ClipboardList,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            // کاردکس — گردشِ هر کالا؛ نقطهٔ ورود از پرفروش‌ها یا جستجو.
-            title: "کاردکس کالا",
-            href: "/admin/inventory/kardex",
-            icon: ScrollText,
             roles: ["ADMIN", "MANAGER"],
           },
           {
@@ -236,80 +199,25 @@ export const NAV_SECTIONS: NavSection[] = [
             icon: MapPin,
             roles: ["ADMIN", "MANAGER"],
           },
-          {
-            title: "انواع موقعیت",
-            href: "/admin/location-types",
-            icon: Layers,
-            roles: ["ADMIN", "MANAGER"],
-          },
         ],
       },
       {
         /*
-         * کارتابل — هر چیزی که منتظرِ تصمیمِ مدیر است، یک‌جا.
-         * قبلاً سه صفحه‌ی جدا در سه گوشه‌ی منو بودند و هیچ‌کس نمی‌دانست کدام‌شان
-         * کار دارد.
+         * کارتابل — هر چیزی که منتظرِ تصمیمِ مدیر است، یک‌جا و با شمارنده.
+         * قبلاً سه صفحه‌ی جدا بود و صفِ هیچ‌کدام دیده نمی‌شد مگر بازش می‌کردی.
+         * مسیرهای قدیمی هنوز کار می‌کنند، فقط از منو برداشته شده‌اند.
          */
         title: "کارتابل",
+        href: "/admin/inbox",
         icon: ClipboardCheck,
         roles: ["ADMIN", "MANAGER"],
-        children: [
-          {
-            title: "بازبینی عملیات",
-            href: "/admin/review",
-            icon: ClipboardCheck,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "درخواست‌های افزودن کالا",
-            href: "/admin/product-requests",
-            icon: ClipboardCheck,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "لیبل‌های در انتظار",
-            href: "/admin/labels",
-            icon: Tags,
-            roles: ["ADMIN", "MANAGER"],
-          },
-        ],
       },
       {
-        title: "ابزارها",
+        // پنج صفحه‌ی تنظیمات، یک ردیف. نقش‌ها روی تب‌ها اعمال می‌شوند.
+        title: "تنظیمات",
+        href: "/admin/settings",
         icon: Settings,
-        roles: ["ADMIN", "MANAGER", "STAFF"],
-        children: [
-          {
-            title: "مانیتور ورودی صوتی",
-            href: "/admin/voice-input",
-            icon: Mic,
-            roles: ["ADMIN", "MANAGER", "STAFF"],
-          },
-          {
-            title: "ورود اکسل",
-            href: "/admin/imports",
-            icon: FileSpreadsheet,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "پشتیبان‌گیری",
-            href: "/admin/backups",
-            icon: DatabaseBackup,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "مشخصات مغازه",
-            href: "/admin/shop-settings",
-            icon: Store,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "کاربران",
-            href: "/admin/users",
-            icon: Users,
-            roles: ["ADMIN"],
-          },
-        ],
+        roles: ["ADMIN", "MANAGER"],
       },
     ],
   },

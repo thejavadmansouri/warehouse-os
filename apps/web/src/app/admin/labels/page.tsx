@@ -47,7 +47,11 @@ function sinceOf(p: Period): string | undefined {
   return d.toISOString();
 }
 
-export default function LabelsPage() {
+/**
+ * وقتی داخلِ کارتابل رندر می‌شود سرتیترِ خودش را نشان نمی‌دهد — کارتابل یک
+ * سرتیتر دارد و تب‌ها زیرش می‌نشینند.
+ */
+export function LabelsPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
 
   const [period, setPeriod] = React.useState<Period>("today");
@@ -123,6 +127,7 @@ export default function LabelsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="لیبل‌های در انتظار"
         description="کالاهایی که وارد انبار شده‌اند و هنوز لیبل نخورده‌اند"
         icon={Tags}
@@ -327,4 +332,10 @@ export default function LabelsPage() {
       )}
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی و بوکمارک‌ها نباید بشکنند. */
+export default function LabelsPage() {
+  return <LabelsPanel />;
 }

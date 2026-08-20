@@ -63,7 +63,11 @@ function confidenceBadgeClass(confidence: number): string {
   return "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400";
 }
 
-export default function ReviewPage() {
+/**
+ * وقتی داخلِ کارتابل رندر می‌شود سرتیترِ خودش را نشان نمی‌دهد — کارتابل یک
+ * سرتیتر دارد و تب‌ها زیرش می‌نشینند.
+ */
+export function ReviewPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const { toast } = useToast();
 
@@ -188,6 +192,7 @@ export default function ReviewPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="بازبینی عملیات کارگر"
         description="عملیات ثبت‌شده توسط کارگر که در انتظار تأیید مدیر است. تأیید = ثبت واقعی موجودی."
         actions={
@@ -426,4 +431,10 @@ export default function ReviewPage() {
       </Dialog>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی و بوکمارک‌ها نباید بشکنند. */
+export default function ReviewPage() {
+  return <ReviewPanel />;
 }

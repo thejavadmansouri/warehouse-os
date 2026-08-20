@@ -484,6 +484,11 @@ export function getBrands(): Promise<T.Brand[]> {
 
 // POST /products/:id/prices — ثبت قیمت جدید. ردیف تازه در تاریخچه می‌سازد.
 // فیلدِ نفرستاده یعنی «عوض نکن»، نه «صفر کن».
+// GET /products/:id/prices — تاریخچه‌ی قیمت، تازه‌ترین اول
+export function getProductPrices(id: string): Promise<T.ProductPrice[]> {
+  return apiFetch<T.ProductPrice[]>(`/products/${encodeURIComponent(id)}/prices`);
+}
+
 export function setProductPrice(
   id: string,
   dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number }

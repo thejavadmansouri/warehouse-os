@@ -60,7 +60,8 @@ const ROLE_BADGE_CLASS: Record<Role, string> = {
   SALES: "bg-sky-100 text-sky-700",
 };
 
-export default function UsersPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   const user = useAuthStore((s) => s.user);
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -159,6 +160,7 @@ export default function UsersPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="کاربران"
         description="مدیریت کاربران سیستم و نقش‌ها"
         icon={UsersIcon}
@@ -425,4 +427,10 @@ export default function UsersPage() {
 
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function UsersPage() {
+  return <UsersPanel />;
 }

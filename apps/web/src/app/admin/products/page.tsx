@@ -15,6 +15,7 @@ import {
   ArrowLeft,
   Loader2,
   Printer,
+  BadgeDollarSign,
 } from "lucide-react";
 
 import {
@@ -261,6 +262,16 @@ export default function ProductsListPage() {
         icon={Package}
         actions={
           <>
+            {/* قیمت‌گذاری گروهی از منو برداشته شد: ویرایشِ انبوهِ قیمت یک
+                «کار» است روی همین فهرست، نه یک «جا» که به آن می‌روی. */}
+            {canCreate ? (
+              <Button asChild variant="outline" size="sm">
+                <Link href="/admin/pricing">
+                  <BadgeDollarSign className="h-4 w-4" />
+                  قیمت‌گذاری گروهی
+                </Link>
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="sm"

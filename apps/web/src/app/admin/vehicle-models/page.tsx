@@ -81,7 +81,8 @@ function sortByName(items: VehicleModel[]): VehicleModel[] {
   );
 }
 
-export default function VehicleModelsPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function VehicleModelsPanel({ embedded }: { embedded?: boolean } = {}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = React.useState(false);
@@ -197,6 +198,7 @@ export default function VehicleModelsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="مدیریت مدل‌های خودرو"
         description="لیست مدل خودروهای ثبت‌شده برای تطبیق با قطعات"
         icon={Car}
@@ -395,4 +397,10 @@ export default function VehicleModelsPage() {
       </Dialog>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function VehicleModelsPage() {
+  return <VehicleModelsPanel />;
 }

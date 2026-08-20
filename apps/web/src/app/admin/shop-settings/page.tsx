@@ -34,7 +34,8 @@ const EMPTY: ShopSettings = {
  * هرچه اینجا نوشته شود روی سربرگ فاکتور، پیش‌فاکتور و صورت‌حساب چاپ می‌شود.
  * جدا از «انبار» است: انبار یک مفهوم داخلی است، این چیزی است که مشتری می‌بیند.
  */
-export default function ShopSettingsPage() {
+/** داخلِ صفحه‌ی میزبان سرتیترِ خودش را نشان نمی‌دهد. */
+export function ShopSettingsPanel({ embedded }: { embedded?: boolean } = {}) {
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: ["shop-settings"], queryFn: getShopSettings });
   const [form, setForm] = React.useState<ShopSettings | null>(null);
@@ -77,6 +78,7 @@ export default function ShopSettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
+        compact={embedded}
         title="مشخصات مغازه"
         description="روی سربرگ فاکتور، پیش‌فاکتور و صورت‌حساب چاپ می‌شود"
         icon={Store}
@@ -210,4 +212,10 @@ function Field({
       {children}
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function ShopSettingsPage() {
+  return <ShopSettingsPanel />;
 }

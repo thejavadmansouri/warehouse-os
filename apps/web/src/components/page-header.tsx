@@ -9,13 +9,30 @@ export function PageHeader({
   icon: Icon,
   actions,
   className,
+  compact,
 }: {
   title: string;
   description?: string;
   icon?: React.ComponentType<{ className?: string }>;
   actions?: React.ReactNode;
   className?: string;
+  /**
+   * صفحه داخلِ صفحه‌ی دیگری (مثلاً یک تبِ کارتابل) رندر شده: عنوان و توضیح را
+   * میزبان می‌گوید، پس فقط دکمه‌ها می‌مانند. بدون این، دو سرتیتر روی هم می‌نشیند.
+   */
+  compact?: boolean;
 }) {
+
+  if (compact) {
+    // چیزی برای نشان‌دادن نیست اگر دکمه‌ای هم نباشد.
+    if (!actions) return null;
+    return (
+      <div className={cn("flex items-center justify-end gap-2", className)}>
+        {actions}
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
