@@ -33,6 +33,8 @@ import {
   rowNet,
   type PurchaseRow,
 } from "../_components/purchase-lines";
+import { PriceWarningDialog } from "../_components/price-warning-dialog";
+import type { PurchasePriceWarning } from "@/lib/types";
 
 const ALLOWED = ["ADMIN", "MANAGER"] as const;
 
@@ -55,6 +57,15 @@ export default function NewPurchasePage() {
    */
   const idem = React.useRef<string | null>(null);
 
+  /*
+   * هشدارهای قیمت که سرور برگردانده. null یعنی هشداری در کار نیست.
+   *
+   * سرور مرجع است، نه فرم: همین بررسی باید برای ایمپورت و هر کلاینتِ دیگری هم
+   * اجرا شود، پس قاعده آنجا زندگی می‌کند و اینجا فقط نمایش داده می‌شود.
+   */
+  const [priceWarnings, setPriceWarnings] =
+    React.useState<PurchasePriceWarning[] | null>(null);
+
   const warehousesQ = useQuery({ queryKey: ["warehouses"], queryFn: getWarehouses });
   const suppliersQ = useQuery({ queryKey: ["suppliers"], queryFn: getSuppliers });
 
@@ -69,10 +80,11 @@ export default function NewPurchasePage() {
   const total = Math.max(0, subtotal - discount);
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: (confirmPriceWarnings?: boolean) => {
       if (!idem.current) idem.current = uuid();
       return createPurchase({
         idempotencyKey: idem.current,
+        confirmPriceWarnings,
         warehouseId,
         supplierId: supplierId === "NONE" ? null : supplierId,
         supplierRef: supplierRef.trim() || undefined,
@@ -88,6 +100,7 @@ export default function NewPurchasePage() {
       });
     },
     onSuccess: (p) => {
+      setPriceWarnings(null);
       toast.success(`فاکتور خرید ${p.number} ثبت شد`, {
         description: "کالاها روی «انبار موقت» نشستند — با انتقال سر جایشان ببرید.",
       });
@@ -96,6 +109,19 @@ export default function NewPurchasePage() {
     onError: (e) => {
       // سند ثبت نشد ⇒ کلید باید تازه شود، وگرنه تلاش بعدی همان خطا را می‌گیرد.
       idem.current = null;
+
+      /*
+       * قیمتِ مشکوک خطا نیست، یک سؤال است: سند عمداً ثبت نشده تا آدم تصمیم
+       * بگیرد. پس به‌جای toastِ قرمز، دیالوگ باز می‌شود.
+       */
+      if (e instanceof ApiException && e.code === "PRICE_WARNINGS") {
+        const list = (e.raw as { warnings?: PurchasePriceWarning[] }).warnings;
+        if (list?.length) {
+          setPriceWarnings(list);
+          return;
+        }
+      }
+
       toast.error(e instanceof ApiException ? e.message : "ثبت فاکتور ناموفق بود");
     },
   });
@@ -201,12 +227,19 @@ export default function NewPurchasePage() {
           <Button
             size="lg"
             disabled={blocked || save.isPending}
-            onClick={() => save.mutate()}
+            onClick={() => save.mutate(undefined)}
           >
             {save.isPending ? "در حال ثبت…" : "ثبت فاکتور خرید"}
           </Button>
         </div>
       </Card>
+
+      <PriceWarningDialog
+        warnings={priceWarnings}
+        pending={save.isPending}
+        onCancel={() => setPriceWarnings(null)}
+        onConfirm={() => save.mutate(true)}
+      />
     </div>
   );
 }

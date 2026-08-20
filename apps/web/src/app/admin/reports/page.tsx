@@ -44,6 +44,7 @@ import {
   getChequesReport,
   getDebtors,
   getLowStock,
+  getSuspiciousPrices,
   getPeriodicProfit,
   getPeriodicSales,
   getProductPerformance,
@@ -195,6 +196,11 @@ export default function ReportsPage() {
     queryFn: () => getLowStock({ page, limit }),
     enabled: tab === "low-stock" || tab === "overview",
   });
+  const suspicious = useQuery({
+    queryKey: ["rep", "suspicious-prices", page],
+    queryFn: () => getSuspiciousPrices({ page, limit }),
+    enabled: tab === "suspicious-prices",
+  });
   const sellers = useQuery({
     queryKey: ["rep", "sellers", dates, page],
     queryFn: () => getSellerPerformance({ ...dates, page, limit }),
@@ -206,7 +212,11 @@ export default function ReportsPage() {
     enabled: tab === "categories",
   });
 
-  const timeBased = tab !== "debtors" && tab !== "cheques" && tab !== "low-stock";
+  const timeBased =
+    tab !== "debtors" &&
+    tab !== "cheques" &&
+    tab !== "low-stock" &&
+    tab !== "suspicious-prices";
 
   return (
     <div className="space-y-6">
@@ -250,6 +260,7 @@ export default function ReportsPage() {
           <TabsTrigger value="cheques" className="py-2 text-xs">چک‌ها</TabsTrigger>
           <TabsTrigger value="products" className="py-2 text-xs">پرفروش/راکد</TabsTrigger>
           <TabsTrigger value="low-stock" className="py-2 text-xs">موجودی زیر حد</TabsTrigger>
+          <TabsTrigger value="suspicious-prices" className="py-2 text-xs">قیمت‌های مشکوک</TabsTrigger>
           <TabsTrigger value="sellers" className="py-2 text-xs">فروشندگان</TabsTrigger>
         </TabsList>
 
@@ -1014,6 +1025,68 @@ export default function ReportsPage() {
               </ScrollTable>
 
               <Pagination page={page} lastPage={lowStock.data.items.meta.lastPage} onChange={setPage} />
+            </>
+          )}
+        </TabsContent>
+
+        {/* ۷ — قیمت‌های مشکوک.
+            گاردِ ثبتِ فاکتور خرید جلوی خرابیِ آینده را می‌گیرد؛ این فهرست برای
+            خرابیِ موجود است. ترتیب بر اساس نسبت است نه مبلغ، چون نسبتِ ~۱۰
+            امضای واردکردنِ تومان به‌جای ریال است. */}
+        <TabsContent value="suspicious-prices" className="space-y-4">
+          <div className="flex justify-end">
+            <ExportButton endpoint="/reports/suspicious-prices" params={{}} fileName="قیمت-های-مشکوک" />
+          </div>
+
+          {suspicious.isLoading ? <LoadingState /> : suspicious.isError ? (
+            <ErrorState onRetry={() => suspicious.refetch()} />
+          ) : !suspicious.data?.items.data.length ? (
+            <div className="rounded-xl border border-dashed bg-card p-12 text-center">
+              <h3 className="text-base font-bold text-emerald-600">قیمت مشکوکی پیدا نشد</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                هیچ کالایی قیمت خریدش از قیمت فروشش بیشتر نیست.
+              </p>
+            </div>
+          ) : (
+            <>
+              <ScrollTable>
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-card shadow-sm">
+                    <TableRow>
+                      <TableHead>کالا</TableHead>
+                      <TableHead className="text-center">قیمت خرید</TableHead>
+                      <TableHead className="text-center">قیمت فروش</TableHead>
+                      <TableHead className="text-center">نسبت</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {suspicious.data.items.data.map((i) => (
+                      <TableRow key={i.productId}>
+                        <TableCell className="font-medium">
+                          <div className="max-w-[24rem] truncate">{i.productName}</div>
+                          <div className="text-xs tabular-nums text-muted-foreground">{toFa(i.sku)}</div>
+                        </TableCell>
+                        <TableCell className="text-center font-bold tabular-nums text-destructive">
+                          {money(i.purchasePrice)}
+                        </TableCell>
+                        <TableCell className="text-center tabular-nums">{money(i.salePrice)}</TableCell>
+                        <TableCell className="text-center">
+                          {/* نسبتِ نزدیک به ۱۰ برجسته می‌شود: همان الگویی که
+                              تقریباً همیشه یعنی واحد پول اشتباه وارد شده. */}
+                          <Badge
+                            variant={i.ratio >= 8 && i.ratio <= 12 ? "destructive" : "outline"}
+                            className="tabular-nums"
+                          >
+                            {toFa(i.ratio)}×
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollTable>
+
+              <Pagination page={page} lastPage={suspicious.data.items.meta.lastPage} onChange={setPage} />
             </>
           )}
         </TabsContent>

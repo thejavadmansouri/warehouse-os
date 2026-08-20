@@ -65,6 +65,8 @@ import { SaleReceiptDialog } from "./_components/sale-receipt-dialog";
 import { TodayPurchasesDialog } from "./_components/today-purchases-dialog";
 import { WorkerPicker } from "./_components/worker-picker";
 import { WorkTasksPanel } from "./_components/work-tasks-panel";
+import { ShortageDialog } from "./_components/shortage-dialog";
+import { ProductFormDialog } from "../products/_components/product-form-dialog";
 import {
   NO_DISCOUNT,
   discountToRial,
@@ -195,6 +197,10 @@ export default function PosPage() {
   const setShowRecent = usePosUiStore((s) => s.recent);
   const showOpenAccounts = usePosUiStore((s) => s.openAccountsOpen);
   const setShowOpenAccounts = usePosUiStore((s) => s.openAccounts);
+  const showShortage = usePosUiStore((s) => s.shortageOpen);
+  const setShowShortage = usePosUiStore((s) => s.shortage);
+  const showAddProduct = usePosUiStore((s) => s.addProductOpen);
+  const setShowAddProduct = usePosUiStore((s) => s.addProduct);
   const [showCheckout, setShowCheckout] = useState(false);
   /** فاکتورِ تازه‌ثبت‌شده — تا وقتی خودش بسته نشود، رسیدش روی صفحه می‌ماند. */
   const [receipt, setReceipt] = useState<Invoice | null>(null);
@@ -1510,6 +1516,20 @@ export default function PosPage() {
         open={showWorkTasks}
         warehouseId={warehouseId}
         onClose={() => { setShowWorkTasks(false); focusScan(); }}
+      />
+
+      {/* کسری: مشتریِ فعلیِ سبد همراهش می‌رود تا بعداً بشود خبرش کرد. */}
+      <ShortageDialog
+        open={showShortage}
+        onOpenChange={(v) => { setShowShortage(v); if (!v) focusScan(); }}
+        warehouseId={warehouseId}
+        customerId={customer?.id ?? null}
+      />
+
+      <ProductFormDialog
+        open={showAddProduct}
+        onOpenChange={(v) => { setShowAddProduct(v); if (!v) focusScan(); }}
+        mode="create"
       />
 
       <PaymentDialog

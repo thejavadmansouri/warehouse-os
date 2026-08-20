@@ -31,6 +31,16 @@ function makePrisma(over: Record<string, any> = {}) {
       findUnique: jest.fn().mockResolvedValue({ id: 's1' }),
       ...over.supplier,
     },
+    // گاردِ قیمت: بدونِ سابقه، هیچ ردیفی مشکوک نیست — پس تست‌هایی که کاری به
+    // قیمت ندارند بی‌تغییر می‌مانند.
+    productPrice: {
+      findMany: jest.fn().mockResolvedValue([]),
+      ...over.productPrice,
+    },
+    product: {
+      findMany: jest.fn().mockResolvedValue([]),
+      ...over.product,
+    },
     $transaction: jest.fn(),
   };
 }
@@ -101,6 +111,76 @@ describe('PurchasesService', () => {
       const e = await thrown(() => service.create(dto({ lines } as any)));
       expect(e.getResponse().error).toBe('AMOUNT_TOO_LARGE');
       expect(e.getResponse().max).toBe(INT4_MAX);
+    });
+  });
+
+
+  describe('گاردِ قیمتِ مشکوک', () => {
+    /** سابقه‌ی قیمتِ کالای p1 — گارد از همین می‌خواند. */
+    const withHistory = (purchasePrice: number | null, salePrice: number | null) =>
+      makePrisma({
+        productPrice: {
+          findMany: jest.fn().mockResolvedValue([
+            { productId: 'p1', purchasePrice, salePrice },
+          ]),
+        },
+        product: {
+          findMany: jest.fn().mockResolvedValue([{ id: 'p1', name: 'لنت جلو پراید' }]),
+        },
+      });
+
+    it('قیمتِ ده‌برابری سند را ثبت نمی‌کند و ردیف را نام می‌برد', async () => {
+      await build(withHistory(100, null));
+
+      const e = await thrown(() =>
+        service.create(dto({ lines: [{ productId: 'p1', quantity: 1, unitPrice: 1000 }] } as any)),
+      );
+
+      expect(e).toBeInstanceOf(ConflictException);
+      expect(e.getResponse().error).toBe('PRICE_WARNINGS');
+
+      const [w] = e.getResponse().warnings;
+      expect(w.kind).toBe('TENFOLD_JUMP');
+      expect(w.lineIndex).toBe(0);
+      expect(w.productName).toBe('لنت جلو پراید');
+
+      // و مهم‌تر از پیام: هیچ تراکنشی باز نشده.
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('با تأییدِ کاربر ثبت انجام می‌شود', async () => {
+      await build(withHistory(100, null));
+      prisma.$transaction.mockResolvedValue('purchase-1');
+
+      // findOne پس از ثبت صدا زده می‌شود؛ اینجا فقط باید نشکند.
+      prisma.purchaseInvoice.findUnique = jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: 'purchase-1' });
+
+      await service.create(
+        dto({
+          lines: [{ productId: 'p1', quantity: 1, unitPrice: 1000 }],
+          confirmPriceWarnings: true,
+        } as any),
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    it('قیمتِ عادی اصلاً هشدار نمی‌دهد', async () => {
+      await build(withHistory(1000, 1500));
+      prisma.$transaction.mockResolvedValue('purchase-1');
+      prisma.purchaseInvoice.findUnique = jest
+        .fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ id: 'purchase-1' });
+
+      await service.create(
+        dto({ lines: [{ productId: 'p1', quantity: 1, unitPrice: 1100 }] } as any),
+      );
+
+      expect(prisma.$transaction).toHaveBeenCalled();
     });
   });
 

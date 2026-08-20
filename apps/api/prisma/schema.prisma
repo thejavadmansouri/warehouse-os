@@ -39,9 +39,9 @@ model User {
   productRequestsReviewed ProductCreationRequest[] @relation("ProductRequestReviewer")
   saleInvoices            SaleInvoice[]            @relation("InvoiceSeller")
   saleInvoicesCancelled   SaleInvoice[]            @relation("InvoiceCanceller")
-  receiptsTaken          Receipt[]                @relation("ReceiptTaker")
-  saleReturns            SaleReturn[]             @relation("ReturnProcessor")
-  saleCorrections  SaleCorrection[]         @relation("CorrectionActor")
+  receiptsTaken           Receipt[]                @relation("ReceiptTaker")
+  saleReturns             SaleReturn[]             @relation("ReturnProcessor")
+  saleCorrections         SaleCorrection[]         @relation("CorrectionActor")
   purchases               PurchaseInvoice[]        @relation("PurchaseRecorder")
   purchasesCancelled      PurchaseInvoice[]        @relation("PurchaseCanceller")
   ledgerEntries           CustomerLedger[]         @relation("LedgerActor")
@@ -49,28 +49,31 @@ model User {
   pickTasksRequested      PickTask[]               @relation("PickRequester")
   pickTasksAssigned       PickTask[]               @relation("PickAssignee")
   pickTasksPicked         PickTask[]               @relation("PickPicker")
+  shortagesReported       ProductShortage[]        @relation("ShortageReporter")
+  shortagesResolved       ProductShortage[]        @relation("ShortageResolver")
   workTasksRequested      WorkTask[]               @relation("WorkTaskRequester")
   workTasksAssigned       WorkTask[]               @relation("WorkTaskAssignee")
   workTaskItemsDone       WorkTaskItem[]           @relation("WorkTaskItemDoneBy")
 }
 
 model Warehouse {
-  id            String             @id @default(uuid())
-  name          String
-  code          String             @unique
-  isActive      Boolean            @default(true)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  sessions      InventorySession[]
-  locations     Location[]
-  locationTypes LocationType[]
-  saleInvoices  SaleInvoice[]
-  saleReturns   SaleReturn[]
+  id              String             @id @default(uuid())
+  name            String
+  code            String             @unique
+  isActive        Boolean            @default(true)
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  sessions        InventorySession[]
+  locations       Location[]
+  locationTypes   LocationType[]
+  saleInvoices    SaleInvoice[]
+  saleReturns     SaleReturn[]
   saleCorrections SaleCorrection[]
-  pickTasks     PickTask[]
-  quotations    Quotation[]
-  purchases     PurchaseInvoice[]
-  workTasks     WorkTask[]
+  pickTasks       PickTask[]
+  quotations      Quotation[]
+  purchases       PurchaseInvoice[]
+  workTasks       WorkTask[]
+  shortages       ProductShortage[]
 }
 
 model LocationType {
@@ -88,33 +91,33 @@ model LocationType {
 }
 
 model Location {
-  id               String                     @id @default(uuid())
-  name             String
-  code             String                     @unique
-  barcode          String                     @unique
-  path             String
-  depth            Int
-  warehouseId      String?
-  typeId           String
-  parentId         String?
-  isActive         Boolean                    @default(true)
-  deletedAt        DateTime?
-  sortOrder        Int                        @default(0)
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime                   @updatedAt
-  inventories      Inventory[]
-  inventoryCounts  InventoryCount[]
-  inventoryLogs    InventoryLog[]
-  sessionLocations InventorySessionLocation[]
-  printJobItems    PrintJobItem[]
-  parent           Location?                  @relation("LocationTree", fields: [parentId], references: [id])
-  children         Location[]                 @relation("LocationTree")
-  type             LocationType               @relation(fields: [typeId], references: [id])
-  warehouse        Warehouse?                 @relation(fields: [warehouseId], references: [id])
-  pendingOps       PendingOperation[]
-  productRequests  ProductCreationRequest[]
-  pickTasks        PickTask[]
-  saleReturnLines  SaleReturnLine[]
+  id                  String                     @id @default(uuid())
+  name                String
+  code                String                     @unique
+  barcode             String                     @unique
+  path                String
+  depth               Int
+  warehouseId         String?
+  typeId              String
+  parentId            String?
+  isActive            Boolean                    @default(true)
+  deletedAt           DateTime?
+  sortOrder           Int                        @default(0)
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+  inventories         Inventory[]
+  inventoryCounts     InventoryCount[]
+  inventoryLogs       InventoryLog[]
+  sessionLocations    InventorySessionLocation[]
+  printJobItems       PrintJobItem[]
+  parent              Location?                  @relation("LocationTree", fields: [parentId], references: [id])
+  children            Location[]                 @relation("LocationTree")
+  type                LocationType               @relation(fields: [typeId], references: [id])
+  warehouse           Warehouse?                 @relation(fields: [warehouseId], references: [id])
+  pendingOps          PendingOperation[]
+  productRequests     ProductCreationRequest[]
+  pickTasks           PickTask[]
+  saleReturnLines     SaleReturnLine[]
   saleCorrectionLines SaleCorrectionLine[]
   workTaskItems       WorkTaskItem[]
 
@@ -231,6 +234,7 @@ model Product {
   saleReturnLines     SaleReturnLine[]
   saleCorrectionLines SaleCorrectionLine[]
   workTaskItems       WorkTaskItem[]
+  shortages           ProductShortage[]
 
   @@index([searchTokens], type: Gin)
   @@index([labelPrintedAt])
@@ -317,50 +321,50 @@ model Inventory {
 }
 
 model InventoryLog {
-  id            String            @id @default(uuid())
-  productId     String
-  locationId    String
-  quantity      Int
-  action        InventoryAction
-  note          String?
-  userId        String?
-  sessionId     String?
-  voiceRecordId String?
+  id              String               @id @default(uuid())
+  productId       String
+  locationId      String
+  quantity        Int
+  action          InventoryAction
+  note            String?
+  userId          String?
+  sessionId       String?
+  voiceRecordId   String?
   /// قیمتِ واحدِ همین حرکت به ریال — قیمتِ **فروش** برای SALE و قیمتِ **خرید**
   /// برای INِ ناشی از فاکتور خرید. برای بقیه‌ی حرکت‌ها null.
   /// مفهوم یکی است («پول به ازای هر واحد در این جابه‌جایی») پس ستون جدا ندارد.
-  unitPrice     Int?
+  unitPrice       Int?
   /// تخفیف همین ردیف به ریال (فقط برای SALE).
   /// بدون این، تخفیفِ ردیفی فقط در subtotal فاکتور جمع می‌شد و روی فاکتور چاپی
   /// جمعِ ردیف‌ها با مبلغ فاکتور نمی‌خواند — که برای مشتری شبیه اشتباه است.
-  lineDiscount  Int?
+  lineDiscount    Int?
   // فاکتور فروش چندردیفی: ردیف‌های فاکتور همین رکوردهای لجر هستند، نه یک جدول جدا.
   // بنابراین جمع فاکتور هیچ‌وقت با حرکت واقعی موجودی اختلاف پیدا نمی‌کند.
-  invoiceId     String?
+  invoiceId       String?
   /// وقتی این ردیف حرکتِ RETURNِ ناشی از یک سند مرجوعی است، به همان سند وصل
   /// می‌شود — تا یک حرکتِ برگشتِ موجودی همیشه قابل‌ردیابی به سندی باشد که سببش
   /// شده. null برای فروش، ابطال، و همه‌ی حرکت‌های دیگر.
-  saleReturnId  String?
+  saleReturnId    String?
   /// فاکتور خریدی که این ردیفِ IN را ساخته. مثل فروش، ردیف‌های فاکتور خرید
   /// جدول جدا ندارند و همین رکوردهای لجرند — پس جمعِ سند هیچ‌وقت با حرکتِ
   /// واقعیِ انبار اختلاف پیدا نمی‌کند. null برای هر ورودِ دیگری.
-  purchaseId    String?
-  createdAt     DateTime          @default(now())
-  source        String            @default("MANUAL")
-  assets        Asset[]
-  location      Location          @relation(fields: [locationId], references: [id])
-  product       Product           @relation(fields: [productId], references: [id])
-  session       InventorySession? @relation(fields: [sessionId], references: [id])
-  user          User?             @relation(fields: [userId], references: [id])
-  voiceRecord   VoiceRecord?      @relation(fields: [voiceRecordId], references: [id])
-  invoice       SaleInvoice?      @relation(fields: [invoiceId], references: [id])
-  saleReturn    SaleReturn?       @relation("ReturnMovement", fields: [saleReturnId], references: [id])
-  purchase      PurchaseInvoice?  @relation(fields: [purchaseId], references: [id])
+  purchaseId      String?
+  createdAt       DateTime             @default(now())
+  source          String               @default("MANUAL")
+  assets          Asset[]
+  location        Location             @relation(fields: [locationId], references: [id])
+  product         Product              @relation(fields: [productId], references: [id])
+  session         InventorySession?    @relation(fields: [sessionId], references: [id])
+  user            User?                @relation(fields: [userId], references: [id])
+  voiceRecord     VoiceRecord?         @relation(fields: [voiceRecordId], references: [id])
+  invoice         SaleInvoice?         @relation(fields: [invoiceId], references: [id])
+  saleReturn      SaleReturn?          @relation("ReturnMovement", fields: [saleReturnId], references: [id])
+  purchase        PurchaseInvoice?     @relation(fields: [purchaseId], references: [id])
   /// اصلاحیه‌ای که این حرکتِ جبرانی را ساخته (فقط برای حرکاتِ اصلاحیه). null برای بقیه.
-  correctionId  String?
-  correction    SaleCorrection?   @relation("CorrectionMovement", fields: [correctionId], references: [id])
+  correctionId    String?
+  correction      SaleCorrection?      @relation("CorrectionMovement", fields: [correctionId], references: [id])
   // ردیف‌های مرجوعی که این ردیفِ SALE را برمی‌گردانند (saleLogId به این اشاره دارد).
-  returnLines   SaleReturnLine[]
+  returnLines     SaleReturnLine[]
   // ردیف‌های اصلاحیه‌ای که همین ردیفِ SALE را تصحیح کرده‌اند (saleLogId).
   correctionLines SaleCorrectionLine[]
 
@@ -753,49 +757,50 @@ model ProductCreationRequest {
 /// بدون هیچ شماره‌ای ثبت کرد. شماره‌ها جدا نگه داشته می‌شوند چون یک نفر
 /// می‌تواند موبایل و تلفن ثابت داشته باشد.
 model Customer {
-  id          String   @id @default(uuid())
-  firstName   String
-  lastName    String?
+  id             String         @id @default(uuid())
+  firstName      String
+  lastName       String?
   /// نام کامل نرمال‌شده برای جست‌وجو. از firstName/lastName ساخته می‌شود و
   /// منبع مستقلِ حقیقت نیست — فقط ایندکس جست‌وجو.
-  searchName  String   @default("")
+  searchName     String         @default("")
   /// آدرس مشتری — برای پیک و پیامک و صورتحساب.
-  address     String?
+  address        String?
   /// شماره ملی — برای صورتحساب رسمی و شناسایی یکتا.
-  nationalId  String?
+  nationalId     String?
   /// دسته‌ی مشتری — ارجاع به جدول CustomerCategory که مدیر تعریف می‌کند.
-  categoryId  String?
-  note        String?
+  categoryId     String?
+  note           String?
   /// مشتری گفته پیامک نمی‌خواهم — از ارسال گروهی حذف می‌شود.
-  smsOptOut   Boolean  @default(false)
+  smsOptOut      Boolean        @default(false)
   /// سقف اعتبار حساب‌باز (ریال). صفر یعنی «سقفی تعیین نشده».
   ///
   /// عبور از سقف **جلوی فروش را نمی‌گیرد**، فقط هشدار می‌دهد: فعلاً مدیر خودش
   /// فروشنده است و قفل‌کردن فروش یعنی نرم‌افزار جلوی کار را بگیرد.
-  creditLimit Int      @default(0)
+  creditLimit    Int            @default(0)
   /// مهلت پرداخت پیش‌فرض این مشتری به روز. سررسید فاکتور از همین ساخته می‌شود
   /// تا فروشنده مجبور نباشد هر بار انتخابش کند؛ صفر یعنی سررسید همان روز.
-  creditDays  Int      @default(0)
+  creditDays     Int            @default(0)
   /// نرخِ تفاوتِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم (bp).
   /// ۲۵۰ یعنی ۲.۵٪. عدد صحیح است نه اعشار — اعشار در پول یعنی اختلافِ یک‌ریالی
   /// که هیچ‌وقت جمع نمی‌شود. صفر یعنی «از پیش‌فرضِ فروشگاه بگیر».
   chequeRateBp   Int            @default(0)
   chequeRateMode ChequeRateMode @default(MONTHLY)
-  isActive    Boolean  @default(true) // Soft Delete (قانون ۵)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  isActive       Boolean        @default(true) // Soft Delete (قانون ۵)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
   category CustomerCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
-  phones      CustomerPhone[]
-  invoices    SaleInvoice[]
+  phones       CustomerPhone[]
+  invoices     SaleInvoice[]
   openAccounts OpenAccount[]
-  messages    SmsMessage[]
-  receipts    Receipt[]
-  quotations Quotation[]
-  ledger     CustomerLedger[]
-  returns    SaleReturn[]
-  corrections SaleCorrection[]
+  messages     SmsMessage[]
+  receipts     Receipt[]
+  quotations   Quotation[]
+  ledger       CustomerLedger[]
+  returns      SaleReturn[]
+  corrections  SaleCorrection[]
+  shortages    ProductShortage[]
 
   @@index([searchName])
   @@index([lastName])
@@ -1021,6 +1026,55 @@ enum WorkTaskItemStatus {
 ///
 /// ابطال فاکتور هیچ‌وقت ردیف لجر را حذف نمی‌کند؛ حرکت‌های RETURN جبرانی ثبت
 /// می‌شوند و وضعیت به CANCELLED تغییر می‌کند (لجر append-only است).
+/// کسری محصول — چیزی که مشتری خواست و نداشتیم.
+///
+/// این **سیگنالِ خرید** است، نه اصلاحِ موجودی. عمداً هیچ حرکتِ انباری نمی‌سازد
+/// و هیچ عددی را تغییر نمی‌دهد؛ فقط ثبت می‌کند که تقاضایی بوده و جواب نگرفته.
+///
+/// چرا ارزش دارد: فروشِ ازدست‌رفته تنها عددی است که هیچ سندی در سیستم ندارد.
+/// «این ماه ۱۲ نفر لنت جلو پراید خواستند و نداشتیم» چیزی است که هیچ گزارشِ
+/// فروشی نمی‌تواند بگوید، چون آن دوازده نفر هیچ‌وقت فاکتوری نساختند.
+///
+/// `productId` اختیاری است چون نیمی از این تقاضاها برای کالایی است که اصلاً در
+/// کاتالوگ نیست — و آن دقیقاً ارزشمندترین حالت است. در آن صورت `productName`
+/// همان چیزی می‌ماند که فروشنده شنیده.
+model ProductShortage {
+  id           String                @id @default(uuid())
+  /// کالای کاتالوگ، اگر پیدا شده باشد.
+  productId    String?
+  /// نامی که فروشنده زده — برای کالای بیرونِ کاتالوگ تنها چیزی است که داریم.
+  productName  String
+  quantity     Int                   @default(1)
+  /// مشتری‌ای که پرسیده، اگر مشخص باشد. برای خبر‌کردنش وقتی جنس رسید.
+  customerId   String?
+  warehouseId  String
+  /// فروشنده‌ای که ثبت کرده.
+  userId       String?
+  note         String?
+  status       ProductShortageStatus @default(OPEN)
+  resolvedAt   DateTime?
+  resolvedById String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  product    Product?  @relation(fields: [productId], references: [id])
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  warehouse  Warehouse @relation(fields: [warehouseId], references: [id])
+  user       User?     @relation("ShortageReporter", fields: [userId], references: [id])
+  resolvedBy User?     @relation("ShortageResolver", fields: [resolvedById], references: [id])
+
+  // صفحه‌ی مدیر همیشه «بازها، تازه‌ترین اول» را می‌خواهد.
+  @@index([status, createdAt])
+  // شمارشِ تقاضا برای یک کالا — همان چیزی که تصمیمِ خرید را می‌سازد.
+  @@index([productId])
+}
+
+enum ProductShortageStatus {
+  OPEN // ثبت شده، هنوز تصمیمی گرفته نشده
+  ORDERED // سفارش داده شد
+  DISMISSED // تصمیم گرفته شد که تهیه نشود
+}
+
 model SaleInvoice {
   id             String        @id @default(uuid())
   number         Int           @unique @default(autoincrement()) // شماره‌ی خوانا برای کاربر
@@ -1034,7 +1088,7 @@ model SaleInvoice {
   discount       Int           @default(0) // تخفیف کل فاکتور (ریال)
   /// تفاوتِ فروشِ مدت‌دار روی این فاکتور (سودِ چک).
   /// total = subtotal − discount + financeCharge
-  financeCharge  Int @default(0)
+  financeCharge  Int           @default(0)
   total          Int           @default(0) // مبلغ نهایی = subtotal - discount
   paidAmount     Int           @default(0) // جمع پرداخت‌های ثبت‌شده
   dueAmount      Int           @default(0) // مانده = total - paidAmount (نسیه)
@@ -1124,7 +1178,7 @@ model OpenAccount {
   createdAt  DateTime          @default(now())
   updatedAt  DateTime          @updatedAt
 
-  customer Customer       @relation(fields: [customerId], references: [id])
+  customer Customer      @relation(fields: [customerId], references: [id])
   invoices SaleInvoice[]
 
   @@index([status])
@@ -1143,9 +1197,9 @@ enum OpenAccountStatus {
 /// (receiptPaymentId). دقیقاً یکی از این دو باید پر باشد — سرویس این را کنترل
 /// می‌کند.
 model Cheque {
-  id               String          @id @default(uuid())
-  paymentId        String?         @unique
-  receiptPaymentId String?         @unique
+  id               String       @id @default(uuid())
+  paymentId        String?      @unique
+  receiptPaymentId String?      @unique
   number           String // شماره چک
   bankName         String?
   branch           String?
@@ -1157,16 +1211,16 @@ model Cheque {
   /// دست نمی‌خورد، چون بانک دقیقاً همان را پاس می‌کند. این ستون فقط می‌گوید چه
   /// سهمی از آن بابتِ مدت بوده، تا گزارشِ سود، حاشیه‌ی کالا را با درآمدِ مدت
   /// قاطی نکند. مبلغِ پایه = amount − charge.
-  charge           Int             @default(0)
+  charge           Int          @default(0)
   /// نرخ و مدتی که این عدد از آن ساخته شد — برای توضیح‌دادنِ رقم، نه محاسبه‌ی
   /// دوباره‌اش. عددِ نهایی ذخیره شده تا تغییرِ بعدیِ قاعده، تاریخ را عوض نکند.
-  rateBp           Int             @default(0)
-  months           Int             @default(0)
-  status           ChequeStatus    @default(IN_HAND)
+  rateBp           Int          @default(0)
+  months           Int          @default(0)
+  status           ChequeStatus @default(IN_HAND)
   settledAt        DateTime?
   note             String?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   payment        Payment?        @relation(fields: [paymentId], references: [id])
   receiptPayment ReceiptPayment? @relation(fields: [receiptPaymentId], references: [id])
@@ -1236,23 +1290,23 @@ model ReceiptPayment {
 ///
 /// مانده‌ی مشتری = SUM(amount). بس.
 model CustomerLedger {
-  id         String          @id @default(uuid())
-  customerId String
-  type       LedgerEntryType
+  id           String          @id @default(uuid())
+  customerId   String
+  type         LedgerEntryType
   /// ریال. **مثبت = بدهی مشتری زیاد می‌شود، منفی = کم می‌شود.**
   /// همین یک قرارداد باعث می‌شود مانده یک SUM ساده باشد و هیچ‌جا لازم نشود
   /// بر اساس نوعِ ردیف تصمیم گرفت که جمع کنیم یا تفریق.
-  amount     Int
+  amount       Int
   /// رویدادی که این ردیف را ساخته — برای گردش حساب و ردیابی.
-  invoiceId  String?
-  receiptId  String?
+  invoiceId    String?
+  receiptId    String?
   /// سند مرجوعی که این ردیفِ بستانکاری را ساخته (نوع RETURN). null برای بقیه.
-  returnId   String?
+  returnId     String?
   /// اصلاحیه‌ای که این ردیفِ لجر را ساخته (نوع CORRECTION). null برای بقیه.
   correctionId String?
-  note       String?
-  userId     String?
-  createdAt  DateTime        @default(now())
+  note         String?
+  userId       String?
+  createdAt    DateTime        @default(now())
 
   customer   Customer        @relation(fields: [customerId], references: [id])
   invoice    SaleInvoice?    @relation(fields: [invoiceId], references: [id])
@@ -1406,13 +1460,13 @@ model SaleCorrection {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  invoice   SaleInvoice            @relation(fields: [invoiceId], references: [id])
-  customer  Customer?              @relation(fields: [customerId], references: [id])
-  warehouse Warehouse              @relation(fields: [warehouseId], references: [id])
-  user      User?                  @relation("CorrectionActor", fields: [userId], references: [id])
+  invoice   SaleInvoice          @relation(fields: [invoiceId], references: [id])
+  customer  Customer?            @relation(fields: [customerId], references: [id])
+  warehouse Warehouse            @relation(fields: [warehouseId], references: [id])
+  user      User?                @relation("CorrectionActor", fields: [userId], references: [id])
   lines     SaleCorrectionLine[]
   ledger    CustomerLedger[]
-  movements InventoryLog[]         @relation("CorrectionMovement")
+  movements InventoryLog[]       @relation("CorrectionMovement")
 
   @@index([invoiceId])
   @@index([customerId, createdAt])
@@ -1426,20 +1480,20 @@ model SaleCorrection {
 /// فقط مالی اصلاح می‌شود و هیچ حرکتی در انبار نمی‌خورد؛ اگر تعداد زیاد/کم شود،
 /// موجودی همان‌جا جبران می‌شود (INVALID برای زیادشدن، RETURN برای کم‌شدن).
 model SaleCorrectionLine {
-  id            String   @id @default(uuid())
-  correctionId  String
+  id           String   @id @default(uuid())
+  correctionId String
   /// لاگِ SALE فاکتور که این اصلاحیه تصحیح می‌کند.
-  saleLogId     String
-  productId     String
+  saleLogId    String
+  productId    String
   /// مکانی که کالا از آن فروخته شده بود؛ جبرانِ موجودی به همین‌جا می‌خورد.
-  locationId    String
-  oldQuantity   Int
-  newQuantity   Int
-  oldUnitPrice  Int
-  newUnitPrice  Int
+  locationId   String
+  oldQuantity  Int
+  newQuantity  Int
+  oldUnitPrice Int
+  newUnitPrice Int
   /// تغییرِ مبلغ همین قلم = newQty×newPrice − oldQty×oldPrice (ریال).
-  lineAdjust    Int
-  createdAt     DateTime @default(now())
+  lineAdjust   Int
+  createdAt    DateTime @default(now())
 
   correction SaleCorrection @relation(fields: [correctionId], references: [id], onDelete: Cascade)
   saleLog    InventoryLog   @relation(fields: [saleLogId], references: [id])
@@ -1518,20 +1572,20 @@ enum QuotationStatus {
 /// تنظیمات، چون مدیر باید بتواند از خود پنل عوضش کند: شماره‌ی کارت عوض می‌شود
 /// و کسی نمی‌رود روی سرور ویندوز فایل ویرایش کند.
 model ShopSettings {
-  id         String   @id @default("singleton")
+  id             String         @id @default("singleton")
   /// نامی که بالای فاکتور چاپ می‌شود. خالی یعنی نام انبار استفاده شود.
-  name       String   @default("")
-  phone      String   @default("")
-  address    String   @default("")
+  name           String         @default("")
+  phone          String         @default("")
+  address        String         @default("")
   /// شماره کارت برای واریز — روی فاکتور نسیه مهم‌ترین خط برگه است.
-  cardNumber String   @default("")
-  cardHolder String   @default("")
+  cardNumber     String         @default("")
+  cardHolder     String         @default("")
   /// یک خط دلخواه پایین برگه (شرایط فروش، ساعت کار، …).
-  footer     String   @default("")
+  footer         String         @default("")
   /// پیش‌فرضِ نرخِ فروشِ مدت‌دار — وقتی خودِ مشتری نرخ ندارد.
   chequeRateBp   Int            @default(0)
   chequeRateMode ChequeRateMode @default(MONTHLY)
-  updatedAt  DateTime @updatedAt
+  updatedAt      DateTime       @updatedAt
 
   @@map("ShopSettings")
 }

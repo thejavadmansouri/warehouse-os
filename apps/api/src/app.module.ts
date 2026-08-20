@@ -44,10 +44,12 @@ import { BackupsModule } from './backups/backups.module';
 
 import { ShopModule } from './shop/shop.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { ShortagesModule } from './shortages/shortages.module';
 
 @Module({
   imports: [
     RealtimeModule,
+    ShortagesModule,
     ShopModule,
     ScheduleModule.forRoot(),
     /*

@@ -557,6 +557,83 @@ export class ReportsService {
 
 
   /**
+   * قیمت‌های مشکوک — کالاهایی که قیمتِ خریدشان از قیمتِ فروششان بیشتر است.
+   *
+   * گاردِ ثبتِ فاکتور فقط جلوی خرابیِ **آینده** را می‌گیرد. این گزارش برای
+   * خرابیِ **موجود** است: در `schema.prisma` ثبت شده که در کاتالوگِ
+   * ایمپورت‌شده بعضی ردیف‌ها قیمتِ خریدشان از فروش بیشتر است — احتمالاً تومان
+   * به‌جای ریال. تا وقتی آن‌ها پاک نشوند، گزارشِ سود روی آن کالاها بی‌معنا است.
+   *
+   * ترتیب بر اساس نسبت است نه مبلغ: نسبتِ ~۱۰ امضای اشتباهِ واحد پول است و
+   * باید اولِ فهرست باشد، حتی اگر کالای ارزانی باشد.
+   */
+  async suspiciousPrices(q: RangeQuery) {
+    const { page, limit, skip } = paging(q);
+
+    // آخرین ردیفِ قیمتِ هر کالا؛ `ProductPrice` تاریخچه‌ای است و ردیف‌های
+    // قدیمی نباید کالا را مشکوک نشان دهند.
+    const rows = await this.prisma.$queryRaw<
+      {
+        productId: string;
+        productName: string;
+        sku: string;
+        purchasePrice: number;
+        salePrice: number;
+      }[]
+    >`
+      WITH latest AS (
+        SELECT DISTINCT ON (pp."productId")
+               pp."productId", pp."purchasePrice", pp."salePrice"
+        FROM "ProductPrice" pp
+        ORDER BY pp."productId", pp."createdAt" DESC
+      )
+      SELECT p."id" AS "productId", p."name" AS "productName", p."sku",
+             l."purchasePrice", l."salePrice"
+      FROM latest l
+      JOIN "Product" p ON p."id" = l."productId"
+      WHERE p."deletedAt" IS NULL
+        AND l."purchasePrice" > 0
+        AND l."salePrice" > 0
+        AND l."purchasePrice" > l."salePrice"
+      ORDER BY (l."purchasePrice"::numeric / l."salePrice") DESC
+      OFFSET ${skip} LIMIT ${limit}
+    `;
+
+    const [{ count }] = await this.prisma.$queryRaw<{ count: bigint }[]>`
+      WITH latest AS (
+        SELECT DISTINCT ON (pp."productId")
+               pp."productId", pp."purchasePrice", pp."salePrice"
+        FROM "ProductPrice" pp
+        ORDER BY pp."productId", pp."createdAt" DESC
+      )
+      SELECT COUNT(*)::bigint AS count
+      FROM latest l
+      JOIN "Product" p ON p."id" = l."productId"
+      WHERE p."deletedAt" IS NULL
+        AND l."purchasePrice" > 0
+        AND l."salePrice" > 0
+        AND l."purchasePrice" > l."salePrice"
+    `;
+
+    return {
+      summary: { totalSuspicious: Number(count) },
+      items: {
+        data: rows.map((r) => ({
+          productId: r.productId,
+          productName: r.productName,
+          sku: r.sku,
+          purchasePrice: r.purchasePrice,
+          salePrice: r.salePrice,
+          /** چند برابرِ قیمتِ فروش است — گردشده به دو رقم. */
+          ratio: Math.round((r.purchasePrice / r.salePrice) * 100) / 100,
+        })),
+        meta: meta(Number(count), page, limit),
+      },
+    };
+  }
+
+
+  /**
    * عملکرد فروشنده.
    *
    * مرجوعی به فروشنده‌ی **فاکتور اصلی** نسبت داده می‌شود، نه به کسی که سندِ

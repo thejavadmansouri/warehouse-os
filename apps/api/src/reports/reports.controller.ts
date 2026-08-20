@@ -171,6 +171,15 @@ export class ReportsController {
 
 
   @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('suspicious-prices')
+  async suspiciousPrices(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
+    const r = await this.service.suspiciousPrices({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+    if (q.format === 'excel') return toExcel(res, r.items.data, 'suspicious-prices');
+    return r;
+  }
+
+
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Get('seller-performance')
   async sellerPerformance(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
     const r = await this.service.sellerPerformance({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });

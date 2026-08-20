@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Menu, Moon, Sun, LogOut, UserCircle,
-  Wallet, ClipboardList, ReceiptText, Users,
+  Wallet, ClipboardList, ReceiptText, Users, PackagePlus, PackageX,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -146,6 +146,28 @@ export function AdminTopbar({
           >
             <ClipboardList className="size-4" />
             <span className="hidden md:inline">کارهای انبار</span>
+          </Button>
+
+          <Button
+            variant="outline"
+            className="h-9"
+            onClick={() => usePosUiStore.getState().addProduct(true)}
+            title="ساخت کالای تازه بدون ترک‌کردن صندوق"
+          >
+            <PackagePlus className="size-4" />
+            <span className="hidden md:inline">افزودن محصول</span>
+          </Button>
+
+          {/* «کسری» عمداً کنارِ کارهای انبار است نه کنارِ فروش: چیزی که ثبت
+              می‌کند تقاضای جواب‌نگرفته است، و مقصدش میزِ خرید است. */}
+          <Button
+            variant="outline"
+            className="h-9"
+            onClick={() => usePosUiStore.getState().shortage(true)}
+            title="کالایی که مشتری خواست و نداشتیم"
+          >
+            <PackageX className="size-4" />
+            <span className="hidden md:inline">کسری محصول</span>
           </Button>
 
           {/* سبز عمدی است: تنها دکمه‌ی «نگاه به گذشته» بین ابزارهای فروش، و

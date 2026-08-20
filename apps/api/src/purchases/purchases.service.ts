@@ -11,6 +11,7 @@ import { InventoryOperationService } from '../inventory-operation/inventory-oper
 import { SystemLocationsService } from '../inventory/system-locations.service';
 import { INT4_MAX } from '../common/money';
 import { inLockOrder } from '../common/lock-order';
+import { checkPurchasePrice, type PriceWarning } from '../common/price-guard';
 
 import {
   CreatePurchaseDto,
@@ -149,6 +150,25 @@ export class PurchasesService {
     }
 
 
+    // ---- گاردِ قیمتِ مشکوک ----
+    //
+    // **بعد از** ریاضیِ سند عمدی است: آن بررسی‌ها محاسبه‌ی محض‌اند و رایگان،
+    // این یکی دو کوئری می‌زند. سندی که تخفیفش از جمعش بیشتر است اصلاً نباید
+    // به قیمت‌سنجی برسد.
+    //
+    // و پیش از تراکنش، چون نتیجه‌اش ممکن است «اصلاً ثبت نکن» باشد.
+
+    const priceWarnings = await this.findPriceWarnings(dto);
+
+    if (priceWarnings.length && !dto.confirmPriceWarnings) {
+      throw new ConflictException({
+        error:'PRICE_WARNINGS',
+        warnings: priceWarnings,
+        message:'چند قیمت غیرعادی به‌نظر می‌رسد — بررسی کنید',
+      });
+    }
+
+
     // ---- تراکنش ----
 
     try {
@@ -205,6 +225,25 @@ export class PurchasesService {
         }
 
         await this.learnPurchasePrices(tx, dto);
+
+        /*
+         * تأییدِ آگاهانه ثبت می‌شود، نه فقط عبور داده شود.
+         *
+         * اگر شش ماه بعد معلوم شد قیمتِ تمام‌شده‌ی کالایی خراب است، این تنها
+         * جایی است که می‌گوید چه کسی و با دیدنِ چه هشداری تأییدش کرده. بدون
+         * آن، تنها چیزی که می‌ماند یک عددِ اشتباهِ بی‌صاحب است.
+         */
+        if (priceWarnings.length) {
+          await tx.auditLog.create({
+            data:{
+              userId: userId ?? null,
+              action:'PURCHASE_PRICE_WARNING_CONFIRMED',
+              entity:'PurchaseInvoice',
+              entityId: purchase.id,
+              newData: priceWarnings as unknown as Prisma.InputJsonValue,
+            },
+          });
+        }
 
         return purchase.id;
       });
@@ -406,6 +445,77 @@ export class PurchasesService {
    *
    * همین تابع است که گزارش سود را از حالت خالی درمی‌آورد.
    */
+  /**
+   * ردیف‌هایی که قیمتشان مشکوک است، با نامِ کالا تا فرم بتواند سطر را قرمز کند.
+   *
+   * یک کوئری برای همه‌ی ردیف‌ها: فاکتور خرید تا ۵۰۰ قلم دارد و یک کوئری به
+   * ازای هر قلم، ثبتِ یک بارِ کامیون را به یک انتظارِ محسوس تبدیل می‌کند.
+   */
+  private async findPriceWarnings(
+    dto: CreatePurchaseDto,
+  ): Promise<Array<PriceWarning & {
+    lineIndex: number;
+    productId: string;
+    productName: string;
+  }>> {
+
+    const productIds = [...new Set(dto.lines.map(l => l.productId))];
+    if (!productIds.length) return [];
+
+    const [prices, products] = await Promise.all([
+      this.prisma.productPrice.findMany({
+        where:{ productId:{ in: productIds } },
+        orderBy:{ createdAt:'desc' },
+        select:{ productId:true, purchasePrice:true, salePrice:true },
+      }),
+      this.prisma.product.findMany({
+        where:{ id:{ in: productIds } },
+        select:{ id:true, name:true },
+      }),
+    ]);
+
+    // فقط تازه‌ترین ردیفِ هر کالا؛ بقیه تاریخچه‌اند.
+    const latest = new Map<string, { purchasePrice: number | null; salePrice: number | null }>();
+    for (const p of prices) {
+      if (!latest.has(p.productId)) {
+        latest.set(p.productId, {
+          purchasePrice: p.purchasePrice,
+          salePrice: p.salePrice,
+        });
+      }
+    }
+
+    const names = new Map(products.map(p => [p.id, p.name]));
+
+    const out: Array<PriceWarning & {
+      lineIndex: number;
+      productId: string;
+      productName: string;
+    }> = [];
+
+    dto.lines.forEach((line, lineIndex) => {
+      const prev = latest.get(line.productId);
+
+      const warning = checkPurchasePrice({
+        unitPrice: line.unitPrice,
+        lastPurchasePrice: prev?.purchasePrice ?? null,
+        salePrice: prev?.salePrice ?? null,
+      });
+
+      if (warning) {
+        out.push({
+          ...warning,
+          lineIndex,
+          productId: line.productId,
+          productName: names.get(line.productId) ?? '',
+        });
+      }
+    });
+
+    return out;
+  }
+
+
   private async learnPurchasePrices(
     tx: Prisma.TransactionClient,
     dto: CreatePurchaseDto,

@@ -1568,6 +1568,52 @@ export interface LowStockReport {
   };
 }
 
+/** کسری محصول — تقاضایی که جواب نگرفت. سیگنالِ خرید، نه اصلاحِ موجودی. */
+export interface ProductShortage {
+  id: string;
+  productId: string | null;
+  productName: string;
+  quantity: number;
+  customerId: string | null;
+  warehouseId: string;
+  userId: string | null;
+  note: string | null;
+  status: "OPEN" | "ORDERED" | "DISMISSED";
+  resolvedAt: string | null;
+  createdAt: string;
+  product?: { id: string; name: string; sku: string } | null;
+  customer?: { id: string; firstName: string; lastName: string | null } | null;
+  user?: { id: string; fullName: string | null; username: string } | null;
+  /** چند بارِ باز برای همین کالا ثبت شده — عددی که تصمیمِ خرید را می‌سازد. */
+  timesRequested: number;
+}
+
+export interface CreateShortageInput {
+  productId?: string;
+  productName: string;
+  quantity?: number;
+  customerId?: string;
+  warehouseId: string;
+  note?: string;
+}
+
+/** کالاهایی که قیمتِ خریدشان از قیمتِ فروششان بیشتر است — نشانه‌ی تومان/ریال. */
+export interface SuspiciousPricesReport {
+  summary: { totalSuspicious: number };
+  items: {
+    data: {
+      productId: string;
+      productName: string;
+      sku: string;
+      purchasePrice: number;
+      salePrice: number;
+      /** خرید تقسیم بر فروش. حدودِ ۱۰ یعنی اشتباهِ واحد پول. */
+      ratio: number;
+    }[];
+    meta: ReportMeta;
+  };
+}
+
 export interface SellerPerformanceReport {
   sellers: {
     data: {
@@ -2026,7 +2072,23 @@ export interface CreatePurchaseInput {
   invoiceDate?: string;
   discount?: number;
   note?: string;
+  /** «هشدارهای قیمت را دیدم» — سند فقط با این پرچم پس از هشدار ثبت می‌شود. */
+  confirmPriceWarnings?: boolean;
   lines: PurchaseLineInput[];
+}
+
+/** یک قیمتِ مشکوک که سرور روی ردیفِ فاکتور خرید تشخیص داده. */
+export interface PurchasePriceWarning {
+  kind: "TENFOLD_JUMP" | "ABOVE_SALE_PRICE" | "BIG_JUMP" | "BIG_DROP";
+  /** اندیس ردیف در آرایه‌ی `lines`ی که فرستاده شده. */
+  lineIndex: number;
+  productId: string;
+  productName: string;
+  /** قیمتی که الان وارد شده. */
+  current: number;
+  /** عددی که با آن مقایسه شده — خرید قبلی یا قیمت فروش. */
+  previous: number;
+  message: string;
 }
 
 export interface PurchaseLine {

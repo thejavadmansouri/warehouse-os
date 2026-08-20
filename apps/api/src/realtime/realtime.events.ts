@@ -17,7 +17,9 @@ export type RealtimeEventType =
   | 'work-task.progress'
   | 'open-account.created'
   | 'open-account.settled'
-  | 'cheque.updated';
+  | 'cheque.updated'
+  | 'shortage.created'
+  | 'shortage.updated';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;

@@ -15,17 +15,27 @@ interface PosUiState {
   openAccountsOpen: boolean;
   workTasksOpen: boolean;
   recentOpen: boolean;
+  /** ثبتِ کالایی که مشتری خواست و نداشتیم. */
+  shortageOpen: boolean;
+  /** ساختِ کالای تازه بدون ترک‌کردنِ صندوق. */
+  addProductOpen: boolean;
   /** از topbar صدا زده می‌شود (دکمه‌ها) — و از میان‌برهای F3/F10 در خود POS. */
   openAccounts: (open: boolean) => void;
   workTasks: (open: boolean) => void;
   recent: (open: boolean) => void;
+  shortage: (open: boolean) => void;
+  addProduct: (open: boolean) => void;
 }
 
 export const usePosUiStore = create<PosUiState>((set) => ({
   openAccountsOpen: false,
   workTasksOpen: false,
   recentOpen: false,
+  shortageOpen: false,
+  addProductOpen: false,
   openAccounts: (open) => set({ openAccountsOpen: open }),
   workTasks: (open) => set({ workTasksOpen: open }),
   recent: (open) => set({ recentOpen: open }),
+  shortage: (open) => set({ shortageOpen: open }),
+  addProduct: (open) => set({ addProductOpen: open }),
 }));

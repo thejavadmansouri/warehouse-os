@@ -1707,6 +1707,35 @@ export function getLowStock(p: { page?: number; limit?: number }) {
   return apiFetch<T.LowStockReport>(`/reports/low-stock?${reportQs(p)}`);
 }
 
+// =====================================================
+// کسری محصول — تقاضایی که جواب نگرفت
+// =====================================================
+
+export function createShortage(body: T.CreateShortageInput): Promise<T.ProductShortage> {
+  return apiFetch<T.ProductShortage>("/shortages", { method: "POST", body });
+}
+
+export function getShortages(p: { status?: string; warehouseId?: string } = {}) {
+  const qs = new URLSearchParams();
+  if (p.status) qs.set("status", p.status);
+  if (p.warehouseId) qs.set("warehouseId", p.warehouseId);
+  return apiFetch<T.ProductShortage[]>(`/shortages?${qs.toString()}`);
+}
+
+export function resolveShortage(
+  id: string,
+  body: { status: "ORDERED" | "DISMISSED"; note?: string }
+): Promise<T.ProductShortage> {
+  return apiFetch<T.ProductShortage>(`/shortages/${id}/resolve`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export function getSuspiciousPrices(p: { page?: number; limit?: number }) {
+  return apiFetch<T.SuspiciousPricesReport>(`/reports/suspicious-prices?${reportQs(p)}`);
+}
+
 export function getSellerPerformance(p: ReportRange) {
   return apiFetch<T.SellerPerformanceReport>(`/reports/seller-performance?${reportQs(p)}`);
 }

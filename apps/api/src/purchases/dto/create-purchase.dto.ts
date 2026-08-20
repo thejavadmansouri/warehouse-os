@@ -2,6 +2,7 @@ import {
   ArrayMaxSize,
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsInt,
   IsOptional,
@@ -99,6 +100,18 @@ export class CreatePurchaseDto {
   @IsOptional()
   @IsString()
   note?:string;
+
+
+  /**
+   * «هشدارهای قیمت را دیدم، ثبت کن».
+   *
+   * سرور قیمتِ هر ردیف را با خریدِ قبلی و قیمتِ فروش می‌سنجد و اگر مشکوک بود
+   * سند را ثبت نمی‌کند تا آدم تصمیم بگیرد. با این پرچم همان درخواست دوباره
+   * فرستاده می‌شود و ثبت انجام می‌گیرد — و تأیید در `AuditLog` می‌ماند.
+   */
+  @IsOptional()
+  @IsBoolean()
+  confirmPriceWarnings?:boolean;
 
 
   @IsArray()
