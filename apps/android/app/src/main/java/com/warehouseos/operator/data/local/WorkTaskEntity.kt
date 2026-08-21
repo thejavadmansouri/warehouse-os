@@ -15,6 +15,8 @@ data class WorkTaskEntity(
     @PrimaryKey val id: String,
     /** PENDING | IN_PROGRESS | COMPLETED | CANCELLED */
     val status: String,
+    /** PICK | PUTAWAY — جهتِ کار. رفتنِ سراغِ قفسه در هر دو یکی است، مقصد فرق دارد. */
+    val kind: String,
     val invoiceNumber: String?,
     val quotationNumber: String?,
     val note: String?,

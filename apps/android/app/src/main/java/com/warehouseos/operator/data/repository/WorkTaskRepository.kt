@@ -85,6 +85,7 @@ class WorkTaskRepository @Inject constructor(
     private fun WorkTaskDto.toEntity() = WorkTaskEntity(
         id = id,
         status = status,
+        kind = kind,
         invoiceNumber = invoice?.number,
         quotationNumber = quotation?.number,
         note = note,

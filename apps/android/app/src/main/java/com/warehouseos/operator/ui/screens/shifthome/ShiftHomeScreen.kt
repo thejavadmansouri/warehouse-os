@@ -422,7 +422,8 @@ private fun ActiveSessionContent(
                 subtitle = if (pendingWorkCount > 0) {
                     "${faNum(pendingWorkCount)} کار در جریان"
                 } else {
-                    "کارهای ارسالی از POS"
+                    // دیگر فقط از POS نمی‌آید: چیدنِ کالای فاکتور خرید هم همین‌جاست.
+                    "برداشتن و چیدن کالا"
                 },
                 icon = Icons.Filled.Assignment,
                 onClick = onWorkTasks,

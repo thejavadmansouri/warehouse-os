@@ -17,6 +17,13 @@ data class WorkTaskDto(
     val id: String,
     /** PENDING | IN_PROGRESS | COMPLETED | CANCELLED */
     val status: String = "PENDING",
+    /**
+     * PICK | PUTAWAY — «بردار و بیاور» یا «ببر بچین».
+     *
+     * پیش‌فرض PICK است تا گوشی‌ای که به سرورِ قدیمی وصل است (که این فیلد را
+     * نمی‌فرستد) دقیقاً همان رفتار قبلی را داشته باشد، نه یک صفحه‌ی خالی.
+     */
+    val kind: String = "PICK",
     val invoiceId: String? = null,
     val quotationId: String? = null,
     val assignedToId: String? = null,

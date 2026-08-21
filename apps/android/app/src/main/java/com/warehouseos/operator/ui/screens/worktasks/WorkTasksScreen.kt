@@ -202,6 +202,10 @@ private fun TaskCard(
                         )
                     }
                 }
+                if (task.isPutaway) {
+                    KindChip()
+                    Spacer(Modifier.width(Dimens.gapSmall))
+                }
                 StatusChip(status = task.status)
             }
 
@@ -236,6 +240,23 @@ fun TaskProgress(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+/** نشانِ «چیدن» — تنها تفاوتِ دیدنیِ دو نوع کار در فهرست. */
+@Composable
+private fun KindChip() {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Text(
+            text = "چیدن",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
     }
 }
@@ -298,6 +319,16 @@ private fun TaskDetail(
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
+                if (t.isPutaway) {
+                    // جهتِ کار برعکسِ برداشتن است و کارگر باید همان اول بداند —
+                    // وگرنه سراغِ قفسه‌ی نوشته‌شده می‌رود تا جنس را بردارد.
+                    Text(
+                        text = "این اقلام در انبار موقت‌اند. ببرید سر جایشان و بچینید.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 Spacer(Modifier.height(Dimens.gap))
                 TaskProgress(done = t.doneItems, total = t.totalItems)
             }
@@ -316,6 +347,7 @@ private fun TaskDetail(
                 items(items, key = { it.id }) { item ->
                     WorkTaskItemRow(
                         item = item,
+                        isPutaway = t.isPutaway,
                         enabled = t.status != "CANCELLED",
                         onTick = { viewModel.tick(taskId, item.id) },
                     )
@@ -329,6 +361,7 @@ private fun TaskDetail(
 @Composable
 private fun WorkTaskItemRow(
     item: WorkTaskItemEntity,
+    isPutaway: Boolean = false,
     enabled: Boolean,
     onTick: () -> Unit,
 ) {
@@ -378,6 +411,17 @@ private fun WorkTaskItemRow(
                     ?: item.locationName?.takeIf { it.isNotBlank() }
                     ?: item.locationBarcode
                 if (shelf != null) {
+                    // در کارِ چیدن این آدرس یعنی «جنس الان اینجاست»، نه «برو
+                    // اینجا و بردار». بدونِ این برچسب، همان متن دو معنیِ متضاد
+                    // دارد و کارگر جنس را از جای درست برمی‌دارد و برنمی‌گرداند.
+                    Text(
+                        text = if (isPutaway) "الان اینجاست:" else "قفسه:",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                if (shelf != null) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.padding(top = 4.dp),
@@ -423,9 +467,14 @@ private fun WorkTaskItemRow(
     }
 }
 
+/** آیا این کار «ببر بچین» است؟ */
+private val WorkTaskEntity.isPutaway: Boolean get() = kind == "PUTAWAY"
+
 /** عنوان کار: شماره فاکتور/پیش‌فاکتور، یا یادداشت، یا «کار انبار». */
 private fun WorkTaskEntity.title(): String =
-    invoiceNumber?.let { "فاکتور $it" }
+    // کارِ چیدن سندِ فروش ندارد؛ عنوانش باید بگوید چه کاری است، نه شماره‌ی چیزی.
+    if (isPutaway) "چیدن کالای رسیده"
+    else invoiceNumber?.let { "فاکتور $it" }
         ?: quotationNumber?.let { "پیش‌فاکتور $it" }
         ?: note?.takeIf { it.isNotBlank() }
         ?: "کار انبار"

@@ -13,7 +13,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         WorkTaskItemEntity::class,
         PendingPhotoEntity::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = false,
 )
 abstract class OperatorDatabase : RoomDatabase() {
@@ -129,6 +129,21 @@ abstract class OperatorDatabase : RoomDatabase() {
                 // must end up with it or Room's validation kills the app on launch.
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS index_catalog_product_sku ON catalog_product (`sku`)",
+                )
+            }
+        }
+
+        /**
+         * v5 → v6: جهتِ کار (برداشتن یا چیدن).
+         *
+         * پیش‌فرض 'PICK' لازم است نه اختیاری: ستون NOT NULL است و ردیف‌های
+         * موجود در گوشی مقداری ندارند. بدون DEFAULT، مهاجرت روی هر گوشی‌ای که
+         * کاری در صف دارد شکست می‌خورد.
+         */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE work_task ADD COLUMN kind TEXT NOT NULL DEFAULT 'PICK'",
                 )
             }
         }

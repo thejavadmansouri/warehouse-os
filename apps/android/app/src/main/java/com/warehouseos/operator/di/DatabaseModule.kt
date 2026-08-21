@@ -30,6 +30,7 @@ object DatabaseModule {
                 OperatorDatabase.MIGRATION_2_3,
                 OperatorDatabase.MIGRATION_3_4,
                 OperatorDatabase.MIGRATION_4_5,
+                OperatorDatabase.MIGRATION_5_6,
             )
             .build()
 
