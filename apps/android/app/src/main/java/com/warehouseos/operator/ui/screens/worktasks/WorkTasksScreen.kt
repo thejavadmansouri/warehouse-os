@@ -56,6 +56,17 @@ import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.EmptyState
 import com.warehouseos.operator.ui.components.ErrorState
 import com.warehouseos.operator.ui.components.LoadingState
+import android.Manifest
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
+import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
 
 /**
  * «کارهای انبار» — کارهایی که فروشنده/مدیر از POS برای کارگر می‌فرستد.
@@ -244,6 +255,81 @@ fun TaskProgress(
     }
 }
 
+/**
+ * اسکنِ قفسه‌ی مقصد پیش از تیکِ کارِ چیدن.
+ *
+ * چرا اجباری است: تیکِ چیدن روی سرور یک انتقالِ واقعیِ موجودی است. بدون مقصد،
+ * جنس در انبار موقت می‌ماند و صف هیچ‌وقت خالی نمی‌شود — پس سرور هم بدونش تیک را
+ * نمی‌پذیرد و اینجا هم دکمه فعال نمی‌شود.
+ *
+ * ورودِ دستی کنارِ دوربین می‌ماند: برچسبِ خش‌افتاده یا نورِ بدِ انبار نباید کار
+ * را متوقف کند.
+ */
+@OptIn(ExperimentalPermissionsApi::class)
+@Composable
+private fun DestinationSheet(
+    productName: String,
+    quantity: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit,
+) {
+    val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
+    var manual by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("قفسه‌ی مقصد") },
+        text = {
+            Column {
+                Text(
+                    text = "$productName — ${faNum(quantity)} عدد",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    text = "بارکد قفسه‌ای که جنس را رویش می‌چینید اسکن کنید.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp, bottom = Dimens.gap),
+                )
+
+                if (cameraPermission.status.isGranted) {
+                    BarcodeScanner(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(200.dp),
+                        onBarcodeDetected = onConfirm,
+                    )
+                } else {
+                    Button(
+                        onClick = { cameraPermission.launchPermissionRequest() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("اجازه دسترسی به دوربین") }
+                }
+
+                OutlinedTextField(
+                    value = manual,
+                    onValueChange = { manual = it },
+                    label = { Text("یا بارکد را دستی وارد کنید") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = Dimens.gap),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = manual.isNotBlank(),
+                onClick = { onConfirm(manual.trim()) },
+            ) { Text("ثبت") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("انصراف") }
+        },
+    )
+}
+
 /** نشانِ «چیدن» — تنها تفاوتِ دیدنیِ دو نوع کار در فهرست. */
 @Composable
 private fun KindChip() {
@@ -291,6 +377,21 @@ private fun TaskDetail(
         .collectAsState(initial = null)
     val items by remember(taskId) { viewModel.observeItems(taskId) }
         .collectAsState(initial = emptyList())
+
+    /** قلمی که منتظرِ اسکنِ قفسه‌ی مقصد است — فقط در کارِ چیدن پر می‌شود. */
+    var destinationFor by remember { mutableStateOf<WorkTaskItemEntity?>(null) }
+
+    destinationFor?.let { pending ->
+        DestinationSheet(
+            productName = pending.productName,
+            quantity = pending.quantity,
+            onDismiss = { destinationFor = null },
+            onConfirm = { barcode ->
+                viewModel.tick(taskId, pending.id, barcode)
+                destinationFor = null
+            },
+        )
+    }
 
     if (task == null) {
         LoadingState(label = "در حال دریافت جزئیات…")
@@ -349,7 +450,11 @@ private fun TaskDetail(
                         item = item,
                         isPutaway = t.isPutaway,
                         enabled = t.status != "CANCELLED",
-                        onTick = { viewModel.tick(taskId, item.id) },
+                        // چیدن مقصد لازم دارد: اول قفسه اسکن شود، بعد تیک.
+                        onTick = {
+                            if (t.isPutaway) destinationFor = item
+                            else viewModel.tick(taskId, item.id)
+                        },
                     )
                 }
             }

@@ -87,6 +87,13 @@ data class WorkTaskPersonDto(
 data class WorkTaskTickPayload(
     val taskId: String,
     val itemId: String,
+    /**
+     * قفسه‌ی مقصد — فقط برای کارِ چیدن.
+     *
+     * بارکد ذخیره می‌شود نه شناسه: گوشیِ آفلاین درختِ مکان‌ها را ندارد که
+     * بارکد را به id تبدیل کند، و سرور خودش این کار را می‌کند.
+     */
+    val toLocationBarcode: String? = null,
 )
 
 @Serializable
@@ -94,6 +101,7 @@ data class WorkTaskSyncMutationRequest(
     val clientMutationId: String,
     val taskId: String,
     val itemId: String,
+    val toLocationBarcode: String? = null,
 )
 
 @Serializable
@@ -106,7 +114,10 @@ data class WorkTaskSyncResultItem(
     val clientMutationId: String,
     val taskId: String = "",
     val itemId: String = "",
-    /** OK | ALREADY_DONE | TASK_CANCELLED | TASK_NOT_VISIBLE | ITEM_NOT_FOUND */
+    /**
+     * OK | ALREADY_DONE | TASK_CANCELLED | TASK_NOT_VISIBLE | ITEM_NOT_FOUND
+     * | MISSING_DESTINATION | DESTINATION_NOT_FOUND | TRANSFER_FAILED
+     */
     val status: String = "",
 )
 

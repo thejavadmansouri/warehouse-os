@@ -94,9 +94,12 @@ class WorkTasksViewModel @Inject constructor(
      * تیک خوش‌بینانه‌ی یک قلم. چون تیک فقط محلی + outbox است، همیشه «موفق» است —
      * تنها حالتِ رد، وقتی است که قلم قبلاً DONE شده باشد (تکرارِ تپ).
      */
-    fun tick(taskId: String, itemId: String) {
+    /**
+     * @param toLocationBarcode قفسه‌ی مقصد — فقط برای کارِ چیدن، و آنجا اجباری.
+     */
+    fun tick(taskId: String, itemId: String, toLocationBarcode: String? = null) {
         viewModelScope.launch {
-            val newTick = repo.tick(taskId, itemId)
+            val newTick = repo.tick(taskId, itemId, toLocationBarcode)
             _uiState.update {
                 it.copy(toast = if (newTick) "در صف همگام‌سازی ثبت شد" else "این قلم قبلاً ثبت شده")
             }

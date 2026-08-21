@@ -5,11 +5,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { WorkTasksService } from './work-tasks.service';
 import { WorkTasksGateway } from './work-tasks.gateway';
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 
 function makeTask(over: Record<string, unknown> = {}) {
   return {
     id: 't1',
     status: 'PENDING',
+    kind: 'PICK',
     warehouseId: 'w1',
     invoiceId: null,
     quotationId: null,
@@ -52,7 +54,11 @@ describe('WorkTasksService', () => {
   const prisma = {
     workTask: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
     workTaskItem: { findUnique: jest.fn(), updateMany: jest.fn(), groupBy: jest.fn() },
+    location: { findFirst: jest.fn() },
+    // تیک و انتقال در یک تراکنش‌اند؛ بدل با همان mockها اجرا می‌شود.
+    $transaction: jest.fn((fn: any) => fn(prisma)),
   };
+  const operation = { execute: jest.fn() };
   const gateway = { emitCreated: jest.fn(), emitCancelled: jest.fn() };
   const events = { broadcast: jest.fn() };
 
@@ -64,6 +70,7 @@ describe('WorkTasksService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: WorkTasksGateway, useValue: gateway },
         { provide: EventsGateway, useValue: events },
+        { provide: InventoryOperationService, useValue: operation },
       ],
     }).compile();
     service = module.get<WorkTasksService>(WorkTasksService);
@@ -140,6 +147,119 @@ describe('WorkTasksService', () => {
       );
       expect(result.doneItems).toBe(0);
       expect(result.totalItems).toBe(2);
+    });
+  });
+
+  /**
+   * چیدنِ کالای رسیده.
+   *
+   * چیزی که این تست‌ها محافظت می‌کنند: **تیک و انتقال باید یک چیز باشند.** اگر
+   * تیک بخورد و انتقال نه، قلم از صف بیرون می‌رود در حالی که جنسش هنوز در انبار
+   * موقت است — و دیگر هیچ‌کس سراغش نمی‌رود.
+   */
+  describe('syncMutations — کارِ چیدن', () => {
+    const putawayTask = () => makeTask({ id: 't1', kind: 'PUTAWAY' });
+
+    const pm = (over: Record<string, string> = {}) => ({
+      clientMutationId: 'cm-1',
+      taskId: 't1',
+      itemId: 'i1',
+      toLocationBarcode: 'LOC-WH-01-03',
+      ...over,
+    });
+
+    const readyToClaim = () => {
+      prisma.workTaskItem.findUnique.mockResolvedValueOnce(
+        makeItem({
+          task: putawayTask(),
+          productId: 'p1',
+          locationId: 'staging-1',
+          quantity: 12,
+        }),
+      );
+      prisma.workTaskItem.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.workTaskItem.groupBy.mockResolvedValueOnce([
+        { status: 'DONE', _count: { _all: 1 } },
+      ]);
+      prisma.workTask.updateMany.mockResolvedValueOnce({ count: 1 });
+    };
+
+    it('تیک، جنس را از انبار موقت به قفسه منتقل می‌کند', async () => {
+      prisma.location.findFirst.mockResolvedValueOnce({ id: 'shelf-9' });
+      readyToClaim();
+
+      const res = await service.syncMutations('worker1', [pm()]);
+
+      expect(res.results[0].status).toBe('OK');
+      expect(operation.execute).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'TRANSFER',
+          productId: 'p1',
+          locationId: 'staging-1',
+          toLocationId: 'shelf-9',
+          quantity: 12,
+        }),
+        expect.anything(),
+      );
+    });
+
+    it('بدون مقصد، نه تیک می‌خورد نه چیزی منتقل می‌شود', async () => {
+      prisma.workTaskItem.findUnique.mockResolvedValueOnce(
+        makeItem({ task: putawayTask(), locationId: 'staging-1' }),
+      );
+
+      const res = await service.syncMutations('worker1', [
+        pm({ toLocationBarcode: '' }),
+      ]);
+
+      expect(res.results[0].status).toBe('MISSING_DESTINATION');
+      expect(prisma.workTaskItem.updateMany).not.toHaveBeenCalled();
+      expect(operation.execute).not.toHaveBeenCalled();
+    });
+
+    it('قفسه‌ی ناشناس رد می‌شود و قلم در صف می‌ماند', async () => {
+      prisma.location.findFirst.mockResolvedValueOnce(null);
+      prisma.workTaskItem.findUnique.mockResolvedValueOnce(
+        makeItem({ task: putawayTask(), locationId: 'staging-1' }),
+      );
+
+      const res = await service.syncMutations('worker1', [pm()]);
+
+      expect(res.results[0].status).toBe('DESTINATION_NOT_FOUND');
+      expect(prisma.workTaskItem.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('اگر انتقال شکست بخورد، تیک هم برمی‌گردد', async () => {
+      // مثلاً جنس بین ثبت فاکتور و چیدن جای دیگری رفته.
+      prisma.location.findFirst.mockResolvedValueOnce({ id: 'shelf-9' });
+      prisma.workTaskItem.findUnique.mockResolvedValueOnce(
+        makeItem({ task: putawayTask(), locationId: 'staging-1' }),
+      );
+      prisma.workTaskItem.updateMany.mockResolvedValueOnce({ count: 1 });
+      operation.execute.mockRejectedValueOnce(new Error('INSUFFICIENT_STOCK'));
+
+      const res = await service.syncMutations('worker1', [pm()]);
+
+      expect(res.results[0].status).toBe('TRANSFER_FAILED');
+    });
+
+    it('کارِ برداشتن هیچ‌چیز را جابه‌جا نمی‌کند', async () => {
+      // کسر واقعیِ برداشتن موقع ثبت فاکتور انجام می‌شود، نه اینجا.
+      prisma.workTaskItem.findUnique.mockResolvedValueOnce(
+        makeItem({ task: makeTask({ id: 't1', kind: 'PICK' }) }),
+      );
+      prisma.workTaskItem.updateMany.mockResolvedValueOnce({ count: 1 });
+      prisma.workTaskItem.groupBy.mockResolvedValueOnce([
+        { status: 'DONE', _count: { _all: 1 } },
+      ]);
+      prisma.workTask.updateMany.mockResolvedValueOnce({ count: 1 });
+
+      const res = await service.syncMutations('worker1', [
+        { clientMutationId: 'cm-2', taskId: 't1', itemId: 'i1' },
+      ]);
+
+      expect(res.results[0].status).toBe('OK');
+      expect(operation.execute).not.toHaveBeenCalled();
     });
   });
 

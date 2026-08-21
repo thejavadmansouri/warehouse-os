@@ -9,6 +9,7 @@ import { Prisma, WorkTaskStatus, WorkTaskItemStatus, WorkTaskKind, Role } from '
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { WorkTasksGateway } from './work-tasks.gateway';
+import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 
 export interface CreateWorkTaskLine {
   productId: string;
@@ -21,6 +22,13 @@ export interface SyncMutation {
   clientMutationId: string;
   taskId: string;
   itemId: string;
+  /**
+   * قفسه‌ی مقصد — فقط برای کارِ **چیدن**، و آنجا اجباری است.
+   *
+   * بارکد فرستاده می‌شود نه شناسه: کارگر قفسه را اسکن می‌کند و گوشیِ آفلاین
+   * راهی برای تبدیلش به id ندارد. سرور خودش پیدایش می‌کند.
+   */
+  toLocationBarcode?: string;
 }
 
 const SUMMARY_INCLUDE = {
@@ -61,6 +69,7 @@ export class WorkTasksService {
     private prisma: PrismaService,
     private gateway: WorkTasksGateway,
     private events: EventsGateway,
+    private operation: InventoryOperationService,
   ) {}
 
   /** فروشنده/مدیر یک Task با چند قلم می‌سازد — موجودی دست نمی‌خورد. */
@@ -212,7 +221,16 @@ export class WorkTasksService {
       clientMutationId: string;
       taskId: string;
       itemId: string;
-      status: 'OK' | 'ALREADY_DONE' | 'TASK_CANCELLED' | 'TASK_NOT_VISIBLE' | 'ITEM_NOT_FOUND';
+      status:
+        | 'OK'
+        | 'ALREADY_DONE'
+        | 'TASK_CANCELLED'
+        | 'TASK_NOT_VISIBLE'
+        | 'ITEM_NOT_FOUND'
+        // سه‌تای زیر فقط برای کارِ چیدن معنا دارند.
+        | 'MISSING_DESTINATION'
+        | 'DESTINATION_NOT_FOUND'
+        | 'TRANSFER_FAILED';
     }> = [];
     const affectedTaskIds = new Set<string>();
 
@@ -246,16 +264,85 @@ export class WorkTasksService {
         continue;
       }
 
+      /*
+       * کارِ چیدن باید مقصد داشته باشد.
+       *
+       * تیکِ کارِ **برداشتن** عمداً به موجودی دست نمی‌زند — کسر واقعی موقع ثبت
+       * فاکتور انجام می‌شود. ولی برای چیدن، اگر تیک چیزی جابه‌جا نکند، جنس تا
+       * ابد در انبار موقت می‌ماند و صف هیچ‌وقت خالی نمی‌شود.
+       *
+       * پس تیک و انتقال **یک چیزند**: در یک تراکنش، یا هر دو یا هیچ‌کدام. اگر
+       * جدا بودند، یک قطعی وسط کار قلمی می‌ساخت که «انجام شده» است ولی جنسش
+       * هنوز در انبار موقت — و دیگر کسی سراغش نمی‌رفت، چون از صف بیرون رفته.
+       */
+      const isPutaway = task.kind === WorkTaskKind.PUTAWAY;
+      let destinationId: string | null = null;
+
+      if (isPutaway) {
+        const barcode = m.toLocationBarcode?.trim();
+
+        if (!barcode) {
+          results.push({ ...m, status: 'MISSING_DESTINATION' });
+          continue;
+        }
+
+        // مقصد باید در همان انبار و فعال باشد — وگرنه جنس روی قفسه‌ای می‌نشیند
+        // که در درخت نیست و «بی‌صاحب» می‌شود.
+        const destination = await this.prisma.location.findFirst({
+          where: { barcode, warehouseId: task.warehouseId, isActive: true },
+          select: { id: true },
+        });
+
+        if (!destination) {
+          results.push({ ...m, status: 'DESTINATION_NOT_FOUND' });
+          continue;
+        }
+
+        destinationId = destination.id;
+      }
+
       // ادعای اتمیک — اگر race ببازیم و قلم را دیگری برده، DONE می‌بینیم و دوباره چک می‌کنیم.
-      const claimed = await this.prisma.workTaskItem.updateMany({
-        where: { id: m.itemId, status: WorkTaskItemStatus.PENDING },
-        data: {
-          status: WorkTaskItemStatus.DONE,
-          doneById: userId,
-          doneAt: new Date(),
-          clientMutationId: m.clientMutationId,
-        },
-      });
+      let claimed: { count: number };
+
+      try {
+        claimed = await this.prisma.$transaction(async (tx) => {
+          const c = await tx.workTaskItem.updateMany({
+            where: { id: m.itemId, status: WorkTaskItemStatus.PENDING },
+            data: {
+              status: WorkTaskItemStatus.DONE,
+              doneById: userId,
+              doneAt: new Date(),
+              clientMutationId: m.clientMutationId,
+            },
+          });
+
+          // فقط برنده‌ی ادعا جنس را جابه‌جا می‌کند؛ وگرنه تیکِ تکراری موجودی را
+          // دو بار منتقل می‌کرد.
+          if (c.count === 1 && isPutaway && item.locationId && destinationId) {
+            await this.operation.execute(
+              {
+                type: 'TRANSFER',
+                productId: item.productId,
+                locationId: item.locationId,
+                toLocationId: destinationId,
+                quantity: item.quantity,
+                userId,
+                source: 'PUTAWAY',
+                note: 'چیدن کالای رسیده',
+              },
+              tx,
+            );
+          }
+
+          return c;
+        });
+      } catch {
+        // انتقال نشد — مثلاً جنس بین ثبت فاکتور و چیدن جای دیگری رفته. تیک هم
+        // برنگشت، پس قلم در صف می‌ماند و کارگر دوباره تلاش می‌کند.
+        results.push({ ...m, status: 'TRANSFER_FAILED' });
+        continue;
+      }
+
       if (claimed.count === 1) {
         results.push({ ...m, status: 'OK' });
         affectedTaskIds.add(m.taskId);

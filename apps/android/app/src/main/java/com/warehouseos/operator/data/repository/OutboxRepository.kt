@@ -90,7 +90,11 @@ class OutboxRepository @Inject constructor(
      * می‌نشیند و sync شبانه آن را به POST /work-tasks/sync می‌برد. [clientRequestId]
      * همان clientMutationId سمت سرور است؛ تکرارِ sync هرگز یک تیک را دوبار نمی‌زند.
      */
-    suspend fun enqueueWorkTaskTick(taskId: String, itemId: String) {
+    suspend fun enqueueWorkTaskTick(
+        taskId: String,
+        itemId: String,
+        toLocationBarcode: String? = null,
+    ) {
         dao.insert(
             OutboxEntity(
                 clientRequestId = UUID.randomUUID().toString(),
@@ -103,7 +107,11 @@ class OutboxRepository @Inject constructor(
                 status = OutboxStatus.PENDING,
                 payload = Json.encodeToString(
                     WorkTaskTickPayload.serializer(),
-                    WorkTaskTickPayload(taskId = taskId, itemId = itemId),
+                    WorkTaskTickPayload(
+                        taskId = taskId,
+                        itemId = itemId,
+                        toLocationBarcode = toLocationBarcode,
+                    ),
                 ),
             ),
         )
@@ -212,6 +220,7 @@ class OutboxRepository @Inject constructor(
                     clientMutationId = op.clientRequestId,
                     taskId = payload.taskId,
                     itemId = payload.itemId,
+                    toLocationBarcode = payload.toLocationBarcode,
                 )
             }
         }
@@ -254,6 +263,10 @@ class OutboxRepository @Inject constructor(
         "TASK_CANCELLED" -> "کار لغو شده است"
         "TASK_NOT_VISIBLE" -> "این کار به شما تخصیص داده نشده"
         "ITEM_NOT_FOUND" -> "قلم در کار پیدا نشد"
+        "MISSING_DESTINATION" -> "قفسه‌ی مقصد ثبت نشده بود"
+        "DESTINATION_NOT_FOUND" -> "قفسه‌ی مقصد پیدا نشد"
+        // جنس بین ثبت فاکتور و چیدن جای دیگری رفته — کارگر باید دوباره ببیند.
+        "TRANSFER_FAILED" -> "انتقال به قفسه انجام نشد؛ دوباره تلاش کنید"
         else -> null
     }
 

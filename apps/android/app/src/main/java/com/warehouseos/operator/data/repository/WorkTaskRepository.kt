@@ -74,11 +74,19 @@ class WorkTaskRepository @Inject constructor(
      * تیک خوش‌بینانه: قلم محلی DONE می‌شود + ردیف در outbox می‌نشیند.
      * اگر قلم از قبل DONE بود (تکراری) ردیفی ساخته نمی‌شود.
      */
-    suspend fun tick(taskId: String, itemId: String): Boolean {
+    /**
+     * @param toLocationBarcode قفسه‌ی مقصد — برای کارِ چیدن اجباری است.
+     *   سرور بدونش تیک را نمی‌پذیرد، چون تیکِ چیدن یعنی انتقالِ واقعیِ موجودی.
+     */
+    suspend fun tick(
+        taskId: String,
+        itemId: String,
+        toLocationBarcode: String? = null,
+    ): Boolean {
         val marked = taskDao.markItemDone(taskId, itemId)
         if (marked == 0) return false
         taskDao.bumpTaskProgress(taskId)
-        outbox.enqueueWorkTaskTick(taskId, itemId)
+        outbox.enqueueWorkTaskTick(taskId, itemId, toLocationBarcode)
         return true
     }
 
