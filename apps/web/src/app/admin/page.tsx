@@ -11,6 +11,7 @@ import {
   ArrowLeft,
   PieChart as PieIcon,
   AlertTriangle,
+  BarChart3,
 } from "lucide-react";
 import {
   getCurrentStock,
@@ -18,10 +19,6 @@ import {
   getProductsPaged,
   getSalesByCategory,
   getPeriodicSales,
-  getPeriodicProfit,
-  getDebtors,
-  getChequesReport,
-  getLowStock,
 } from "@/lib/api";
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState, EmptyState } from "@/components/states";
@@ -132,31 +129,19 @@ export default function DashboardPage() {
     queryFn: () => getSalesByCategory(presetDates("this_month")),
   });
 
-  // KPIهای مالی — از همان اندپوینت‌های گزارش‌ها؛ فقط summary لازم است، پس
-  // کوچک‌ترین صفحه (limit=1) گرفته می‌شود تا داشبورد سبک بماند.
+  /*
+   * تنها عددِ مالیِ این صفحه: فروشِ امروز.
+   *
+   * پنج کارتِ دیگر (فروش ماه، سود، بدهی، چک، زیرِ حد) از اینجا برداشته شدند
+   * چون همان‌ها در گزارش‌ها › «یک نگاه» هستند — و آنجا بهترند: هر کارت با
+   * همان بازه‌ی تاریخِ بالای صفحه به فهرستش می‌رود، در حالی که کارت‌های اینجا
+   * بن‌بست بودند. دو جا برای یک عدد یعنی کاربر هیچ‌وقت نمی‌داند کدام را باز کند.
+   *
+   * «امروز» می‌ماند چون تنها چیزی است که گزارش‌ها بدون انتخابِ تاریخ نمی‌دهد.
+   */
   const salesTodayQ = useQuery({
     queryKey: ["kpi", "sales", "today"],
     queryFn: () => getPeriodicSales({ ...presetDates("today"), page: 1, limit: 1 }),
-  });
-  const salesMonthQ = useQuery({
-    queryKey: ["kpi", "sales", "month"],
-    queryFn: () => getPeriodicSales({ ...presetDates("this_month"), page: 1, limit: 1 }),
-  });
-  const profitMonthQ = useQuery({
-    queryKey: ["kpi", "profit", "month"],
-    queryFn: () => getPeriodicProfit({ ...presetDates("this_month"), page: 1, limit: 1 }),
-  });
-  const debtorsKpiQ = useQuery({
-    queryKey: ["kpi", "debtors"],
-    queryFn: () => getDebtors({ page: 1, limit: 1 }),
-  });
-  const chequesKpiQ = useQuery({
-    queryKey: ["kpi", "cheques", "upcoming"],
-    queryFn: () => getChequesReport({ status: "UPCOMING", page: 1, limit: 1 }),
-  });
-  const lowStockKpiQ = useQuery({
-    queryKey: ["kpi", "low-stock"],
-    queryFn: () => getLowStock({ page: 1, limit: 1 }),
   });
 
   /** مقدارِ کارتِ مالی با در نظر گرفتن حالت بارگذاری/خطا. */
@@ -208,45 +193,24 @@ export default function DashboardPage() {
         icon={Boxes}
       />
 
-      {/* KPIهای مالی — مهم‌ترین اعداد برای مدیر، بالای صفحه */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-6">
+      {/* یک عددِ مالی، و درِ ورودیِ بقیه. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <SummaryCard
           label="فروش خالص امروز"
           value={kpi(salesTodayQ, () => t(salesTodayQ.data!.summary.netAmount))}
         />
-        <SummaryCard
-          label="فروش خالص این ماه"
-          value={kpi(salesMonthQ, () => t(salesMonthQ.data!.summary.netAmount))}
-        />
-        <SummaryCard
-          label="سود این ماه"
-          value={kpi(profitMonthQ, () => t(profitMonthQ.data!.summary.grossProfit))}
-          tone="success"
-        />
-        <SummaryCard
-          label="بدهی مشتریان"
-          value={kpi(debtorsKpiQ, () => t(debtorsKpiQ.data!.summary.totalCreditBalance))}
-          tone="warning"
-        />
-        <SummaryCard
-          label="چک سررسید نزدیک"
-          value={kpi(chequesKpiQ, () =>
-            chequesKpiQ.data!.summary.totalCount > 0
-              ? `${t(chequesKpiQ.data!.summary.totalAmount)}`
-              : "—",
-          )}
-        />
-        <SummaryCard
-          label="اقلام زیر حد سفارش"
-          value={kpi(lowStockKpiQ, () => toFa(lowStockKpiQ.data!.summary.totalLowStockItems))}
-          tone={
-            !lowStockKpiQ.isLoading &&
-            !lowStockKpiQ.isError &&
-            lowStockKpiQ.data!.summary.totalLowStockItems > 0
-              ? "warning"
-              : "default"
-          }
-        />
+        <Link
+          href="/admin/reports"
+          className="flex items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-sm transition-colors hover:bg-muted/50 sm:col-span-2"
+        >
+          <div>
+            <div className="font-medium">اعداد فروش، سود، بدهی و چک</div>
+            <div className="mt-1 text-sm text-muted-foreground">
+              در گزارش‌ها › «یک نگاه» — با بازه‌ی دلخواه و خروجی اکسل
+            </div>
+          </div>
+          <BarChart3 className="size-5 shrink-0 text-muted-foreground" />
+        </Link>
       </div>
 
       {/* کارت‌های آماری */}

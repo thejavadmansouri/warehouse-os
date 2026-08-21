@@ -6,7 +6,6 @@ import {
   Package,
   MapPin,
   Boxes,
-  ArrowLeftRight,
   ClipboardList,
   ClipboardCheck,
   Users,
@@ -155,22 +154,10 @@ export const NAV_SECTIONS: NavSection[] = [
             roles: ["ADMIN", "MANAGER"],
           },
           {
-            title: "لاگ موجودی",
-            href: "/admin/inventory/logs",
-            icon: ClipboardList,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
             title: "فاکتور خرید",
             href: "/admin/purchases",
             icon: PackagePlus,
             roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "انتقال بین قفسه‌ها",
-            href: "/admin/inventory-transfer",
-            icon: ArrowLeftRight,
-            roles: ["ADMIN", "MANAGER", "STAFF"],
           },
           {
             title: "انبارگردانی",

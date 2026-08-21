@@ -81,7 +81,8 @@ function toIsoEnd(dateStr: string): string | undefined {
   return d.toISOString();
 }
 
-export default function InventoryLogsPage() {
+/** داخلِ صفحه‌ی «موجودی» سرتیترِ خودش را نشان نمی‌دهد. */
+export function InventoryLogsPanel({ embedded }: { embedded?: boolean } = {}) {
   const hasRole = useAuthStore((s) => s.hasRole);
   const canView = hasRole(...ALLOWED);
   const { toast } = useToast();
@@ -157,6 +158,7 @@ export default function InventoryLogsPage() {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
+          compact={embedded}
           title="لاگ‌های موجودی"
           description="تاریخچه تراکنش‌های انبار"
           icon={ClipboardList}
@@ -174,6 +176,7 @@ export default function InventoryLogsPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="لاگ‌های موجودی"
         description="تاریخچه ورود، خروج، انتقال و شمارش‌های انبار"
         icon={ClipboardList}
@@ -378,4 +381,10 @@ export default function InventoryLogsPage() {
       </Card>
     </div>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function InventoryLogsPage() {
+  return <InventoryLogsPanel />;
 }

@@ -61,7 +61,8 @@ const ALLOWED: Array<"ADMIN" | "MANAGER" | "STAFF"> = [
   "STAFF",
 ];
 
-export default function InventoryTransferPage() {
+/** داخلِ صفحه‌ی «موجودی» سرتیترِ خودش را نشان نمی‌دهد. */
+export function InventoryTransferPanel({ embedded }: { embedded?: boolean } = {}) {
   const hasRole = useAuthStore((s) => s.hasRole);
   const canManage = hasRole(...ALLOWED);
 
@@ -69,6 +70,7 @@ export default function InventoryTransferPage() {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
+          compact={embedded}
           title="انتقال بین قفسه‌ها"
           description="جابجایی موجودی بین موقعیت‌ها"
           icon={ArrowLeftRight}
@@ -87,6 +89,7 @@ export default function InventoryTransferPage() {
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
+        compact={embedded}
         title="انتقال بین قفسه‌ها"
         description="جابجایی موجودی از یک موقعیت به موقعیت دیگر"
         icon={ArrowLeftRight}
@@ -420,4 +423,10 @@ function RecentTransfers() {
       </CardContent>
     </Card>
   );
+}
+
+
+/** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
+export default function InventoryTransferPage() {
+  return <InventoryTransferPanel />;
 }
