@@ -4,7 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, WorkTaskStatus, WorkTaskItemStatus, Role } from '@prisma/client';
+import { Prisma, WorkTaskStatus, WorkTaskItemStatus, WorkTaskKind, Role } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
@@ -73,6 +73,8 @@ export class WorkTasksService {
       assignedToId?: string | null;
       note?: string;
       idempotencyKey?: string;
+      /** پیش‌فرض PICK — رفتارِ همه‌ی صداکننده‌های موجود دست‌نخورده می‌ماند. */
+      kind?: WorkTaskKind;
     },
     requestedById?: string,
   ) {
@@ -104,6 +106,7 @@ export class WorkTasksService {
     const task = await this.prisma.workTask.create({
       data: {
         warehouseId: input.warehouseId,
+        kind: input.kind ?? WorkTaskKind.PICK,
         invoiceId: input.invoiceId ?? null,
         quotationId: input.quotationId ?? null,
         assignedToId: input.assignedToId ?? null,
@@ -348,6 +351,9 @@ export class WorkTasksService {
     return {
       id: task.id,
       status: task.status,
+      // بدونِ این، گوشیِ کارگر نمی‌تواند «بردار و بیاور» را از «ببر بچین» جدا
+      // کند و هر دو یک‌شکل نشان داده می‌شوند.
+      kind: task.kind,
       warehouseId: task.warehouseId,
       invoiceId: task.invoiceId,
       quotationId: task.quotationId,

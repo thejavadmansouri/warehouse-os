@@ -29,6 +29,8 @@ input,select{font-family:inherit}
 .header__cart-btn:hover{background:var(--c-surface-2)}
 .header__cart-badge{position:absolute;top:2px;left:2px;min-width:18px;height:18px;padding:0 4px;background:var(--c-badge);color:#fff;font-size:11px;font-weight:var(--fw-bold);border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;line-height:1}
 .header__cart-badge:empty{display:none}
+.header__user-btn{width:42px;height:42px;border-radius:var(--r-full);background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:var(--fs-lg);font-weight:var(--fw-bold);transition:background .15s}
+.header__user-btn:hover{background:var(--c-accent-hover)}
 
 .cat-bar{background:var(--c-surface);border-bottom:1px solid var(--c-border);overflow-x:auto;scrollbar-width:none}
 .cat-bar::-webkit-scrollbar{display:none}
@@ -43,7 +45,7 @@ input,select{font-family:inherit}
 .products-header__sort select{height:36px;padding:0 var(--sp-3);border:1px solid var(--c-border);border-radius:var(--r-md);background:var(--c-surface);font-size:var(--fs-sm);color:var(--c-text);cursor:pointer}
 .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--sp-4)}
 
-.p-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);overflow:hidden;transition:box-shadow .2s,transform .2s;display:flex;flex-direction:column}
+.p-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);overflow:hidden;transition:box-shadow .2s,transform .2s;display:flex;flex-direction:column;cursor:pointer}
 .p-card:hover{box-shadow:var(--sh-lg);transform:translateY(-2px)}
 .p-card__img{aspect-ratio:4/3;background:var(--c-surface-2);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
 .p-card__img-placeholder{color:var(--c-text-3);font-size:var(--fs-2xl);user-select:none}
@@ -64,6 +66,71 @@ input,select{font-family:inherit}
 .p-card__add-btn.added{background:var(--c-success)}
 .p-card.out-of-stock{opacity:.6}
 .p-card.out-of-stock .p-card__add-btn{background:var(--c-text-3);pointer-events:none}
+
+.detail{display:none;max-width:900px;margin:0 auto;padding:var(--sp-4)}
+.detail.show{display:block}
+.detail__back{display:inline-flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);color:var(--c-text-2);margin-bottom:var(--sp-4);padding:var(--sp-2) var(--sp-3);border-radius:var(--r-md);transition:background .15s}
+.detail__back:hover{background:var(--c-surface-2)}
+.detail__hero{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-8);margin-bottom:var(--sp-8)}
+.detail__img-box{aspect-ratio:1;background:var(--c-surface-2);border-radius:var(--r-xl);display:flex;align-items:center;justify-content:center;font-size:6rem;color:var(--c-text-3);position:relative}
+.detail__img-badge{position:absolute;top:var(--sp-4);right:var(--sp-4);padding:4px 12px;border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-bold)}
+.detail__img-badge.in-stock{background:#e3f2fd;color:#0d47a1}
+.detail__img-badge.low-stock{background:#fff3cd;color:#856404}
+.detail__img-badge.out-of-stock{background:#f8d7da;color:#721c24}
+.detail__info{display:flex;flex-direction:column;gap:var(--sp-4)}
+.detail__brand{font-size:var(--fs-sm);color:var(--c-accent);font-weight:var(--fw-medium)}
+.detail__name{font-size:var(--fs-2xl);font-weight:var(--fw-bold);line-height:1.3}
+.detail__sku{font-size:var(--fs-sm);color:var(--c-text-3);direction:ltr;text-align:right}
+.detail__price-box{display:flex;align-items:baseline;gap:var(--sp-3);padding:var(--sp-4);background:var(--c-surface-2);border-radius:var(--r-lg)}
+.detail__price{font-size:var(--fs-2xl);font-weight:var(--fw-bold);color:var(--c-accent)}
+.detail__price-unit{font-size:var(--fs-sm);color:var(--c-text-3)}
+.detail__qty-row{display:flex;align-items:center;gap:var(--sp-4)}
+.detail__qty{display:flex;align-items:center;gap:var(--sp-2);background:var(--c-surface-2);border-radius:var(--r-lg);padding:var(--sp-2)}
+.detail__qty-btn{width:40px;height:40px;border-radius:var(--r-md);background:var(--c-surface);border:1px solid var(--c-border);display:flex;align-items:center;justify-content:center;font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--c-text);transition:background .15s}
+.detail__qty-btn:hover{background:var(--c-border)}
+.detail__qty-val{font-size:var(--fs-xl);font-weight:var(--fw-bold);min-width:40px;text-align:center}
+.detail__add-btn{flex:1;height:48px;border-radius:var(--r-lg);background:var(--c-accent);color:#fff;font-size:var(--fs-lg);font-weight:var(--fw-bold);transition:background .15s,transform .1s;display:flex;align-items:center;justify-content:center;gap:var(--sp-2)}
+.detail__add-btn:hover{background:var(--c-accent-hover);transform:scale(1.02)}
+.detail__add-btn:active{transform:scale(.98)}
+.detail__add-btn.added{background:var(--c-success)}
+.detail__tabs{display:flex;gap:var(--sp-1);border-bottom:1px solid var(--c-border);margin-bottom:var(--sp-4)}
+.detail__tab{padding:var(--sp-3) var(--sp-4);font-size:var(--fs-sm);font-weight:var(--fw-medium);color:var(--c-text-3);border-bottom:2px solid transparent;transition:all .15s}
+.detail__tab:hover{color:var(--c-text)}
+.detail__tab.active{color:var(--c-accent);border-bottom-color:var(--c-accent)}
+.detail__tab-panel{display:none}
+.detail__tab-panel.active{display:block}
+.detail__specs{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)}
+.detail__spec{display:flex;justify-content:space-between;padding:var(--sp-3);background:var(--c-surface-2);border-radius:var(--r-md)}
+.detail__spec-label{font-size:var(--fs-sm);color:var(--c-text-3)}
+.detail__spec-val{font-size:var(--fs-sm);font-weight:var(--fw-medium)}
+.detail__desc{font-size:var(--fs-md);line-height:1.8;color:var(--c-text-2)}
+.detail__related-title{font-size:var(--fs-lg);font-weight:var(--fw-bold);margin-bottom:var(--sp-4)}
+.detail__related-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--sp-3)}
+
+.profile{display:none;max-width:600px;margin:0 auto;padding:var(--sp-4)}
+.profile.show{display:block}
+.profile__header{display:flex;align-items:center;gap:var(--sp-4);padding:var(--sp-6);background:var(--c-surface);border-radius:var(--r-xl);margin-bottom:var(--sp-6);box-shadow:var(--sh-md)}
+.profile__avatar{width:72px;height:72px;border-radius:var(--r-full);background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:var(--fs-2xl);font-weight:var(--fw-bold);flex-shrink:0}
+.profile__info{flex:1}
+.profile__name{font-size:var(--fs-xl);font-weight:var(--fw-bold)}
+.profile__phone{font-size:var(--fs-sm);color:var(--c-text-3);direction:ltr;text-align:right}
+.profile__stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);margin-bottom:var(--sp-6)}
+.profile__stat{background:var(--c-surface);border-radius:var(--r-lg);padding:var(--sp-4);text-align:center;box-shadow:var(--sh-sm)}
+.profile__stat-val{font-size:var(--fs-xl);font-weight:var(--fw-bold);color:var(--c-accent)}
+.profile__stat-label{font-size:var(--fs-xs);color:var(--c-text-3);margin-top:var(--sp-1)}
+.profile__section-title{font-size:var(--fs-lg);font-weight:var(--fw-bold);margin-bottom:var(--sp-4)}
+.order-card{background:var(--c-surface);border:1px solid var(--c-border);border-radius:var(--r-lg);padding:var(--sp-4);margin-bottom:var(--sp-3);box-shadow:var(--sh-sm)}
+.order-card__header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-3)}
+.order-card__id{font-weight:var(--fw-bold);font-size:var(--fs-md)}
+.order-card__date{font-size:var(--fs-xs);color:var(--c-text-3)}
+.order-card__status{display:inline-flex;align-items:center;gap:var(--sp-1);padding:2px 10px;border-radius:var(--r-full);font-size:var(--fs-xs);font-weight:var(--fw-bold)}
+.order-card__status.delivered{background:#e8f5e9;color:#2e7d32}
+.order-card__status.sending{background:#e3f2fd;color:#1565c0}
+.order-card__status.preparing{background:#fff8e1;color:#f57f17}
+.order-card__status.cancelled{background:#fce4ec;color:#c62828}
+.order-card__items{display:flex;flex-direction:column;gap:var(--sp-2);margin-bottom:var(--sp-3)}
+.order-card__item{display:flex;justify-content:space-between;font-size:var(--fs-sm);color:var(--c-text-2)}
+.order-card__footer{display:flex;justify-content:space-between;padding-top:var(--sp-3);border-top:1px solid var(--c-border);font-weight:var(--fw-bold)}
 
 .cart-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;opacity:0;visibility:hidden;transition:opacity .25s,visibility .25s}
 .cart-overlay.open{opacity:1;visibility:visible}
@@ -115,6 +182,12 @@ input,select{font-family:inherit}
 .btn-secondary{height:42px;padding:0 var(--sp-6);border-radius:var(--r-md);background:var(--c-surface-2);color:var(--c-text);font-size:var(--fs-sm);font-weight:var(--fw-medium);transition:background .15s}
 .btn-secondary:hover{background:var(--c-border)}
 
+.auth-tabs{display:flex;gap:var(--sp-1);margin-bottom:var(--sp-6);background:var(--c-surface-2);border-radius:var(--r-lg);padding:var(--sp-1)}
+.auth-tab{flex:1;padding:var(--sp-3);border-radius:var(--r-md);font-size:var(--fs-sm);font-weight:var(--fw-medium);color:var(--c-text-3);text-align:center;transition:all .15s}
+.auth-tab.active{background:var(--c-surface);color:var(--c-accent);box-shadow:var(--sh-sm)}
+.auth-form{display:none}
+.auth-form.active{display:block}
+
 .mobile-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:56px;background:var(--c-surface);border-top:1px solid var(--c-border);z-index:90;padding:0 var(--sp-4)}
 .mobile-nav__item{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--c-text-3)}
 .mobile-nav__item.active{color:var(--c-accent)}
@@ -123,7 +196,7 @@ input,select{font-family:inherit}
 .empty-state__icon{font-size:3rem;margin-bottom:var(--sp-4);opacity:.3}
 .empty-state__text{font-size:var(--fs-lg)}
 
-@media(max-width:640px){.header__logo span{display:none}.product-grid{grid-template-columns:repeat(2,1fr);gap:var(--sp-2)}.p-card__body{padding:var(--sp-2) var(--sp-3) var(--sp-3)}.p-card__name{font-size:var(--fs-sm)}.p-card__price{font-size:var(--fs-md)}.p-card__add-btn{width:36px;height:36px}.mobile-nav{display:flex;align-items:center;justify-content:space-around}body{padding-bottom:56px}}
+@media(max-width:640px){.header__logo span{display:none}.product-grid{grid-template-columns:repeat(2,1fr);gap:var(--sp-2)}.p-card__body{padding:var(--sp-2) var(--sp-3) var(--sp-3)}.p-card__name{font-size:var(--fs-sm)}.p-card__price{font-size:var(--fs-md)}.p-card__add-btn{width:36px;height:36px}.mobile-nav{display:flex;align-items:center;justify-content:space-around}body{padding-bottom:56px}.detail__hero{grid-template-columns:1fr;gap:var(--sp-4)}.detail__specs{grid-template-columns:1fr}.detail__related-grid{grid-template-columns:repeat(2,1fr)}.profile__stats{grid-template-columns:repeat(3,1fr)}.profile__stat{padding:var(--sp-3)}.profile__stat-val{font-size:var(--fs-lg)}}
 @media(min-width:641px) and (max-width:1024px){.product-grid{grid-template-columns:repeat(3,1fr)}}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--c-border);border-radius:var(--r-full)}
 
@@ -139,7 +212,7 @@ input,select{font-family:inherit}
 <body>
 
 <header class="header">
-  <a href="/" class="header__logo">
+  <a href="/" class="header__logo" onclick="showGrid();return false">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/></svg>
     <span>قطعات خودرو</span>
   </a>
@@ -148,6 +221,7 @@ input,select{font-family:inherit}
     <input type="text" id="searchInput" placeholder="جستجوی محصول، برند یا شماره فنی..." autocomplete="off">
   </div>
   <div class="header__actions">
+    <button class="header__user-btn" id="headerUserBtn" onclick="openAuth()" title="ورود / پروفایل">👤</button>
     <button class="header__cart-btn" id="cartBtn" aria-label="سبد خرید">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
       <span class="header__cart-badge" id="cartBadge"></span>
@@ -155,15 +229,42 @@ input,select{font-family:inherit}
   </div>
 </header>
 
-<nav class="cat-bar"><div class="cat-bar__inner" id="catBar"><button class="cat-bar__chip active" data-cat="all">همه</button></div></nav>
+<nav class="cat-bar" id="catBarWrap"><div class="cat-bar__inner" id="catBar"><button class="cat-bar__chip active" data-cat="all">همه</button></div></nav>
 
-<main class="main">
+<main class="main" id="gridView">
   <div class="products-header">
     <span class="products-header__count" id="productsCount"></span>
     <div class="products-header__sort"><select id="sortSelect"><option value="newest">جدیدترین</option><option value="cheapest">ارزان‌ترین</option><option value="expensive">گران‌ترین</option><option value="name">نام</option></select></div>
   </div>
   <div class="product-grid" id="productGrid"></div>
 </main>
+
+<section class="detail" id="detailView">
+  <button class="detail__back" onclick="showGrid()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به لیست
+  </button>
+  <div class="detail__hero" id="detailHero"></div>
+  <div class="detail__tabs" id="detailTabs">
+    <button class="detail__tab active" data-tab="desc">توضیحات</button>
+    <button class="detail__tab" data-tab="specs">مشخصات فنی</button>
+  </div>
+  <div class="detail__tab-panel active" id="tabDesc"></div>
+  <div class="detail__tab-panel" id="tabSpecs"></div>
+  <div style="margin-top:var(--sp-8)"><h3 class="detail__related-title">محصولات مرتبط</h3><div class="detail__related-grid" id="relatedGrid"></div></div>
+</section>
+
+<!-- ===== PROFILE VIEW ===== -->
+<section class="profile" id="profileView">
+  <button class="detail__back" onclick="showGrid()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به فروشگاه
+  </button>
+  <div class="profile__header" id="profileHeader"></div>
+  <div class="profile__stats" id="profileStats"></div>
+  <h3 class="profile__section-title">تاریخچه سفارش‌ها</h3>
+  <div id="orderList"></div>
+</section>
 
 <footer class="footer"><p>فروشگاه قطعات خودرو — تمامی حقوق محفوظ است</p></footer>
 
@@ -174,6 +275,31 @@ input,select{font-family:inherit}
   <div class="cart-drawer__footer" id="cartFooter" style="display:none;"><div class="cart-summary"><div class="cart-summary__row"><span>جمع کل</span><span id="cartSubtotal">۰</span></div><div class="cart-summary__row total"><span>قابل پرداخت</span><span id="cartTotal">۰ تومان</span></div></div><button class="checkout-btn" id="checkoutBtn">تسویه و خرید</button></div>
 </aside>
 
+<!-- ===== AUTH MODAL ===== -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal">
+    <div class="modal__header"><h3 class="modal__title">ورود / ثبت‌نام</h3><button class="cart-drawer__close" id="authClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+    <div class="modal__body">
+      <div class="auth-tabs">
+        <button class="auth-tab active" onclick="switchAuthTab('login')">ورود</button>
+        <button class="auth-tab" onclick="switchAuthTab('register')">ثبت‌نام</button>
+      </div>
+      <form class="auth-form active" id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group"><label>شماره موبایل</label><input type="tel" id="loginPhone" placeholder="0912xxxxxxx" dir="ltr" style="text-align:left;" required></div>
+        <div class="form-group"><label>رمز عبور</label><input type="password" id="loginPass" placeholder="رمز عبور" required></div>
+        <button type="submit" class="btn-primary" style="width:100%;height:48px;font-size:var(--fs-md)">ورود</button>
+      </form>
+      <form class="auth-form" id="registerForm" onsubmit="handleRegister(event)">
+        <div class="form-group"><label>نام و نام خانوادگی</label><input type="text" id="regName" placeholder="مثال: علی رضایی" required></div>
+        <div class="form-group"><label>شماره موبایل</label><input type="tel" id="regPhone" placeholder="0912xxxxxxx" dir="ltr" style="text-align:left;" required></div>
+        <div class="form-group"><label>رمز عبور</label><input type="password" id="regPass" placeholder="حداقل ۶ کاراکتر" required minlength="6"></div>
+        <button type="submit" class="btn-primary" style="width:100%;height:48px;font-size:var(--fs-md)">ثبت‌نام</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CHECKOUT MODAL ===== -->
 <div class="modal-overlay" id="checkoutModal">
   <div class="modal">
     <div class="modal__header"><h3 class="modal__title">تسویه خرید</h3><button class="cart-drawer__close" id="checkoutClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
@@ -187,34 +313,35 @@ input,select{font-family:inherit}
 </div>
 
 <nav class="mobile-nav">
-  <a class="mobile-nav__item active" href="#"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>خانه</span></a>
-  <button class="mobile-nav__item" id="mobileCartBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>سبد</span></button>
+  <a class="mobile-nav__item active" href="#" onclick="showGrid();return false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>خانه</span></a>
+  <button class="mobile-nav__item" id="mobileCartBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>سبد</span></a>
+  <button class="mobile-nav__item" onclick="openAuth()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>حساب من</span></button>
 </nav>
 
 <div class="toast" id="toast"></div>
 
 <script>
 const PRODUCTS=[
-{id:'1',name:'لنت ترمز جلو پراید',sku:'LNT-PRY-001',brand:'آسیا',category:'ترمز',price:185000,stock:24,unit:'جفت'},
-{id:'2',name:'فیلتر روغن پراید',sku:'FLT-OL-P01',brand:'فلیپ',category:'موتور',price:45000,stock:80,unit:'عدد'},
-{id:'3',name:'فیلتر هوا پراید',sku:'FLT-AIR-P1',brand:'فلیپ',category:'موتور',price:38000,stock:65,unit:'عدد'},
-{id:'4',name:'شمع موتور NGK پراید',sku:'SHM-NGK-P1',brand:'NGK',category:'موتور',price:72000,stock:40,unit:'عدد'},
-{id:'5',name:'تسمه دینام پراید',sku:'TSM-DN-P01',brand:'دایMOV',category:'موتور',price:55000,stock:30,unit:'عدد'},
-{id:'6',name:'روغن موتور ۲۰W-50 چهار لیتری',sku:'ROGH-20W50',brand:'ایسوسان',category:'روغن',price:320000,stock:15,unit:'عدد'},
-{id:'7',name:'ضد یخ اورجینال ۴ لیتری',sku:'ANTF-4L',brand:'پارس',category:'روغن',price:280000,stock:12,unit:'عدد'},
-{id:'8',name:'لنت ترمز عقب پراید',sku:'LNT-PRY-R1',brand:'آسیا',category:'ترمز',price:145000,stock:18,unit:'جفت'},
-{id:'9',name:'دیسک ترمز جلو پراید',sku:'DSK-PRY-F1',brand:'آسیا',category:'ترمز',price:210000,stock:10,unit:'عدد'},
-{id:'10',name:'باطری ۶۰ آمپر اوربیتال',sku:'BATT-60A',brand:'ورتا',category:'برقی',price:2850000,stock:8,unit:'عدد'},
-{id:'11',name:'دیسک ترمز عقب پراید',sku:'DSK-PRY-R1',brand:'آسیا',category:'ترمز',price:195000,stock:0,unit:'عدد'},
-{id:'12',name:'فیلتر کابین پراید',sku:'FLT-CAB-P1',brand:'فلیپ',category:'موتور',price:32000,stock:50,unit:'عدد'},
-{id:'13',name:'گردگیر فرمان پراید',sku:'GRD-FRN-P1',brand:'ارج',category:'فرمان',price:65000,stock:20,unit:'عدد'},
-{id:'14',name:'مگنت فرمان پراید',sku:'MAG-FRN-P1',brand:'ارج',category:'فرمان',price:85000,stock:14,unit:'عدد'},
-{id:'15',name:'لاستیک ۱۶۵/۶۵R۱۳',sku:'TYR-165-13',brand:'بارز',category:'لاستیک',price:1450000,stock:32,unit:'عدد'},
-{id:'16',name:'لاستیک ۱۷۵/۶۵R۱۴',sku:'TYR-175-14',brand:'کویر',category:'لاستیک',price:1750000,stock:28,unit:'عدد'},
-{id:'17',name:'واشر سرسیلندر پراید',sku:'WSH-SLC-P1',brand:'ارج',category:'موتور',price:95000,stock:6,unit:'عدد'},
-{id:'18',name:'پمپ بنزین پراید',sku:'PMP-GAZ-P1',brand:'بوش',category:'موتور',price:420000,stock:4,unit:'عدد'},
-{id:'19',name:'چراغ جلو راست پراید',sku:'LGT-FR-R1',brand:'ارج',category:'برقی',price:380000,stock:7,unit:'عدد'},
-{id:'20',name:'آینه جانبی راست پراید',sku:'MRR-SDE-R1',brand:'ارج',category:'بدنه',price:165000,stock:11,unit:'عدد'},
+{id:'1',name:'لنت ترمز جلو پراید',sku:'LNT-PRY-001',brand:'آسیا',category:'ترمز',price:185000,stock:24,unit:'جفت',icon:'🔧',desc:'لنت ترمز جلو پراید آسیا با کیفیت بالا و عمر طولانی. مناسب برای شرایط رانندگی شهری و جاده‌ای.',specs:{'نوع خودرو':'پراید ۱۳۱/۱۳۲','موقعیت':'جلو','جنس':'نیمه‌فلزی','برند':'آسیا','وزن':'۱.۲ کیلوگرم'}},
+{id:'2',name:'فیلتر روغن پراید',sku:'FLT-OL-P01',brand:'فلیپ',category:'موتور',price:45000,stock:80,unit:'عدد',icon:'🔧',desc:'فیلتر روغن فلیپ مناسب موتورهای EC5 و M13 پراید.',specs:{'نوع خودرو':'پراید EC5/M13','قطر':'۶۷ میلی‌متر','برند':'فلیپ'}},
+{id:'3',name:'فیلتر هوا پراید',sku:'FLT-AIR-P1',brand:'فلیپ',category:'موتور',price:38000,stock:65,unit:'عدد',icon:'🔧',desc:'فیلتر هوای فلیپ با کارایی بالا.',specs:{'نوع خودرو':'پراید ۱۳۱/۱۳۲','جنس':'کاغذی','برند':'فلیپ'}},
+{id:'4',name:'شمع موتور NGK پراید',sku:'SHM-NGK-P1',brand:'NGK',category:'موتور',price:72000,stock:40,unit:'عدد',icon:'🔧',desc:'شمع موتور اورجینال NGK با الکترود پلاتینی.',specs:{'نوع خودرو':'پراید ۱.۳L','برند':'NGK','نوع الکترود':'پلاتینی'}},
+{id:'5',name:'تسمه دینام پراید',sku:'TSM-DN-P01',brand:'دایMOV',category:'موتور',price:55000,stock:30,unit:'عدد',icon:'🔧',desc:'تسمه دینام دایMOV با مقاومت بالا.',specs:{'نوع خودرو':'پراید','عرض':'۱۲.۷ میلی‌متر','برند':'دایMOV'}},
+{id:'6',name:'روغن موتور ۲۰W-50 چهار لیتری',sku:'ROGH-20W50',brand:'ایسوسان',category:'روغن',price:320000,stock:15,unit:'عدد',icon:'🛢️',desc:'روغن موتور ایسوسان با گرانروی ۲۰W-50.',specs:{'گرانروی':'۲۰W-50','حجم':'۴ لیتر','برند':'ایسوسان'}},
+{id:'7',name:'ضد یخ اورجینال ۴ لیتری',sku:'ANTF-4L',brand:'پارس',category:'روغن',price:280000,stock:12,unit:'عدد',icon:'💧',desc:'ضد یخ پارس با فرمولاسیون اورجینال.',specs:{'دمای انجماد':'۳۷- درجه','حجم':'۴ لیتر','برند':'پارس'}},
+{id:'8',name:'لنت ترمز عقب پراید',sku:'LNT-PRY-R1',brand:'آسیا',category:'ترمز',price:145000,stock:18,unit:'جفت',icon:'🔧',desc:'لنت ترمز عقب پراید آسیا.',specs:{'نوع خودرو':'پراید ۱۳۱/۱۳۲','موقعیت':'عقب','برند':'آسیا'}},
+{id:'9',name:'دیسک ترمز جلو پراید',sku:'DSK-PRY-F1',brand:'آسیا',category:'ترمز',price:210000,stock:10,unit:'عدد',icon:'🔧',desc:'دیسک ترمز جلو پراید آسیا با قطر ۲۴۵ میلی‌متر.',specs:{'قطر':'۲۴۵ میلی‌متر','جنس':'چدن آلیاژی','برند':'آسیا'}},
+{id:'10',name:'باطری ۶۰ آمپر اوربیتال',sku:'BATT-60A',brand:'ورتا',category:'برقی',price:2850000,stock:8,unit:'عدد',icon:'🔋',desc:'باطری اوربیتال ۶۰ آمپر ورتا با گارانتی ۲۴ ماهه.',specs:{'ظرفیت':'۶۰ آمپر ساعت','ولتاژ':'۱۲ ولت','برند':'ورتا'}},
+{id:'11',name:'دیسک ترمز عقب پراید',sku:'DSK-PRY-R1',brand:'آسیا',category:'ترمز',price:195000,stock:0,unit:'عدد',icon:'🔧',desc:'دیسک ترمز عقب پراید آسیا.',specs:{'قطر':'۲۲۰ میلی‌متر','جنس':'چدن آلیاژی','برند':'آسیا'}},
+{id:'12',name:'فیلتر کابین پراید',sku:'FLT-CAB-P1',brand:'فلیپ',category:'موتور',price:32000,stock:50,unit:'عدد',icon:'🔧',desc:'فیلتر کابین فلیپ با قابلیت جذب گرد و غبار.',specs:{'جنس':'کربن فعال','برند':'فلیپ'}},
+{id:'13',name:'گردگیر فرمان پراید',sku:'GRD-FRN-P1',brand:'ارج',category:'فرمان',price:65000,stock:20,unit:'عدد',icon:'🔧',desc:'گردگیر فرمان ارج مناسب برای مکانیزم فرمان پراید.',specs:{'جنس':'پلاستیک مقاوم','برند':'ارج'}},
+{id:'14',name:'مگنت فرمان پراید',sku:'MAG-FRN-P1',brand:'ارج',category:'فرمان',price:85000,stock:14,unit:'عدد',icon:'🔧',desc:'مگنت فرمان ارج با کیفیت بالا.',specs:{'جنس':'فلز آلیاژی','برند':'ارج'}},
+{id:'15',name:'لاستیک ۱۶۵/۶۵R۱۳',sku:'TYR-165-13',brand:'بارز',category:'لاستیک',price:1450000,stock:32,unit:'عدد',icon:'🛞',desc:'لاستیک بارز ۱۶۵/۶۵R۱۳ با گل مناسب برای شرایط جاده‌ای.',specs:{'سایز':'۱۶۵/۶۵R۱۳','برند':'بارز','نوع':'تابستانی'}},
+{id:'16',name:'لاستیک ۱۷۵/۶۵R۱۴',sku:'TYR-175-14',brand:'کویر',category:'لاستیک',price:1750000,stock:28,unit:'عدد',icon:'🛞',desc:'لاستیک کویر ۱۷۵/۶۵R۱۴ با گل سه‌بعدی.',specs:{'سایز':'۱۷۵/۶۵R۱۴','برند':'کویر','نوع':'تابستانی'}},
+{id:'17',name:'واشر سرسیلندر پراید',sku:'WSH-SLC-P1',brand:'ارج',category:'موتور',price:95000,stock:6,unit:'عدد',icon:'🔧',desc:'واشر سرسیلندر ارج با مقاومت بالا.',specs:{'جنس':'آزبست','برند':'ارج'}},
+{id:'18',name:'پمپ بنزین پراید',sku:'PMP-GAZ-P1',brand:'بوش',category:'موتور',price:420000,stock:4,unit:'عدد',icon:'🔧',desc:'پمپ بنزین بوش اورجینال.',specs:{'برند':'بوش','فشار':'۳ بار'}},
+{id:'19',name:'چراغ جلو راست پراید',sku:'LGT-FR-R1',brand:'ارج',category:'برقی',price:380000,stock:7,unit:'عدد',icon:'💡',desc:'چراغ جلو راست پراید ارج با لنز شفاف.',specs:{'موقعیت':'جلو راست','نوع لامپ':'H4','برند':'ارج'}},
+{id:'20',name:'آینه جانبی راست پراید',sku:'MRR-SDE-R1',brand:'ارج',category:'بدنه',price:165000,stock:11,unit:'عدد',icon:'🪞',desc:'آینه جانبی راست پراید ارج.',specs:{'موقعیت':'راست','نوع':'برقی','برند':'ارج'}},
 ];
 
 const fa=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
@@ -223,11 +350,52 @@ const toman=n=>faNum(n)+' تومان';
 
 function stockLabel(q){if(q===0)return{text:'ناموجود',cls:'out-of-stock'};if(q<=10)return{text:fa(q)+' موجود',cls:'low-stock'};return{text:'موجود',cls:'in-stock'}}
 
+/* ===== AUTH ===== */
+let currentUser=JSON.parse(localStorage.getItem('sf_user')||'null');
+let orders=JSON.parse(localStorage.getItem('sf_orders')||'[]');
+
+function openAuth(){if(currentUser){showProfile()}else{document.getElementById('authModal').classList.add('open');document.body.style.overflow='hidden'}}
+function closeAuth(){document.getElementById('authModal').classList.remove('open');document.body.style.overflow=''}
+function switchAuthTab(t){document.querySelectorAll('.auth-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.auth-form').forEach(x=>x.classList.remove('active'));if(t==='login'){document.querySelectorAll('.auth-tab')[0].classList.add('active');document.getElementById('loginForm').classList.add('active')}else{document.querySelectorAll('.auth-tab')[1].classList.add('active');document.getElementById('registerForm').classList.add('active')}}
+function handleLogin(e){e.preventDefault();const phone=document.getElementById('loginPhone').value.trim();const pass=document.getElementById('loginPass').value;if(!phone||!pass)return;currentUser={name:'کاربر',phone:phone,avatar:phone.slice(-2)};localStorage.setItem('sf_user',JSON.stringify(currentUser));closeAuth();updateUserBtn();showToast('خوش آمدید '+currentUser.name+' ✓')}
+function handleRegister(e){e.preventDefault();const name=document.getElementById('regName').value.trim();const phone=document.getElementById('regPhone').value.trim();const pass=document.getElementById('regPass').value;if(!name||!phone||!pass)return;currentUser={name:name,phone:phone,avatar:name.slice(0,1)};localStorage.setItem('sf_user',JSON.stringify(currentUser));closeAuth();updateUserBtn();showToast('ثبت‌نام موفق '+name+' ✓')}
+function logout(){currentUser=null;localStorage.removeItem('sf_user');showGrid();updateUserBtn();showToast('از حساب خارج شدید')}
+function updateUserBtn(){const btn=document.getElementById('headerUserBtn');btn.textContent=currentUser?currentUser.avatar:'👤'}
+
+/* ===== ORDERS ===== */
+function addOrder(cartItems,total,payMethod){const o={id:fa(orders.length+1001),date:new Date().toLocaleDateString('fa-IR'),items:cartItems.map(i=>({name:i.name,qty:i.qty,price:i.price})),total:total,payMethod:payMethod,status:'preparing',statusText:'در حال آماده‌سازی'};orders.unshift(o);localStorage.setItem('sf_orders',JSON.stringify(orders));return o}
+
+function renderProfile(){
+  if(!currentUser)return;
+  document.getElementById('profileHeader').innerHTML=`
+    <div class="profile__avatar">${currentUser.avatar||'👤'}</div>
+    <div class="profile__info">
+      <div class="profile__name">${currentUser.name}</div>
+      <div class="profile__phone">${currentUser.phone}</div>
+    </div>
+    <button class="btn-secondary" onclick="logout()" style="flex-shrink:0">خروج</button>`;
+  const totalSpent=orders.reduce((s,o)=>s+o.total,0);
+  const deliveredCount=orders.filter(o=>o.status==='delivered').length;
+  document.getElementById('profileStats').innerHTML=`
+    <div class="profile__stat"><div class="profile__stat-val">${fa(orders.length)}</div><div class="profile__stat-label">کل سفارشات</div></div>
+    <div class="profile__stat"><div class="profile__stat-val">${fa(deliveredCount)}</div><div class="profile__stat-label">تحویل شده</div></div>
+    <div class="profile__stat"><div class="profile__stat-val">${faNum(totalSpent)}</div><div class="profile__stat-label">جمع خرید (ریال)</div></div>`;
+  const list=document.getElementById('orderList');
+  if(!orders.length){list.innerHTML='<div class="empty-state"><div class="empty-state__icon">📦</div><div class="empty-state__text">هنوز سفارشی ثبت نکرده‌اید</div></div>';return}
+  list.innerHTML=orders.map(o=>`<div class="order-card">
+    <div class="order-card__header">
+      <div><span class="order-card__id">سفارش #${o.id}</span><span class="order-card__date"> — ${o.date}</span></div>
+      <span class="order-card__status ${o.status}">${o.statusText}</span>
+    </div>
+    <div class="order-card__items">${o.items.map(i=>`<div class="order-card__item"><span>${i.name} × ${fa(i.qty)}</span><span>${faNum(i.price*i.qty)} ریال</span></div>`).join('')}</div>
+    <div class="order-card__footer"><span>روش پرداخت: ${o.payMethod==='cash'?'نقد':o.payMethod==='card'?'کارتخوان':'انتقال بانکی'}</span><span>${faNum(o.total)} ریال</span></div>
+  </div>`).join('')}
+
+/* ===== CART ===== */
 let cart=[];
 function cartCount(){return cart.reduce((s,i)=>s+i.qty,0)}
 function cartTotal(){return cart.reduce((s,i)=>s+i.price*i.qty,0)}
-
-function addToCart(p){const e=cart.find(i=>i.id===p.id);if(e)e.qty++;else cart.push({id:p.id,name:p.name,price:p.price,qty:1,unit:p.unit});renderCart();showToast(p.name+' به سبد اضافه شد')}
+function addToCart(p,qty){qty=qty||1;const e=cart.find(i=>i.id===p.id);if(e)e.qty+=qty;else cart.push({id:p.id,name:p.name,price:p.price,qty:qty,unit:p.unit});renderCart();showToast(p.name+' به سبد اضافه شد')}
 function removeFromCart(id){cart=cart.filter(i=>i.id!==id);renderCart()}
 function changeQty(id,d){const i=cart.find(x=>x.id===id);if(i){i.qty=Math.max(1,i.qty+d);renderCart()}}
 
@@ -238,10 +406,11 @@ function renderProducts(list){
   const g=document.getElementById('productGrid');
   if(!list.length){g.innerHTML='<div class="empty-state"><div class="empty-state__icon">🔍</div><div class="empty-state__text">محصولی یافت نشد</div></div>';document.getElementById('productsCount').textContent='';return}
   document.getElementById('productsCount').textContent=fa(list.length)+' محصول';
-  g.innerHTML=list.map(p=>{const sl=stockLabel(p.stock);const o=p.stock===0?' out-of-stock':'';return`<article class="p-card${o}" data-id="${p.id}"><div class="p-card__img"><span class="p-card__img-placeholder">🔧</span><span class="p-card__stock-badge ${sl.cls}">${sl.text}</span></div><div class="p-card__body"><span class="p-card__brand">${p.brand}</span><h3 class="p-card__name">${p.name}</h3><span class="p-card__sku">${p.sku}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ریال / ${p.unit}</span></div><button class="p-card__add-btn" onclick="handleAdd('${p.id}')" ${p.stock===0?'disabled':''}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`}).join('')}
+  g.innerHTML=list.map(p=>{const sl=stockLabel(p.stock);const o=p.stock===0?' out-of-stock':'';return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img"><span class="p-card__img-placeholder">${p.icon||'🔧'}</span><span class="p-card__stock-badge ${sl.cls}">${sl.text}</span></div><div class="p-card__body"><span class="p-card__brand">${p.brand}</span><h3 class="p-card__name">${p.name}</h3><span class="p-card__sku">${p.sku}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ریال / ${p.unit}</span></div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${p.stock===0?'disabled':''}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`}).join('')}
 
-function handleAdd(id){const p=PRODUCTS.find(x=>x.id===id);if(p&&p.stock>0){addToCart(p);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
+function handleAdd(id,qty){const p=PRODUCTS.find(x=>x.id===id);if(p&&p.stock>0){addToCart(p,qty);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
 
+let detailQty=1;
 function renderCart(){
   const badge=document.getElementById('cartBadge');const items=document.getElementById('cartItems');const empty=document.getElementById('cartEmpty');const footer=document.getElementById('cartFooter');const c=cartCount();
   badge.textContent=c>0?fa(c):'';
@@ -257,7 +426,47 @@ function buildCategories(){const c=[...new Set(PRODUCTS.map(p=>p.category))];con
 let activeCat='all',searchQuery='';
 function getFiltered(){let l=PRODUCTS;if(activeCat!=='all')l=l.filter(p=>p.category===activeCat);if(searchQuery){const q=searchQuery.toLowerCase();l=l.filter(p=>p.name.includes(q)||p.sku.toLowerCase().includes(q)||p.brand.toLowerCase().includes(q))}const s=document.getElementById('sortSelect').value;if(s==='cheapest')l.sort((a,b)=>a.price-b.price);else if(s==='expensive')l.sort((a,b)=>b.price-a.price);else if(s==='name')l.sort((a,b)=>a.name.localeCompare(b.name,'fa'));return l}
 
+/* ===== DETAIL ===== */
+function showDetail(id){
+  const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
+  ['gridView','profileView'].forEach(v=>document.getElementById(v).style.display='none');
+  document.getElementById('detailView').classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  detailQty=1;
+  const sl=stockLabel(p.stock);
+  document.getElementById('detailHero').innerHTML=`<div class="detail__img-box"><span>${p.icon||'🔧'}</span><span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${p.brand}</span><h1 class="detail__name">${p.name}</h1><span class="detail__sku">کد: ${p.sku}</span><div class="detail__price-box"><span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">ریال / ${p.unit}</span></div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${p.stock===0?'disabled':''}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${p.stock===0?'ناموجود':'افزودن به سبد'}</button></div></div>`;
+  document.getElementById('tabDesc').innerHTML=`<p class="detail__desc">${p.desc||'توضیحاتی ثبت نشده است.'}</p>`;
+  let specsHtml='<div class="detail__specs">';
+  if(p.specs)Object.entries(p.specs).forEach(([k,v])=>{specsHtml+=`<div class="detail__spec"><span class="detail__spec-label">${k}</span><span class="detail__spec-val">${v}</span></div>`});
+  specsHtml+=`<div class="detail__spec"><span class="detail__spec-label">موجودی</span><span class="detail__spec-val">${fa(p.stock)} ${p.unit}</span></div></div>`;
+  document.getElementById('tabSpecs').innerHTML=specsHtml;
+  const related=PRODUCTS.filter(x=>x.id!==id&&x.category===p.category).slice(0,4);
+  document.getElementById('relatedGrid').innerHTML=related.map(r=>`<article class="p-card" onclick="showDetail('${r.id}')"><div class="p-card__img"><span class="p-card__img-placeholder">${r.icon||'🔧'}</span></div><div class="p-card__body"><span class="p-card__brand">${r.brand}</span><h3 class="p-card__name">${r.name}</h3><div class="p-card__footer"><span class="p-card__price">${faNum(r.price)}</span></div></div></article>`).join('');
+  document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(t=>{t.onclick=()=>{document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tabDesc').classList.toggle('active',t.dataset.tab==='desc');document.getElementById('tabSpecs').classList.toggle('active',t.dataset.tab==='specs')}});
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function changeDetailQty(d){detailQty=Math.max(1,detailQty+d);document.getElementById('detailQtyVal').textContent=fa(detailQty)}
+function handleDetailAdd(id){const p=PRODUCTS.find(x=>x.id===id);if(p&&p.stock>0){addToCart(p,detailQty);const b=document.getElementById('detailAddBtn');b.classList.add('added');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg> اضافه شد';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> افزودن به سبد'},1200)}}
+
+/* ===== PROFILE ===== */
+function showProfile(){
+  if(!currentUser){openAuth();return}
+  ['gridView','detailView'].forEach(v=>document.getElementById(v).style.display='none');
+  document.getElementById('profileView').classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  renderProfile();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function showGrid(){
+  ['detailView','profileView'].forEach(v=>{document.getElementById(v).classList.remove('show');document.getElementById(v).style.display=''});
+  document.getElementById('gridView').style.display='';
+  document.getElementById('catBarWrap').style.display='';
+  renderProducts(getFiltered());
+}
+
 document.addEventListener('DOMContentLoaded',()=>{
+  updateUserBtn();
   buildCategories();renderProducts(getFiltered());
   document.getElementById('catBar').addEventListener('click',e=>{const c=e.target.closest('.cat-bar__chip');if(!c)return;document.querySelectorAll('.cat-bar__chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');activeCat=c.dataset.cat;renderProducts(getFiltered())});
   let sd;document.getElementById('searchInput').addEventListener('input',e=>{clearTimeout(sd);sd=setTimeout(()=>{searchQuery=e.target.value.trim();renderProducts(getFiltered())},200)});
@@ -274,8 +483,19 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('checkoutClose').addEventListener('click',closeCheckout);
   document.getElementById('checkoutCancel').addEventListener('click',closeCheckout);
   document.getElementById('checkoutModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCheckout()});
-  document.getElementById('checkoutConfirm').addEventListener('click',()=>{const n=document.getElementById('custName').value.trim();if(!n){document.getElementById('custName').focus();document.getElementById('custName').style.borderColor='#e74c3c';setTimeout(()=>document.getElementById('custName').style.borderColor='',1500);return}const o=Math.floor(Math.random()*9000)+1000;closeCheckout();cart=[];renderCart();showToast('سفارش شماره '+fa(o)+' ثبت شد ✓');document.getElementById('custName').value='';document.getElementById('custPhone').value=''});
-  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCheckout();closeCart()}});
+  document.getElementById('authClose').addEventListener('click',closeAuth);
+  document.getElementById('authModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuth()});
+  document.getElementById('checkoutConfirm').addEventListener('click',()=>{
+    const n=(currentUser?currentUser.name:document.getElementById('custName').value.trim())||'مشتری';
+    const p=(currentUser?currentUser.phone:document.getElementById('custPhone').value.trim())||'-';
+    const pm=document.getElementById('payMethod').value;
+    const items=[...cart];const total=cartTotal();
+    addOrder(items,total,pm);
+    closeCheckout();cart=[];renderCart();
+    showToast('سفارش ثبت شد ✓');
+    document.getElementById('custName').value='';document.getElementById('custPhone').value='';
+  });
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCheckout();closeCart();closeAuth()}});
 });
 </script>
 </body>

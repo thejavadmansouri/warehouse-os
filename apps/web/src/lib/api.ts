@@ -484,6 +484,20 @@ export function getBrands(): Promise<T.Brand[]> {
 
 // POST /products/:id/prices — ثبت قیمت جدید. ردیف تازه در تاریخچه می‌سازد.
 // فیلدِ نفرستاده یعنی «عوض نکن»، نه «صفر کن».
+// POST /barcode/link — چسباندنِ بارکدِ خودِ جنس به کالای موجود
+export function linkBarcode(body: {
+  productId: string;
+  barcode: string;
+  type?: "FACTORY" | "QR" | "OTHER";
+}): Promise<T.ProductBarcodeRow & { alreadyLinked: boolean }> {
+  return apiFetch("/barcode/link", { method: "POST", body });
+}
+
+// DELETE /barcode/link/:id
+export function unlinkBarcode(id: string): Promise<{ success: boolean }> {
+  return apiFetch(`/barcode/link/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
 // GET /products/:id/prices — تاریخچه‌ی قیمت، تازه‌ترین اول
 export function getProductPrices(id: string): Promise<T.ProductPrice[]> {
   return apiFetch<T.ProductPrice[]>(`/products/${encodeURIComponent(id)}/prices`);

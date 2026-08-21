@@ -40,6 +40,7 @@ import { ProductFormDialog } from "../_components/product-form-dialog";
 import { ProductKardex } from "../_components/product-kardex";
 import { ProductStock } from "../_components/product-stock";
 import { ProductPrices } from "../_components/product-prices";
+import { ProductBarcodes } from "../_components/product-barcodes";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -526,6 +527,9 @@ export default function ProductDetailPage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* بارکدها — چسباندنِ بارکدِ خودِ جنس، تا کالا بدون چاپ برچسب اسکن شود. */}
+          <ProductBarcodes product={product} />
         </div>
       </div>
 

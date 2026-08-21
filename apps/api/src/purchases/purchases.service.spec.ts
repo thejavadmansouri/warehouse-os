@@ -5,6 +5,7 @@ import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { SystemLocationsService } from '../inventory/system-locations.service';
+import { WorkTasksService } from '../work-tasks/work-tasks.service';
 import { INT4_MAX } from '../common/money';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 
@@ -77,6 +78,8 @@ describe('PurchasesService', () => {
         { provide: PrismaService, useValue: p },
         { provide: InventoryOperationService, useValue: { execute: jest.fn() } },
         { provide: SystemLocationsService, useValue: { staging: jest.fn() } },
+        // «کار چیدمان» بیرون از تراکنش ساخته می‌شود و این تست‌ها کاری با آن ندارند.
+        { provide: WorkTasksService, useValue: { create: jest.fn() } },
       ],
     }).compile();
     service = module.get(PurchasesService);

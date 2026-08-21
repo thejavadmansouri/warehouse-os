@@ -4,11 +4,12 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, PurchaseStatus } from '@prisma/client';
+import { Prisma, PurchaseStatus, WorkTaskKind } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { SystemLocationsService } from '../inventory/system-locations.service';
+import { WorkTasksService } from '../work-tasks/work-tasks.service';
 import { INT4_MAX } from '../common/money';
 import { inLockOrder } from '../common/lock-order';
 import { checkPurchasePrice, type PriceWarning } from '../common/price-guard';
@@ -41,6 +42,7 @@ export class PurchasesService {
     private prisma: PrismaService,
     private operation: InventoryOperationService,
     private systemLocations: SystemLocationsService,
+    private workTasks: WorkTasksService,
   ) {}
 
 
@@ -248,6 +250,8 @@ export class PurchasesService {
         return purchase.id;
       });
 
+      await this.queuePutaway(purchaseId, dto, userId);
+
       return this.findOne(purchaseId);
 
     } catch (err:any) {
@@ -445,6 +449,59 @@ export class PurchasesService {
    *
    * همین تابع است که گزارش سود را از حالت خالی درمی‌آورد.
    */
+  /**
+   * «کار چیدمان» برای اقلامی که روی انبار موقت نشسته‌اند.
+   *
+   * فاکتور خرید تا امروز دقیقاً جایی تمام می‌شد که کارِ انبار باید شروع شود:
+   * جنس روی «انبار موقت» می‌نشست — یک مکانِ سیستمی که روی هیچ قفسه‌ای نیست — و
+   * **هیچ صفحه‌ای نمی‌گفت چیزی منتظر چیدن است**. صفی که کسی نمی‌دیدش.
+   *
+   * حالا همان لحظه یک Task برای کارگر می‌رود و روی گوشی‌اش push می‌شود.
+   *
+   * فقط ردیف‌های بی‌مکان: اگر حسابدار قفسه را می‌دانسته و زده، جنس سرِ جایش
+   * است و کاری نمانده.
+   *
+   * ⚠️ بیرون از تراکنش است و عمداً: ساختِ Task نباید بتواند ثبتِ فاکتوری را که
+   * موجودی‌اش قبلاً وارد شده برگرداند. اگر شکست بخورد، جنس در انبار موقت است و
+   * از همان‌جا دیده می‌شود — بدتر از آن، فاکتورِ برگشت‌خورده بود.
+   */
+  private async queuePutaway(
+    purchaseId: string,
+    dto: CreatePurchaseDto,
+    userId?: string,
+  ): Promise<void> {
+
+    const unplaced = dto.lines.filter(l => !l.locationId);
+    if (!unplaced.length) return;
+
+    try {
+      const staging = await this.systemLocations.staging(
+        this.prisma as any,
+        dto.warehouseId,
+      );
+
+      await this.workTasks.create(
+        {
+          warehouseId: dto.warehouseId,
+          kind: WorkTaskKind.PUTAWAY,
+          // مکانِ هر قلم «کجاست»، نه «کجا برود» — کارگر مقصد را خودش اسکن می‌کند.
+          lines: unplaced.map(l => ({
+            productId: l.productId,
+            locationId: staging,
+            quantity: l.quantity,
+          })),
+          note: 'چیدن اقلام فاکتور خرید',
+          // همان کلیدِ فاکتور، پس ثبتِ دوباره Taskِ تکراری نمی‌سازد.
+          idempotencyKey: `putaway:${purchaseId}`,
+        },
+        userId,
+      );
+    } catch {
+      // بی‌صدا رد می‌شود: فاکتور ثبت شده و جنس در انبار موقت پیداست.
+    }
+  }
+
+
   /**
    * ردیف‌هایی که قیمتشان مشکوک است، با نامِ کالا تا فرم بتواند سطر را قرمز کند.
    *

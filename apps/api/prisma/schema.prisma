@@ -318,6 +318,11 @@ model Inventory {
   product    Product  @relation(fields: [productId], references: [id])
 
   @@unique([productId, locationId])
+
+  // «روی این قفسه چه چیزی هست» — کوئریِ اسکنِ کارگر و انتخابگرِ مکانِ صندوق.
+  // یکتای بالا فقط `productId` را به‌عنوان پیشوند پوشش می‌دهد، پس جست‌وجو با
+  // `locationId` تنها هیچ ایندکسی نداشت.
+  @@index([locationId])
 }
 
 model InventoryLog {
@@ -371,6 +376,18 @@ model InventoryLog {
   @@index([invoiceId])
   @@index([saleReturnId])
   @@index([purchaseId])
+
+  // ⚠️ این جدول سریع‌ترین رشدِ کل دیتابیس را دارد: هر ردیفِ فروش، هر ورود، هر
+  // تعدیل. تا امروز فقط FKهای سند ایندکس داشتند و سه مسیرِ اصلیِ خواندن هیچ —
+  // یعنی `EXPLAIN` روی هر سه Seq Scan می‌داد. با جدولِ کوچک بی‌ضرر است و
+  // درست هم هست؛ مسئله وقتی ظاهر می‌شود که جدول بزرگ شده باشد، یعنی سرِ مشتری.
+
+  // کاردکس: فیلتر روی کالا و ترتیب زمانی، در یک ایندکس.
+  @@index([productId, createdAt])
+  // صفحه‌ی تاریخچه: تازه‌ترین‌ها، بدون فیلتر.
+  @@index([createdAt])
+  // تاریخچه‌ی یک قفسه.
+  @@index([locationId])
 }
 
 /// فاکتور خرید — ورودِ کالا از روی برگه‌ای که فروشنده همراه جنس می‌آورد.
@@ -954,6 +971,12 @@ enum PickTaskStatus {
 model WorkTask {
   id             String         @id @default(uuid())
   status         WorkTaskStatus @default(PENDING)
+  /// برداشتن از قفسه (برای فروشنده) یا چیدن روی قفسه (بعد از فاکتور خرید).
+  ///
+  /// پیش‌فرض `PICK` است تا هر Taskی که تا امروز ساخته شده دقیقاً همان بماند.
+  /// چرخه‌ی کار یکی است — فهرستی از اقلام که کارگر تیک می‌زند — فقط جهتش فرق
+  /// می‌کند، پس جدولِ جدا لازم نیست.
+  kind           WorkTaskKind   @default(PICK)
   warehouseId    String
   /// ارجاع اختیاری به سند — فقط برای نمایش («فاکتور ۱۲۳۴»)، هیچ تأثیری روی سند.
   invoiceId      String?
@@ -979,6 +1002,8 @@ model WorkTask {
   @@index([warehouseId, status, createdAt])
   @@index([assignedToId, status])
   @@index([invoiceId])
+  // صفِ کارگر و صفحه‌ی مدیر هر دو با نوع فیلتر می‌شوند.
+  @@index([kind, status])
 }
 
 /// یک قلمِ کارِ کارگر — کالا + قفسه + تعداد + وضعیت تیک.
@@ -1005,6 +1030,11 @@ model WorkTaskItem {
   doneBy   User?     @relation("WorkTaskItemDoneBy", fields: [doneById], references: [id])
 
   @@index([taskId, status])
+}
+
+enum WorkTaskKind {
+  PICK // کالا را از قفسه بردار و بیاور
+  PUTAWAY // کالا در انبار موقت است، ببر سر جایش بچین
 }
 
 enum WorkTaskStatus {

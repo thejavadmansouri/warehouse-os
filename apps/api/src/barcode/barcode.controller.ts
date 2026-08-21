@@ -7,11 +7,13 @@ import {
   UploadedFile,
   UseInterceptors,
   Req,
+  Delete,
   UseGuards
 } from '@nestjs/common';
 
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
+import { LinkBarcodeDto } from './dto/link-barcode.dto';
 
 import { BarcodeService } from './barcode.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -35,6 +37,32 @@ export class BarcodeController {
 
     return this.barcodeService.lookup(barcode);
 
+  }
+
+
+  /**
+   * چسباندنِ بارکدِ خودِ جنس به یک کالا.
+   *
+   * انباردار هم اجازه دارد: او کسی است که جعبه را دستش گرفته و بارکدش را
+   * می‌بیند. این مسیر هیچ عددی از موجودی را تغییر نمی‌دهد — فقط می‌گوید این
+   * رشته یعنی این کالا — پس دادنش به STAFF بی‌خطر است.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Post('link')
+  link(
+    @Body() dto: LinkBarcodeDto,
+  ){
+    return this.barcodeService.linkBarcode(dto.productId, dto.barcode, dto.type);
+  }
+
+
+  /** برداشتنِ بارکد کارِ مدیر است — اشتباهش کالا را از مسیر اسکن گم می‌کند. */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Delete('link/:id')
+  unlink(
+    @Param('id') id:string,
+  ){
+    return this.barcodeService.unlinkBarcode(id);
   }
 
 

@@ -69,6 +69,16 @@ export interface Product {
    * کالا هستند و در پاسخ‌ها پر نمی‌شوند.
    */
   prices?: ProductPrice[];
+  /** همه‌ی بارکدهای این کالا — داخلی، کارخانه، و هر بارکدی که وصل شده. */
+  barcodes?: ProductBarcodeRow[];
+}
+
+/** یک بارکد که به کالا وصل است. */
+export interface ProductBarcodeRow {
+  id: string;
+  barcode: string;
+  type: "INTERNAL" | "FACTORY" | "QR" | "OTHER";
+  createdAt?: string;
 }
 
 export interface CreateProductDto {
