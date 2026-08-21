@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { PAYMENT_LABELS, money, toFa } from "@/lib/format";
 import type { Invoice } from "@/lib/types";
 
+import { unitLabel } from "@/lib/currency";
 /**
  * رسیدِ پس از ثبت فاکتور.
  *
@@ -85,7 +86,7 @@ export function SaleReceiptDialog({
                 <span className="text-sm font-medium text-primary-foreground/80">مبلغ نهایی</span>
                 <span className="text-2xl font-bold tabular-nums">{money(invoice.total)}</span>
               </div>
-              <p className="text-end text-[11px] text-primary-foreground/70">ریال</p>
+              <p className="text-end text-[11px] text-primary-foreground/70">{unitLabel()}</p>
             </div>
 
             {/* تفکیک پرداخت — روش‌های ترکیبی و چک اینجا دیده می‌شوند. */}

@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Input } from "@/components/ui/input";
 import { faToEn, money, parseNum } from "@/lib/format";
+import { fromDisplay } from "@/lib/currency";
 
 /**
  * ورودی پولی با نمایشِ زنده.
@@ -64,7 +65,12 @@ export function MoneyInput({
           faToEn(el.value.slice(0, el.selectionStart ?? el.value.length)).match(/\d/g) ??
           []
         ).length;
-        const next = parseNum(el.value);
+        /*
+         * `money()` عددِ دیتابیس را به واحدِ نمایش برد، پس آنچه کاربر تایپ کرده
+         * هم به همان واحد است و باید برگردد — وگرنه با نمایشِ تومان، هر مبلغِ
+         * تایپ‌شده یک‌دهم ذخیره می‌شود.
+         */
+        const next = fromDisplay(parseNum(el.value));
         onChange(next);
 
         /*

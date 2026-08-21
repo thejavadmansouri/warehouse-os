@@ -13,7 +13,7 @@ import { MoneyInput } from "@/components/money-input";
 import { ChequeFields } from "@/components/cheque-fields";
 import { createReceipt } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { money, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { amount, money, toFa, PAYMENT_LABELS } from "@/lib/format";
 import { uuid } from "@/lib/uuid";
 import type { PaymentInput, PaymentMethod } from "@/lib/types";
 
@@ -85,7 +85,7 @@ export function ReceiptForm({
       toast.success(
         <div className="flex flex-col gap-0.5">
           <span className="text-base font-bold">رسید {toFa(r.number)} ثبت شد</span>
-          <span className="tabular-nums">{money(r.amount)} ریال</span>
+          <span className="tabular-nums">{amount(r.amount)}</span>
         </div>
       );
       setRows([{ method: "CASH", amount: 0 }]);
@@ -197,15 +197,15 @@ export function ReceiptForm({
         <div className="rounded-lg bg-muted p-3 text-sm">
           <div className="flex justify-between">
             <span>جمع دریافتی</span>
-            <span className="tabular-nums">{money(paid)} ریال</span>
+            <span className="tabular-nums">{amount(paid)}</span>
           </div>
           <div className="mt-1 flex justify-between">
             <span>بدهی فعلی</span>
-            <span className="tabular-nums">{money(totalDue)} ریال</span>
+            <span className="tabular-nums">{amount(totalDue)}</span>
           </div>
           <div className={`mt-1 flex justify-between font-semibold ${overpayment > 0 ? "text-destructive" : ""}`}>
             <span>{overpayment > 0 ? "اضافه‌پرداخت" : "باقی‌مانده‌ی بدهی"}</span>
-            <span className="tabular-nums">{money(overpayment > 0 ? overpayment : remaining)} ریال</span>
+            <span className="tabular-nums">{amount(overpayment > 0 ? overpayment : remaining)}</span>
           </div>
         </div>
 
@@ -220,7 +220,7 @@ export function ReceiptForm({
             />
             <span className="text-xs">
               <b className="block text-amber-800 dark:text-amber-300">
-                {money(overpayment)} ریال بیشتر از بدهی است
+                {amount(overpayment)} بیشتر از بدهی است
               </b>
               <span className="text-muted-foreground">
                 به‌عنوان پیش‌دریافت ثبت شود و مشتری بستانکار شود؟ فروش بعدی

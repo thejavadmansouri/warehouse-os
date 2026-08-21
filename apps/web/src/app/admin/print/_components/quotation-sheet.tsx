@@ -1,6 +1,6 @@
 "use client";
 
-import { faDate, money, qty, toFa } from "@/lib/format";
+import { amount, faDate, money, qty, toFa } from "@/lib/format";
 import type { Quotation } from "@/lib/types";
 
 import { PrintStyles, type PaperSize } from "./print-styles";
@@ -121,7 +121,7 @@ export function QuotationSheet({
           )}
           <div className="grand">
             <span>مبلغ کل</span>
-            <span>{money(q.total)} ریال</span>
+            <span>{amount(q.total)}</span>
           </div>
         </section>
 

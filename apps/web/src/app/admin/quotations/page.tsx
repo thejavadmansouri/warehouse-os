@@ -45,7 +45,7 @@ import {
   updateQuotation,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, money, parseNum, qty, toFa } from "@/lib/format";
+import { amount, faDate, money, parseNum, qty, toFa } from "@/lib/format";
 import { uuid } from "@/lib/uuid";
 import type { Customer, LocateResult, PaymentInput, Quotation } from "@/lib/types";
 import { CustomerPicker } from "../pos/_components/customer-picker";
@@ -134,7 +134,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
     mutationFn: (v: { id: string; payments: PaymentInput[]; dueDate?: string }) =>
       convertQuotation(v.id, v.payments, v.dueDate),
     onSuccess: (inv) => {
-      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${money(inv.total)} ریال`);
+      toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${amount(inv.total)}`);
       setPayingFor(null);
       setOpenId(null);
       refresh();
@@ -419,7 +419,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="font-semibold">مبلغ کل</span>
                 <span className="text-lg font-bold tabular-nums">
-                  {money(Math.max(0, editSubtotal - q.discount))} ریال
+                  {amount(Math.max(0, editSubtotal - q.discount))}
                 </span>
               </div>
 
@@ -481,7 +481,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
 
               <div className="flex items-center justify-between rounded-lg bg-muted p-3">
                 <span className="font-semibold">مبلغ کل</span>
-                <span className="text-lg font-bold tabular-nums">{money(q.total)} ریال</span>
+                <span className="text-lg font-bold tabular-nums">{amount(q.total)}</span>
               </div>
 
               {q.displayStatus === "EXPIRED" && (

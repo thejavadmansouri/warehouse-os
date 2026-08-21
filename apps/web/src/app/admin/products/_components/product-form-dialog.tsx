@@ -51,6 +51,7 @@ import { ApiException } from "@/lib/api-error-messages";
 import { useToast } from "@/hooks/use-toast";
 import type { Product, CreateProductDto, UpdateProductDto } from "@/lib/types";
 
+import { unitLabel } from "@/lib/currency";
 // عدد اختیاری — رشته خالی → undefined، در غیر این صورت عدد
 const optionalNumber = z.preprocess(
   (v) => {
@@ -632,7 +633,7 @@ export function ProductFormDialog({
                   name="purchasePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>قیمت خرید (ریال)</FormLabel>
+                      <FormLabel>قیمت خرید ({unitLabel()})</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"
@@ -651,7 +652,7 @@ export function ProductFormDialog({
                   name="salePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>قیمت فروش (ریال)</FormLabel>
+                      <FormLabel>قیمت فروش ({unitLabel()})</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"
@@ -670,7 +671,7 @@ export function ProductFormDialog({
                   name="wholesalePrice"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>قیمت عمده‌فروشی (ریال)</FormLabel>
+                      <FormLabel>قیمت عمده‌فروشی ({unitLabel()})</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"

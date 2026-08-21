@@ -7,7 +7,6 @@ import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.repository.AuthRepository
 import com.warehouseos.operator.data.repository.OutboxRepository
 import com.warehouseos.operator.data.repository.PhotoRepository
-import com.warehouseos.operator.data.repository.PickTaskRepository
 import com.warehouseos.operator.data.repository.SessionRepository
 import com.warehouseos.operator.data.repository.WorkTaskRepository
 import com.warehouseos.operator.data.sync.CatalogSyncScheduler
@@ -39,7 +38,6 @@ class ShiftHomeViewModel @Inject constructor(
     private val sessionRepository: SessionRepository,
     private val outboxRepository: OutboxRepository,
     photoRepository: PhotoRepository,
-    pickTaskRepository: PickTaskRepository,
     workTaskRepository: WorkTaskRepository,
     private val syncScheduler: SyncScheduler,
     private val catalogSyncScheduler: CatalogSyncScheduler,
@@ -88,23 +86,6 @@ class ShiftHomeViewModel @Inject constructor(
      */
     val failedItems: StateFlow<List<OutboxEntity>> = outboxRepository.failed
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    /**
-     * کارهای برداشتی که هنوز منتظر این کارگر هستند — بج روی کارت «کار برداشت».
-     *
-     * poll فقط تا وقتی صفحه واقعاً آن را collect می‌کند اجرا می‌شود؛ قبلاً در init
-     * راه می‌افتاد و تا آخر عمر ViewModel ادامه داشت، یعنی حتی وقتی کارگر در صفحه‌ی
-     * دیگری بود هم هر ۲۰ ثانیه به سرور می‌زد.
-     */
-    val pendingPickCount: StateFlow<Int> = flow {
-        while (true) {
-            when (val r = pickTaskRepository.mine()) {
-                is ApiResult.Success -> emit(r.data.count { it.status == "PENDING" })
-                else -> {} // offline/error — keep the last known count
-            }
-            delay(PICK_POLL_MS)
-        }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
      * کارهای انباری که هنوز تمام نشده‌اند — از کش محلی، بدون هیچ درخواست شبکه‌ای.

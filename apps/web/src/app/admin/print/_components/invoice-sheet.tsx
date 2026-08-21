@@ -3,7 +3,7 @@
 import { PrintStyles, type PaperSize } from "./print-styles";
 import { ShopHeader, ShopPaymentInfo } from "./shop-header";
 
-import { faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { amount, faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
 import type { Invoice } from "@/lib/types";
 
 export type { PaperSize };
@@ -145,7 +145,7 @@ export function InvoiceSheet({
               )}
               <tr className="grand">
                 <td>مبلغ قابل پرداخت</td>
-                <td className="num">{money(inv.total)} ریال</td>
+                <td className="num">{amount(inv.total)}</td>
               </tr>
               {inv.dueAmount > 0 && (
                 <tr className="due">

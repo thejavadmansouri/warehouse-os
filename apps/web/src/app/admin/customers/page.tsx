@@ -43,6 +43,7 @@ import { useAuthStore } from "@/lib/auth-store";
 import type { Customer } from "@/lib/types";
 import { CreateCustomerDialog } from "./_components/create-customer-dialog";
 
+import { unitLabel } from "@/lib/currency";
 /**
  * فهرست مشتریان.
  *
@@ -210,7 +211,7 @@ export default function CustomersPage() {
                   <TableRow>
                     <TableHead className="text-start">نام</TableHead>
                     <TableHead className="text-start">شماره</TableHead>
-                    <TableHead className="text-end">بدهی (ریال)</TableHead>
+                    <TableHead className="text-end">بدهی ({unitLabel()})</TableHead>
                     {canManage && <TableHead className="text-end">عملیات</TableHead>}
                   </TableRow>
                 </TableHeader>

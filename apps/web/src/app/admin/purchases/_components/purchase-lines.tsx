@@ -9,6 +9,7 @@ import { MoneyInput } from "@/components/money-input";
 import { ProductPicker } from "@/components/product-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { unitLabel } from "@/lib/currency";
 import {
   Table,
   TableBody,
@@ -73,7 +74,7 @@ export function PurchaseLines({
           <TableRow>
             <TableHead className="w-[38%]">کالا</TableHead>
             <TableHead className="w-[12%]">تعداد</TableHead>
-            <TableHead className="w-[20%]">قیمت خرید (ریال)</TableHead>
+            <TableHead className="w-[20%]">قیمت خرید ({unitLabel()})</TableHead>
             <TableHead className="w-[16%]">تخفیف ردیف</TableHead>
             <TableHead className="w-[14%]">جمع</TableHead>
             <TableHead className="w-8" />

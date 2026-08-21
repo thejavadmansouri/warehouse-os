@@ -1,0 +1,313 @@
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { OnlineOrderStatus, OnlinePayMethod } from '@prisma/client';
+
+import { PrismaService } from '../prisma/prisma.service';
+import { EventsGateway } from '../realtime/events.gateway';
+import { StorefrontCatalogService } from './storefront-catalog.service';
+import { CreateOrderDto } from './dto/create-order.dto';
+import { convertMoney } from '../common/money';
+import { normalizePhone } from '../common/phone.util';
+
+/**
+ * سفارش‌های سایت.
+ *
+ * ⚠️ مهم‌ترین قاعده‌ی این فایل: **هیچ‌جا موجودی کم نمی‌شود.** سفارشِ سایت یک
+ * «درخواست» است نه فاکتور. تا وقتی فروشنده در پنل تأییدش نکرده، هیچ کالایی از
+ * انبار حرکت نکرده و هیچ ردیفی در دفتر مشتری ننشسته. تبدیل به `SaleInvoice` کارِ
+ * ماژول پنل است، نه این فایل.
+ *
+ * دلیلش ساده است: سبد یک غریبه‌ی اینترنتی نباید بتواند موجودیِ مغازه را قفل کند.
+ */
+@Injectable()
+export class StorefrontOrderService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalog: StorefrontCatalogService,
+    private readonly events: EventsGateway,
+  ) {}
+
+  /**
+   * انبارِ سفارش‌های سایت.
+   *
+   * سایت انبار را از کاربر نمی‌پرسد — کاتالوگ هم موجودی را روی همه‌ی انبارها
+   * جمع می‌زند. تا وقتی نصب تک‌انباری است (حالت امروز) این درست است؛ روزی که
+   * چند انبارِ فروشنده داشته باشیم، اینجا باید یک تنظیمِ صریح بشود نه حدس.
+   */
+  private async defaultWarehouseId(): Promise<string> {
+    const w = await this.prisma.warehouse.findFirst({
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+
+    if (!w) {
+      throw new BadRequestException({
+        error: 'NO_WAREHOUSE',
+        message: 'هنوز انباری تعریف نشده است',
+      });
+    }
+    return w.id;
+  }
+
+  async create(customerId: string, dto: CreateOrderDto) {
+    const shop = await this.catalog.assertOnline();
+
+    /*
+     * تکراری‌بودن پیش از هر کار دیگری بررسی می‌شود و همان سفارشِ قبلی برمی‌گردد
+     * — نه خطا. برای کلاینت این یعنی retryِ بی‌خطر: پاسخِ گم‌شده را دوباره
+     * می‌گیرد بی‌آنکه مشتری دو بار سفارش داده باشد.
+     */
+    if (dto.idempotencyKey) {
+      const existing = await this.prisma.onlineOrder.findUnique({
+        where: { idempotencyKey: dto.idempotencyKey },
+        select: { id: true, customerId: true },
+      });
+      if (existing) {
+        if (existing.customerId !== customerId) {
+          throw new BadRequestException({
+            error: 'KEY_TAKEN',
+            message: 'این درخواست قبلاً ثبت شده است',
+          });
+        }
+        return this.myOrder(customerId, existing.id);
+      }
+    }
+
+    // یک کالا دو بار در سبد = یک ردیف با تعداد جمع‌شده.
+    const wanted = new Map<string, number>();
+    for (const l of dto.lines) {
+      wanted.set(l.productId, (wanted.get(l.productId) ?? 0) + l.quantity);
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: [...wanted.keys()] },
+        showOnline: true,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        name: true,
+        unit: true,
+        prices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { salePrice: true },
+        },
+        inventories: { select: { quantity: true } },
+      },
+    });
+
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    const lines: {
+      productId: string;
+      productName: string;
+      unit: string;
+      quantity: number;
+      unitPrice: number;
+      lineTotal: number;
+    }[] = [];
+
+    for (const [productId, quantity] of wanted) {
+      const p = byId.get(productId);
+
+      // کالایی که مدیر از سایت برداشته یا حذف کرده، انگار هیچ‌وقت نبوده.
+      if (!p) {
+        throw new BadRequestException({
+          error: 'PRODUCT_UNAVAILABLE',
+          message: 'یکی از کالاهای سبد دیگر در فروشگاه موجود نیست',
+        });
+      }
+
+      const raw = p.prices[0]?.salePrice ?? null;
+      if (raw == null || raw <= 0) {
+        throw new BadRequestException({
+          error: 'PRODUCT_UNPRICED',
+          message: `قیمت «${p.name}» مشخص نیست — لطفاً تماس بگیرید`,
+        });
+      }
+
+      const stock = p.inventories.reduce((s, i) => s + i.quantity, 0);
+      if (stock < quantity) {
+        throw new BadRequestException({
+          error: 'INSUFFICIENT_STOCK',
+          message: `موجودی «${p.name}» کافی نیست`,
+        });
+      }
+
+      /*
+       * قیمت از دیتابیس می‌آید، نه از کلاینت — و در همان لحظه به واحد سایت
+       * تبدیل می‌شود. تبدیلِ هر ردیف پیش از جمع انجام می‌شود تا ستونِ فاکتور
+       * با عددِ پایینش بخواند (همان قاعده‌ی `convertMoney`).
+       */
+      const unitPrice = convertMoney(raw, shop.storedUnit, shop.unit);
+
+      lines.push({
+        productId,
+        productName: p.name,
+        unit: p.unit,
+        quantity,
+        unitPrice,
+        lineTotal: unitPrice * quantity,
+      });
+    }
+
+    const subtotal = lines.reduce((s, l) => s + l.lineTotal, 0);
+
+    /*
+     * ارسال رایگان بالای سقف. `freeShipOver === 0` یعنی قاعده خاموش است، نه
+     * «همه‌چیز رایگان» — این تفاوت را اگر جا بیندازیم هر سفارشی رایگان می‌شود.
+     */
+    const freeShip = shop.freeShipOver > 0 && subtotal >= shop.freeShipOver;
+    const shippingFee = freeShip ? 0 : shop.shippingFee;
+
+    const phone = normalizePhone(dto.receiverPhone);
+    if (!phone) {
+      throw new BadRequestException({
+        error: 'BAD_PHONE',
+        message: 'شماره گیرنده معتبر نیست',
+      });
+    }
+
+    const warehouseId = await this.defaultWarehouseId();
+
+    const order = await this.prisma.onlineOrder.create({
+      data: {
+        idempotencyKey: dto.idempotencyKey ?? null,
+        customerId,
+        warehouseId,
+        status: OnlineOrderStatus.PENDING,
+        subtotal,
+        shippingFee,
+        total: subtotal + shippingFee,
+        payMethod: dto.payMethod ?? OnlinePayMethod.ON_DELIVERY,
+        receiverName: dto.receiverName.trim(),
+        receiverPhone: phone,
+        address: dto.address.trim(),
+        note: dto.note?.trim() || null,
+        lines: { create: lines },
+      },
+      select: { id: true, number: true },
+    });
+
+    // پنل باید سفارش تازه را بدون رفرش ببیند؛ خودِ سفارش از REST گرفته می‌شود.
+    this.events.broadcast({
+      type: 'online-order.created',
+      orderId: order.id,
+      customerId,
+      warehouseId,
+    });
+
+    return this.myOrder(customerId, order.id);
+  }
+
+  /** فهرست سفارش‌های خودِ مشتری. */
+  async myOrders(customerId: string) {
+    const rows = await this.prisma.onlineOrder.findMany({
+      where: { customerId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        total: true,
+        payMethod: true,
+        createdAt: true,
+        _count: { select: { lines: true } },
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      number: r.number,
+      status: r.status,
+      total: r.total,
+      payMethod: r.payMethod,
+      createdAt: r.createdAt,
+      lineCount: r._count.lines,
+    }));
+  }
+
+  /**
+   * یک سفارش — فقط اگر مالِ همین مشتری باشد.
+   *
+   * شرطِ `customerId` داخل `where` است نه یک `if` بعد از خواندن: سفارشِ کسِ
+   * دیگر باید ۴۰۴ بدهد، نه ۴۰۳ — وگرنه شماره‌ی سفارش‌های موجود قابل شمارش است.
+   */
+  async myOrder(customerId: string, id: string) {
+    const o = await this.prisma.onlineOrder.findFirst({
+      where: { id, customerId },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        subtotal: true,
+        shippingFee: true,
+        total: true,
+        payMethod: true,
+        receiverName: true,
+        receiverPhone: true,
+        address: true,
+        note: true,
+        rejectReason: true,
+        createdAt: true,
+        decidedAt: true,
+        lines: {
+          select: {
+            productId: true,
+            productName: true,
+            unit: true,
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
+          },
+        },
+      },
+    });
+
+    if (!o) {
+      throw new NotFoundException({
+        error: 'ORDER_NOT_FOUND',
+        message: 'سفارش پیدا نشد',
+      });
+    }
+    return o;
+  }
+
+  /**
+   * لغو توسط خودِ مشتری — فقط تا پیش از تصمیمِ فروشنده.
+   *
+   * بعد از تأیید، سفارش دیگر فاکتور دارد و لغوش یعنی ابطال فاکتور؛ آن کار
+   * مسیر خودش را دارد و از سایت انجام نمی‌شود.
+   */
+  async cancel(customerId: string, id: string) {
+    const done = await this.prisma.onlineOrder.updateMany({
+      where: { id, customerId, status: OnlineOrderStatus.PENDING },
+      data: {
+        status: OnlineOrderStatus.CANCELLED,
+        decidedAt: new Date(),
+      },
+    });
+
+    if (done.count === 0) {
+      throw new BadRequestException({
+        error: 'NOT_CANCELLABLE',
+        message: 'این سفارش دیگر قابل لغو نیست',
+      });
+    }
+
+    this.events.broadcast({
+      type: 'online-order.decided',
+      orderId: id,
+      customerId,
+    });
+
+    return this.myOrder(customerId, id);
+  }
+}

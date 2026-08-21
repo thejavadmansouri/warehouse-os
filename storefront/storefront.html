@@ -162,6 +162,16 @@ input,select{font-family:inherit}
 .checkout-btn{width:100%;height:48px;border-radius:var(--r-lg);background:var(--c-accent);color:#fff;font-size:var(--fs-md);font-weight:var(--fw-bold);transition:background .15s}
 .checkout-btn:hover{background:var(--c-accent-hover)}
 
+.p-card__photo{width:100%;height:100%;object-fit:contain;padding:var(--sp-2)}
+.detail__photo{max-width:100%;max-height:280px;object-fit:contain}
+.detail__loading{padding:var(--sp-12);text-align:center;color:var(--c-text-3)}
+.auth-hint{font-size:var(--fs-sm);color:var(--c-text-2);margin-bottom:var(--sp-4);line-height:1.7}
+.checkout-summary{border-top:1px solid var(--c-border);margin-top:var(--sp-4);padding-top:var(--sp-3);display:flex;flex-direction:column;gap:var(--sp-2)}
+.checkout-summary__row{display:flex;justify-content:space-between;font-size:var(--fs-sm);color:var(--c-text-2)}
+.checkout-summary__row.total{font-size:var(--fs-md);font-weight:var(--fw-bold);color:var(--c-text);border-top:1px solid var(--c-border);padding-top:var(--sp-2)}
+.modal__body textarea{width:100%;padding:var(--sp-3);border:1px solid var(--c-border);border-radius:var(--r-md);background:var(--c-surface);font-family:inherit;font-size:var(--fs-sm);color:var(--c-text);resize:vertical}
+.modal__body textarea:focus{outline:none;border-color:var(--c-accent)}
+.product-grid[aria-busy="true"]{opacity:.5;transition:opacity .15s}
 .toast{position:fixed;bottom:var(--sp-6);left:50%;transform:translateX(-50%) translateY(120%);background:var(--c-text);color:#fff;padding:var(--sp-3) var(--sp-6);border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-medium);z-index:300;opacity:0;transition:transform .3s,opacity .3s;pointer-events:none;white-space:nowrap}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
@@ -207,7 +217,112 @@ input,select{font-family:inherit}
 .product-grid .p-card:nth-child(4){animation-delay:.15s}
 .product-grid .p-card:nth-child(5){animation-delay:.2s}
 .product-grid .p-card:nth-child(6){animation-delay:.25s}
-  </style>
+
+/* ========== Cart Page ========== */
+.cart-page{display:none;max-width:800px;margin:0 auto;padding:var(--sp-4)}
+.cart-page.show{display:block}
+.cart-page__title{font-size:var(--fs-xl);font-weight:var(--fw-bold);margin-bottom:var(--sp-6)}
+.cart-page__grid{display:grid;grid-template-columns:1fr 340px;gap:var(--sp-6)}
+.cart-page__items{background:var(--c-surface);border-radius:var(--r-xl);padding:var(--sp-4);box-shadow:var(--sh-sm)}
+.cart-page__item{display:flex;gap:var(--sp-4);padding:var(--sp-4) 0;border-bottom:1px solid var(--c-surface-2)}
+.cart-page__item:last-child{border-bottom:none}
+.cart-page__item-img{width:80px;height:80px;border-radius:var(--r-lg);background:var(--c-surface-2);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:2rem}
+.cart-page__item-info{flex:1}
+.cart-page__item-name{font-weight:var(--fw-medium);margin-bottom:var(--sp-1)}
+.cart-page__item-price{font-size:var(--fs-sm);color:var(--c-accent);font-weight:var(--fw-bold)}
+.cart-page__item-controls{display:flex;align-items:center;gap:var(--sp-3);margin-top:var(--sp-2)}
+.cart-page__summary{background:var(--c-surface);border-radius:var(--r-xl);padding:var(--sp-6);box-shadow:var(--sh-sm);position:sticky;top:calc(var(--header-h) + var(--sp-4))}
+.cart-page__summary-title{font-size:var(--fs-lg);font-weight:var(--fw-bold);margin-bottom:var(--sp-4)}
+.cart-page__summary-row{display:flex;justify-content:space-between;padding:var(--sp-2) 0;font-size:var(--fs-sm);color:var(--c-text-2)}
+.cart-page__summary-row.total{font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--c-text);padding-top:var(--sp-3);border-top:1px solid var(--c-border);margin-top:var(--sp-2)}
+.cart-page__checkout-btn{width:100%;height:52px;border-radius:var(--r-lg);background:var(--c-accent);color:#fff;font-size:var(--fs-md);font-weight:var(--fw-bold);transition:background .15s;margin-top:var(--sp-4)}
+.cart-page__checkout-btn:hover{background:var(--c-accent-hover)}
+.cart-page__pdf-btn{width:100%;height:48px;border-radius:var(--r-lg);background:var(--c-success);color:#fff;font-size:var(--fs-sm);font-weight:var(--fw-bold);transition:background .15s;margin-top:var(--sp-3);display:flex;align-items:center;justify-content:center;gap:var(--sp-2)}
+.cart-page__pdf-btn:hover{background:#219a52}
+@media(max-width:768px){.cart-page__grid{grid-template-columns:1fr}.cart-page__summary{position:static}}
+
+/* ========== Advanced Filter ========== */
+.filter-toggle{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-4);border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-medium);background:var(--c-surface);border:1px solid var(--c-border);color:var(--c-text-2);transition:all .15s;margin-bottom:var(--sp-4)}
+.filter-toggle:hover{border-color:var(--c-accent);color:var(--c-accent)}
+.filter-toggle.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+.filter-panel{display:none;background:var(--c-surface);border-radius:var(--r-xl);padding:var(--sp-6);margin-bottom:var(--sp-4);box-shadow:var(--sh-sm);border:1px solid var(--c-border)}
+.filter-panel.show{display:block}
+.filter-panel__title{font-size:var(--fs-lg);font-weight:var(--fw-bold);margin-bottom:var(--sp-4)}
+.filter-panel__section{margin-bottom:var(--sp-4)}
+.filter-panel__section-title{font-size:var(--fs-sm);font-weight:var(--fw-medium);color:var(--c-text-2);margin-bottom:var(--sp-2)}
+.filter-panel__range{display:flex;align-items:center;gap:var(--sp-3)}
+.filter-panel__range input{flex:1;height:40px;padding:0 var(--sp-3);border:1px solid var(--c-border);border-radius:var(--r-md);font-size:var(--fs-sm);text-align:center}
+.filter-panel__range input:focus{border-color:var(--c-accent);outline:none}
+.filter-panel__range span{color:var(--c-text-3);font-size:var(--fs-sm)}
+.filter-panel__brands{display:flex;flex-wrap:wrap;gap:var(--sp-2)}
+.filter-panel__brand{display:flex;align-items:center;gap:var(--sp-1);padding:var(--sp-1) var(--sp-3);border-radius:var(--r-full);font-size:var(--fs-xs);background:var(--c-surface-2);color:var(--c-text-2);cursor:pointer;transition:all .15s;border:1px solid transparent}
+.filter-panel__brand:hover{border-color:var(--c-accent)}
+.filter-panel__brand.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+.filter-panel__stock{display:flex;gap:var(--sp-2)}
+.filter-panel__stock-opt{flex:1;padding:var(--sp-2);border-radius:var(--r-md);font-size:var(--fs-xs);text-align:center;background:var(--c-surface-2);color:var(--c-text-2);cursor:pointer;transition:all .15s;border:1px solid transparent}
+.filter-panel__stock-opt:hover{border-color:var(--c-accent)}
+.filter-panel__stock-opt.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
+.filter-panel__actions{display:flex;gap:var(--sp-3);margin-top:var(--sp-4)}
+.filter-panel__apply{flex:1;height:40px;border-radius:var(--r-md);background:var(--c-accent);color:#fff;font-size:var(--fs-sm);font-weight:var(--fw-bold);transition:background .15s}
+.filter-panel__apply:hover{background:var(--c-accent-hover)}
+.filter-panel__clear{height:40px;padding:0 var(--sp-4);border-radius:var(--r-md);background:var(--c-surface-2);color:var(--c-text-2);font-size:var(--fs-sm);font-weight:var(--fw-medium);transition:background .15s}
+.filter-panel__clear:hover{background:var(--c-border)}
+.filter-active-count{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 4px;background:var(--c-accent);color:#fff;font-size:10px;font-weight:var(--fw-bold);border-radius:var(--r-full);margin-right:var(--sp-1)}
+@media(max-width:640px){.filter-panel__range{flex-direction:column}.filter-panel__brands{max-height:120px;overflow-y:auto}}
+  
+/* ========== Blog ========== */
+.blog-page{display:none;max-width:900px;margin:0 auto;padding:var(--sp-4)}
+.blog-page.show{display:block}
+.blog-page__title{font-size:var(--fs-2xl);font-weight:var(--fw-bold);margin-bottom:var(--sp-6)}
+.blog-page__grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:var(--sp-4)}
+.blog-card{background:var(--c-surface);border-radius:var(--r-xl);overflow:hidden;border:1px solid var(--c-border);transition:box-shadow .2s,transform .2s;cursor:pointer}
+.blog-card:hover{box-shadow:var(--sh-lg);transform:translateY(-2px)}
+.blog-card__img{aspect-ratio:16/9;background:var(--c-surface-2);display:flex;align-items:center;justify-content:center;font-size:3rem}
+.blog-card__body{padding:var(--sp-4)}
+.blog-card__cat{display:inline-block;padding:2px 8px;border-radius:var(--r-full);font-size:var(--fs-xs);font-weight:var(--fw-bold);background:var(--c-accent-light);color:var(--c-accent);margin-bottom:var(--sp-2)}
+.blog-card__title{font-size:var(--fs-md);font-weight:var(--fw-bold);line-height:1.4;margin-bottom:var(--sp-2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.blog-card__excerpt{font-size:var(--fs-sm);color:var(--c-text-2);line-height:1.6;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-bottom:var(--sp-3)}
+.blog-card__meta{display:flex;justify-content:space-between;font-size:var(--fs-xs);color:var(--c-text-3)}
+.blog-detail{display:none;max-width:800px;margin:0 auto;padding:var(--sp-4)}
+.blog-detail.show{display:block}
+.blog-detail__cat{display:inline-block;padding:4px 12px;border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-bold);background:var(--c-accent-light);color:var(--c-accent);margin-bottom:var(--sp-4)}
+.blog-detail__title{font-size:var(--fs-2xl);font-weight:var(--fw-bold);line-height:1.4;margin-bottom:var(--sp-3)}
+.blog-detail__meta{display:flex;gap:var(--sp-4);font-size:var(--fs-sm);color:var(--c-text-3);margin-bottom:var(--sp-6)}
+.blog-detail__content{font-size:var(--fs-md);line-height:2;color:var(--c-text-2);margin-bottom:var(--sp-8)}
+.blog-detail__content p{margin-bottom:var(--sp-4)}
+.blog-detail__content h3{font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--c-text);margin:var(--sp-6) 0 var(--sp-3)}
+.blog-detail__tags{display:flex;gap:var(--sp-2);margin-bottom:var(--sp-6)}
+.blog-detail__tag{padding:4px 12px;border-radius:var(--r-full);font-size:var(--fs-xs);background:var(--c-surface-2);color:var(--c-text-2)}
+
+/* ========== Reviews ========== */
+.reviews{margin-top:var(--sp-8);padding-top:var(--sp-6);border-top:1px solid var(--c-border)}
+.reviews__header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-4)}
+.reviews__title{font-size:var(--fs-lg);font-weight:var(--fw-bold)}
+.reviews__avg{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);color:var(--c-text-2)}
+.reviews__avg-score{font-size:var(--fs-xl);font-weight:var(--fw-bold);color:var(--c-accent)}
+.reviews__avg-stars{color:#f39c12}
+.reviews__list{margin-bottom:var(--sp-6)}
+.review-item{padding:var(--sp-4) 0;border-bottom:1px solid var(--c-border)}
+.review-item:last-child{border-bottom:none}
+.review-item__header{display:flex;justify-content:space-between;align-items:center;margin-bottom:var(--sp-2)}
+.review-item__user{display:flex;align-items:center;gap:var(--sp-2)}
+.review-item__avatar{width:32px;height:32px;border-radius:50%;background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:var(--fs-xs);font-weight:var(--fw-bold)}
+.review-item__name{font-weight:var(--fw-medium)}
+.review-item__date{font-size:var(--fs-xs);color:var(--c-text-3)}
+.review-item__stars{color:#f39c12;font-size:var(--fs-sm);margin-bottom:var(--sp-2)}
+.review-item__text{font-size:var(--fs-sm);color:var(--c-text-2);line-height:1.6}
+.review-form{background:var(--c-surface-2);border-radius:var(--r-xl);padding:var(--sp-6)}
+.review-form__title{font-size:var(--fs-md);font-weight:var(--fw-bold);margin-bottom:var(--sp-4)}
+.review-form__stars{display:flex;gap:var(--sp-1);margin-bottom:var(--sp-4)}
+.review-form__star{font-size:1.5rem;cursor:pointer;color:var(--c-border);transition:color .15s}
+.review-form__star.active,.review-form__star:hover{color:#f39c12}
+.review-form textarea{width:100%;height:100px;padding:var(--sp-3);border:1px solid var(--c-border);border-radius:var(--r-md);font-size:var(--fs-sm);resize:vertical;font-family:inherit}
+.review-form textarea:focus{border-color:var(--c-accent);outline:none}
+.review-form__btn{margin-top:var(--sp-3);height:42px;padding:0 var(--sp-6);border-radius:var(--r-md);background:var(--c-accent);color:#fff;font-size:var(--fs-sm);font-weight:var(--fw-bold);cursor:pointer;border:none;transition:background .15s}
+.review-form__btn:hover{background:var(--c-accent-hover)}
+@media(max-width:640px){.blog-page__grid{grid-template-columns:1fr}}
+</style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
 
@@ -235,6 +350,35 @@ input,select{font-family:inherit}
   <div class="products-header">
     <span class="products-header__count" id="productsCount"></span>
     <div class="products-header__sort"><select id="sortSelect"><option value="newest">جدیدترین</option><option value="cheapest">ارزان‌ترین</option><option value="expensive">گران‌ترین</option><option value="name">نام</option></select></div>
+  </div>
+  <button class="filter-toggle" id="filterToggle" onclick="toggleFilter()">🔍 فیلتر پیشرفته</button>
+  <div class="filter-panel" id="filterPanel">
+    <h3 class="filter-panel__title">فیلتر محصولات</h3>
+    <div class="filter-panel__section">
+      <div class="filter-panel__section-title">محدوده قیمت (تومان)</div>
+      <div class="filter-panel__range">
+        <input type="number" id="filterPriceMin" placeholder="از">
+        <span>تا</span>
+        <input type="number" id="filterPriceMax" placeholder="تا">
+      </div>
+    </div>
+    <div class="filter-panel__section">
+      <div class="filter-panel__section-title">برند</div>
+      <div class="filter-panel__brands" id="filterBrands"></div>
+    </div>
+    <div class="filter-panel__section">
+      <div class="filter-panel__section-title">وضعیت موجودی</div>
+      <div class="filter-panel__stock" id="filterStock">
+        <button class="filter-panel__stock-opt active" data-stock="all" onclick="setStockFilter('all')">همه</button>
+        <button class="filter-panel__stock-opt" data-stock="in" onclick="setStockFilter('in')">موجود</button>
+        <button class="filter-panel__stock-opt" data-stock="low" onclick="setStockFilter('low')">کم</button>
+        <button class="filter-panel__stock-opt" data-stock="out" onclick="setStockFilter('out')">ناموجود</button>
+      </div>
+    </div>
+    <div class="filter-panel__actions">
+      <button class="filter-panel__clear" onclick="clearFilters()">پاک کردن</button>
+      <button class="filter-panel__apply" onclick="applyFilters()">اعمال فیلتر</button>
+    </div>
   </div>
   <div class="product-grid" id="productGrid"></div>
 </main>
@@ -266,6 +410,38 @@ input,select{font-family:inherit}
   <div id="orderList"></div>
 </section>
 
+<!-- ===== CART PAGE ===== -->
+<section class="cart-page" id="cartPage">
+  <button class="detail__back" onclick="showGrid()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به فروشگاه
+  </button>
+  <h1 class="cart-page__title">🛒 سبد خرید</h1>
+  <div class="cart-page__grid">
+    <div class="cart-page__items" id="cartPageItems"></div>
+    <div class="cart-page__summary" id="cartPageSummary"></div>
+  </div>
+</section>
+
+
+<!-- ===== BLOG PAGE ===== -->
+<section class="blog-page" id="blogPage">
+  <button class="detail__back" onclick="showGrid()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به فروشگاه
+  </button>
+  <h1 class="blog-page__title">📰 مقالات و راهنماها</h1>
+  <div class="blog-page__grid" id="blogGrid"></div>
+</section>
+
+<!-- ===== BLOG DETAIL ===== -->
+<section class="blog-detail" id="blogDetail">
+  <button class="detail__back" onclick="showBlogPage()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به مقالات
+  </button>
+  <div id="blogDetailContent"></div>
+</section>
 <footer class="footer"><p>فروشگاه قطعات خودرو — تمامی حقوق محفوظ است</p></footer>
 
 <div class="cart-overlay" id="cartOverlay"></div>
@@ -280,20 +456,26 @@ input,select{font-family:inherit}
   <div class="modal">
     <div class="modal__header"><h3 class="modal__title">ورود / ثبت‌نام</h3><button class="cart-drawer__close" id="authClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
     <div class="modal__body">
-      <div class="auth-tabs">
-        <button class="auth-tab active" onclick="switchAuthTab('login')">ورود</button>
-        <button class="auth-tab" onclick="switchAuthTab('register')">ثبت‌نام</button>
-      </div>
-      <form class="auth-form active" id="loginForm" onsubmit="handleLogin(event)">
-        <div class="form-group"><label>شماره موبایل</label><input type="tel" id="loginPhone" placeholder="0912xxxxxxx" dir="ltr" style="text-align:left;" required></div>
-        <div class="form-group"><label>رمز عبور</label><input type="password" id="loginPass" placeholder="رمز عبور" required></div>
-        <button type="submit" class="btn-primary" style="width:100%;height:48px;font-size:var(--fs-md)">ورود</button>
+      <!--
+        ورود با کد پیامکی — نه رمز عبور.
+
+        هیچ «ثبت‌نام» جدایی وجود ندارد: شماره‌ای که تا حالا مشتری نبوده، با
+        همان اولین ورود مشتری می‌شود. یک فرمِ کمتر، و یک رمزِ فراموش‌شدنیِ
+        کمتر.
+      -->
+      <form class="auth-form active" id="phoneForm" onsubmit="handleRequestOtp(event)">
+        <p class="auth-hint">شماره موبایل خود را وارد کنید. کد ورود پیامک می‌شود.</p>
+        <div class="form-group"><label>شماره موبایل</label><input type="tel" id="loginPhone" placeholder="09121234567" dir="ltr" style="text-align:left;" required inputmode="numeric"></div>
+        <button type="submit" class="btn-primary" id="otpSendBtn" style="width:100%;height:48px;font-size:var(--fs-md)">ارسال کد</button>
       </form>
-      <form class="auth-form" id="registerForm" onsubmit="handleRegister(event)">
-        <div class="form-group"><label>نام و نام خانوادگی</label><input type="text" id="regName" placeholder="مثال: علی رضایی" required></div>
-        <div class="form-group"><label>شماره موبایل</label><input type="tel" id="regPhone" placeholder="0912xxxxxxx" dir="ltr" style="text-align:left;" required></div>
-        <div class="form-group"><label>رمز عبور</label><input type="password" id="regPass" placeholder="حداقل ۶ کاراکتر" required minlength="6"></div>
-        <button type="submit" class="btn-primary" style="width:100%;height:48px;font-size:var(--fs-md)">ثبت‌نام</button>
+
+      <form class="auth-form" id="codeForm" onsubmit="handleVerifyOtp(event)">
+        <p class="auth-hint">کد پیامک‌شده به <span id="otpPhoneLabel" dir="ltr"></span> را وارد کنید.</p>
+        <div class="form-group"><label>کد ورود</label><input type="tel" id="loginCode" placeholder="۴ رقم" dir="ltr" style="text-align:left;letter-spacing:.4em" required inputmode="numeric" autocomplete="one-time-code"></div>
+        <!-- فقط برای شماره‌ی تازه؛ برای ورودِ دوباره سرور نادیده‌اش می‌گیرد. -->
+        <div class="form-group"><label>نام و نام خانوادگی <span style="color:var(--c-text-3)">(اختیاری)</span></label><input type="text" id="loginName" placeholder="مثال: علی رضایی"></div>
+        <button type="submit" class="btn-primary" id="otpVerifyBtn" style="width:100%;height:48px;font-size:var(--fs-md)">ورود</button>
+        <button type="button" class="btn-secondary" onclick="backToPhone()" style="width:100%;height:40px;margin-top:var(--sp-2)">تغییر شماره</button>
       </form>
     </div>
   </div>
@@ -304,9 +486,16 @@ input,select{font-family:inherit}
   <div class="modal">
     <div class="modal__header"><h3 class="modal__title">تسویه خرید</h3><button class="cart-drawer__close" id="checkoutClose"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
     <div class="modal__body">
-      <div class="form-group"><label for="custName">نام مشتری</label><input type="text" id="custName" placeholder="نام و نام خانوادگی"></div>
-      <div class="form-group"><label for="custPhone">شماره تماس</label><input type="tel" id="custPhone" placeholder="0912xxxxxxx" dir="ltr" style="text-align:left;"></div>
-      <div class="form-group"><label for="payMethod">روش پرداخت</label><select id="payMethod"><option value="cash">نقد</option><option value="card">کارتخوان</option><option value="transfer">انتقال بانکی</option></select></div>
+      <div class="form-group"><label for="custName">نام گیرنده</label><input type="text" id="custName" placeholder="نام و نام خانوادگی" required></div>
+      <div class="form-group"><label for="custPhone">شماره تماس</label><input type="tel" id="custPhone" placeholder="09121234567" dir="ltr" style="text-align:left;" inputmode="numeric" required></div>
+      <!-- بدون آدرس، سفارش قابل ارسال نیست — این فیلد در ماکت نبود. -->
+      <div class="form-group"><label for="custAddress">آدرس تحویل</label><textarea id="custAddress" rows="3" placeholder="شهر، خیابان، پلاک، واحد" required></textarea></div>
+      <div class="form-group"><label for="payMethod">روش پرداخت</label><select id="payMethod">
+        <option value="ON_DELIVERY">پرداخت در محل</option>
+        <option value="TRANSFER">کارت‌به‌کارت</option>
+      </select></div>
+      <div class="form-group"><label for="custNote">توضیح (اختیاری)</label><input type="text" id="custNote" placeholder="مثلاً: بعدازظهر تماس بگیرید"></div>
+      <div id="checkoutSummary" class="checkout-summary"></div>
     </div>
     <div class="modal__footer"><button class="btn-secondary" id="checkoutCancel">انصراف</button><button class="btn-primary" id="checkoutConfirm">تأیید و ثبت سفارش</button></div>
   </div>
@@ -314,82 +503,351 @@ input,select{font-family:inherit}
 
 <nav class="mobile-nav">
   <a class="mobile-nav__item active" href="#" onclick="showGrid();return false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>خانه</span></a>
-  <button class="mobile-nav__item" id="mobileCartBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>سبد</span></a>
-  <button class="mobile-nav__item" onclick="openAuth()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>حساب من</span></button>
+  <button class="mobile-nav__item" id="mobileCartBtn" onclick="showCartPage();return false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>سبد</span></button>
+  <button class="mobile-nav__item" onclick="showBlogPage()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg><span>مقالات</span></button>
+<button class="mobile-nav__item" onclick="openAuth()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>حساب من</span></button>
 </nav>
 
 <div class="toast" id="toast"></div>
 
 <script>
-const PRODUCTS=[
-{id:'1',name:'لنت ترمز جلو پراید',sku:'LNT-PRY-001',brand:'آسیا',category:'ترمز',price:185000,stock:24,unit:'جفت',icon:'🔧',desc:'لنت ترمز جلو پراید آسیا با کیفیت بالا و عمر طولانی. مناسب برای شرایط رانندگی شهری و جاده‌ای.',specs:{'نوع خودرو':'پراید ۱۳۱/۱۳۲','موقعیت':'جلو','جنس':'نیمه‌فلزی','برند':'آسیا','وزن':'۱.۲ کیلوگرم'}},
-{id:'2',name:'فیلتر روغن پراید',sku:'FLT-OL-P01',brand:'فلیپ',category:'موتور',price:45000,stock:80,unit:'عدد',icon:'🔧',desc:'فیلتر روغن فلیپ مناسب موتورهای EC5 و M13 پراید.',specs:{'نوع خودرو':'پراید EC5/M13','قطر':'۶۷ میلی‌متر','برند':'فلیپ'}},
-{id:'3',name:'فیلتر هوا پراید',sku:'FLT-AIR-P1',brand:'فلیپ',category:'موتور',price:38000,stock:65,unit:'عدد',icon:'🔧',desc:'فیلتر هوای فلیپ با کارایی بالا.',specs:{'نوع خودرو':'پراید ۱۳۱/۱۳۲','جنس':'کاغذی','برند':'فلیپ'}},
-{id:'4',name:'شمع موتور NGK پراید',sku:'SHM-NGK-P1',brand:'NGK',category:'موتور',price:72000,stock:40,unit:'عدد',icon:'🔧',desc:'شمع موتور اورجینال NGK با الکترود پلاتینی.',specs:{'نوع خودرو':'پراید ۱.۳L','برند':'NGK','نوع الکترود':'پلاتینی'}},
-{id:'5',name:'تسمه دینام پراید',sku:'TSM-DN-P01',brand:'دایMOV',category:'موتور',price:55000,stock:30,unit:'عدد',icon:'🔧',desc:'تسمه دینام دایMOV با مقاومت بالا.',specs:{'نوع خودرو':'پراید','عرض':'۱۲.۷ میلی‌متر','برند':'دایMOV'}},
-{id:'6',name:'روغن موتور ۲۰W-50 چهار لیتری',sku:'ROGH-20W50',brand:'ایسوسان',category:'روغن',price:320000,stock:15,unit:'عدد',icon:'🛢️',desc:'روغن موتور ایسوسان با گرانروی ۲۰W-50.',specs:{'گرانروی':'۲۰W-50','حجم':'۴ لیتر','برند':'ایسوسان'}},
-{id:'7',name:'ضد یخ اورجینال ۴ لیتری',sku:'ANTF-4L',brand:'پارس',category:'روغن',price:280000,stock:12,unit:'عدد',icon:'💧',desc:'ضد یخ پارس با فرمولاسیون اورجینال.',specs:{'دمای انجماد':'۳۷- درجه','حجم':'۴ لیتر','برند':'پارس'}},
-{id:'8',name:'لنت ترمز عقب پراید',sku:'LNT-PRY-R1',brand:'آسیا',category:'ترمز',price:145000,stock:18,unit:'جفت',icon:'🔧',desc:'لنت ترمز عقب پراید آسیا.',specs:{'نوع خودرو':'پراید ۱۳۱/۱۳۲','موقعیت':'عقب','برند':'آسیا'}},
-{id:'9',name:'دیسک ترمز جلو پراید',sku:'DSK-PRY-F1',brand:'آسیا',category:'ترمز',price:210000,stock:10,unit:'عدد',icon:'🔧',desc:'دیسک ترمز جلو پراید آسیا با قطر ۲۴۵ میلی‌متر.',specs:{'قطر':'۲۴۵ میلی‌متر','جنس':'چدن آلیاژی','برند':'آسیا'}},
-{id:'10',name:'باطری ۶۰ آمپر اوربیتال',sku:'BATT-60A',brand:'ورتا',category:'برقی',price:2850000,stock:8,unit:'عدد',icon:'🔋',desc:'باطری اوربیتال ۶۰ آمپر ورتا با گارانتی ۲۴ ماهه.',specs:{'ظرفیت':'۶۰ آمپر ساعت','ولتاژ':'۱۲ ولت','برند':'ورتا'}},
-{id:'11',name:'دیسک ترمز عقب پراید',sku:'DSK-PRY-R1',brand:'آسیا',category:'ترمز',price:195000,stock:0,unit:'عدد',icon:'🔧',desc:'دیسک ترمز عقب پراید آسیا.',specs:{'قطر':'۲۲۰ میلی‌متر','جنس':'چدن آلیاژی','برند':'آسیا'}},
-{id:'12',name:'فیلتر کابین پراید',sku:'FLT-CAB-P1',brand:'فلیپ',category:'موتور',price:32000,stock:50,unit:'عدد',icon:'🔧',desc:'فیلتر کابین فلیپ با قابلیت جذب گرد و غبار.',specs:{'جنس':'کربن فعال','برند':'فلیپ'}},
-{id:'13',name:'گردگیر فرمان پراید',sku:'GRD-FRN-P1',brand:'ارج',category:'فرمان',price:65000,stock:20,unit:'عدد',icon:'🔧',desc:'گردگیر فرمان ارج مناسب برای مکانیزم فرمان پراید.',specs:{'جنس':'پلاستیک مقاوم','برند':'ارج'}},
-{id:'14',name:'مگنت فرمان پراید',sku:'MAG-FRN-P1',brand:'ارج',category:'فرمان',price:85000,stock:14,unit:'عدد',icon:'🔧',desc:'مگنت فرمان ارج با کیفیت بالا.',specs:{'جنس':'فلز آلیاژی','برند':'ارج'}},
-{id:'15',name:'لاستیک ۱۶۵/۶۵R۱۳',sku:'TYR-165-13',brand:'بارز',category:'لاستیک',price:1450000,stock:32,unit:'عدد',icon:'🛞',desc:'لاستیک بارز ۱۶۵/۶۵R۱۳ با گل مناسب برای شرایط جاده‌ای.',specs:{'سایز':'۱۶۵/۶۵R۱۳','برند':'بارز','نوع':'تابستانی'}},
-{id:'16',name:'لاستیک ۱۷۵/۶۵R۱۴',sku:'TYR-175-14',brand:'کویر',category:'لاستیک',price:1750000,stock:28,unit:'عدد',icon:'🛞',desc:'لاستیک کویر ۱۷۵/۶۵R۱۴ با گل سه‌بعدی.',specs:{'سایز':'۱۷۵/۶۵R۱۴','برند':'کویر','نوع':'تابستانی'}},
-{id:'17',name:'واشر سرسیلندر پراید',sku:'WSH-SLC-P1',brand:'ارج',category:'موتور',price:95000,stock:6,unit:'عدد',icon:'🔧',desc:'واشر سرسیلندر ارج با مقاومت بالا.',specs:{'جنس':'آزبست','برند':'ارج'}},
-{id:'18',name:'پمپ بنزین پراید',sku:'PMP-GAZ-P1',brand:'بوش',category:'موتور',price:420000,stock:4,unit:'عدد',icon:'🔧',desc:'پمپ بنزین بوش اورجینال.',specs:{'برند':'بوش','فشار':'۳ بار'}},
-{id:'19',name:'چراغ جلو راست پراید',sku:'LGT-FR-R1',brand:'ارج',category:'برقی',price:380000,stock:7,unit:'عدد',icon:'💡',desc:'چراغ جلو راست پراید ارج با لنز شفاف.',specs:{'موقعیت':'جلو راست','نوع لامپ':'H4','برند':'ارج'}},
-{id:'20',name:'آینه جانبی راست پراید',sku:'MRR-SDE-R1',brand:'ارج',category:'بدنه',price:165000,stock:11,unit:'عدد',icon:'🪞',desc:'آینه جانبی راست پراید ارج.',specs:{'موقعیت':'راست','نوع':'برقی','برند':'ارج'}},
-];
+/* ═══════════════════════════════════════════════════════════════════════
+   لایه‌ی API
+
+   قاعده: هیچ کامپوننتی مستقیم fetch نمی‌زند — همه از اینجا رد می‌شوند، تا
+   آدرس سرور، توکن و ترجمه‌ی خطا یک جا باشند.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * آدرس API در زمان اجرا از خودِ مرورگر گرفته می‌شود، نه از build.
+ *
+ * همان درسی که در پنل مدیر گرفته شد: آی‌پیِ حک‌شده در فایل یعنی نسخه‌ای که
+ * روی سرور مشتری کار نمی‌کند. اگر سایت و API روی یک میزبان باشند (حالت
+ * پیش‌فرضِ استقرار) همین درست است؛ برای میزبانِ جدا، فقط همین یک خط عوض
+ * می‌شود یا window.SHOP_API پیش از این اسکریپت تعریف می‌شود.
+ */
+const API = (window.SHOP_API || location.origin).replace(/\/$/, '');
+
+const TOKEN_KEY = 'sf_token';
+let authToken = localStorage.getItem(TOKEN_KEY) || null;
+
+function setToken(t){
+  authToken = t;
+  if(t) localStorage.setItem(TOKEN_KEY, t);
+  else localStorage.removeItem(TOKEN_KEY);
+}
+
+/** خطایی که پیامش را می‌شود مستقیم به کاربر نشان داد. */
+class ApiError extends Error{
+  constructor(message, code, status){
+    super(message);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+async function api(path, options){
+  const opt = options || {};
+  const headers = { 'content-type':'application/json' };
+  if(authToken) headers.authorization = 'Bearer ' + authToken;
+
+  let res;
+  try{
+    res = await fetch(API + path, {
+      method: opt.method || 'GET',
+      headers,
+      body: opt.body ? JSON.stringify(opt.body) : undefined,
+    });
+  }catch(e){
+    // شبکه‌ی قطع یا سرورِ خاموش — پیام باید بگوید چه کار کند، نه اینکه fetch failed.
+    throw new ApiError('ارتباط با فروشگاه برقرار نشد. اتصال اینترنت را بررسی کنید.','NETWORK',0);
+  }
+
+  if(res.status === 204) return null;
+
+  let body = null;
+  try{ body = await res.json() }catch(_){ /* پاسخِ بی‌بدنه */ }
+
+  if(!res.ok){
+    /*
+     * توکنِ منقضی: بی‌سروصدا بیرونش می‌کنیم تا کاربر گیرِ حلقه‌ی ۴۰۱ نیفتد.
+     * سرور پیام فارسی می‌دهد؛ اگر نداد یک پیامِ عمومیِ قابل‌فهم می‌گذاریم.
+     */
+    if(res.status === 401 && authToken){ setToken(null); currentUser = null; updateUserBtn(); }
+    throw new ApiError(
+      (body && body.message) || 'خطایی رخ داد. دوباره تلاش کنید.',
+      body && body.error,
+      res.status,
+    );
+  }
+  return body;
+}
+
+/* تنظیمات فروشگاه — واحد پول و هزینه‌ی ارسال از سرور می‌آید، نه هاردکد. */
+let SHOP = { unit:'TOMAN', shippingFee:0, freeShipOver:0, name:'', phone:'', cardNumber:'', cardHolder:'' };
+
+const UNIT_LABEL = { RIAL:'ریال', TOMAN:'تومان' };
+const unitLabel = () => UNIT_LABEL[SHOP.unit] || 'تومان';
+
+/* کاتالوگی که از سرور آمده. جای همان PRODUCTS هاردکدِ قبلی. */
+let PRODUCTS = [];
+let catalogTotal = 0;
 
 const fa=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
 const faNum=n=>n.toLocaleString('fa-IR');
-const toman=n=>faNum(n)+' تومان';
+const toman=n=>faNum(n)+' '+unitLabel();
 
-function stockLabel(q){if(q===0)return{text:'ناموجود',cls:'out-of-stock'};if(q<=10)return{text:fa(q)+' موجود',cls:'low-stock'};return{text:'موجود',cls:'in-stock'}}
+/*
+ * سرور عمداً عددِ موجودی را بیرون نمی‌دهد، فقط سه حالت — رقیب نباید بداند از
+ * هر کالا چند تا داری. پس این تابع روی رشته کار می‌کند نه روی عدد.
+ */
+const BANDS = {
+  OUT: { text:'ناموجود',   cls:'out-of-stock' },
+  LOW: { text:'موجودی کم', cls:'low-stock'    },
+  IN:  { text:'موجود',     cls:'in-stock'     },
+};
+function stockLabel(band){ return BANDS[band] || BANDS.IN }
+const inStock = band => band !== 'OUT';
 
-/* ===== AUTH ===== */
-let currentUser=JSON.parse(localStorage.getItem('sf_user')||'null');
-let orders=JSON.parse(localStorage.getItem('sf_orders')||'[]');
+/** نامِ کالا از دیتابیس می‌آید و مستقیم داخل HTML می‌نشیند — پس escape لازم است. */
+function esc(v){
+  return String(v ?? '').replace(/[&<>"']/g, c => (
+    { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+  ));
+}
 
-function openAuth(){if(currentUser){showProfile()}else{document.getElementById('authModal').classList.add('open');document.body.style.overflow='hidden'}}
-function closeAuth(){document.getElementById('authModal').classList.remove('open');document.body.style.overflow=''}
-function switchAuthTab(t){document.querySelectorAll('.auth-tab').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.auth-form').forEach(x=>x.classList.remove('active'));if(t==='login'){document.querySelectorAll('.auth-tab')[0].classList.add('active');document.getElementById('loginForm').classList.add('active')}else{document.querySelectorAll('.auth-tab')[1].classList.add('active');document.getElementById('registerForm').classList.add('active')}}
-function handleLogin(e){e.preventDefault();const phone=document.getElementById('loginPhone').value.trim();const pass=document.getElementById('loginPass').value;if(!phone||!pass)return;currentUser={name:'کاربر',phone:phone,avatar:phone.slice(-2)};localStorage.setItem('sf_user',JSON.stringify(currentUser));closeAuth();updateUserBtn();showToast('خوش آمدید '+currentUser.name+' ✓')}
-function handleRegister(e){e.preventDefault();const name=document.getElementById('regName').value.trim();const phone=document.getElementById('regPhone').value.trim();const pass=document.getElementById('regPass').value;if(!name||!phone||!pass)return;currentUser={name:name,phone:phone,avatar:name.slice(0,1)};localStorage.setItem('sf_user',JSON.stringify(currentUser));closeAuth();updateUserBtn();showToast('ثبت‌نام موفق '+name+' ✓')}
-function logout(){currentUser=null;localStorage.removeItem('sf_user');showGrid();updateUserBtn();showToast('از حساب خارج شدید')}
-function updateUserBtn(){const btn=document.getElementById('headerUserBtn');btn.textContent=currentUser?currentUser.avatar:'👤'}
+/* ═══════════════════════════════════════════════════════════════════════
+   ورود مشتری — کد یک‌بارمصرف پیامکی
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * پروفایل در حافظه است، نه در localStorage.
+ *
+ * تنها چیزی که ماندگار ذخیره می‌شود توکن است؛ نام و شماره هر بار از
+ * `/shop/me` می‌آیند. قبلاً پروفایل در localStorage بود و می‌شد دستی
+ * ویرایشش کرد — چیزی که وقتی «ورود» جعلی بود اهمیتی نداشت و حالا دارد.
+ */
+let currentUser = null;
+let orders = [];
+let otpPhone = '';
+
+function initials(name){
+  const t=(name||'').trim();
+  return t ? t[0] : '👤';
+}
+
+function openAuth(){
+  if(currentUser){ showProfile(); return }
+  backToPhone();
+  document.getElementById('authModal').classList.add('open');
+  document.body.style.overflow='hidden';
+}
+function closeAuth(){
+  document.getElementById('authModal').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+function showAuthForm(which){
+  document.querySelectorAll('.auth-form').forEach(f=>f.classList.remove('active'));
+  document.getElementById(which).classList.add('active');
+}
+function backToPhone(){
+  showAuthForm('phoneForm');
+  document.getElementById('loginCode').value='';
+}
+
+async function handleRequestOtp(e){
+  e.preventDefault();
+  const phone=document.getElementById('loginPhone').value.trim();
+  if(!phone) return;
+
+  const btn=document.getElementById('otpSendBtn');
+  btn.disabled=true; btn.textContent='در حال ارسال…';
+  try{
+    await api('/shop/auth/otp',{method:'POST',body:{phone}});
+    otpPhone=phone;
+    document.getElementById('otpPhoneLabel').textContent=phone;
+    showAuthForm('codeForm');
+    document.getElementById('loginCode').focus();
+    showToast('کد ورود پیامک شد');
+  }catch(err){
+    showToast(err.message);
+  }finally{
+    btn.disabled=false; btn.textContent='ارسال کد';
+  }
+}
+
+async function handleVerifyOtp(e){
+  e.preventDefault();
+  const code=document.getElementById('loginCode').value.trim();
+  const name=document.getElementById('loginName').value.trim();
+  if(!code) return;
+
+  const btn=document.getElementById('otpVerifyBtn');
+  btn.disabled=true; btn.textContent='در حال ورود…';
+  try{
+    const res=await api('/shop/auth/verify',{method:'POST',body:{phone:otpPhone,code,name:name||undefined}});
+    setToken(res.token || res.access_token);
+    applyUser(res.customer);
+    closeAuth();
+    showToast('خوش آمدید'+(currentUser.name?' '+currentUser.name:'')+' ✓');
+  }catch(err){
+    showToast(err.message);
+  }finally{
+    btn.disabled=false; btn.textContent='ورود';
+  }
+}
+
+function applyUser(c){
+  if(!c){ currentUser=null; updateUserBtn(); return }
+  const name=[c.firstName,c.lastName].filter(Boolean).join(' ');
+  currentUser={ id:c.id, name, phone:c.phone||otpPhone, avatar:initials(name) };
+  updateUserBtn();
+}
+
+/** توکنِ ذخیره‌شده معتبر است؟ اگر نه، `api()` خودش پاکش می‌کند. */
+async function refreshMe(){
+  try{
+    applyUser(await api('/shop/me'));
+  }catch(_){ /* توکن باطل بود؛ کاربر مهمان می‌ماند */ }
+}
+
+function logout(){
+  setToken(null);
+  currentUser=null;
+  orders=[];
+  showGrid();
+  updateUserBtn();
+  showToast('از حساب خارج شدید');
+}
+
+function updateUserBtn(){
+  const btn=document.getElementById('headerUserBtn');
+  if(btn) btn.textContent=currentUser?currentUser.avatar:'👤';
+}
 
 /* ===== ORDERS ===== */
-function addOrder(cartItems,total,payMethod){const o={id:fa(orders.length+1001),date:new Date().toLocaleDateString('fa-IR'),items:cartItems.map(i=>({name:i.name,qty:i.qty,price:i.price})),total:total,payMethod:payMethod,status:'preparing',statusText:'در حال آماده‌سازی'};orders.unshift(o);localStorage.setItem('sf_orders',JSON.stringify(orders));return o}
+/* ═══════════════════════════════════════════════════════════════════════
+   سفارش‌ها
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const ORDER_STATUS = {
+  PENDING:   { text:'در انتظار تأیید', cls:'preparing' },
+  CONFIRMED: { text:'تأیید شد',        cls:'delivered' },
+  REJECTED:  { text:'رد شد',           cls:'cancelled' },
+  CANCELLED: { text:'لغو شد',          cls:'cancelled' },
+};
+const PAY_LABEL = {
+  ON_DELIVERY:'پرداخت در محل',
+  TRANSFER:'کارت‌به‌کارت',
+  GATEWAY:'درگاه اینترنتی',
+};
+
+/**
+ * ثبت سفارش روی سرور.
+ *
+ * ⚠️ هیچ قیمتی فرستاده نمی‌شود — فقط شناسه‌ی کالا و تعداد. قیمت را سرور از
+ * دیتابیس می‌خواند، وگرنه هر کسی می‌توانست با یک درخواستِ دستی هر چیزی را به
+ * هر قیمتی سفارش دهد.
+ */
+async function submitOrder(payload){
+  const order = await api('/shop/orders',{ method:'POST', body:{
+    lines: cart.map(i=>({ productId:i.id, quantity:i.qty })),
+    receiverName: payload.name,
+    receiverPhone: payload.phone,
+    address: payload.address,
+    payMethod: payload.payMethod,
+    note: payload.note || undefined,
+    // retryِ شبکه یا دوبار خوردنِ دکمه نباید دو سفارش بسازد.
+    idempotencyKey: payload.key,
+  }});
+  return order;
+}
+
+async function loadMyOrders(){
+  try{ orders = await api('/shop/orders') }catch(_){ orders = [] }
+}
+
+/*
+ * کلید تکرارناپذیری.
+ *
+ * یک بار برای هر «تلاش برای تسویه» ساخته می‌شود و تا وقتی سفارش موفق ثبت
+ * نشده همان می‌ماند — پس اگر پاسخ در راه گم شد و کاربر دوباره زد، سرور همان
+ * سفارش قبلی را برمی‌گرداند به‌جای اینکه دومی بسازد.
+ */
+function newKey(){
+  return (crypto.randomUUID ? crypto.randomUUID()
+    : 'k' + Date.now() + Math.random().toString(16).slice(2));
+}
+let checkoutKey = newKey();
+
+/** نام و شماره‌ی مشتریِ واردشده از قبل پر می‌شود؛ دوباره تایپ‌کردن بی‌دلیل است. */
+function prefillCheckout(){
+  const n=document.getElementById('custName');
+  const p=document.getElementById('custPhone');
+  if(n && !n.value && currentUser) n.value=currentUser.name||'';
+  if(p && !p.value && currentUser) p.value=currentUser.phone||'';
+}
+
+/** خلاصه‌ی مبلغ داخل مودال — هزینه‌ی ارسال از تنظیمات سرور می‌آید. */
+function renderCheckoutSummary(){
+  const el=document.getElementById('checkoutSummary');
+  if(!el) return;
+  const subtotal=cartTotal();
+  const freeShip=SHOP.freeShipOver>0 && subtotal>=SHOP.freeShipOver;
+  const ship=freeShip?0:(SHOP.shippingFee||0);
+  el.innerHTML=`
+    <div class="checkout-summary__row"><span>جمع کالاها</span><span>${faNum(subtotal)} ${unitLabel()}</span></div>
+    <div class="checkout-summary__row"><span>هزینه ارسال</span><span>${ship?faNum(ship)+' '+unitLabel():'رایگان'}</span></div>
+    <div class="checkout-summary__row total"><span>قابل پرداخت</span><span>${faNum(subtotal+ship)} ${unitLabel()}</span></div>`;
+}
+
+async function cancelOrder(id){
+  if(!confirm('این سفارش لغو شود؟')) return;
+  try{
+    await api('/shop/orders/'+encodeURIComponent(id)+'/cancel',{method:'POST'});
+    showToast('سفارش لغو شد');
+    await loadMyOrders();
+    renderProfile();
+  }catch(e){ showToast(e.message) }
+}
 
 function renderProfile(){
   if(!currentUser)return;
   document.getElementById('profileHeader').innerHTML=`
-    <div class="profile__avatar">${currentUser.avatar||'👤'}</div>
+    <div class="profile__avatar">${esc(currentUser.avatar||'👤')}</div>
     <div class="profile__info">
-      <div class="profile__name">${currentUser.name}</div>
-      <div class="profile__phone">${currentUser.phone}</div>
+      <div class="profile__name">${esc(currentUser.name||'مشتری')}</div>
+      <div class="profile__phone" dir="ltr">${esc(currentUser.phone||'')}</div>
     </div>
     <button class="btn-secondary" onclick="logout()" style="flex-shrink:0">خروج</button>`;
-  const totalSpent=orders.reduce((s,o)=>s+o.total,0);
-  const deliveredCount=orders.filter(o=>o.status==='delivered').length;
+
+  // فقط سفارش‌های تأییدشده «خرید» حساب می‌شوند؛ رد و لغو پول جابه‌جا نکرده‌اند.
+  const confirmed=orders.filter(o=>o.status==='CONFIRMED');
+  const totalSpent=confirmed.reduce((s,o)=>s+o.total,0);
   document.getElementById('profileStats').innerHTML=`
-    <div class="profile__stat"><div class="profile__stat-val">${fa(orders.length)}</div><div class="profile__stat-label">کل سفارشات</div></div>
-    <div class="profile__stat"><div class="profile__stat-val">${fa(deliveredCount)}</div><div class="profile__stat-label">تحویل شده</div></div>
-    <div class="profile__stat"><div class="profile__stat-val">${faNum(totalSpent)}</div><div class="profile__stat-label">جمع خرید (ریال)</div></div>`;
+    <div class="profile__stat"><div class="profile__stat-val">${fa(orders.length)}</div><div class="profile__stat-label">کل سفارش‌ها</div></div>
+    <div class="profile__stat"><div class="profile__stat-val">${fa(confirmed.length)}</div><div class="profile__stat-label">تأیید شده</div></div>
+    <div class="profile__stat"><div class="profile__stat-val">${faNum(totalSpent)}</div><div class="profile__stat-label">جمع خرید (${unitLabel()})</div></div>`;
+
   const list=document.getElementById('orderList');
   if(!orders.length){list.innerHTML='<div class="empty-state"><div class="empty-state__icon">📦</div><div class="empty-state__text">هنوز سفارشی ثبت نکرده‌اید</div></div>';return}
-  list.innerHTML=orders.map(o=>`<div class="order-card">
+
+  list.innerHTML=orders.map(o=>{
+    const st=ORDER_STATUS[o.status]||ORDER_STATUS.PENDING;
+    const d=new Date(o.createdAt).toLocaleDateString('fa-IR');
+    const canCancel=o.status==='PENDING';
+    return `<div class="order-card">
     <div class="order-card__header">
-      <div><span class="order-card__id">سفارش #${o.id}</span><span class="order-card__date"> — ${o.date}</span></div>
-      <span class="order-card__status ${o.status}">${o.statusText}</span>
+      <div><span class="order-card__id">سفارش #${fa(o.number)}</span><span class="order-card__date"> — ${d}</span></div>
+      <span class="order-card__status ${st.cls}">${st.text}</span>
     </div>
-    <div class="order-card__items">${o.items.map(i=>`<div class="order-card__item"><span>${i.name} × ${fa(i.qty)}</span><span>${faNum(i.price*i.qty)} ریال</span></div>`).join('')}</div>
-    <div class="order-card__footer"><span>روش پرداخت: ${o.payMethod==='cash'?'نقد':o.payMethod==='card'?'کارتخوان':'انتقال بانکی'}</span><span>${faNum(o.total)} ریال</span></div>
-  </div>`).join('')}
+    <div class="order-card__footer">
+      <span>${fa(o.lineCount)} قلم · ${PAY_LABEL[o.payMethod]||''}</span>
+      <span>${faNum(o.total)} ${unitLabel()}</span>
+    </div>
+    ${canCancel?`<div style="margin-top:var(--sp-3)"><button class="btn-secondary" onclick="cancelOrder('${o.id}')">لغو سفارش</button></div>`:''}
+  </div>`}).join('')}
 
 /* ===== CART ===== */
 let cart=[];
@@ -405,10 +863,19 @@ function showToast(m){const e=document.getElementById('toast');e.textContent=m;e
 function renderProducts(list){
   const g=document.getElementById('productGrid');
   if(!list.length){g.innerHTML='<div class="empty-state"><div class="empty-state__icon">🔍</div><div class="empty-state__text">محصولی یافت نشد</div></div>';document.getElementById('productsCount').textContent='';return}
-  document.getElementById('productsCount').textContent=fa(list.length)+' محصول';
-  g.innerHTML=list.map(p=>{const sl=stockLabel(p.stock);const o=p.stock===0?' out-of-stock':'';return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img"><span class="p-card__img-placeholder">${p.icon||'🔧'}</span><span class="p-card__stock-badge ${sl.cls}">${sl.text}</span></div><div class="p-card__body"><span class="p-card__brand">${p.brand}</span><h3 class="p-card__name">${p.name}</h3><span class="p-card__sku">${p.sku}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ریال / ${p.unit}</span></div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${p.stock===0?'disabled':''}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`}).join('')}
+  // شمارشِ کلِ نتیجه‌ی سرور، نه فقط این صفحه.
+  document.getElementById('productsCount').textContent=fa(catalogTotal||list.length)+' محصول';
+  g.innerHTML=list.map(p=>{
+    const sl=stockLabel(p.stock);
+    const o=inStock(p.stock)?'':' out-of-stock';
+    // عکس واقعی اگر ثبت شده، وگرنه همان آیکونِ آبرومند.
+    const img=p.image
+      ? `<img class="p-card__photo" src="${API}${p.image}" alt="${esc(p.name)}" loading="lazy">`
+      : '<span class="p-card__img-placeholder">🔧</span>';
+    return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img">${img}<span class="p-card__stock-badge ${sl.cls}">${sl.text}</span></div><div class="p-card__body"><span class="p-card__brand">${esc(p.brand||'')}</span><h3 class="p-card__name">${esc(p.name)}</h3><span class="p-card__sku">${esc(p.sku||'')}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ${unitLabel()} / ${esc(p.unit||'')}</span></div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`
+  }).join('')}
 
-function handleAdd(id,qty){const p=PRODUCTS.find(x=>x.id===id);if(p&&p.stock>0){addToCart(p,qty);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
+function handleAdd(id,qty){const p=PRODUCTS.find(x=>x.id===id);if(p&&inStock(p.stock)){addToCart(p,qty);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
 
 let detailQty=1;
 function renderCart(){
@@ -417,67 +884,410 @@ function renderCart(){
   if(!cart.length){empty.style.display='';footer.style.display='none';items.querySelectorAll('.cart-item').forEach(e=>e.remove());return}
   empty.style.display='none';footer.style.display='';
   items.querySelectorAll('.cart-item').forEach(e=>e.remove());
-  items.insertAdjacentHTML('beforeend',cart.map(i=>`<div class="cart-item" data-id="${i.id}"><div class="cart-item__img"><span style="font-size:1.5rem">🔧</span></div><div class="cart-item__info"><div class="cart-item__name">${i.name}</div><div class="cart-item__price">${faNum(i.price*i.qty)} ریال</div><div class="cart-item__controls"><button class="cart-qty-btn" onclick="changeQty('${i.id}',1)">+</button><span class="cart-item__qty">${fa(i.qty)}</span><button class="cart-qty-btn" onclick="changeQty('${i.id}',-1)">−</button><button class="cart-item__remove" onclick="removeFromCart('${i.id}')">حذف</button></div></div></div>`).join(''));
+  items.insertAdjacentHTML('beforeend',cart.map(i=>`<div class="cart-item" data-id="${i.id}"><div class="cart-item__img"><span style="font-size:1.5rem">🔧</span></div><div class="cart-item__info"><div class="cart-item__name">${i.name}</div><div class="cart-item__price">${faNum(i.price*i.qty)} تومان</div><div class="cart-item__controls"><button class="cart-qty-btn" onclick="changeQty('${i.id}',1)">+</button><span class="cart-item__qty">${fa(i.qty)}</span><button class="cart-qty-btn" onclick="changeQty('${i.id}',-1)">−</button><button class="cart-item__remove" onclick="removeFromCart('${i.id}')">حذف</button></div></div></div>`).join(''));
   document.getElementById('cartSubtotal').textContent=faNum(cartTotal());
   document.getElementById('cartTotal').textContent=toman(cartTotal())}
 
-function buildCategories(){const c=[...new Set(PRODUCTS.map(p=>p.category))];const b=document.getElementById('catBar');c.forEach(x=>{const btn=document.createElement('button');btn.className='cat-bar__chip';btn.dataset.cat=x;btn.textContent=x;b.appendChild(btn)})}
+/*
+ * دسته و برند از `/shop/facets` می‌آیند و **شناسه** دارند نه نام.
+ *
+ * قبلاً از روی نامِ محصولاتِ همان صفحه ساخته می‌شدند؛ با صفحه‌بندیِ سرور آن
+ * روش یعنی «نوارِ دسته با هر صفحه عوض می‌شود». ضمناً فیلترِ سرور شناسه
+ * می‌خواهد نه نام — دو دسته می‌توانند هم‌نام باشند.
+ */
+async function loadFacets(){
+  let f;
+  try{ f = await api('/shop/facets') }catch(_){ return }   // نوار فیلتر حیاتی نیست
 
-let activeCat='all',searchQuery='';
-function getFiltered(){let l=PRODUCTS;if(activeCat!=='all')l=l.filter(p=>p.category===activeCat);if(searchQuery){const q=searchQuery.toLowerCase();l=l.filter(p=>p.name.includes(q)||p.sku.toLowerCase().includes(q)||p.brand.toLowerCase().includes(q))}const s=document.getElementById('sortSelect').value;if(s==='cheapest')l.sort((a,b)=>a.price-b.price);else if(s==='expensive')l.sort((a,b)=>b.price-a.price);else if(s==='name')l.sort((a,b)=>a.name.localeCompare(b.name,'fa'));return l}
+  const bar = document.getElementById('catBar');
+  f.categories.forEach(c=>{
+    const btn=document.createElement('button');
+    btn.className='cat-bar__chip';
+    btn.dataset.cat=c.id;
+    btn.textContent=c.name;
+    bar.appendChild(btn);
+  });
+
+  document.getElementById('filterBrands').innerHTML = f.brands.map(b =>
+    `<button class="filter-panel__brand" data-brand="${b.id}" onclick="toggleBrand('${b.id}')">${esc(b.name)}</button>`
+  ).join('');
+}
+
+/**
+ * بالا آمدنِ سایت: اول تنظیمات (واحد پول لازمِ هر قیمتی است)، بعد فهرست.
+ *
+ * تنظیمات پیش از محصولات گرفته می‌شود و نه هم‌زمان: اگر قیمت‌ها زودتر از واحد
+ * برسند، لحظه‌ای «۱۸٬۵۰۰ تومان» با واحدِ پیش‌فرض رندر می‌شود و بعد می‌پرد.
+ */
+async function boot(){
+  try{
+    SHOP = await api('/shop/settings');
+  }catch(e){
+    document.getElementById('productGrid').innerHTML =
+      `<div class="empty-state"><div class="empty-state__icon">⚠️</div>`
+      + `<div class="empty-state__text">${esc(e.message)}</div></div>`;
+    return;
+  }
+
+  if(SHOP.name) document.title = SHOP.name;
+  await Promise.all([loadFacets(), loadProducts()]);
+  if(authToken) refreshMe();
+}
+
+let activeCat='all',searchQuery='',page=1;
+/*
+ * فیلتر و مرتب‌سازی روی **سرور** انجام می‌شود، نه در مرورگر.
+ *
+ * قبلاً کل کاتالوگ در حافظه بود و `Array.filter` کافی بود. با کاتالوگ واقعی
+ * این ممکن نیست: مرورگر نباید ده‌ها هزار ردیف را دانلود کند تا سه‌تایش را
+ * نشان دهد — و جستجوی فارسی هم روی سرور ranker خودش را دارد.
+ */
+let catalogSeq = 0;
+
+function catalogParams(){
+  const q = new URLSearchParams();
+  if(searchQuery) q.set('q', searchQuery);
+  if(activeCat !== 'all') q.set('categoryId', activeCat);
+  if(filterState){
+    if(filterState.priceMin > 0) q.set('minPrice', filterState.priceMin);
+    if(filterState.priceMax < Infinity) q.set('maxPrice', filterState.priceMax);
+    // سرور یک برند می‌گیرد نه چند تا؛ تا وقتی چندتایی لازم شود، همان اولی.
+    if(filterState.brands.length) q.set('brandId', filterState.brands[0]);
+    if(filterState.stock === 'in') q.set('inStock', 'true');
+  }
+  const sort = document.getElementById('sortSelect').value;
+  if(sort && sort !== 'newest') q.set('sort', sort);
+  q.set('page', String(page));
+  q.set('pageSize', '24');
+  return q;
+}
+
+async function loadProducts(){
+  const grid = document.getElementById('productGrid');
+  /*
+   * هر درخواست یک شماره دارد و فقط تازه‌ترین اجازه‌ی نوشتن روی صفحه را دارد.
+   * بدون این، تایپِ سریع در جعبه‌ی جستجو یعنی پاسخِ کندِ «لن» می‌تواند بعد از
+   * پاسخِ «لنت» برسد و نتیجه‌ی اشتباه روی صفحه بماند.
+   */
+  const seq = ++catalogSeq;
+  grid.setAttribute('aria-busy','true');
+
+  try{
+    const res = await api('/shop/products?' + catalogParams().toString());
+    if(seq !== catalogSeq) return;
+    PRODUCTS = res.items;
+    catalogTotal = res.total;
+    renderProducts(PRODUCTS);
+  }catch(e){
+    if(seq !== catalogSeq) return;
+    PRODUCTS = []; catalogTotal = 0;
+    grid.innerHTML =
+      `<div class="empty-state"><div class="empty-state__icon">⚠️</div>`
+      + `<div class="empty-state__text">${esc(e.message)}</div></div>`;
+    document.getElementById('productsCount').textContent='';
+  }finally{
+    grid.removeAttribute('aria-busy');
+  }
+}
 
 /* ===== DETAIL ===== */
-function showDetail(id){
-  const p=PRODUCTS.find(x=>x.id===id);if(!p)return;
-  ['gridView','profileView'].forEach(v=>document.getElementById(v).style.display='none');
-  document.getElementById('detailView').classList.add('show');
+/**
+ * جزئیات کالا — از سرور گرفته می‌شود، نه از فهرستِ حافظه.
+ *
+ * با صفحه‌بندیِ سرور، `PRODUCTS` فقط ۲۴ قلمِ صفحه‌ی جاری است؛ لینکِ مستقیم یا
+ * محصولِ مرتبط ممکن است اصلاً در آن نباشد. ضمناً توضیحات و خودروهای سازگار
+ * فقط در endpointِ جزئیات می‌آیند.
+ */
+let detailProduct = null;
+
+async function showDetail(id){
+  ['gridView','detailView','profileView','cartPage','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+  const dv=document.getElementById('detailView');dv.style.display='';dv.classList.add('show');
   document.getElementById('catBarWrap').style.display='none';
-  detailQty=1;
-  const sl=stockLabel(p.stock);
-  document.getElementById('detailHero').innerHTML=`<div class="detail__img-box"><span>${p.icon||'🔧'}</span><span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${p.brand}</span><h1 class="detail__name">${p.name}</h1><span class="detail__sku">کد: ${p.sku}</span><div class="detail__price-box"><span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">ریال / ${p.unit}</span></div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${p.stock===0?'disabled':''}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${p.stock===0?'ناموجود':'افزودن به سبد'}</button></div></div>`;
-  document.getElementById('tabDesc').innerHTML=`<p class="detail__desc">${p.desc||'توضیحاتی ثبت نشده است.'}</p>`;
-  let specsHtml='<div class="detail__specs">';
-  if(p.specs)Object.entries(p.specs).forEach(([k,v])=>{specsHtml+=`<div class="detail__spec"><span class="detail__spec-label">${k}</span><span class="detail__spec-val">${v}</span></div>`});
-  specsHtml+=`<div class="detail__spec"><span class="detail__spec-label">موجودی</span><span class="detail__spec-val">${fa(p.stock)} ${p.unit}</span></div></div>`;
-  document.getElementById('tabSpecs').innerHTML=specsHtml;
-  const related=PRODUCTS.filter(x=>x.id!==id&&x.category===p.category).slice(0,4);
-  document.getElementById('relatedGrid').innerHTML=related.map(r=>`<article class="p-card" onclick="showDetail('${r.id}')"><div class="p-card__img"><span class="p-card__img-placeholder">${r.icon||'🔧'}</span></div><div class="p-card__body"><span class="p-card__brand">${r.brand}</span><h3 class="p-card__name">${r.name}</h3><div class="p-card__footer"><span class="p-card__price">${faNum(r.price)}</span></div></div></article>`).join('');
-  document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(t=>{t.onclick=()=>{document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tabDesc').classList.toggle('active',t.dataset.tab==='desc');document.getElementById('tabSpecs').classList.toggle('active',t.dataset.tab==='specs')}});
   window.scrollTo({top:0,behavior:'smooth'});
+
+  const hero=document.getElementById('detailHero');
+  hero.innerHTML='<div class="detail__loading">در حال بارگذاری…</div>';
+  document.getElementById('tabDesc').innerHTML='';
+  document.getElementById('tabSpecs').innerHTML='';
+  document.getElementById('relatedGrid').innerHTML='';
+  detailQty=1;
+
+  let p;
+  try{
+    p = await api('/shop/products/'+encodeURIComponent(id));
+  }catch(e){
+    hero.innerHTML=`<div class="empty-state"><div class="empty-state__icon">⚠️</div><div class="empty-state__text">${esc(e.message)}</div></div>`;
+    return;
+  }
+  detailProduct = p;
+
+  const sl=stockLabel(p.stock);
+  const img=p.images && p.images.length
+    ? `<img class="detail__photo" src="${API}${p.images[0]}" alt="${esc(p.name)}">`
+    : '<span>🔧</span>';
+
+  hero.innerHTML=`<div class="detail__img-box">${img}<span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${esc(p.brand||'')}</span><h1 class="detail__name">${esc(p.name)}</h1><span class="detail__sku">کد: ${esc(p.sku||'')}</span><div class="detail__price-box"><span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">${unitLabel()} / ${esc(p.unit||'')}</span></div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${inStock(p.stock)?'افزودن به سبد':'ناموجود'}</button></div></div>`;
+
+  document.getElementById('tabDesc').innerHTML=`<p class="detail__desc">${esc(p.description||'توضیحاتی ثبت نشده است.')}</p>`;
+
+  // مشخصات از فیلدهای واقعی ساخته می‌شود؛ هرچه خالی است اصلاً ردیف نمی‌گیرد.
+  const specs=[
+    ['برند', p.brand],
+    ['دسته', p.category],
+    ['شماره فنی', p.partNumber],
+    ['واحد', p.unit],
+    ['وزن', p.weight ? faNum(p.weight)+' کیلوگرم' : null],
+    ['خودروهای سازگار', (p.vehicles||[]).join('، ') || null],
+    ['وضعیت موجودی', sl.text],
+  ].filter(([,v]) => v);
+  document.getElementById('tabSpecs').innerHTML =
+    '<div class="detail__specs">' + specs.map(([k,v]) =>
+      `<div class="detail__spec"><span class="detail__spec-label">${k}</span><span class="detail__spec-val">${esc(v)}</span></div>`
+    ).join('') + '</div>';
+
+  document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(t=>{t.onclick=()=>{document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tabDesc').classList.toggle('active',t.dataset.tab==='desc');document.getElementById('tabSpecs').classList.toggle('active',t.dataset.tab==='specs')}});
+
+  loadRelated(id);
+}
+
+async function loadRelated(id){
+  let items=[];
+  try{ items = await api('/shop/products/'+encodeURIComponent(id)+'/related') }catch(_){ return }
+  document.getElementById('relatedGrid').innerHTML = items.map(r=>{
+    const img=r.image
+      ? `<img class="p-card__photo" src="${API}${r.image}" alt="${esc(r.name)}" loading="lazy">`
+      : '<span class="p-card__img-placeholder">🔧</span>';
+    return `<article class="p-card" onclick="showDetail('${r.id}')"><div class="p-card__img">${img}</div><div class="p-card__body"><span class="p-card__brand">${esc(r.brand||'')}</span><h3 class="p-card__name">${esc(r.name)}</h3><div class="p-card__footer"><span class="p-card__price">${faNum(r.price)}</span></div></div></article>`;
+  }).join('');
 }
 function changeDetailQty(d){detailQty=Math.max(1,detailQty+d);document.getElementById('detailQtyVal').textContent=fa(detailQty)}
-function handleDetailAdd(id){const p=PRODUCTS.find(x=>x.id===id);if(p&&p.stock>0){addToCart(p,detailQty);const b=document.getElementById('detailAddBtn');b.classList.add('added');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg> اضافه شد';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> افزودن به سبد'},1200)}}
+// کالای صفحه‌ی جزئیات از `detailProduct` می‌آید، نه از فهرستِ صفحه — ممکن است
+// اصلاً در آن صفحه نبوده باشد (لینک مستقیم یا محصول مرتبط).
+function handleDetailAdd(id){const p=detailProduct&&detailProduct.id===id?detailProduct:PRODUCTS.find(x=>x.id===id);if(p&&inStock(p.stock)){addToCart(p,detailQty);const b=document.getElementById('detailAddBtn');b.classList.add('added');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg> اضافه شد';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> افزودن به سبد'},1200)}}
 
 /* ===== PROFILE ===== */
-function showProfile(){
+async function showProfile(){
   if(!currentUser){openAuth();return}
-  ['gridView','detailView'].forEach(v=>document.getElementById(v).style.display='none');
+  ['gridView','detailView','cartPage','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
   document.getElementById('profileView').classList.add('show');
   document.getElementById('catBarWrap').style.display='none';
-  renderProfile();
+  renderProfile();                 // اول با چیزی که داریم، تا صفحه خالی نماند
   window.scrollTo({top:0,behavior:'smooth'});
+  await loadMyOrders();
+  renderProfile();                 // بعد با فهرستِ تازه از سرور
 }
 
 function showGrid(){
-  ['detailView','profileView'].forEach(v=>{document.getElementById(v).classList.remove('show');document.getElementById(v).style.display=''});
+  ['detailView','profileView','cartPage'].forEach(v=>{document.getElementById(v).classList.remove('show');document.getElementById(v).style.display=''});
   document.getElementById('gridView').style.display='';
   document.getElementById('catBarWrap').style.display='';
-  renderProducts(getFiltered());
+  loadProducts();
 }
+
+
+/* ===== BLOG ===== */
+const BLOG_POSTS = [
+  {id:1,title:'راهنمای انتخاب لنت ترمز مناسب',cat:'راهنمای خرید',icon:'🔧',date:'۱۴۰۵/۰۶/۰۱',excerpt:'انتخاب لنت ترمز مناسب برای خودروی شما اهمیت زیادی دارد. در این مقاله با معیارهای انتخاب آشنا می‌شوید.',content:'<p>لنت ترمز یکی از مهم‌ترین قطعات ایمنی خودرو است. انتخاب لنت مناسب تأثیر مستقیمی بر عملکرد ترمز و ایمنی رانندگی دارد.</p><h3>معیارهای انتخاب لنت ترمز</h3><p>۱. <strong>نوع خودرو:</strong> هر خودرو لنت مخصوص خود را دارد. حتماً مدل خودرو را بررسی کنید.</p><p>۲. <strong>نوع رانندگی:</strong> اگر در شهر تردد زیاد دارید، لنت‌های نیمه‌فلزی مناسب‌ترند.</p><p>۳. <strong>کیفیت ساخت:</strong> برندهای معتبر مانند آسیا و بوش کیفیت بالاتری دارند.</p><p>۴. <strong>عمر مفید:</strong> لنت‌های باکیفیت عمر طولانی‌تری دارند و در درازمدت مقرون‌به‌صرفه‌ترند.</p>',tags:['لنت ترمز','ایمنی','راهنمای خرید']},
+  {id:2,title:'چه زمانی فیلتر روغن را عوض کنیم؟',cat:'نگهداری خودرو',icon:'🛢️',date:'۱۴۰۵/۰۵/۲۸',excerpt:'تعویض به‌موقع فیلتر روغن عمر موتور خودروی شما را افزایش می‌دهد.',content:'<p>فیلتر روغن وظیفه تمیز کردن روغن موتور از آلودگی‌ها را دارد. تعویض به‌موقع آن برای سلامت موتور ضروری است.</p><h3>زمان تعویض فیلتر روغن</h3><p>به‌طور کلی فیلتر روغن باید هر <strong>۵,۰۰۰ تا ۱۰,۰۰۰ کیلومتر</strong> تعویض شود.</p><p>اما این زمان بستگی به نوع روغن و شرایط رانندگی دارد:</p><p>- روغن معمولی: هر ۵,۰۰۰ کیلومتر</p><p>- روغن نیمه‌سنتتیک: هر ۷,۵۰۰ کیلومتر</p><p>- روغن تمام‌سنتتیک: هر ۱۰,۰۰۰ کیلومتر</p>',tags:['فیلتر روغن','نگهداری','موتور']},
+  {id:3,title:'تفاوت دیسک ترمز جلو و عقب',cat:'آموزشی',icon:'⚙️',date:'۱۴۰۵/۰۵/۲۵',excerpt:'آیا می‌دانستید عملکرد دیسک ترمز جلو و عقب متفاوت است؟ با هم بررسی می‌کنیم.',content:'<p>دیسک ترمز یکی از اجزای اصلی سیستم ترمز خودرو است. اما عملکرد دیسک جلو و عقب با هم تفاوت دارد.</p><h3>دیسک ترمز جلو</h3><p>حدود <strong>۷۰٪ نیروی ترمز</strong> توسط دیسک‌های جلو تأمین می‌شود. به همین دلیل دیسک‌های جلو بزرگتر و مقاوم‌تر هستند.</p><h3>دیسک ترمز عقب</h3><p>حدود <strong>۳۰٪ نیروی ترمز</strong> توسط دیسک‌های عقب تأمین می‌شود. این دیسک‌ها کوچکتر هستند.</p><p>نکته مهم: تعویض دیسک‌ها باید همیشه به صورت جفتی (چپ و راست) انجام شود.</p>',tags:['دیسک ترمز','ترمز','آموزش']},
+  {id:4,title:'نکات مهم در خرید باطری خودرو',cat:'راهنمای خرید',icon:'🔋',date:'۱۴۰۵/۰۵/۲۰',excerpt:'باطری خودرو قلب سیستم برقی شماست. با نکات خرید باطری آشنا شوید.',content:'<p>باطری خودرو منبع انرژی الکتریکی خودرو است و انتخاب درست آن اهمیت زیادی دارد.</p><h3>معیارهای انتخاب باطری</h3><p>۱. <strong>ظرفیت آمپر:</strong> برای خودروهای سبک ۴۵ تا ۷۴ آمپر مناسب است.</p><p>۲. <strong>نوع باطری:</strong> باطری‌های اتمی نسبت به اسیدی مزایای بیشتری دارند.</p><p>۳. <strong>گارانتی:</strong> باطری‌های با گارانتی معتبر بخرید.</p><p>۴. <strong>برند:</strong> برندهای معتبر مانند ورتا و آمیکس کیفیت بالاتری دارند.</p>',tags:['باطری','برق خودرو','راهنمای خرید']},
+  {id:5,title:'علائم خرابی شمع موتور',cat:'عیب‌یابی',icon:'🔍',date:'۱۴۰۵/۰۵/۱۵',excerpt:'شمع موتور خراب می‌تواند مشکلات زیادی ایجاد کند. علائم آن را بشناسید.',content:'<p>شمع موتور وظیقه ایجاد جرقه برای احتراق سوخت در موتور را دارد. خرابی آن علائم مشخصی دارد.</p><h3>علائم خرابی شمع موتور</h3><p>- <strong>روشن شدن چراغ چک انجین</strong></p><p>- <strong>لرزش موتور</strong> در حالت دور آرام</p><p>- <strong>کاهش شتاب</strong> و قدرت موتور</p><p>- <strong>افزایش مصرف سوخت</strong></p><p>- <strong>صداهای غیرعادی</strong> از موتور</p><p>- <strong>دیر روشن شدن</strong> خودرو</p><p>برای جلوگیری از مشکلات بیشتر، شمع موتور را هر <strong>۳۰,۰۰۰ کیلومتر</strong> تعویض کنید.</p>',tags:['شمع موتور','عیب‌یابی','موتور']}
+];
+
+function showBlogPage(){
+  ['gridView','detailView','profileView','cartPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+  const bp=document.getElementById('blogPage');bp.style.display='';bp.classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  renderBlogList();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderBlogList(){
+  document.getElementById('blogGrid').innerHTML=BLOG_POSTS.map(p=>`
+    <article class="blog-card" onclick="showBlogDetail(${p.id})">
+      <div class="blog-card__img">${p.icon}</div>
+      <div class="blog-card__body">
+        <span class="blog-card__cat">${p.cat}</span>
+        <h3 class="blog-card__title">${p.title}</h3>
+        <p class="blog-card__excerpt">${p.excerpt}</p>
+        <div class="blog-card__meta">
+          <span>📅 ${p.date}</span>
+          <span>🏷️ ${p.tags.join('، ')}</span>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+function showBlogDetail(id){
+  const post=BLOG_POSTS.find(p=>p.id===id);
+  if(!post)return;
+  ['gridView','detailView','profileView','cartPage','blogPage'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+  const bd=document.getElementById('blogDetail');bd.style.display='';bd.classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  document.getElementById('blogDetailContent').innerHTML=`
+    <span class="blog-detail__cat">${post.cat}</span>
+    <h1 class="blog-detail__title">${post.title}</h1>
+    <div class="blog-detail__meta">
+      <span>📅 ${post.date}</span>
+      <span>⏱️ ۵ دقیقه مطالعه</span>
+    </div>
+    <div class="blog-detail__content">${post.content}</div>
+    <div class="blog-detail__tags">${post.tags.map(t=>`<span class="blog-detail__tag">#${t}</span>`).join('')}</div>
+  `;
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ===== PRODUCT REVIEWS ===== */
+let productReviews={};
+
+function initReviews(){
+  // Add sample reviews
+  productReviews['1']=[
+    {user:'علی محمدی',avatar:'ع',stars:5,text:'لنت ترمز عالی بود. نصب آسان و عملکرد عالی.',date:'۱۴۰۵/۰۶/۰۱'},
+    {user:'رضا کریمی',avatar:'ر',stars:4,text:'کیفیت خوبی دارد. فقط کمی صدا می‌دهد.',date:'۱۴۰۵/۰۵/۲۸'},
+  ];
+  productReviews['2']=[
+    {user:'مریم احمدی',avatar:'م',stars:5,text:'فیلتر روغن استاندارد و باکیفیت.',date:'۱۴۰۵/۰۵/۲۵'},
+  ];
+  productReviews['3']=[
+    {user:'حسن رضایی',avatar:'ح',stars:4,text:'شمع موتور خوبی است. مصرف سوخت کمتر شد.',date:'۱۴۰۵/۰۵/۲۰'},
+  ];
+  productReviews['4']=[
+    {user:'زهرا عباسی',avatar:'ز',stars:5,text:'روغن موتور عالی. موتور نرم‌تر کار می‌کند.',date:'۱۴۰۵/۰۵/۱۵'},
+  ];
+}
+
+function renderReviews(productId){
+  const reviews=productReviews[productId]||[];
+  const avg=reviews.length?reviews.reduce((s,r)=>s+r.stars,0)/reviews.length:0;
+  const stars='★'.repeat(Math.round(avg))+'☆'.repeat(5-Math.round(avg));
+  
+  let html=`
+    <div class="reviews">
+      <div class="reviews__header">
+        <h3 class="reviews__title">نظرات مشتریان</h3>
+        <div class="reviews__avg">
+          <span class="reviews__avg-score">${avg.toFixed(1)}</span>
+          <span class="reviews__avg-stars">${stars}</span>
+          <span>(${fa(reviews.length)} نظر)</span>
+        </div>
+      </div>
+      <div class="reviews__list">
+  `;
+  
+  if(!reviews.length){
+    html+='<p style="color:var(--c-text-3);text-align:center;padding:var(--sp-6)">هنوز نظری ثبت نشده است</p>';
+  }else{
+    reviews.forEach(r=>{
+      html+=`
+        <div class="review-item">
+          <div class="review-item__header">
+            <div class="review-item__user">
+              <div class="review-item__avatar">${r.avatar}</div>
+              <span class="review-item__name">${r.user}</span>
+            </div>
+            <span class="review-item__date">${r.date}</span>
+          </div>
+          <div class="review-item__stars">${'★'.repeat(r.stars)}${'☆'.repeat(5-r.stars)}</div>
+          <p class="review-item__text">${r.text}</p>
+        </div>
+      `;
+    });
+  }
+  
+  html+=`
+      </div>
+      <div class="review-form">
+        <h4 class="review-form__title">ثبت نظر</h4>
+        <div class="review-form__stars" id="reviewStars">
+          <span class="review-form__star" onclick="setReviewStars(1)">★</span>
+          <span class="review-form__star" onclick="setReviewStars(2)">★</span>
+          <span class="review-form__star" onclick="setReviewStars(3)">★</span>
+          <span class="review-form__star" onclick="setReviewStars(4)">★</span>
+          <span class="review-form__star" onclick="setReviewStars(5)">★</span>
+        </div>
+        <textarea id="reviewText" placeholder="نظر خود را بنویسید..."></textarea>
+        <button class="review-form__btn" onclick="submitReview('${productId}')">ثبت نظر</button>
+      </div>
+    </div>
+  `;
+  
+  return html;
+}
+
+let reviewStars=0;
+function setReviewStars(n){
+  reviewStars=n;
+  document.querySelectorAll('#reviewStars .review-form__star').forEach((s,i)=>{
+    s.classList.toggle('active',i<n);
+  });
+}
+
+function submitReview(productId){
+  const text=document.getElementById('reviewText').value.trim();
+  if(!text||!reviewStars){showText('لطفا امتیاز و نظر را وارد کنید');return}
+  if(!currentUser){showText('لطفا ابتدا وارد شوید');return}
+  if(!productReviews[productId])productReviews[productId]=[];
+  productReviews[productId].unshift({user:currentUser.name,avatar:currentUser.avatar||'👤',stars:reviewStars,text:text,date:new Date().toLocaleDateString('fa-IR')});
+  reviewStars=0;
+  // Re-render reviews in detail view
+  const reviewsEl=document.querySelector('.reviews');
+  if(reviewsEl){
+    const temp=document.createElement('div');
+    temp.innerHTML=renderReviews(productId);
+    reviewsEl.replaceWith(temp.firstElementChild);
+  }
+  showToast('نظر شما ثبت شد ✓');
+}
+
+function showText(m){showToast(m)}
+
+// Init reviews
+initReviews();
+
+/* ===== UPDATE showGrid ===== */
+const _origShowGrid=showGrid;
+showGrid=function(){
+  _origShowGrid();
+  ['blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+};
+
+/* ===== UPDATE showDetail to include reviews ===== */
+const _origShowDetail=showDetail;
+showDetail=function(id){
+  _origShowDetail(id);
+  // Add reviews section after related products
+  const relatedSection=document.querySelector('.detail__related-title')?.parentElement;
+  if(relatedSection&&!relatedSection.querySelector('.reviews')){
+    const reviewsDiv=document.createElement('div');
+    reviewsDiv.innerHTML=renderReviews(id);
+    relatedSection.appendChild(reviewsDiv.firstElementChild);
+  }
+};
 
 document.addEventListener('DOMContentLoaded',()=>{
   updateUserBtn();
-  buildCategories();renderProducts(getFiltered());
-  document.getElementById('catBar').addEventListener('click',e=>{const c=e.target.closest('.cat-bar__chip');if(!c)return;document.querySelectorAll('.cat-bar__chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');activeCat=c.dataset.cat;renderProducts(getFiltered())});
-  let sd;document.getElementById('searchInput').addEventListener('input',e=>{clearTimeout(sd);sd=setTimeout(()=>{searchQuery=e.target.value.trim();renderProducts(getFiltered())},200)});
-  document.getElementById('sortSelect').addEventListener('change',()=>renderProducts(getFiltered()));
+  buildFilterBrands();
+  boot();
+  document.getElementById('catBar').addEventListener('click',e=>{const c=e.target.closest('.cat-bar__chip');if(!c)return;document.querySelectorAll('.cat-bar__chip').forEach(x=>x.classList.remove('active'));c.classList.add('active');activeCat=c.dataset.cat;page=1;loadProducts()});
+  let sd;document.getElementById('searchInput').addEventListener('input',e=>{clearTimeout(sd);sd=setTimeout(()=>{searchQuery=e.target.value.trim();page=1;loadProducts()},200)});
+  document.getElementById('sortSelect').addEventListener('change',()=>{page=1;loadProducts()});
   const openCart=()=>{document.getElementById('cartDrawer').classList.add('open');document.getElementById('cartOverlay').classList.add('open');document.body.style.overflow='hidden'};
   const closeCart=()=>{document.getElementById('cartDrawer').classList.remove('open');document.getElementById('cartOverlay').classList.remove('open');document.body.style.overflow=''};
   document.getElementById('cartBtn').addEventListener('click',openCart);
-  document.getElementById('mobileCartBtn').addEventListener('click',openCart);
   document.getElementById('cartClose').addEventListener('click',closeCart);
   document.getElementById('cartOverlay').addEventListener('click',closeCart);
-  const openCheckout=()=>{if(!cart.length)return;closeCart();setTimeout(()=>{document.getElementById('checkoutModal').classList.add('open');document.body.style.overflow='hidden'},300)};
+  const openCheckout=()=>{
+    if(!cart.length)return;
+    // مشتریِ واردنشده اول باید وارد شود؛ بهتر است الان بفهمد تا بعد از پرکردن فرم.
+    if(!currentUser){ closeCart(); openAuth(); showToast('برای ثبت سفارش وارد شوید'); return }
+    prefillCheckout();
+    renderCheckoutSummary();
+    closeCart();
+    setTimeout(()=>{document.getElementById('checkoutModal').classList.add('open');document.body.style.overflow='hidden'},300);
+  };
   const closeCheckout=()=>{document.getElementById('checkoutModal').classList.remove('open');document.body.style.overflow=''};
   document.getElementById('checkoutBtn').addEventListener('click',openCheckout);
   document.getElementById('checkoutClose').addEventListener('click',closeCheckout);
@@ -485,18 +1295,267 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('checkoutModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeCheckout()});
   document.getElementById('authClose').addEventListener('click',closeAuth);
   document.getElementById('authModal').addEventListener('click',e=>{if(e.target===e.currentTarget)closeAuth()});
-  document.getElementById('checkoutConfirm').addEventListener('click',()=>{
-    const n=(currentUser?currentUser.name:document.getElementById('custName').value.trim())||'مشتری';
-    const p=(currentUser?currentUser.phone:document.getElementById('custPhone').value.trim())||'-';
-    const pm=document.getElementById('payMethod').value;
-    const items=[...cart];const total=cartTotal();
-    addOrder(items,total,pm);
-    closeCheckout();cart=[];renderCart();
-    showToast('سفارش ثبت شد ✓');
-    document.getElementById('custName').value='';document.getElementById('custPhone').value='';
+  document.getElementById('checkoutConfirm').addEventListener('click',async ()=>{
+    /*
+     * ثبت سفارش فقط برای مشتریِ واردشده: سفارش باید به یک پرونده بچسبد تا
+     * فروشنده بتواند پیگیری کند و خودِ مشتری هم بعداً ببیندش.
+     */
+    if(!currentUser){ closeCheckout(); openAuth(); showToast('برای ثبت سفارش وارد شوید'); return }
+    if(!cart.length) return;
+
+    const name=document.getElementById('custName').value.trim();
+    const phone=document.getElementById('custPhone').value.trim();
+    const address=document.getElementById('custAddress').value.trim();
+    if(!name||!phone||!address){ showToast('نام، شماره تماس و آدرس لازم است'); return }
+
+    const btn=document.getElementById('checkoutConfirm');
+    btn.disabled=true; btn.textContent='در حال ثبت…';
+    try{
+      const order=await submitOrder({
+        name, phone, address,
+        payMethod: document.getElementById('payMethod').value,
+        note: document.getElementById('custNote').value.trim(),
+        key: checkoutKey,
+      });
+      cart=[]; renderCart(); closeCheckout();
+      // کلید مصرف شد؛ سفارش بعدی کلید تازه می‌خواهد.
+      checkoutKey = newKey();
+      document.getElementById('custNote').value='';
+      showToast('سفارش #'+fa(order.number)+' ثبت شد ✓');
+      await loadMyOrders();
+      showProfile();
+    }catch(e){
+      showToast(e.message);
+    }finally{
+      btn.disabled=false; btn.textContent='تأیید و ثبت سفارش';
+    }
   });
   document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeCheckout();closeCart();closeAuth()}});
 });
+
+/* ===== ADVANCED FILTER ===== */
+let filterState = { priceMin: 0, priceMax: Infinity, brands: [], stock: 'all' };
+
+function toggleFilter() {
+  const panel = document.getElementById('filterPanel');
+  const btn = document.getElementById('filterToggle');
+  panel.classList.toggle('show');
+  btn.classList.toggle('active');
+}
+
+// برندها حالا در `loadFacets` از سرور پر می‌شوند؛ این فقط برای سازگاری مانده.
+function buildFilterBrands() {}
+
+function toggleBrand(brand) {
+  const idx = filterState.brands.indexOf(brand);
+  if (idx > -1) filterState.brands.splice(idx, 1);
+  else filterState.brands.push(brand);
+  document.querySelectorAll('.filter-panel__brand').forEach(b => {
+    b.classList.toggle('active', filterState.brands.includes(b.dataset.brand));
+  });
+}
+
+function setStockFilter(stock) {
+  filterState.stock = stock;
+  document.querySelectorAll('.filter-panel__stock-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.stock === stock);
+  });
+}
+
+function applyFilters() {
+  const min = parseInt(document.getElementById('filterPriceMin').value) || 0;
+  const max = parseInt(document.getElementById('filterPriceMax').value) || Infinity;
+  filterState.priceMin = min;
+  filterState.priceMax = max;
+  // فیلترِ تازه از صفحه‌ی اول شروع می‌شود، وگرنه کاربر روی صفحه‌ی ۵ نتیجه‌ی خالی می‌بیند.
+  page = 1;
+  loadProducts();
+  toggleFilter();
+  updateFilterCount();
+}
+
+function clearFilters() {
+  filterState = { priceMin: 0, priceMax: Infinity, brands: [], stock: 'all' };
+  document.getElementById('filterPriceMin').value = '';
+  document.getElementById('filterPriceMax').value = '';
+  document.querySelectorAll('.filter-panel__brand').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.filter-panel__stock-opt').forEach(b => {
+    b.classList.toggle('active', b.dataset.stock === 'all');
+  });
+  page = 1;
+  loadProducts();
+  updateFilterCount();
+}
+
+function updateFilterCount() {
+  const btn = document.getElementById('filterToggle');
+  let count = 0;
+  if (filterState.priceMin > 0) count++;
+  if (filterState.priceMax < Infinity) count++;
+  if (filterState.brands.length > 0) count++;
+  if (filterState.stock !== 'all') count++;
+  const existing = btn.querySelector('.filter-active-count');
+  if (existing) existing.remove();
+  if (count > 0) {
+    btn.insertAdjacentHTML('afterbegin', `<span class="filter-active-count">${count}</span>`);
+  }
+}
+
+/* ===== CART PAGE ===== */
+function showCartPage(){
+  ['gridView','detailView','profileView','cartPage','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+  const cp=document.getElementById('cartPage');cp.style.display='';cp.classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  renderCartPage();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderCartPage(){
+  const itemsEl=document.getElementById('cartPageItems');
+  const summaryEl=document.getElementById('cartPageSummary');
+  if(!cart.length){
+    itemsEl.innerHTML='<div class="empty-state"><div class="empty-state__icon">🛒</div><div class="empty-state__text">سبد خرید شما خالی است</div></div>';
+    summaryEl.innerHTML='';
+    return;
+  }
+  itemsEl.innerHTML=cart.map(i=>`
+    <div class="cart-page__item">
+      <div class="cart-page__item-img">🔧</div>
+      <div class="cart-page__item-info">
+        <div class="cart-page__item-name">${i.name}</div>
+        <div class="cart-page__item-price">${faNum(i.price)} تومان / ${i.unit}</div>
+        <div class="cart-page__item-controls">
+          <button class="cart-qty-btn" onclick="changeQty('${i.id}',1);renderCartPage()">+</button>
+          <span class="cart-item__qty">${fa(i.qty)}</span>
+          <button class="cart-qty-btn" onclick="changeQty('${i.id}',-1);renderCartPage()">−</button>
+          <button class="cart-item__remove" onclick="removeFromCart('${i.id}');renderCartPage()">حذف</button>
+        </div>
+      </div>
+      <div style="font-weight:var(--fw-bold);color:var(--c-accent);white-space:nowrap">${faNum(i.price*i.qty)} تومان</div>
+    </div>
+  `).join('');
+
+  const subtotal=cartTotal();
+  const tax=Math.round(subtotal*0.09);
+  const total=subtotal+tax;
+  const itemCount=cartCount();
+
+  summaryEl.innerHTML=`
+    <h3 class="cart-page__summary-title">خلاصه سفارش</h3>
+    <div class="cart-page__summary-row"><span>تعداد اقلام</span><span>${fa(itemCount)} عدد</span></div>
+    <div class="cart-page__summary-row"><span>جمع جزء</span><span>${faNum(subtotal)} تومان</span></div>
+    <div class="cart-page__summary-row"><span>مالیات (۹٪)</span><span>${faNum(tax)} تومان</span></div>
+    <div class="cart-page__summary-row total"><span>مبلغ قابل پرداخت</span><span>${faNum(total)} تومان</span></div>
+    <button class="cart-page__checkout-btn" onclick="openCheckoutFromPage()">تسویه و خرید</button>
+    <button class="cart-page__pdf-btn" onclick="generatePDF()">📄 دریافت فاکتور PDF</button>
+  `;
+}
+
+function openCheckoutFromPage(){
+  if(!cart.length)return;
+  showGrid();
+  setTimeout(()=>{
+    document.getElementById('cartDrawer').classList.add('open');
+    document.getElementById('cartOverlay').classList.add('open');
+    document.body.style.overflow='hidden';
+    setTimeout(()=>{
+      document.getElementById('checkoutModal').classList.add('open');
+      document.body.style.overflow='hidden';
+    },300);
+  },100);
+}
+
+/* ===== PDF GENERATION ===== */
+function generatePDF(){
+  if(!cart.length){showToast('سبد خرید خالی است');return}
+  const {jsPDF}=window.jspdf;
+  const doc=new jsPDF({orientation:'p',unit:'mm',format:'a4'});
+
+  // Set RTL support
+  doc.setFont('helvetica');
+
+  const pageW=210;
+  const margin=15;
+  let y=margin;
+
+  // Header
+  doc.setFillColor(21,101,192);
+  doc.rect(0,0,pageW,35,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(18);
+  doc.text('Invoice',pageW-margin,y+10);
+  doc.setFontSize(10);
+  doc.text('Warehouse OS - Auto Parts Store',pageW-margin,y+18);
+  doc.text('Date: '+new Date().toLocaleDateString('fa-IR'),pageW-margin,y+25);
+
+  y=45;
+  doc.setTextColor(0,0,0);
+
+  // Customer info
+  doc.setFontSize(11);
+  doc.text('Customer: '+(currentUser?currentUser.name:'Guest'),margin,y);
+  doc.text('Phone: '+(currentUser?currentUser.phone:'-'),margin,y+7);
+  y+=15;
+
+  // Table header
+  doc.setFillColor(240,244,248);
+  doc.rect(margin,y,pageW-2*margin,10,'F');
+  doc.setFontSize(9);
+  doc.setTextColor(90,90,90);
+  const cols=[margin,margin+10,margin+80,margin+110,margin+140,margin+165];
+  doc.text('#',cols[0]+2,y+7);
+  doc.text('Product',cols[1]+2,y+7);
+  doc.text('Qty',cols[2]+2,y+7);
+  doc.text('Unit',cols[3]+2,y+7);
+  doc.text('Price',cols[4]+2,y+7);
+  doc.text('Total',cols[5]+2,y+7);
+  y+=12;
+
+  // Items
+  doc.setTextColor(0,0,0);
+  cart.forEach((item,i)=>{
+    if(y>270){doc.addPage();y=margin}
+    doc.setFontSize(9);
+    doc.text(String(i+1),cols[0]+2,y+5);
+    doc.text(item.name.substring(0,30),cols[1]+2,y+5);
+    doc.text(String(item.qty),cols[2]+2,y+5);
+    doc.text(item.unit||'-',cols[3]+2,y+5);
+    doc.text(faNum(item.price),cols[4]+2,y+5);
+    doc.text(faNum(item.price*item.qty),cols[5]+2,y+5);
+    y+=8;
+    doc.setDrawColor(220,220,220);
+    doc.line(margin,y,pageW-margin,y);
+    y+=2;
+  });
+
+  // Summary
+  y+=5;
+  const subtotal=cartTotal();
+  const tax=Math.round(subtotal*0.09);
+  const total=subtotal+tax;
+
+  doc.setFontSize(10);
+  doc.text('Subtotal:',pageW-margin-50,y);
+  doc.text(faNum(subtotal)+' TOMAN',pageW-margin,y);
+  y+=8;
+  doc.text('Tax (9%):',pageW-margin-50,y);
+  doc.text(faNum(tax)+' TOMAN',pageW-margin,y);
+  y+=10;
+  doc.setFillColor(21,101,192);
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(12);
+  doc.rect(margin,y-5,pageW-2*margin,12,'F');
+  doc.text('TOTAL: '+faNum(total)+' TOMAN',pageW-margin,y+3);
+
+  // Footer
+  y+=20;
+  doc.setTextColor(150,150,150);
+  doc.setFontSize(8);
+  doc.text('Generated by Warehouse OS - Auto Parts Store',pageW/2,y,'C');
+
+  doc.save('invoice-'+fa(orders.length+1001)+'.pdf');
+  showToast('فاکتور PDF دانلود شد ✓');
+}
 </script>
 </body>
 </html>

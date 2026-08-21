@@ -2,7 +2,7 @@ package com.warehouseos.operator.ui.screens.startup
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.warehouseos.operator.data.notifications.PickTaskWatcherController
+import com.warehouseos.operator.data.notifications.WorkTaskWatcherController
 import com.warehouseos.operator.data.repository.AuthRepository
 import com.warehouseos.operator.data.repository.StartupDestination
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,7 +16,7 @@ import javax.inject.Inject
 @HiltViewModel
 class StartupViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val watcher: PickTaskWatcherController,
+    private val watcher: WorkTaskWatcherController,
 ) : ViewModel() {
 
     private val _destination = MutableStateFlow<StartupDestination?>(null)

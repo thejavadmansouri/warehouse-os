@@ -54,6 +54,7 @@ model User {
   workTasksRequested      WorkTask[]               @relation("WorkTaskRequester")
   workTasksAssigned       WorkTask[]               @relation("WorkTaskAssignee")
   workTaskItemsDone       WorkTaskItem[]           @relation("WorkTaskItemDoneBy")
+  onlineOrdersDecided     OnlineOrder[]            @relation("OnlineOrderDecider")
 }
 
 model Warehouse {
@@ -74,6 +75,7 @@ model Warehouse {
   purchases       PurchaseInvoice[]
   workTasks       WorkTask[]
   shortages       ProductShortage[]
+  onlineOrders    OnlineOrder[]
 }
 
 model LocationType {
@@ -199,6 +201,11 @@ model Product {
   vehicleModelId      String?
   supplierId          String?
   isActive            Boolean                  @default(true)
+  /// روی سایت عمومی دیده شود؟
+  ///
+  /// پیش‌فرض false و عمداً: کاتالوگ ۳۳ هزار قلمی بدون عکس و توضیح، فروشگاه
+  /// اینترنتی نیست. مدیر همان چند صد قلمی را که عکس و قیمت دارند روشن می‌کند.
+  showOnline          Boolean                  @default(false)
   /// توکن‌های نرمال‌شده‌ی نام + SKU + شماره فنی، برای جستجوی ایندکس‌دار.
   /// pg_trgm روی متن فارسی در این محیط کار نمی‌کند (show_trgm خالی برمی‌گرداند)،
   /// بنابراین جستجو به‌جای ترای‌گرام روی این آرایه با ایندکس GIN انجام می‌شود.
@@ -235,12 +242,16 @@ model Product {
   saleCorrectionLines SaleCorrectionLine[]
   workTaskItems       WorkTaskItem[]
   shortages           ProductShortage[]
+  onlineOrderLines    OnlineOrderLine[]
 
   @@index([searchTokens], type: Gin)
   @@index([labelPrintedAt])
   // مرحله‌ی ۱ جستجو (کدِ دقیق) در هر کیبورد-استروک `partNumber = ?` را می‌زند؛
   // بدون این ایندکس، OR با sku/barcode به seq scan روی کل محصولات می‌افتد.
   @@index([partNumber])
+  // فهرست عمومی سایت همیشه `showOnline = true AND isActive = true` است؛ بدون
+  // این ایندکس هر بازدید از صفحه‌ی اول کل جدول محصول را اسکن می‌کند.
+  @@index([showOnline, isActive])
 }
 
 /// یک قطعه معمولاً روی چند خودرو می‌نشیند («دسته موتور زیر باطری 206 و سمند ملی»).
@@ -318,7 +329,6 @@ model Inventory {
   product    Product  @relation(fields: [productId], references: [id])
 
   @@unique([productId, locationId])
-
   // «روی این قفسه چه چیزی هست» — کوئریِ اسکنِ کارگر و انتخابگرِ مکانِ صندوق.
   // یکتای بالا فقط `productId` را به‌عنوان پیشوند پوشش می‌دهد، پس جست‌وجو با
   // `locationId` تنها هیچ ایندکسی نداشت.
@@ -373,15 +383,14 @@ model InventoryLog {
   // ردیف‌های اصلاحیه‌ای که همین ردیفِ SALE را تصحیح کرده‌اند (saleLogId).
   correctionLines SaleCorrectionLine[]
 
-  @@index([invoiceId])
-  @@index([saleReturnId])
-  @@index([purchaseId])
-
   // ⚠️ این جدول سریع‌ترین رشدِ کل دیتابیس را دارد: هر ردیفِ فروش، هر ورود، هر
   // تعدیل. تا امروز فقط FKهای سند ایندکس داشتند و سه مسیرِ اصلیِ خواندن هیچ —
   // یعنی `EXPLAIN` روی هر سه Seq Scan می‌داد. با جدولِ کوچک بی‌ضرر است و
   // درست هم هست؛ مسئله وقتی ظاهر می‌شود که جدول بزرگ شده باشد، یعنی سرِ مشتری.
 
+  @@index([invoiceId])
+  @@index([saleReturnId])
+  @@index([purchaseId])
   // کاردکس: فیلتر روی کالا و ترتیب زمانی، در یک ایندکس.
   @@index([productId, createdAt])
   // صفحه‌ی تاریخچه: تازه‌ترین‌ها، بدون فیلتر.
@@ -818,6 +827,8 @@ model Customer {
   returns      SaleReturn[]
   corrections  SaleCorrection[]
   shortages    ProductShortage[]
+  addresses    CustomerAddress[]
+  onlineOrders OnlineOrder[]
 
   @@index([searchName])
   @@index([lastName])
@@ -1153,6 +1164,7 @@ model SaleInvoice {
   returns     SaleReturn[]
   corrections SaleCorrection[]
   workTasks   WorkTask[]
+  onlineOrder OnlineOrder?
 
   @@index([warehouseId, createdAt])
   @@index([customerId])
@@ -1615,7 +1627,37 @@ model ShopSettings {
   /// پیش‌فرضِ نرخِ فروشِ مدت‌دار — وقتی خودِ مشتری نرخ ندارد.
   chequeRateBp   Int            @default(0)
   chequeRateMode ChequeRateMode @default(MONTHLY)
-  updatedAt      DateTime       @updatedAt
+
+  /// ─── فروشگاه اینترنتی ───
+  /// کلید روشن/خاموشِ سایت. پیش‌فرض خاموش: نصبی که هرگز قرار نیست سایت داشته
+  /// باشد نباید با استقرار کد ناگهان کاتالوگش عمومی شود.
+  onlineEnabled Boolean  @default(false)
+  /// هزینه‌ی ارسال، به `storedUnit`. صفر یعنی رایگان.
+  shippingFee   Int      @default(0)
+  /// سفارش بالاتر از این مبلغ ارسال رایگان دارد، به `storedUnit`.
+  /// صفر یعنی این قاعده خاموش است.
+  freeShipOver  Int      @default(0)
+
+  /// ─── واحد پول ───
+  ///
+  /// سه فیلد، ولی فقط دوتاشان «انتخاب»‌اند؛ اولی یک **واقعیت** است.
+  ///
+  /// `storedUnit` می‌گوید عددهای صحیحِ داخل دیتابیس یعنی چه. عوض‌کردنش
+  /// **هیچ عددی را تغییر نمی‌دهد** — فقط معنی‌شان را. اگر داده ریال است و این
+  /// را روی تومان بگذاری، هر قیمتی ده برابر می‌شود. برای همین این گزینه در پنل
+  /// با هشدار صریح می‌آید و کنار دو تای دیگر نمی‌نشیند.
+  ///
+  /// `panelUnit` و `siteUnit` فقط **نمایش**‌اند و آزادانه عوض می‌شوند؛ تبدیل
+  /// در لبه‌ی خروجی انجام می‌شود و چیزی در دیتابیس جابه‌جا نمی‌گردد.
+  ///
+  /// پیش‌فرض‌ها وضع امروز را می‌گویند، نه آرزو را: داده و پنل ریال‌اند، ولی
+  /// سایت تومان است چون همه‌ی رقبای اینترنتی تومان نشان می‌دهند و مشتری
+  /// عددِ ریالی را اشتباه می‌خواند.
+  storedUnit    CurrencyUnit @default(RIAL)
+  panelUnit     CurrencyUnit @default(RIAL)
+  siteUnit      CurrencyUnit @default(TOMAN)
+
+  updatedAt     DateTime @updatedAt
 
   @@map("ShopSettings")
 }
@@ -1735,4 +1777,179 @@ enum ChequeStatus {
   DEPOSITED // به بانک ارائه شده
   CASHED // وصول شد
   BOUNCED // برگشت خورد
+}
+
+/// ═══════════════════════════════════════════════════════════════════════════
+/// فروشگاه اینترنتی
+///
+/// همه‌ی چیزی که سایت عمومی لازم دارد اینجاست و هیچ‌کدام به جدول‌های موجودی و
+/// فاکتور دست نمی‌زند. اصل حاکم: **سایت پیشنهاد می‌دهد، ثبت نمی‌کند** — همان
+/// قاعده‌ای که در ورودی صوتی گرفتیم. سبد یک غریبه هرگز نباید موجودی انبار را
+/// کم کند یا در دفتر مشتری بنشیند؛ فقط وقتی فروشنده تأیید کرد به `SaleInvoice`
+/// تبدیل می‌شود و از همان لحظه مسیر عادی فروش را می‌رود.
+/// ═══════════════════════════════════════════════════════════════════════════
+
+/// سفارشی که از سایت آمده — **هنوز فاکتور نیست**.
+model OnlineOrder {
+  id             String            @id @default(uuid())
+  /// شماره‌ی خوانا برای مشتری و تلفن. جدا از شماره‌ی فاکتور می‌ماند، چون هر
+  /// سفارش به فاکتور نمی‌رسد و پرش در شماره‌ی فاکتور بدحساب است.
+  number         Int               @unique @default(autoincrement())
+  /// کلید یکتای کلاینت: دکمه‌ی دوبار خورده یا retry شبکه دو سفارش نمی‌سازد.
+  idempotencyKey String?           @unique
+  customerId     String
+  warehouseId    String
+  status         OnlineOrderStatus @default(PENDING)
+  /// جمع ردیف‌ها (تومان) — از قیمت‌های لحظه‌ی ثبت، نه قیمت امروز.
+  subtotal       Int               @default(0)
+  shippingFee    Int               @default(0)
+  total          Int               @default(0)
+  payMethod      OnlinePayMethod   @default(ON_DELIVERY)
+  /// آدرس در لحظه‌ی ثبت کپی می‌شود، نه ارجاع: مشتری آدرسش را عوض می‌کند و
+  /// سفارشِ هفته‌ی پیش نباید به آدرس تازه برود.
+  receiverName   String
+  receiverPhone  String
+  address        String
+  note           String?
+  /// فاکتوری که از این سفارش ساخته شد. تا وقتی null است هیچ کالایی حرکت نکرده.
+  invoiceId      String?           @unique
+  rejectReason   String?
+  decidedAt      DateTime?
+  decidedById    String?
+
+  /// ─── فقط برای سینک بین سایت و انبار ───
+  /// **روی سایت:** لحظه‌ای که ایجنتِ انبار این سفارش را پایین برد. تا وقتی
+  /// null است در صفِ تحویل می‌ماند و دوباره فرستاده می‌شود.
+  pulledAt       DateTime?
+  /// **روی انبار:** لحظه‌ای که تصمیمِ فروشنده به سایت رسید. تا null است هر
+  /// چرخه دوباره تلاش می‌شود، پس قطعیِ اینترنت وضعیتی را گم نمی‌کند.
+  syncedAt       DateTime?
+
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  customer  Customer          @relation(fields: [customerId], references: [id])
+  warehouse Warehouse         @relation(fields: [warehouseId], references: [id])
+  invoice   SaleInvoice?      @relation(fields: [invoiceId], references: [id])
+  decidedBy User?             @relation("OnlineOrderDecider", fields: [decidedById], references: [id])
+  lines     OnlineOrderLine[]
+  payments  PaymentAttempt[]
+
+  // صف کاری فروشنده: «سفارش‌های در انتظار، تازه‌ترین اول».
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([warehouseId])
+  // صفِ سینک: «چه چیزی هنوز نرفته» — روی هر دو طرف هر ۲ دقیقه پرسیده می‌شود.
+  @@index([pulledAt])
+  @@index([syncedAt])
+}
+
+/// یک ردیف از سفارش سایت. نام و قیمت **کپی** می‌شوند نه ارجاع: قیمت فردا عوض
+/// می‌شود و سفارشِ دیروز باید همان چیزی بماند که مشتری دید و پذیرفت.
+model OnlineOrderLine {
+  id          String @id @default(uuid())
+  orderId     String
+  productId   String
+  productName String
+  unit        String @default("عدد")
+  quantity    Int
+  unitPrice   Int
+  lineTotal   Int
+
+  order   OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product     @relation(fields: [productId], references: [id])
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+enum OnlineOrderStatus {
+  PENDING // ثبت شده، منتظر تأیید فروشنده
+  CONFIRMED // تأیید شد و به فاکتور تبدیل شد
+  REJECTED // فروشنده رد کرد — ناموجود، تماس بی‌پاسخ
+  CANCELLED // خودِ مشتری پیش از تأیید لغو کرد
+}
+
+enum OnlinePayMethod {
+  ON_DELIVERY // پرداخت در محل
+  TRANSFER // کارت‌به‌کارت
+  GATEWAY // درگاه اینترنتی
+}
+
+/// کد یک‌بارمصرفِ ورود مشتری.
+///
+/// کدِ خام هرگز ذخیره نمی‌شود — فقط هشِ آن. دیتابیسی که لو برود نباید کدِ در
+/// جریانِ کسی را بدهد. `attempts` جلوی حدس‌زدنِ کد چهار رقمی را می‌گیرد.
+model CustomerOtp {
+  id         String    @id @default(uuid())
+  /// شماره به فرم نرمال‌شده — همان قاعده‌ی `CustomerPhone.phone`.
+  phone      String
+  codeHash   String
+  expiresAt  DateTime
+  attempts   Int       @default(0)
+  consumedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([phone, createdAt])
+  @@index([expiresAt])
+}
+
+/// آدرس تحویل. `Customer.address` یک رشته‌ی تکی است و برای فروش حضوری کافی بود؛
+/// سفارش اینترنتی گیرنده و شماره‌ی جدا لازم دارد (هدیه، محل کار، پیک).
+model CustomerAddress {
+  id            String   @id @default(uuid())
+  customerId    String
+  title         String?
+  receiverName  String
+  receiverPhone String
+  province      String?
+  city          String?
+  postalCode    String?
+  line          String
+  isDefault     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+}
+
+/// تلاش برای پرداخت — **جای خالیِ درگاه**.
+///
+/// امروز فقط provider ی به‌نام `manual` می‌نویسد («پرداخت در محل» / کارت‌به‌کارت)
+/// و بلافاصله SUCCEEDED نمی‌شود. وقتی درگاه بانکی آمد، یک provider تازه اضافه
+/// می‌شود و همین جدول authority و refId اش را می‌گیرد — بدون مهاجرت دوباره.
+model PaymentAttempt {
+  id         String               @id @default(uuid())
+  orderId    String
+  provider   String               @default("manual")
+  amount     Int
+  /// شناسه‌ای که درگاه موقع شروع می‌دهد. یکتاست تا callbackِ تکراری دو بار
+  /// حساب نشود.
+  authority  String?              @unique
+  /// شماره‌ی پیگیریِ نهایی که به مشتری نشان داده می‌شود.
+  refId      String?
+  status     PaymentAttemptStatus @default(STARTED)
+  failReason String?
+  createdAt  DateTime             @default(now())
+  settledAt  DateTime?
+
+  order OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([status])
+}
+
+enum PaymentAttemptStatus {
+  STARTED
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+/// واحد پول. رابطه‌شان ثابت است: ۱ تومان = ۱۰ ریال.
+enum CurrencyUnit {
+  RIAL
+  TOMAN
 }

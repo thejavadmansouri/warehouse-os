@@ -36,6 +36,7 @@ import {
 import { PriceWarningDialog } from "../_components/price-warning-dialog";
 import type { PurchasePriceWarning } from "@/lib/types";
 
+import { unitLabel } from "@/lib/currency";
 const ALLOWED = ["ADMIN", "MANAGER"] as const;
 
 export default function NewPurchasePage() {
@@ -193,7 +194,7 @@ export default function NewPurchasePage() {
       <Card className="grid gap-4 p-4 sm:grid-cols-2">
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="disc">تخفیف کل فاکتور (ریال)</Label>
+            <Label htmlFor="disc">تخفیف کل فاکتور ({unitLabel()})</Label>
             <MoneyInput id="disc" value={discount} onChange={setDiscount} placeholder="۰" />
             {discount > subtotal ? (
               <span className="text-xs text-destructive">

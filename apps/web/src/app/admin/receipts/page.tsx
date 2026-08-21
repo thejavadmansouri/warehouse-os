@@ -21,7 +21,7 @@ import {
 import { Money } from "@/components/money";
 import { ReceiptForm } from "@/components/receipt-form";
 import { getCustomer, getReceipts } from "@/lib/api";
-import { faDate, money, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { amount, faDate, money, toFa, PAYMENT_LABELS } from "@/lib/format";
 import type { Customer } from "@/lib/types";
 
 import { CustomerPicker } from "../pos/_components/customer-picker";
@@ -84,7 +84,7 @@ export function ReceiptsPanel({ embedded }: { embedded?: boolean } = {}) {
                 <p className="mt-2 text-sm">
                   بدهی فعلی:{" "}
                   <b className={totalDue > 0 ? "text-amber-600 tabular-nums" : "tabular-nums"}>
-                    {money(totalDue)} ریال
+                    {amount(totalDue)}
                   </b>
                 </p>
               </div>

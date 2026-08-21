@@ -26,6 +26,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    * چند کاربر ناچیز است، و در عوض کاربرِ حذف‌شده هم بلافاصله بیرون می‌افتد.
    */
   async validate(payload: any) {
+    /*
+     * توکنِ مشتریِ سایت با همین کلید امضا می‌شود ولی `typ: 'customer'` دارد و
+     * هرگز نباید به مسیرهای داخلی برسد. جست‌وجوی `sub` در جدول `User` عملاً
+     * جلویش را می‌گیرد، ولی این ردِ صریح ارزان است و به تصادفِ شناسه تکیه نمی‌کند.
+     */
+    if (payload?.typ === 'customer') {
+      throw new UnauthorizedException('این توکن برای پنل داخلی نیست');
+    }
+
     const user = await this.prisma.user.findUnique({
       where: { id: payload?.sub },
       select: { id: true, username: true, role: true, activeSessionId: true },

@@ -37,12 +37,13 @@ import { PendingOperationsModule } from './pending-operations/pending-operations
 import { ProductRequestsModule } from './product-requests/product-requests.module';
 import { SalesModule } from './sales/sales.module';
 import { PurchasesModule } from './purchases/purchases.module';
-import { PickTasksModule } from './pick-tasks/pick-tasks.module';
 import { WorkTasksModule } from './work-tasks/work-tasks.module';
 import { ReportsModule } from './reports/reports.module';
 import { BackupsModule } from './backups/backups.module';
 
 import { ShopModule } from './shop/shop.module';
+import { StorefrontModule } from './storefront/storefront.module';
+import { SyncModule } from './sync/sync.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShortagesModule } from './shortages/shortages.module';
 
@@ -51,6 +52,9 @@ import { ShortagesModule } from './shortages/shortages.module';
     RealtimeModule,
     ShortagesModule,
     ShopModule,
+    StorefrontModule,
+    // نیمه‌ی مربوط به این ماشین را لود می‌کند؛ بدون SYNC_ROLE هیچ‌کدام.
+    SyncModule.forRole(),
     ScheduleModule.forRoot(),
     /*
      * محدودیت نرخ — فقط روی مسیر لاگین اعمال می‌شود (با @UseGuards و @Throttle
@@ -98,7 +102,6 @@ LocationBuilderModule,
     ProductRequestsModule,
     SalesModule,
     PurchasesModule,
-    PickTasksModule,
     WorkTasksModule,
     ReportsModule,
     BackupsModule,

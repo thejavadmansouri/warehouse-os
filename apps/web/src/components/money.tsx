@@ -1,4 +1,4 @@
-import { money, rial } from "@/lib/format";
+import { amount, money } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 /**
@@ -26,13 +26,13 @@ export function Money({
 }: {
   value?: number | null;
   tone?: MoneyTone;
-  /** واحد «ریال» هم چاپ شود. */
+  /** واحد پول («ریال» یا «تومان»، طبق تنظیمات) هم چاپ شود. */
   withUnit?: boolean;
   className?: string;
 }) {
   return (
     <span className={cn("tabular-nums", toneClass[tone], className)}>
-      {withUnit ? rial(value) : money(value)}
+      {withUnit ? amount(value) : money(value)}
     </span>
   );
 }

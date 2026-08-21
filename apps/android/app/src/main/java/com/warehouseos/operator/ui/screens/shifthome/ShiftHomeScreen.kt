@@ -82,7 +82,6 @@ fun ShiftHomeScreen(
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
     onMyWork: () -> Unit,
-    onPickTasks: () -> Unit,
     onWorkTasks: () -> Unit,
     onSettings: () -> Unit,
     onLogout: () -> Unit,
@@ -92,7 +91,6 @@ fun ShiftHomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val pendingCount by viewModel.pendingCount.collectAsState()
     val pendingPhotoCount by viewModel.pendingPhotoCount.collectAsState()
-    val pendingPickCount by viewModel.pendingPickCount.collectAsState()
     val pendingWorkCount by viewModel.pendingWorkCount.collectAsState()
     val failedItems by viewModel.failedItems.collectAsState()
     var showLogoutConfirm by remember { mutableStateOf(false) }
@@ -191,9 +189,7 @@ fun ShiftHomeScreen(
                         onLocate = onLocate,
                         onLinkBarcode = onLinkBarcode,
                         onMyWork = onMyWork,
-                        onPickTasks = onPickTasks,
                         onWorkTasks = onWorkTasks,
-                        pendingPickCount = pendingPickCount,
                         pendingWorkCount = pendingWorkCount,
                         onNewShift = viewModel::startShift,
                     )
@@ -403,9 +399,7 @@ private fun ActiveSessionContent(
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
     onMyWork: () -> Unit,
-    onPickTasks: () -> Unit,
     onWorkTasks: () -> Unit,
-    pendingPickCount: Int,
     pendingWorkCount: Int,
     onNewShift: () -> Unit,
 ) {
@@ -433,20 +427,6 @@ private fun ActiveSessionContent(
     // own initiative sit below. A flat grid of six equal cards made an idle
     // "یافتن کالا" look as urgent as five picks a seller is standing there for.
     val waiting = buildList {
-        add(
-            HomeAction(
-                title = "کار برداشت",
-                subtitle = if (pendingPickCount > 0) {
-                    "${faNum(pendingPickCount)} کالا در انتظار"
-                } else {
-                    "کالاهای درخواستی فروشنده"
-                },
-                icon = Icons.Filled.Inventory2,
-                onClick = onPickTasks,
-                badge = pendingPickCount,
-                accent = AccentPick,
-            ),
-        )
         add(
             HomeAction(
                 title = "کارهای انبار",

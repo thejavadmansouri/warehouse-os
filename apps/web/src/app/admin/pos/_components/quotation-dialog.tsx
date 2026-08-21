@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Printer } from "lucide-react";
 
-import { money, toFa } from "@/lib/format";
+import { amount, money, toFa } from "@/lib/format";
 
 /** مدت‌های رایج. مقدار به دقیقه است تا «۱ ساعت» و «۳ روز» یک مکانیزم باشند. */
 const PRESETS = [
@@ -77,7 +77,7 @@ export function QuotationDialog({
             </div>
             <div className="mt-2 flex justify-between border-t pt-2 font-semibold">
               <span>مبلغ کل</span>
-              <span className="tabular-nums">{money(total)} ریال</span>
+              <span className="tabular-nums">{amount(total)}</span>
             </div>
           </div>
 

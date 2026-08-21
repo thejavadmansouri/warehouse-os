@@ -6,7 +6,8 @@ import android.content.Intent
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.warehouseos.operator.data.remote.ApiResult
-import com.warehouseos.operator.data.repository.PickTaskRepository
+import com.warehouseos.operator.data.repository.WorkTaskRepository
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -22,8 +23,8 @@ import kotlinx.coroutines.launch
 /**
  * Foreground service that keeps the worker reachable for pick-task alerts.
  *
- * Two channels feed [PickAlertCoordinator]:
- *  1. [PickTaskSocket] — instant WebSocket push; the phone rings the moment the
+ * Two channels feed [WorkAlertCoordinator]:
+ *  1. [WorkTaskSocket] — instant WebSocket push; the phone rings the moment the
  *     seller sends work (no waiting for the next poll).
  *  2. A poll of /pick-tasks/mine every few seconds as a safety net while the
  *     socket is disconnected (server restarts, LAN hiccup).
@@ -32,19 +33,19 @@ import kotlinx.coroutines.launch
  * foreground notification so the OS doesn't kill it, stops on logout or 401.
  */
 @AndroidEntryPoint
-class PickTaskWatcherService : Service() {
+class WorkTaskWatcherService : Service() {
 
     @Inject
-    lateinit var repository: PickTaskRepository
+    lateinit var repository: WorkTaskRepository
 
     @Inject
-    lateinit var coordinator: PickAlertCoordinator
+    lateinit var coordinator: WorkAlertCoordinator
 
     @Inject
-    lateinit var socket: PickTaskSocket
+    lateinit var socket: WorkTaskSocket
 
     @Inject
-    lateinit var notifier: PickTaskNotificationManager
+    lateinit var notifier: WorkTaskNotificationManager
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -60,7 +61,7 @@ class PickTaskWatcherService : Service() {
         }
 
         startForeground(
-            PickTaskNotificationManager.ONGOING_NOTIFICATION_ID,
+            WorkTaskNotificationManager.ONGOING_NOTIFICATION_ID,
             notifier.buildOngoingNotification(),
         )
 
@@ -80,9 +81,13 @@ class PickTaskWatcherService : Service() {
     }
 
     private suspend fun pollOnce() {
-        when (val result = repository.mine()) {
+        // refresh کشِ محلی را از سرور پر می‌کند؛ خودِ کارها از همان کش خوانده
+        // می‌شوند تا poll و push دقیقاً یک منبع داشته باشند.
+        when (val result = repository.refresh()) {
             is ApiResult.Success -> coordinator.notifyFromPoll(
-                result.data.filter { it.status == "PENDING" },
+                repository.tasks.first().filter {
+                    it.status != "COMPLETED" && it.status != "CANCELLED"
+                },
             )
             ApiResult.Unauthorized -> {
                 // Token gone or expired — stop watching.
@@ -122,18 +127,18 @@ class PickTaskWatcherService : Service() {
  * holding an Activity context or knowing the service class.
  */
 @Singleton
-class PickTaskWatcherController @Inject constructor(
+class WorkTaskWatcherController @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     /** Start the foreground watcher (safe to call repeatedly). */
     fun start() {
-        val intent = Intent(context, PickTaskWatcherService::class.java)
-            .setAction(PickTaskWatcherService.ACTION_START)
+        val intent = Intent(context, WorkTaskWatcherService::class.java)
+            .setAction(WorkTaskWatcherService.ACTION_START)
         ContextCompat.startForegroundService(context, intent)
     }
 
     /** Stop the watcher (no-op when it isn't running). */
     fun stop() {
-        context.stopService(Intent(context, PickTaskWatcherService::class.java))
+        context.stopService(Intent(context, WorkTaskWatcherService::class.java))
     }
 }

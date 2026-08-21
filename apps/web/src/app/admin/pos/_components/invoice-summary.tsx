@@ -7,6 +7,7 @@ import { money, toFa } from "@/lib/format";
 import { discountToRial, tomanToPercent, type DiscountInput as DiscountValue } from "../_lib/discount";
 import { DiscountField } from "./discount-input";
 
+import { unitLabel } from "@/lib/currency";
 /**
  * خلاصه فاکتور و مبلغ نهایی.
  *
@@ -86,7 +87,7 @@ export function InvoiceSummary({
           <span className="text-sm font-medium text-primary-foreground/80">مبلغ نهایی</span>
           <span className="text-3xl font-bold tabular-nums">{money(total)}</span>
         </div>
-        <p className="text-end text-xs text-primary-foreground/70">ریال</p>
+        <p className="text-end text-xs text-primary-foreground/70">{unitLabel()}</p>
       </div>
 
       {/* یادداشت */}

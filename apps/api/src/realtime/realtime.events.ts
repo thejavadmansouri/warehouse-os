@@ -19,7 +19,9 @@ export type RealtimeEventType =
   | 'open-account.settled'
   | 'cheque.updated'
   | 'shortage.created'
-  | 'shortage.updated';
+  | 'shortage.updated'
+  | 'online-order.created'
+  | 'online-order.decided';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
@@ -30,6 +32,8 @@ export interface RealtimeEvent {
   productId?: string | null;
   /** Task که پیشرفتش عوض شده — فقط id، جزئیات از REST می‌آید. */
   taskId?: string | null;
+  /** سفارش سایت — فقط شناسه، خودِ سفارش از REST گرفته می‌شود. */
+  orderId?: string | null;
   /** زمان تولید رویداد (ISO) — سرور پر می‌کند اگر خالی باشد. */
   at?: string;
 }

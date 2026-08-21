@@ -42,7 +42,7 @@ import {
   updateCustomer,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, faToEn, money, parseNum, toFa } from "@/lib/format";
+import { amount, faDate, faToEn, money, parseNum, toFa } from "@/lib/format";
 import { bpToPercent, percentToBp } from "@/lib/cheque-charge";
 import { useAuthStore } from "@/lib/auth-store";
 import { TakePayment } from "./_components/take-payment";
@@ -50,6 +50,7 @@ import { EditCustomerDialog } from "./_components/edit-customer-dialog";
 import { StatementTable } from "./_components/statement-table";
 import type { Customer, Invoice } from "@/lib/types";
 
+import { unitLabel } from "@/lib/currency";
 /** فیلتر فاکتورهای مشتری — پیش‌فرض «امروز» با ردیف‌های باز. */
 type InvoiceFilter = "today" | "all" | "range";
 const INVOICE_FILTERS: { key: InvoiceFilter; label: string }[] = [
@@ -280,7 +281,7 @@ export default function CustomerPage() {
 
       {(c.creditLimit ?? 0) > 0 && (
         <p className="text-xs text-muted-foreground">
-          سقف اعتبار {money(c.creditLimit!)} ریال · اعتبار باقی‌مانده{" "}
+          سقف اعتبار {amount(c.creditLimit!)} · اعتبار باقی‌مانده{" "}
           <span className="tabular-nums">
             {money(Math.max(0, (c.creditLimit ?? 0) - totalDue))}
           </span>
@@ -744,7 +745,7 @@ function CreditSettings({
 
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="mb-1 block text-sm font-medium">سقف اعتبار (ریال)</label>
+          <label className="mb-1 block text-sm font-medium">سقف اعتبار ({unitLabel()})</label>
           <Input
             dir="ltr"
             className="h-10 w-48 text-right tabular-nums"

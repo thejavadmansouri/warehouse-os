@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { CurrencyUnit } from '../common/money';
 
 
 const SINGLETON = 'singleton';
@@ -16,6 +17,9 @@ export interface ShopSettingsInput {
   footer?: string;
   chequeRateBp?: number;
   chequeRateMode?: 'FLAT' | 'MONTHLY';
+  storedUnit?: CurrencyUnit;
+  panelUnit?: CurrencyUnit;
+  siteUnit?: CurrencyUnit;
 }
 
 
@@ -55,6 +59,9 @@ export class ShopService {
       ...(input.footer !== undefined ? { footer: input.footer.trim() } : {}),
       ...(input.chequeRateBp !== undefined ? { chequeRateBp: input.chequeRateBp } : {}),
       ...(input.chequeRateMode !== undefined ? { chequeRateMode: input.chequeRateMode } : {}),
+      ...(input.storedUnit !== undefined ? { storedUnit: input.storedUnit } : {}),
+      ...(input.panelUnit !== undefined ? { panelUnit: input.panelUnit } : {}),
+      ...(input.siteUnit !== undefined ? { siteUnit: input.siteUnit } : {}),
     };
 
     return this.prisma.shopSettings.upsert({

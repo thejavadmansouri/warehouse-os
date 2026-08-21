@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { getAlerts } from "@/lib/api";
-import { faDate, money, toFa } from "@/lib/format";
+import { amount, faDate, money, toFa } from "@/lib/format";
 
 /** کلیدِ ذخیره‌ی «آخرین وضعیتی که کاربر دید». */
 const SEEN_KEY = "notif-seen-v1";
@@ -122,7 +122,7 @@ export function NotificationBell() {
                       {toFa(overdue.customerCount)} مشتری بدهی معوق دارند
                     </span>
                     <span className="block text-xs tabular-nums text-muted-foreground">
-                      مجموع {money(overdue.amount)} ریال
+                      مجموع {amount(overdue.amount)}
                     </span>
                   </span>
                 </Link>

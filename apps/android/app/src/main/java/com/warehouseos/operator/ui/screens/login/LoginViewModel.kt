@@ -2,7 +2,7 @@ package com.warehouseos.operator.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.warehouseos.operator.data.notifications.PickTaskWatcherController
+import com.warehouseos.operator.data.notifications.WorkTaskWatcherController
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.repository.AuthRepository
 import com.warehouseos.operator.data.settings.SettingsStore
@@ -30,7 +30,7 @@ data class LoginUiState(
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
     private val settings: SettingsStore,
-    private val watcher: PickTaskWatcherController,
+    private val watcher: WorkTaskWatcherController,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState(serverUrl = settings.baseUrl()))

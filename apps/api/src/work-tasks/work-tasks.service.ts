@@ -72,6 +72,21 @@ export class WorkTasksService {
     private operation: InventoryOperationService,
   ) {}
 
+  /**
+   * کارگرهایی که می‌شود کار را به آن‌ها تخصیص داد.
+   *
+   * از `/pick-tasks/workers` به اینجا منتقل شد وقتی صفِ برداشت در همین Task
+   * ادغام شد. انتخابگرِ کارگر در صندوق همین را صدا می‌زند.
+   */
+  listWorkers() {
+    return this.prisma.user.findMany({
+      where: { role: Role.STAFF },
+      select: { id: true, fullName: true, username: true },
+      orderBy: { fullName: 'asc' },
+    });
+  }
+
+
   /** فروشنده/مدیر یک Task با چند قلم می‌سازد — موجودی دست نمی‌خورد. */
   async create(
     input: {

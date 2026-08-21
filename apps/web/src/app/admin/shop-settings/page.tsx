@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Store } from "lucide-react";
+import { Store, TriangleAlert } from "lucide-react";
 
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState } from "@/components/states";
@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 
 import { getShopSettings, updateShopSettings } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import type { ShopSettings } from "@/lib/types";
+import type { CurrencyUnit, ShopSettings } from "@/lib/types";
 import { bpToPercent, percentToBp } from "@/lib/cheque-charge";
 import { faToEn } from "@/lib/format";
 
@@ -26,7 +26,15 @@ const EMPTY: ShopSettings = {
   footer: "",
   chequeRateBp: 0,
   chequeRateMode: "MONTHLY",
+  storedUnit: "RIAL",
+  panelUnit: "RIAL",
+  siteUnit: "TOMAN",
 };
+
+const UNITS = [
+  ["RIAL", "ریال"],
+  ["TOMAN", "تومان"],
+] as const;
 
 /**
  * مشخصات مغازه.
@@ -62,6 +70,9 @@ export function ShopSettingsPanel({ embedded }: { embedded?: boolean } = {}) {
         footer: value.footer,
         chequeRateBp: value.chequeRateBp,
         chequeRateMode: value.chequeRateMode,
+        storedUnit: value.storedUnit,
+        panelUnit: value.panelUnit,
+        siteUnit: value.siteUnit,
       }),
     onSuccess: () => {
       toast.success("مشخصات مغازه ذخیره شد");
@@ -161,6 +172,55 @@ export function ShopSettingsPanel({ embedded }: { embedded?: boolean } = {}) {
           </div>
         </div>
 
+        {/*
+          واحد پول.
+
+          سه انتخاب نیست، دو انتخاب و یک واقعیت. `panelUnit` و `siteUnit` فقط
+          نمایش‌اند و بی‌خطر عوض می‌شوند؛ `storedUnit` می‌گوید عددهای دیتابیس
+          یعنی چه و اشتباه‌زدنش هر مبلغی را ده برابر یا یک‌دهم نشان می‌دهد.
+          برای همین از آن دو جدا افتاده و هشدارش کنارش نوشته شده.
+        */}
+        <div className="rounded-lg border bg-muted/20 p-4">
+          <p className="mb-1 text-sm font-medium">واحد پول</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            فقط روی نمایش اثر دارد. عددهای ذخیره‌شده دست‌نخورده می‌مانند و تبدیل
+            موقع نشان‌دادن انجام می‌شود.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="نمایش در پنل و صندوق">
+              <UnitPicker
+                value={value.panelUnit}
+                onChange={(u) => set("panelUnit", u)}
+              />
+            </Field>
+
+            <Field label="نمایش در سایت">
+              <UnitPicker
+                value={value.siteUnit}
+                onChange={(u) => set("siteUnit", u)}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4 rounded-md border border-warning/40 bg-warning/5 p-3">
+            <p className="mb-1 flex items-center gap-2 text-sm font-medium text-warning">
+              <TriangleAlert className="size-4 shrink-0" aria-hidden />
+              واحدِ خودِ داده
+            </p>
+            <p className="mb-3 text-xs text-muted-foreground">
+              عددهای پول در دیتابیس به این واحد ذخیره شده‌اند. این یک گزارش از
+              واقعیت است، نه یک ترجیح — عوض‌کردنش هیچ ردیفی را تغییر نمی‌دهد ولی
+              معنیِ همه‌شان را عوض می‌کند و هر مبلغ ده برابر یا یک‌دهم دیده
+              می‌شود. تا وقتی داده‌ها را واقعاً تبدیل نکرده‌ای دست نزن.
+            </p>
+            <UnitPicker
+              value={value.storedUnit}
+              onChange={(u) => set("storedUnit", u)}
+            />
+          </div>
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="شماره کارت">
             <Input
@@ -195,6 +255,38 @@ export function ShopSettingsPanel({ embedded }: { embedded?: boolean } = {}) {
           {save.isPending ? "در حال ذخیره…" : "ذخیره"}
         </Button>
       </Card>
+    </div>
+  );
+}
+
+/**
+ * انتخابگرِ واحد پول — همان الگوی دکمه‌های چسبیده‌ی «نحوه‌ی محاسبه»، چون سه بار
+ * تکرار می‌شود و سه تا کپیِ دستی یعنی سه جا که می‌توانند از هم دربروند.
+ */
+function UnitPicker({
+  value,
+  onChange,
+}: {
+  value: CurrencyUnit;
+  onChange: (u: CurrencyUnit) => void;
+}) {
+  return (
+    <div className="flex gap-1">
+      {UNITS.map(([unit, label]) => (
+        <button
+          key={unit}
+          type="button"
+          onClick={() => onChange(unit)}
+          aria-pressed={value === unit}
+          className={`h-9 flex-1 rounded-md border text-sm font-medium transition-colors ${
+            value === unit
+              ? "border-primary bg-primary text-primary-foreground"
+              : "hover:border-primary hover:text-primary"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
     </div>
   );
 }

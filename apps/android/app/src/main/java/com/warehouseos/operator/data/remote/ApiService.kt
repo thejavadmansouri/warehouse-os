@@ -18,7 +18,6 @@ import com.warehouseos.operator.data.remote.dto.ProductRequestResult
 import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
 import com.warehouseos.operator.data.remote.dto.MyWorkResponse
 import com.warehouseos.operator.data.remote.dto.PhotoUploadResponse
-import com.warehouseos.operator.data.remote.dto.PickTaskDto
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsResponse
@@ -114,14 +113,7 @@ interface ApiService {
     @POST("work-tasks/sync")
     suspend fun syncWorkTaskMutations(@Body body: WorkTaskSyncRequest): WorkTaskSyncResponse
 
-    // ---- Pick tasks (worker picking queue) ----
-    // صف کارِ برداشتِ همین کارگر — آدرس قفسه + کالا + تعداد.
-    @GET("pick-tasks/mine")
-    suspend fun pickTasksMine(): List<PickTaskDto>
 
-    // «آوردم» — ادعای اتمیک؛ موجودی تغییر نمی‌کند.
-    @POST("pick-tasks/{id}/picked")
-    suspend fun pickTaskMarkPicked(@Path("id") id: String): PickTaskDto
 
     // ---- New-product request (worker → manager review) ----
 

@@ -11,9 +11,10 @@ import { toast } from "sonner";
 
 import { createCustomer, creditCheck, searchCustomers } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { faToEn, money, toFa, rial } from "@/lib/format";
+import { amount, faToEn, money, toFa, rial } from "@/lib/format";
 import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
 
+import { unitLabel } from "@/lib/currency";
 /**
  * تسویه‌ی کامل با کیبورد — «اسکن → اینتر → مشتری → کارت → ثبت».
  *
@@ -324,7 +325,7 @@ export function CheckoutFlow({
           <div className="text-end">
             <div className="text-3xl font-bold tabular-nums">{money(total)}</div>
             <div className="text-xs text-muted-foreground">
-              ریال · {toFa(lineCount)} قلم
+              {unitLabel()} · {toFa(lineCount)} قلم
             </div>
           </div>
         </div>
@@ -560,7 +561,7 @@ export function CheckoutFlow({
                          hover:opacity-90 disabled:opacity-40"
             >
               <Check className="size-5" />
-              {pending ? "در حال ثبت…" : `ثبت فاکتور — ${money(total)} ریال`}
+              {pending ? "در حال ثبت…" : `ثبت فاکتور — ${amount(total)}`}
             </button>
 
             <button

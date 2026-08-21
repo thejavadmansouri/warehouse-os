@@ -2,7 +2,7 @@ package com.warehouseos.operator.data.notifications
 
 import android.content.Context
 import android.content.SharedPreferences
-import com.warehouseos.operator.data.remote.dto.PickTaskDto
+import com.warehouseos.operator.data.local.WorkTaskEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -11,17 +11,17 @@ import javax.inject.Singleton
  * Single owner of the «has this task already rung?» decision.
  *
  * Both discovery paths funnel into here:
- *  - the foreground watcher's poll ([PickTaskWatcherService]) — every few seconds
- *  - the instant WebSocket push ([PickTaskSocket]) — the moment the seller sends
+ *  - the foreground watcher's poll ([WorkTaskWatcherService]) — every few seconds
+ *  - the instant WebSocket push ([WorkTaskSocket]) — the moment the seller sends
  *
  * Dedup lives in one place so a task pushed over the socket (which rings at once)
  * is also marked as seen for the next poll, and vice versa — no double rings.
- * Ringing is skipped while the worker is looking at the pick list ([PickAlertGate]).
+ * Ringing is skipped while the worker is looking at the task list ([WorkAlertGate]).
  */
 @Singleton
-class PickAlertCoordinator @Inject constructor(
+class WorkAlertCoordinator @Inject constructor(
     @ApplicationContext context: Context,
-    private val notifier: PickTaskNotificationManager,
+    private val notifier: WorkTaskNotificationManager,
 ) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -45,7 +45,7 @@ class PickAlertCoordinator @Inject constructor(
 
     /** Called by the poll watcher. First call seeds the baseline, later ones ring. */
     @Synchronized
-    fun notifyFromPoll(pending: List<PickTaskDto>) {
+    fun notifyFromPoll(pending: List<WorkTaskEntity>) {
         if (!hasSeeded) {
             hasSeeded = true
             seenIds.clear()
@@ -61,14 +61,20 @@ class PickAlertCoordinator @Inject constructor(
         persist()
     }
 
-    /** Called by the WebSocket push — tasks are brand new by construction, always ring. */
+    /**
+     * Called by the WebSocket push.
+     *
+     * سوکت فقط شناسه می‌فرستد، پس خودِ کارها از همان فهرستی خوانده می‌شوند که
+     * poll هم می‌خواند. اگر هنوز نرسیده باشند (کار تازه ساخته شده و refresh عقب
+     * است) چیزی زنگ نمی‌زند و poll چند ثانیه بعد می‌گیردش — دیرتر، ولی گم نمی‌شود.
+     */
     @Synchronized
-    fun notifyFromPush(tasks: List<PickTaskDto>) {
+    fun notifyFromPush(taskIds: List<String>, known: List<WorkTaskEntity>) {
         hasSeeded = true
-        ringForNew(tasks)
+        ringForNew(known.filter { it.id in taskIds })
     }
 
-    private fun ringForNew(tasks: List<PickTaskDto>) {
+    private fun ringForNew(tasks: List<WorkTaskEntity>) {
         val fresh = tasks.filter { it.id !in seenIds }
         if (fresh.isEmpty()) return
 
@@ -77,7 +83,7 @@ class PickAlertCoordinator @Inject constructor(
 
         // The worker is already staring at the queue — the screen updates itself,
         // ringing over it would be noise.
-        if (PickAlertGate.pickScreenVisible) return
+        if (WorkAlertGate.taskScreenVisible) return
 
         notifier.notifyNewTasks(fresh)
     }

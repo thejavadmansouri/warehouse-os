@@ -3,7 +3,7 @@
 import { PrintStyles, type PaperSize } from "./print-styles";
 import { ShopHeader, ShopPaymentInfo } from "./shop-header";
 
-import { faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { amount, faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
 import type { OpenAccountSheet as Sheet } from "@/lib/types";
 
 export type { PaperSize };
@@ -146,7 +146,7 @@ export function OpenAccountSheet({
               )}
               <tr className="grand">
                 <td>مبلغ قابل پرداخت</td>
-                <td className="num">{money(t.net)} ریال</td>
+                <td className="num">{amount(t.net)}</td>
               </tr>
               {t.paid > 0 && (
                 <tr>

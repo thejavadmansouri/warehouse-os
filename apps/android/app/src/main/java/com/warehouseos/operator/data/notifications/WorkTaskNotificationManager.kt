@@ -11,7 +11,7 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.warehouseos.operator.MainActivity
-import com.warehouseos.operator.data.remote.dto.PickTaskDto
+import com.warehouseos.operator.data.local.WorkTaskEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -20,7 +20,7 @@ import javax.inject.Singleton
  * Local notifications for pick tasks — the "phone rings" experience on a LAN
  * with no FCM/Google services.
  *
- * [PickTaskWatcherService] polls /pick-tasks/mine and hands freshly arrived
+ * [WorkTaskWatcherService] polls /pick-tasks/mine and hands freshly arrived
  * tasks to [notifyNewTasks], which raises a heads-up notification with the
  * system notification sound so the worker hears it even with the screen off.
  *
@@ -30,7 +30,7 @@ import javax.inject.Singleton
  *    the OS keeps the watcher alive without nagging the worker.
  */
 @Singleton
-class PickTaskNotificationManager @Inject constructor(
+class WorkTaskNotificationManager @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
 
@@ -86,14 +86,21 @@ class PickTaskNotificationManager @Inject constructor(
      * to walk without unlocking the phone (VISIBILITY_PUBLIC on the lock screen).
      * An optional seller note is appended to the body.
      */
-    fun notifyNewTasks(tasks: List<PickTaskDto>) {
+    fun notifyNewTasks(tasks: List<WorkTaskEntity>) {
         if (tasks.isEmpty()) return
 
-        val shelfOf = { task: PickTaskDto ->
-            task.location?.path?.takeIf { it.isNotBlank() }
-                ?: task.location?.name?.takeIf { it.isNotBlank() }
-                ?: task.location?.code
-                ?: ""
+        /*
+         * عنوانِ کار همان چیزی است که در صفحه هم دیده می‌شود: شماره‌ی فاکتور،
+         * یا «چیدن کالای رسیده». کارگر باید بدون بازکردنِ اعلان بفهمد کدام است
+         * — مخصوصاً حالا که برداشتن و چیدن هر دو از همین کانال می‌آیند.
+         */
+        val titleOf = { t: WorkTaskEntity ->
+            when {
+                t.kind == "PUTAWAY" -> "چیدن کالای رسیده"
+                !t.invoiceNumber.isNullOrBlank() -> "فاکتور ${faNum2(t.invoiceNumber)}"
+                !t.quotationNumber.isNullOrBlank() -> "پیش‌فاکتور ${faNum2(t.quotationNumber)}"
+                else -> "کار انبار"
+            }
         }
         val note = tasks.firstNotNullOfOrNull { it.note?.takeIf(String::isNotBlank) }
 
@@ -101,22 +108,15 @@ class PickTaskNotificationManager @Inject constructor(
         val body: String
         if (tasks.size == 1) {
             val task = tasks.first()
-            val shelf = shelfOf(task)
-            val product = task.product?.name?.takeIf { it.isNotBlank() } ?: "کالا"
-            val unit = task.product?.unit?.takeIf { it.isNotBlank() } ?: "عدد"
-            title = if (shelf.isNotBlank()) "کار برداشت — $shelf" else "کار برداشت جدید"
+            title = titleOf(task)
             body = buildString {
-                append("بردارید: ${faNum(task.quantity)} $unit $product")
+                append("${faNum(task.totalItems)} قلم برای انجام")
                 if (note != null) append("\nپیام: $note")
             }
         } else {
-            title = "کار برداشت جدید — ${faNum(tasks.size)} قلم"
+            title = "${faNum(tasks.size)} کار جدید"
             body = buildString {
-                append(tasks.joinToString(" · ") { task ->
-                    val shelf = shelfOf(task)
-                    val product = task.product?.name?.takeIf { it.isNotBlank() } ?: "کالا"
-                    if (shelf.isNotBlank()) "$product ($shelf)" else product
-                })
+                append(tasks.joinToString(" · ") { titleOf(it) })
                 if (note != null) append("\nپیام: $note")
             }
         }
@@ -174,7 +174,10 @@ class PickTaskNotificationManager @Inject constructor(
         const val ALERT_NOTIFICATION_ID = 2002
 
         private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
-        fun faNum(n: Int): String =
-            n.toString().map { if (it.isDigit()) FA_DIGITS[it - '0'] else it }.joinToString("")
+        fun faNum(n: Int): String = faNum2(n.toString())
+
+        /** شماره‌ی سند از سرور رشته می‌آید، نه عدد. */
+        fun faNum2(s: String?): String =
+            s.orEmpty().map { if (it.isDigit()) FA_DIGITS[it - '0'] else it }.joinToString("")
     }
 }

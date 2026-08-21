@@ -1,5 +1,7 @@
 // ابزارهای قالب‌بندی عدد و تاریخ (تاریخ جلالی با Intl خود مرورگر)
 
+import { toDisplay, unitLabel } from "./currency";
+
 export function formatNumber(n?: number | null): string {
   if (n === undefined || n === null) return "—";
   return n.toLocaleString("en-US");
@@ -62,7 +64,7 @@ export const ACTION_BADGE_CLASS: Record<string, string> = {
 };
 
 // =====================================================
-// ارقام فارسی و پول (ریال) — طبق docs/DESIGN_SYSTEM.md
+// ارقام فارسی و پول — واحد از تنظیمات فروشگاه می‌آید (lib/currency.ts)
 // =====================================================
 
 const FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
@@ -93,17 +95,28 @@ export function parseNum(input: string): number {
 /**
  * مبلغ با جداکننده‌ی هزارگان و ارقام فارسی — بدون کلمه‌ی واحد.
  * جداکننده باید «٬» فارسی باشد؛ کاماست انگلیسی کنار ارقام فارسی بد می‌نشیند.
+ *
+ * ورودی همیشه عددِ **دیتابیس** است و خروجی به واحدِ نمایشِ پنل تبدیل می‌شود.
+ * تا وقتی مدیر واحد نمایش را عوض نکرده، این تبدیل بی‌اثر است.
  */
 export function money(n?: number | null): string {
   if (n === null || n === undefined) return "—";
-  return toFa(Math.round(n).toLocaleString("en-US")).replace(/,/g, "٬");
+  return toFa(Math.round(toDisplay(n)).toLocaleString("en-US")).replace(/,/g, "٬");
 }
 
-/** مبلغ کامل با واحد. واحد پول کل سیستم ریال است. */
-export function rial(n?: number | null): string {
+/**
+ * مبلغ کامل با واحد — واحد از تنظیمات فروشگاه می‌آید، نه از یک رشته‌ی ثابت.
+ *
+ * هر جا کنار عدد کلمه‌ی واحد لازم است باید این استفاده شود، نه چسباندنِ دستیِ
+ * یک واحدِ ثابت به `money()` — آن الگو با عوض‌شدنِ واحدِ نمایش دروغ می‌شود.
+ */
+export function amount(n?: number | null): string {
   if (n === null || n === undefined) return "—";
-  return `${money(n)} ریال`;
+  return `${money(n)} ${unitLabel()}`;
 }
+
+/** نام قبلی `amount`. نگه داشته شده تا فراخوانی‌های قدیمی نشکنند. */
+export const rial = amount;
 
 /** تعداد با ارقام فارسی. */
 export function qty(n?: number | null): string {

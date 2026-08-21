@@ -7,7 +7,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { ChequeRateMode } from '@prisma/client';
+import { ChequeRateMode, CurrencyUnit } from '@prisma/client';
 
 
 export class ShopSettingsDto {
@@ -39,4 +39,22 @@ export class ShopSettingsDto {
 
   @IsOptional() @IsEnum(ChequeRateMode)
   chequeRateMode?: ChequeRateMode;
+
+  /**
+   * ⚠️ معنیِ عددهای داخل دیتابیس — نه یک ترجیح نمایشی.
+   *
+   * عوض‌کردنش هیچ ردیفی را بازنویسی نمی‌کند، ولی همان لحظه معنیِ کل داده را
+   * عوض می‌کند: اگر قیمت‌ها ریال باشند و این روی تومان برود، هر مبلغی در پنل و
+   * سایت ده برابر دیده می‌شود. فقط وقتی زده شود که داده واقعاً مهاجرت کرده باشد.
+   */
+  @IsOptional() @IsEnum(CurrencyUnit)
+  storedUnit?: CurrencyUnit;
+
+  /** واحدِ نمایش در پنل مدیر و صندوق فروش. */
+  @IsOptional() @IsEnum(CurrencyUnit)
+  panelUnit?: CurrencyUnit;
+
+  /** واحدِ نمایش در سایت عمومی. */
+  @IsOptional() @IsEnum(CurrencyUnit)
+  siteUnit?: CurrencyUnit;
 }

@@ -6,9 +6,9 @@ package com.warehouseos.operator.data.notifications
  * The worker usually finds out about new pick tasks via the notification, but when
  * they are already looking at the pick list the screen polls the queue itself — so
  * the watcher should not ring the phone at the same moment. [PickTasksScreen] flips
- * this on while visible; [PickTaskWatcherService] checks it before raising an alert.
+ * this on while visible; [WorkTaskWatcherService] checks it before raising an alert.
  */
-object PickAlertGate {
+object WorkAlertGate {
     @Volatile
-    var pickScreenVisible: Boolean = false
+    var taskScreenVisible: Boolean = false
 }

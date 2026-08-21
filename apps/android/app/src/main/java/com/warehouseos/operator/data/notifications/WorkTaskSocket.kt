@@ -1,7 +1,7 @@
 package com.warehouseos.operator.data.notifications
 
-import com.warehouseos.operator.data.remote.dto.PickTaskDto
 import com.warehouseos.operator.data.session.SecureTokenStore
+import com.warehouseos.operator.data.repository.WorkTaskRepository
 import com.warehouseos.operator.data.settings.SettingsStore
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -11,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -22,11 +23,11 @@ import okhttp3.WebSocket
 import okhttp3.WebSocketListener
 
 /**
- * Instant push channel for pick tasks — the replacement for «poll and wait up to
+ * Instant push channel for warehouse work — the replacement for «poll and wait up to
  * 4 seconds».
  *
- * Connects to ws://<server>/pick-tasks/ws?token=<JWT> and, the moment the seller
- * creates a task, the server sends it here. [PickAlertCoordinator] rings the
+ * Connects to ws://<server>/work-tasks/ws?token=<JWT> and, the moment the seller
+ * creates a task, the server sends it here. [WorkAlertCoordinator] rings the
  * phone immediately (with the same dedup as the poll fallback, so no double rings).
  *
  * The on-prem server has no FCM, so this is a plain WebSocket over the LAN —
@@ -34,10 +35,11 @@ import okhttp3.WebSocketListener
  * backoff; the watcher's poll stays as the safety net while disconnected.
  */
 @Singleton
-class PickTaskSocket @Inject constructor(
+class WorkTaskSocket @Inject constructor(
     private val tokenStore: SecureTokenStore,
     private val settings: SettingsStore,
-    private val coordinator: PickAlertCoordinator,
+    private val coordinator: WorkAlertCoordinator,
+    private val repository: WorkTaskRepository,
     private val json: Json,
     okHttpClient: OkHttpClient,
 ) {
@@ -87,7 +89,7 @@ class PickTaskSocket @Inject constructor(
         // and HttpUrl.Builder.scheme() rejects "ws"/"wss" outright
         // (IllegalArgumentException: unexpected scheme: ws).
         val url = base.newBuilder()
-            .addPathSegments("pick-tasks/ws")
+            .addPathSegments("work-tasks/ws")
             .addQueryParameter("token", token)
             .build()
 
@@ -105,9 +107,13 @@ class PickTaskSocket @Inject constructor(
 
         override fun onMessage(webSocket: WebSocket, text: String) {
             runCatching {
-                val push = json.decodeFromString<PickPushDto>(text)
-                if (push.type == PUSH_TYPE_PICK_TASKS_CREATED) {
-                    coordinator.notifyFromPush(push.tasks)
+                val push = json.decodeFromString<WorkPushDto>(text)
+                if (push.type == PUSH_TYPE_WORK_TASK_CREATED) {
+                    // شناسه‌ها آمده‌اند؛ خودِ کارها را از سرور بگیر و بعد زنگ بزن.
+                    scope.launch {
+                        repository.refresh()
+                        coordinator.notifyFromPush(push.taskIds, repository.tasks.first())
+                    }
                 }
             }
         }
@@ -132,16 +138,22 @@ class PickTaskSocket @Inject constructor(
     }
 
     companion object {
-        const val PUSH_TYPE_PICK_TASKS_CREATED = "pick-tasks-created"
+        const val PUSH_TYPE_WORK_TASK_CREATED = "work-task-created"
         private const val NORMAL_CLOSE = 1000
         private const val INITIAL_RECONNECT_MS = 1_000L
         private const val MAX_RECONNECT_MS = 30_000L
     }
 }
 
-/** پیام push سرور: { type: "pick-tasks-created", tasks: [...] }. */
+/**
+ * پیام push سرور: `{ type: "work-task-created", taskIds: [...] }`.
+ *
+ * فقط شناسه می‌آید، نه خودِ کار — همان قاعده‌ای که کانال realtime پنل دارد:
+ * سوکت «چه اتفاقی افتاد» را می‌گوید و داده از همان endpointِ REST که guard و
+ * scope دارد دوباره گرفته می‌شود.
+ */
 @Serializable
-data class PickPushDto(
+data class WorkPushDto(
     val type: String = "",
-    val tasks: List<PickTaskDto> = emptyList(),
+    val taskIds: List<String> = emptyList(),
 )

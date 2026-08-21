@@ -18,7 +18,6 @@ import com.warehouseos.operator.ui.screens.login.LoginScreen
 import com.warehouseos.operator.ui.screens.locate.LocateScreen
 import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
 import com.warehouseos.operator.ui.screens.mywork.MyWorkScreen
-import com.warehouseos.operator.ui.screens.picktasks.PickTasksScreen
 import com.warehouseos.operator.ui.screens.linkbarcode.LinkBarcodeScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
@@ -59,9 +58,9 @@ fun OperatorNavGraph(
         if (!shouldOpenPick) return@LaunchedEffect
         when (currentRoute) {
             null, Routes.STARTUP, Routes.LOGIN -> return@LaunchedEffect
-            Routes.PICK_TASKS -> onPickTasksHandled()
+            Routes.WORK_TASKS -> onPickTasksHandled()
             else -> {
-                navController.navigate(Routes.PICK_TASKS)
+                navController.navigate(Routes.WORK_TASKS)
                 onPickTasksHandled()
             }
         }
@@ -106,7 +105,6 @@ fun OperatorNavGraph(
                 onLocate = { navController.navigate(Routes.LOCATE) },
                 onLinkBarcode = { navController.navigate(Routes.LINK_BARCODE) },
                 onMyWork = { navController.navigate(Routes.MY_WORK) },
-                onPickTasks = { navController.navigate(Routes.PICK_TASKS) },
                 onWorkTasks = { navController.navigate(Routes.WORK_TASKS) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
                 onLogout = {
@@ -136,11 +134,6 @@ fun OperatorNavGraph(
             )
         }
 
-        composable(Routes.PICK_TASKS) {
-            PickTasksScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
 
         composable(Routes.CATALOG_SETUP) {
             CatalogSetupScreen(

@@ -34,6 +34,14 @@ export class WorkTasksController {
 
   /** صف کارهای همین کارگر — تخصیصی + بدون‌تخصیص، با پیشرفت. */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES, Role.STAFF)
+  /** فهرست کارگرها برای انتخابگرِ گیرنده در صندوق. */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('workers')
+  workers() {
+    return this.service.listWorkers();
+  }
+
+
   @Get('mine')
   mine(@Req() req: any, @Query('warehouseId') warehouseId?: string) {
     return this.service.findForWorker(req.user.userId, warehouseId);

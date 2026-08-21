@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { downloadReportExcel } from "@/lib/api";
-import { money, toFa } from "@/lib/format";
+import { amount, money, toFa } from "@/lib/format";
 import { jalaliMonthLength, toGregorian, toJalali } from "@/lib/jalali";
 
 /** رنگ نمودار — از توکن طراحی. `hsl(var(--primary))` اینجا غلط است چون تم oklch است. */
@@ -280,4 +280,4 @@ export function NoData({ onWiden }: { onWiden?: () => void }) {
 }
 
 export const sum = (rows: number[]) => rows.reduce((a, b) => a + b, 0);
-export const t = (n: number) => `${money(n)} ریال`;
+export const t = (n: number) => `${amount(n)}`;

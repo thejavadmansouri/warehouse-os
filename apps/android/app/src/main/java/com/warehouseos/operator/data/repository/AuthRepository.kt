@@ -1,6 +1,6 @@
 package com.warehouseos.operator.data.repository
 
-import com.warehouseos.operator.data.notifications.PickTaskWatcherController
+import com.warehouseos.operator.data.notifications.WorkTaskWatcherController
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.ApiService
 import com.warehouseos.operator.data.remote.dto.LoginRequest
@@ -22,7 +22,7 @@ enum class StartupDestination { LOGIN, SHIFT_HOME }
 class AuthRepository @Inject constructor(
     private val api: ApiService,
     private val tokenStore: SecureTokenStore,
-    private val watcher: PickTaskWatcherController,
+    private val watcher: WorkTaskWatcherController,
 ) {
 
     fun cachedUser(): AuthUser? = tokenStore.cachedUser()

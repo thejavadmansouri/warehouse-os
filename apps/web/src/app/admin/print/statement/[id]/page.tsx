@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getCustomer, getCustomerFullStatement, getStatement } from "@/lib/api";
-import { faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
+import { amount, faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
 import { JalaliDateInput } from "@/components/jalali-date-input";
 import type { CustomerFullStatement, LedgerEntryType } from "@/lib/types";
 
@@ -325,7 +325,7 @@ export default function StatementPrintPage({
               )}
               <tr className="grand">
                 <td>{(s?.totalDue ?? 0) >= 0 ? "مانده‌ی بدهی" : "بستانکار"}</td>
-                <td className="num">{money(Math.abs(s?.totalDue ?? 0))} ریال</td>
+                <td className="num">{amount(Math.abs(s?.totalDue ?? 0))}</td>
               </tr>
             </tbody>
           </table>

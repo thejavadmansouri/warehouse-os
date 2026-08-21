@@ -36,9 +36,10 @@ import { ReceiptForm } from "@/components/receipt-form";
 import { ReturnDialog } from "./return-dialog";
 import { CorrectionDialog } from "./correction-dialog";
 import { ApiException } from "@/lib/api-error-messages";
-import { faDate, faToEn, money, toFa } from "@/lib/format";
+import { amount, faDate, faToEn, money, toFa } from "@/lib/format";
 import type { Customer, OpenAccountDetail, OpenAccountSummary } from "@/lib/types";
 
+import { unitLabel } from "@/lib/currency";
 type View = "list" | "file" | "define" | "receipt";
 
 /** مهلتهای رایج برای تعریف حساب باز. */
@@ -386,7 +387,7 @@ export function OpenAccounts({
                 {toFa(rows.length)} مشتری با حساب باز
               </span>
               <span className="font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                {money(totalDue)} ریال
+                {amount(totalDue)}
               </span>
             </div>
 
@@ -569,7 +570,7 @@ export function OpenAccounts({
             <div className="grid grid-cols-2 gap-3 rounded-lg border bg-muted/20 p-3">
               <div>
                 <label className="mb-1 block text-sm font-medium">
-                  سقف اعتبار <span className="text-muted-foreground">(ریال، ۰ = بدون سقف)</span>
+                  سقف اعتبار <span className="text-muted-foreground">({unitLabel()}، ۰ = بدون سقف)</span>
                 </label>
                 <MoneyInput className="h-10 text-right tabular-nums" value={limit} onChange={setLimit} />
               </div>
@@ -617,7 +618,7 @@ export function OpenAccounts({
               </div>
               <div className="text-end">
                 <p className="text-base font-bold tabular-nums">
-                  {money(detail.data?.total ?? selected.total)} ریال
+                  {amount(detail.data?.total ?? selected.total)}
                 </p>
                 {detail.data && (
                   <p className="text-xs text-muted-foreground">
@@ -680,7 +681,7 @@ export function OpenAccounts({
                           <PencilLine className="size-3.5" /> اصلاح
                         </Button>
                         <span className="font-bold tabular-nums">
-                          {money(inv.netTotal)} ریال
+                          {amount(inv.netTotal)}
                         </span>
                         {inv.netTotal !== inv.total && (
                           <span className="text-[11px] text-muted-foreground line-through">
@@ -786,7 +787,7 @@ export function OpenAccounts({
             <div className="flex items-baseline justify-between rounded-lg bg-muted/50 px-3 py-2 text-sm">
               <span className="text-muted-foreground">کل بدهیِ مشتری</span>
               <span className="font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                {money(settled.totalDue)} ریال
+                {amount(settled.totalDue)}
               </span>
             </div>
 

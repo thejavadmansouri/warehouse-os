@@ -924,7 +924,19 @@ export interface ShopSettings {
   /** پیش‌فرضِ نرخِ فروشِ مدت‌دار، به پایه‌ی هزارم. ۲۵۰ = ۲.۵٪ */
   chequeRateBp: number;
   chequeRateMode: "FLAT" | "MONTHLY";
+  /**
+   * معنیِ عددهای پولِ داخل دیتابیس. یک واقعیت است، نه ترجیح نمایشی —
+   * عوض‌کردنش هیچ ردیفی را بازنویسی نمی‌کند ولی معنیِ همه را عوض می‌کند.
+   */
+  storedUnit: CurrencyUnit;
+  /** واحدِ نمایش در پنل و صندوق. */
+  panelUnit: CurrencyUnit;
+  /** واحدِ نمایش در سایت عمومی. */
+  siteUnit: CurrencyUnit;
 }
+
+/** واحد پول. رابطه ثابت است: ۱ تومان = ۱۰ ریال. */
+export type CurrencyUnit = "RIAL" | "TOMAN";
 
 /** یک مشتریِ دارای حساب باز، با تفکیک سنیِ بدهی‌اش. */
 export interface Debtor {
