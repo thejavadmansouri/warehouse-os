@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -68,6 +70,7 @@ import com.warehouseos.operator.ui.components.BannerType
 import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.SecondaryButton
+import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
 import com.warehouseos.operator.ui.components.StatusBanner
 import com.warehouseos.operator.ui.navigation.NewProductPrefill
 
@@ -173,14 +176,28 @@ fun VoiceEntryScreen(
             }
 
             when (state.phase) {
-                VoicePhase.INPUT -> InputStep(
-                    state = state,
-                    micGranted = micPermission.status.isGranted,
-                    onRequestMic = { micPermission.launchPermissionRequest() },
-                    onStart = viewModel::startListening,
-                    onStop = viewModel::stopListening,
-                    onTranscriptChange = viewModel::onTranscriptChange,
-                )
+                VoicePhase.INPUT -> if (state.scanning) {
+                    /*
+                     * سریع‌ترین راهِ ورود، وقتی جنس بارکد دارد: نه حرف‌زدن، نه
+                     * تایپ. بعد از بارکددارشدنِ انبار این مسیرِ اکثریت می‌شود.
+                     */
+                    BarcodeStep(
+                        cameraGranted = cameraPermission.status.isGranted,
+                        onRequestCamera = { cameraPermission.launchPermissionRequest() },
+                        onBarcode = viewModel::onProductBarcode,
+                        onCancel = viewModel::closeScanner,
+                    )
+                } else {
+                    InputStep(
+                        state = state,
+                        micGranted = micPermission.status.isGranted,
+                        onRequestMic = { micPermission.launchPermissionRequest() },
+                        onStart = viewModel::startListening,
+                        onStop = viewModel::stopListening,
+                        onTranscriptChange = viewModel::onTranscriptChange,
+                        onScanBarcode = viewModel::openScanner,
+                    )
+                }
 
                 VoicePhase.PREVIEWING -> LoadingBlock("در حال جستجو در کاتالوگ گوشی…")
 
@@ -337,6 +354,56 @@ private fun SavedNoticeCard(
     }
 }
 
+/**
+ * اسکنِ بارکدِ خودِ کالا، داخل همین صفحه.
+ *
+ * قفسه از قبل انتخاب شده و همان می‌ماند؛ این فقط می‌گوید «چه چیزی». بعد از
+ * تشخیص، اگر بارکد شناخته شده باشد مستقیم می‌رود سرِ تعداد — نه حرفی، نه تایپی.
+ */
+@Composable
+private fun BarcodeStep(
+    cameraGranted: Boolean,
+    onRequestCamera: () -> Unit,
+    onBarcode: (String) -> Unit,
+    onCancel: () -> Unit,
+) {
+    Text(
+        text = "بارکد روی جعبه را مقابل دوربین بگیرید",
+        style = MaterialTheme.typography.bodyLarge,
+        textAlign = TextAlign.Center,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Dimens.gapLarge, bottom = Dimens.gap),
+    )
+
+    if (cameraGranted) {
+        BarcodeScanner(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(4f / 3f)
+                .clip(RoundedCornerShape(Dimens.corner))
+                .border(
+                    width = 3.dp,
+                    color = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(Dimens.corner),
+                ),
+            onBarcodeDetected = onBarcode,
+        )
+    } else {
+        SecondaryButton(
+            text = "اجازه دسترسی به دوربین",
+            onClick = onRequestCamera,
+            modifier = Modifier.padding(bottom = Dimens.gap),
+        )
+    }
+
+    SecondaryButton(
+        text = "انصراف — با صدا وارد می‌کنم",
+        onClick = onCancel,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
+}
+
 @Composable
 private fun InputStep(
     state: VoiceUiState,
@@ -345,9 +412,22 @@ private fun InputStep(
     onStart: () -> Unit,
     onStop: () -> Unit,
     onTranscriptChange: (String) -> Unit,
+    onScanBarcode: () -> Unit,
 ) {
+    /*
+     * سه راهِ ورود، و ترتیبشان عمدی است: بارکد بالا چون سریع‌ترین است، صدا در
+     * وسط چون همیشه کار می‌کند، و متن پایین به‌عنوان تکیه‌گاهِ آخر برای وقتی
+     * سوله پرسر‌وصدا است و بارکد هم خراب.
+     */
+    SecondaryButton(
+        text = "اسکن بارکد کالا",
+        onClick = onScanBarcode,
+        icon = Icons.Filled.QrCodeScanner,
+        modifier = Modifier.padding(top = Dimens.gap),
+    )
+
     Text(
-        text = "نام کالا و تعداد را بگویید",
+        text = "یا نام کالا و تعداد را بگویید",
         style = MaterialTheme.typography.bodyLarge,
         modifier = Modifier.padding(top = Dimens.gapLarge, bottom = Dimens.gap),
     )

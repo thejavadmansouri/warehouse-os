@@ -20,10 +20,6 @@ import com.warehouseos.operator.data.remote.dto.MyWorkResponse
 import com.warehouseos.operator.data.remote.dto.PhotoUploadResponse
 import com.warehouseos.operator.data.remote.dto.PickTaskDto
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
-import com.warehouseos.operator.data.remote.dto.SaleResolveDto
-import com.warehouseos.operator.data.remote.dto.SellRequest
-import com.warehouseos.operator.data.remote.dto.SellResponse
-import com.warehouseos.operator.data.remote.dto.StockLocationDto
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsResponse
 import com.warehouseos.operator.data.remote.dto.VoiceConfirmRequest
@@ -97,18 +93,8 @@ interface ApiService {
     @GET("products/locate")
     suspend fun locateProducts(@Query("q") query: String): List<LocateResultDto>
 
-    // ---- Sales (manager / salesperson) ----
-    // اسکن بارکد → کالا + موجودی در یک درخواست (فروش سریع پشت پیشخوان).
-    @GET("inventory/sale/resolve/{barcode}")
-    suspend fun resolveForSale(@Path("barcode") barcode: String): SaleResolveDto
 
-    // موجودیِ یک کالا به تفکیک مکان — برای انتخاب مکانِ فروش.
-    @GET("inventory/product/{productId}/stock")
-    suspend fun productStock(@Path("productId") productId: String): List<StockLocationDto>
 
-    // فروش = کاهش موجودی (SALE). بک‌اند اتمیک چک می‌کند و از فروش بیش از موجودی جلوگیری می‌کند.
-    @POST("inventory/out")
-    suspend fun sell(@Body body: SellRequest): SellResponse
 
     // نشست سمت سرور را آزاد می‌کند. هر حساب هم‌زمان فقط روی یک دستگاه فعال است،
     // پس خروجِ صریح باید جای خودش را هم پس بدهد.

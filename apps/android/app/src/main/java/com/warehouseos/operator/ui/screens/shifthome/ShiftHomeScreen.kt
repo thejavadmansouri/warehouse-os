@@ -55,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.warehouseos.operator.R
@@ -78,7 +79,6 @@ import com.warehouseos.operator.ui.components.StatusBanner
 fun ShiftHomeScreen(
     onStockIn: () -> Unit,
     onCount: () -> Unit,
-    onSell: (() -> Unit)? = null,
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
     onMyWork: () -> Unit,
@@ -148,7 +148,7 @@ fun ShiftHomeScreen(
             // sync over mobile data. Naming the reason stops it reading as "stuck".
             if (pendingPhotoCount > 0) {
                 StatusBanner(
-                    text = "$pendingPhotoCount عکس در انتظار وای‌فای مغازه",
+                    text = "${faNum(pendingPhotoCount)} عکس در انتظار وای‌فای مغازه",
                     type = BannerType.Info,
                     icon = Icons.Filled.PhotoCamera,
                     modifier = Modifier.padding(top = Dimens.gapSmall),
@@ -188,7 +188,6 @@ fun ShiftHomeScreen(
                         isStarting = uiState.isStarting,
                         onStockIn = onStockIn,
                         onCount = onCount,
-                        onSell = if (viewModel.isManager) onSell else null,
                         onLocate = onLocate,
                         onLinkBarcode = onLinkBarcode,
                         onMyWork = onMyWork,
@@ -253,7 +252,12 @@ private fun GreetingHeader(
 
         Column(modifier = Modifier.padding(start = Dimens.gap)) {
             Text(
-                text = "سلام، $fullName",
+                /*
+                 * وقتی نام کامل ثبت نشده، `fullName` نامِ کاربری است — و «سلام،
+                 * worker» یعنی یک کلمه‌ی لاتین وسطِ جمله‌ی فارسی، که هم بد
+                 * می‌نشیند هم چیزی به کارگر نمی‌گوید. در آن حالت فقط «سلام».
+                 */
+                text = if (fullName.any { it in 'ا'..'ی' }) "سلام، $fullName" else "سلام",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -332,7 +336,26 @@ private data class HomeAction(
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val onClick: () -> Unit,
     val badge: Int? = null,
+    /** رنگِ کارکردیِ آیکن — از فاصله‌ی بازو زودتر از متن خوانده می‌شود. */
+    val accent: Color? = null,
 )
+
+/*
+ * رنگِ هر کار.
+ *
+ * شش کاشی با شش دایره‌ی آبیِ یکسان یعنی کارگر باید متن را بخواند تا تشخیص
+ * دهد. رنگ از فاصله‌ی بازو و با دستکش زودتر از متن خوانده می‌شود، و بعد از
+ * چند روز دست خودش مسیر را حفظ می‌کند.
+ *
+ * تیره انتخاب شده‌اند نه پاستلی: صفحه‌ی ارزانِ گوشیِ کارگر زیر نورِ سوله
+ * کنتراست کم را می‌بلعد.
+ */
+private val AccentPick = Color(0xFF1D4ED8) // برداشتن — آبی
+private val AccentWork = Color(0xFF7C3AED) // کارهای انبار — بنفش
+private val AccentCount = Color(0xFFB45309) // شمارش — نارنجی
+private val AccentFind = Color(0xFF0F766E) // یافتن — فیروزه‌ای
+private val AccentBarcode = Color(0xFF15803D) // بارکد — سبز
+private val AccentMine = Color(0xFF475569) // کارهای من — خاکستری، عمداً خنثی
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -346,29 +369,29 @@ private fun SectionLabel(text: String) {
     )
 }
 
+/**
+ * فهرستِ کارها — **تک‌ستونه**.
+ *
+ * قبلاً دوستونه بود و هر برچسبی بریده می‌شد: «کارهای ان..»، «کار برداش..»،
+ * «آدرس دقیق قف..». روی صفحه‌ی ۳۶۰dp هر کارت ۱۵۴dp می‌شد و بعد از پدینگ و آیکن
+ * حدود ۷۰dp برای متن می‌ماند — که هیچ عبارتِ فارسیِ دوکلمه‌ای در آن جا نمی‌شود.
+ *
+ * اسکرول عمودی مجانی است، عرض نیست. ردیفِ تمام‌عرض هدفِ لمسیِ بزرگ‌تری هم هست،
+ * و کارگرِ انبار دستکش دستش است.
+ */
 @Composable
 private fun ActionGrid(actions: List<HomeAction>, highlightBadged: Boolean) {
-    actions.chunked(2).forEach { row ->
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(Dimens.gap),
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = Dimens.gap),
-        ) {
-            row.forEach { action ->
-                ActionCard(
-                    title = action.title,
-                    icon = action.icon,
-                    onClick = action.onClick,
-                    subtitle = action.subtitle,
-                    badge = action.badge,
-                    highlighted = highlightBadged && (action.badge ?: 0) > 0,
-                    modifier = Modifier.weight(1f),
-                )
-            }
-            // Odd count → empty spacer keeps the row's card widths even.
-            if (row.size == 1) Spacer(Modifier.weight(1f))
-        }
+    actions.forEach { action ->
+        ActionCard(
+            title = action.title,
+            icon = action.icon,
+            onClick = action.onClick,
+            subtitle = action.subtitle,
+            badge = action.badge,
+            accent = action.accent,
+            highlighted = highlightBadged && (action.badge ?: 0) > 0,
+            modifier = Modifier.padding(bottom = Dimens.gap),
+        )
     }
 }
 
@@ -377,7 +400,6 @@ private fun ActiveSessionContent(
     isStarting: Boolean,
     onStockIn: () -> Unit,
     onCount: () -> Unit,
-    onSell: (() -> Unit)?,
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
     onMyWork: () -> Unit,
@@ -387,11 +409,15 @@ private fun ActiveSessionContent(
     pendingWorkCount: Int,
     onNewShift: () -> Unit,
 ) {
-    StatusBanner(
-        text = "شیفت فعال است — آماده‌ی ثبت کالا",
-        type = BannerType.Success,
-        modifier = Modifier.padding(bottom = Dimens.gapLarge),
-    )
+    /*
+     * بنرِ «شیفت فعال است» برداشته شد.
+     *
+     * تقریباً همیشه درست بود — یعنی یک نوارِ تمام‌عرضِ دائمی که هیچ خبری نمی‌داد
+     * و فقط دکمه‌ی اصلی را پایین می‌برد. وقتی شیفت فعال نباشد اصلاً این بخش
+     * رندر نمی‌شود، پس خودِ دیده‌شدنِ دکمه‌ی «ثبت ورود کالا» همان پیام است.
+     *
+     * بنرِ عکس‌های در انتظار سرِ جایش ماند: آن یکی واقعاً خبر دارد.
+     */
 
     // Primary CTA stays the biggest thing on screen.
     PrimaryButton(
@@ -418,6 +444,7 @@ private fun ActiveSessionContent(
                 icon = Icons.Filled.Inventory2,
                 onClick = onPickTasks,
                 badge = pendingPickCount,
+                accent = AccentPick,
             ),
         )
         add(
@@ -432,13 +459,24 @@ private fun ActiveSessionContent(
                 icon = Icons.Filled.Assignment,
                 onClick = onWorkTasks,
                 badge = pendingWorkCount,
+                accent = AccentWork,
             ),
         )
     }
 
     val tools = buildList {
-        add(HomeAction("انبارگردانی", "شمارش موجودی", Icons.Filled.Checklist, onCount))
-        add(HomeAction("یافتن کالا", "آدرس دقیق قفسه", Icons.Filled.Search, onLocate))
+        add(
+            HomeAction(
+                "انبارگردانی", "شمارش موجودی",
+                Icons.Filled.Checklist, onCount, accent = AccentCount,
+            ),
+        )
+        add(
+            HomeAction(
+                "یافتن کالا", "آدرس دقیق قفسه",
+                Icons.Filled.Search, onLocate, accent = AccentFind,
+            ),
+        )
         // کالایی که بارکد خوانا روی جعبه دارد، برچسبِ چاپی لازم ندارد.
         add(
             HomeAction(
@@ -446,12 +484,15 @@ private fun ActiveSessionContent(
                 subtitle = "بارکد جعبه را به کالا وصل کن",
                 icon = Icons.Filled.QrCodeScanner,
                 onClick = onLinkBarcode,
+                accent = AccentBarcode,
             ),
         )
-        if (onSell != null) {
-            add(HomeAction("فروش کالا", "ثبت فروش از انبار", Icons.Filled.ShoppingCart, onSell))
-        }
-        add(HomeAction("کارهای من", "ثبت‌ها و تأییدها", Icons.Filled.History, onMyWork))
+        add(
+            HomeAction(
+                "کارهای من", "ثبت‌ها و تأییدها",
+                Icons.Filled.History, onMyWork, accent = AccentMine,
+            ),
+        )
     }
 
     SectionLabel(

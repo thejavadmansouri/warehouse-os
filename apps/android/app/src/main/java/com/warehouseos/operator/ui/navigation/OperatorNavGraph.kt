@@ -20,7 +20,6 @@ import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
 import com.warehouseos.operator.ui.screens.mywork.MyWorkScreen
 import com.warehouseos.operator.ui.screens.picktasks.PickTasksScreen
 import com.warehouseos.operator.ui.screens.linkbarcode.LinkBarcodeScreen
-import com.warehouseos.operator.ui.screens.sales.SalesScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
@@ -124,11 +123,6 @@ fun OperatorNavGraph(
             )
         }
 
-        composable(Routes.SALES) {
-            SalesScreen(
-                onBack = { navController.popBackStack() },
-            )
-        }
 
         composable(Routes.LOCATE) {
             LocateScreen(

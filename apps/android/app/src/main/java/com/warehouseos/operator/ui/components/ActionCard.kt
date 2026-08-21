@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,6 +46,12 @@ fun ActionCard(
     badge: Int? = null,
     enabled: Boolean = true,
     highlighted: Boolean = false,
+    /**
+     * رنگِ آیکنِ این کار. وقتی همه‌ی کاشی‌ها یک آبیِ یکسان داشتند، کارگر مجبور
+     * بود متن را بخواند تا تشخیص دهد — از فاصله‌ی بازو و با دستکش، رنگ سریع‌تر
+     * از متن خوانده می‌شود. null یعنی رنگِ اصلیِ تم.
+     */
+    accent: Color? = null,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -55,8 +62,9 @@ fun ActionCard(
     )
 
     val scheme = MaterialTheme.colorScheme
-    val iconBackground = if (highlighted) scheme.primary else scheme.primaryContainer
-    val iconTint = if (highlighted) scheme.onPrimary else scheme.primary
+    val tone = accent ?: scheme.primary
+    val iconBackground = if (highlighted) tone else tone.copy(alpha = 0.14f)
+    val iconTint = if (highlighted) scheme.onPrimary else tone
 
     Card(
         onClick = onClick,
@@ -112,15 +120,19 @@ fun ActionCard(
                     text = title,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
+                    // تک‌ستونه که شد، عنوان جا دارد. «کارهای انبار» دیگر
+                    // «کارهای ان..» نمی‌شود.
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
+                        style = MaterialTheme.typography.bodyMedium,
+                        // onSurfaceVariant روی زمینه‌ی روشن، زیر نورِ انبار کم‌رنگ
+                        // است. کمی تیره‌تر و یک اندازه بزرگ‌تر.
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.72f),
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp),
                     )

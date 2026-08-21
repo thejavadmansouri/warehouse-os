@@ -71,6 +71,16 @@ data class VoiceUiState(
     val recognizedName: String = "",
     val recognizedBrand: String = "",
     val recognizedVehicle: String = "",
+    /** دوربینِ اسکنِ بارکدِ کالا باز است. */
+    val scanning: Boolean = false,
+    /**
+     * بارکدی که اسکن شد ولی هیچ کالایی نداشت.
+     *
+     * نگه داشته می‌شود تا وقتی کارگر کالا را با صدا یا جست‌وجو مشخص کرد، همان
+     * لحظه به آن کالا وصل شود — بی‌آنکه لازم باشد بعداً از ابزارِ جدا دوباره
+     * همان جعبه را بردارد و اسکن کند.
+     */
+    val unlinkedBarcode: String? = null,
 )
 
 /**
@@ -258,11 +268,29 @@ class VoiceEntryViewModel @Inject constructor(
      */
     fun selectChoice(choice: ProductChoice) {
         pendingProductId = choice.id
+
+        /*
+         * اگر این انتخاب بعد از اسکنِ یک بارکدِ ناشناس آمده، همین‌جا وصلش کن.
+         *
+         * لحظه‌ی درستش همین است: جعبه دستِ کارگر است و تازه گفته این چه کالایی
+         * است. اگر به بعد موکول شود، یعنی باید همان جعبه را دوباره پیدا کند.
+         */
+        val pendingBarcode = _uiState.value.unlinkedBarcode
+        if (pendingBarcode != null) {
+            viewModelScope.launch {
+                outboxRepository.enqueueBarcodeLink(choice.id, pendingBarcode)
+                // تا سرور تأیید کند، همین گوشی هم باید بشناسدش — جعبه‌ی بعدیِ
+                // همین کالا معمولاً چند ثانیه بعد اسکن می‌شود.
+                catalogRepository.addBarcodeLocally(choice.id, pendingBarcode)
+            }
+        }
+
         _uiState.update {
             it.copy(
                 phase = VoicePhase.CONFIRM,
                 proposalName = choice.name,
                 unit = it.unit ?: choice.unit,
+                unlinkedBarcode = null,
                 error = null,
             )
         }
@@ -426,6 +454,66 @@ class VoiceEntryViewModel @Inject constructor(
     fun prewarmMic() = speech.prewarm()
 
     /** From NOT_FOUND: fall back to manual product search (keeps the shelf). */
+    // ---------- ورود با بارکدِ کالا ----------
+
+    fun openScanner() = _uiState.update { it.copy(scanning = true, error = null) }
+
+    fun closeScanner() = _uiState.update { it.copy(scanning = false) }
+
+    /**
+     * بارکدِ روی جعبه اسکن شد.
+     *
+     * سریع‌ترین مسیرِ ورود است و بعد از بارکددارشدنِ انبار، مسیرِ اکثریت: نه
+     * حرف‌زدن لازم است نه تایپ — فقط تعداد.
+     *
+     * جست‌وجو **محلی** است، مثل بقیه‌ی این صفحه؛ در سوله‌ای که سرور روی LAN
+     * مغازه است، پرسیدن از شبکه فقط یک timeout می‌خرد.
+     */
+    fun onProductBarcode(raw: String) {
+        val code = raw.trim()
+        if (code.isEmpty()) return
+
+        viewModelScope.launch {
+            val match = catalogRepository.findByBarcode(code)
+
+            if (match != null) {
+                pendingProductId = match.id
+                _uiState.update {
+                    it.copy(
+                        phase = VoicePhase.CONFIRM,
+                        scanning = false,
+                        unlinkedBarcode = null,
+                        proposalName = match.name,
+                        unit = match.unit,
+                        quantity = 1,
+                        error = null,
+                    )
+                }
+            } else {
+                /*
+                 * بارکد ناشناس بن‌بست نیست.
+                 *
+                 * کارگر جعبه دستش است و اسمش را می‌داند؛ می‌رود روی همان مسیرِ
+                 * جست‌وجو/صدا و بعد از انتخابِ کالا، بارکد خودش وصل می‌شود. اگر
+                 * اینجا فقط خطا می‌دادیم، باید جعبه را کنار می‌گذاشت و بعداً با
+                 * ابزارِ جدا دوباره برش می‌داشت.
+                 */
+                pendingProductId = null
+                _uiState.update {
+                    it.copy(
+                        phase = VoicePhase.SELECT,
+                        scanning = false,
+                        unlinkedBarcode = code,
+                        selectionMessage = "این بارکد ثبت نشده — کالایش را پیدا کن تا وصل شود",
+                        choices = emptyList(),
+                        searchResults = emptyList(),
+                        error = null,
+                    )
+                }
+            }
+        }
+    }
+
     fun searchManually() {
         pendingProductId = null
         _uiState.update {

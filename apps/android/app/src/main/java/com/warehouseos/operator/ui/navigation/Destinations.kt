@@ -24,7 +24,6 @@ object Routes {
     const val SHIFT_HOME = "shift_home"
     const val SCAN = "scan"
     const val COUNT = "count"
-    const val SALES = "sales"
     const val LOCATE = "locate"
     const val MY_WORK = "my_work"
     const val PICK_TASKS = "pick_tasks"

@@ -66,9 +66,6 @@ class ShiftHomeViewModel @Inject constructor(
             else -> ""
         }
 
-    /** فروش برای مدیر/ادمین/فروشنده — کاهش موجودی یک حرکت پولی است. */
-    val isManager: Boolean
-        get() = authRepository.cachedUser()?.canSell == true
 
     /** Active shift session id, or null when no shift is running. */
     val sessionId: StateFlow<String?> = sessionRepository.sessionId
