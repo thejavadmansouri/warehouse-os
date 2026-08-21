@@ -45,6 +45,67 @@ export class InventoryOperationService {
    *   (voice، count، transfer، pending-operations، product-requests و …)
    *   بدون تغییر کار می‌کنند.
    */
+  /**
+   * موجودیِ منفیِ یک کالا را در همان انبار به صفر می‌رساند.
+   *
+   * دامنه‌اش عمداً «همان انبار» است نه «همان قفسه»: منفی تقریباً همیشه روی
+   * «موجودی ثبت‌نشده» می‌نشیند، نه روی قفسه‌ای که کارگر دارد جنس را رویش ثبت
+   * می‌کند. محدودکردن به همان قفسه یعنی این قاعده هیچ‌وقت اجرا نمی‌شد.
+   *
+   * ردیف‌ها با ترتیبِ ثابت قفل می‌شوند (همان قاعده‌ی `inLockOrder`) — دو کارگر
+   * که هم‌زمان دو کالا را روی یک قفسه ثبت می‌کنند نباید به deadlock بخورند.
+   */
+  private async zeroOutNegatives(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    locationId: string,
+    logBase: Omit<
+      Prisma.InventoryLogUncheckedCreateInput,
+      'locationId' | 'quantity' | 'action'
+    >,
+  ): Promise<void> {
+
+    const target = await tx.location.findUnique({
+      where:{ id: locationId },
+      select:{ warehouseId: true },
+    });
+
+    if (!target?.warehouseId) return;
+
+    const negatives = await tx.inventory.findMany({
+      where:{
+        productId,
+        quantity:{ lt: 0 },
+        location:{ warehouseId: target.warehouseId },
+      },
+      select:{ locationId: true, quantity: true },
+      orderBy:{ locationId: 'asc' },
+    });
+
+    for (const row of negatives) {
+      await tx.inventory.update({
+        where:{
+          productId_locationId:{ productId, locationId: row.locationId },
+        },
+        data:{ quantity: 0 },
+      });
+
+      await tx.inventoryLog.create({
+        data:{
+          ...logBase,
+          locationId: row.locationId,
+          // منفی بود، پس قرینه‌اش مثبت است — همان قراردادِ ADJUST که دلتا ثبت می‌کند.
+          quantity: -row.quantity,
+          action:'ADJUST',
+          note:
+            (logBase.note ? `${logBase.note} — ` : '') +
+            'صفرکردن کسریِ پیش از ثبت، هنگام ورود کالا',
+        },
+      });
+    }
+  }
+
+
   private async runOperation(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
 
     // وقتی تراکنش بیرونی داریم از همان استفاده کن، وگرنه تراکنش خودت را باز کن.
@@ -170,6 +231,30 @@ export class InventoryOperationService {
     if(type === 'IN' || type === 'RETURN'){
 
       return runInTx(async(tx)=>{
+
+
+        /*
+         * پیش از افزودن، بدهیِ موجودیِ منفیِ همین کالا صفر می‌شود.
+         *
+         * چرا: انبار پیش از دیجیتالی‌شدن می‌فروخت. هر فروشِ کالایی که هنوز ثبت
+         * نشده بود روی «موجودی ثبت‌نشده» منفی می‌نشیند. وقتی کارگر بالاخره همان
+         * کالا را می‌شمارد و وارد می‌کند، **عددِ او حقیقت است** — چیزی که روی
+         * قفسه است. آن منفی یک بدهیِ واقعی نیست، رَدِّ فروشی است که سندش از
+         * قبل در لجر هست.
+         *
+         * پس منفی صفر می‌شود و بعد عددِ کارگر اضافه می‌شود؛ نه اینکه از آن کم
+         * شود. اگر کم می‌شد، کارگری که ۲۰ عدد می‌بیند و وارد می‌کند، در سیستم
+         * ۱۲ تا می‌دید و دوباره می‌شمرد.
+         *
+         * صفرکردن با ADJUST ثبت می‌شود نه IN: جنسی وارد نشده، یک تصحیح انجام
+         * شده — و لجر باید بتواند این دو را از هم جدا کند.
+         *
+         * ⚠️ فاکتور خرید عمداً بیرون است (`purchaseId`): عددِ روی برگه‌ی
+         * فروشنده «چه چیزی رسید» است، نه «چه چیزی روی قفسه است».
+         */
+        if (type === 'IN' && !purchaseId && dto.clearNegative !== false) {
+          await this.zeroOutNegatives(tx, productId, locationId, logBase);
+        }
 
 
         const updated =
