@@ -189,6 +189,8 @@ class OutboxRepository @Inject constructor(
     /** Manual retry of a row the server rejected (FAILED → PENDING). */
     suspend fun retry(clientRequestId: String) {
         dao.retry(clientRequestId)
+        // عکسِ همین عملیات هم با آن رد شده بود؛ با هم برمی‌گردند.
+        photos.requeueFor(clientRequestId)
     }
 
     /**
@@ -228,7 +230,11 @@ class OutboxRepository @Inject constructor(
             // eventual replay idempotent.
             ApiResult.Unauthorized -> false
             is ApiResult.ServerError -> {
-                ops.forEach { dao.updateStatus(it.clientRequestId, OutboxStatus.FAILED, it.attemptCount + 1, result.message) }
+                ops.forEach {
+                    dao.updateStatus(it.clientRequestId, OutboxStatus.FAILED, it.attemptCount + 1, result.message)
+                    // عملیات ثبت نشد ⇒ عکسش هرگز جایی برای نشستن ندارد.
+                    photos.failFor(it.clientRequestId, "عملیاتِ این عکس ثبت نشد")
+                }
                 true
             }
         }

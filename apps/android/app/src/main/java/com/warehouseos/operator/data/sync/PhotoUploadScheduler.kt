@@ -15,8 +15,8 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Schedules photo uploads on Wi-Fi only (UNMETERED), mirroring the catalog
- * download policy: bulk bytes never ride the worker's mobile data.
+ * Schedules photo uploads. The Wi-Fi rule lives in the Worker, not in the
+ * constraint — see ANY_NETWORK below for why.
  *
  * A periodic job covers the end-of-day case — the worker walks back into the
  * shop and the day's photos upload without anyone opening the app.
@@ -30,7 +30,7 @@ class PhotoUploadScheduler @Inject constructor(
     /** One-shot nudge — used right after the outbox drains, so photos follow. */
     fun requestUpload() {
         val request = OneTimeWorkRequestBuilder<PhotoUploadWorker>()
-            .setConstraints(WIFI_ONLY)
+            .setConstraints(ANY_NETWORK)
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 60, TimeUnit.SECONDS)
             .build()
         workManager.enqueueUniqueWork(WORK_ONCE, ExistingWorkPolicy.KEEP, request)
@@ -41,7 +41,7 @@ class PhotoUploadScheduler @Inject constructor(
             PERIOD_MINUTES,
             TimeUnit.MINUTES,
         )
-            .setConstraints(WIFI_ONLY)
+            .setConstraints(ANY_NETWORK)
             .build()
         workManager.enqueueUniquePeriodicWork(
             WORK_PERIODIC,
@@ -57,10 +57,19 @@ class PhotoUploadScheduler @Inject constructor(
         /** Cheap when the queue is empty — the DAO returns without a network call. */
         const val PERIOD_MINUTES = 30L
 
-        // WorkManager cannot express "Wi-Fi", and UNMETERED is the wrong proxy:
-        // it never fires on a phone hotspot or a router flagged metered. Ask only
-        // for connectivity here; the worker applies the Wi-Fi rule itself.
-        val WIFI_ONLY = Constraints.Builder()
+        /*
+         * فقط «شبکه‌ای هست» — نه «وای‌فای است».
+         *
+         * قاعده‌ی وای‌فای عمداً اینجا بیان نمی‌شود: `UNMETERED`ِ WorkManager یک
+         * حدس است و دقیقاً در همین حالت‌ها اشتباه می‌کند — هات‌اسپاتِ گوشی
+         * metered گزارش می‌شود، و وای‌فای انبار که اینترنت ندارد ممکن است اصلاً
+         * رد شود. با آن، کار برای همیشه اجرا نمی‌شود.
+         *
+         * پس شرطِ واقعی در خودِ Worker با `NetworkStatus.isOnWifi()` چک می‌شود.
+         * این ثابت قبلاً `WIFI_ONLY` نام داشت و کامنتش «UNMETERED» می‌گفت، در
+         * حالی که هیچ‌کدام نبود — اسمِ دروغ، ساعت‌ها دیباگِ اشتباه می‌سازد.
+         */
+        val ANY_NETWORK = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
     }

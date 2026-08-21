@@ -47,6 +47,32 @@ interface PendingPhotoDao {
     @Query("DELETE FROM pending_photo WHERE id = :id")
     suspend fun delete(id: String)
 
+    /**
+     * عکس‌های یک عملیاتِ ردشده را هم رد می‌کند.
+     *
+     * بدون این، عکس با وضعیت PENDING می‌ماند ولی هیچ‌وقت کاندیدِ آپلود نمی‌شود
+     * (فیلترِ getReadyToUpload ردیفِ outbox را می‌بیند) — یعنی برای همیشه و
+     * بی‌صدا گیر می‌کند. کارگر باید ببیندش، نه اینکه نبیندش.
+     */
+    @Query(
+        """
+        UPDATE pending_photo
+        SET status = 'FAILED', lastError = :reason
+        WHERE clientRequestId = :operationId AND status = 'PENDING'
+        """,
+    )
+    suspend fun failForOperation(operationId: String, reason: String)
+
+    /** با retry کردنِ عملیات، عکسش هم باید دوباره در صف بیفتد. */
+    @Query(
+        """
+        UPDATE pending_photo
+        SET status = 'PENDING', attemptCount = 0, lastError = NULL
+        WHERE clientRequestId = :operationId AND status = 'FAILED'
+        """,
+    )
+    suspend fun requeueForOperation(operationId: String)
+
     @Query("DELETE FROM pending_photo WHERE clientRequestId = :operationId")
     suspend fun deleteForOperation(operationId: String)
 

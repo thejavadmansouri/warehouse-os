@@ -37,6 +37,8 @@ class OutboxRepositoryTest {
     private lateinit var dao: FakeOutboxDao
     private lateinit var repo: OutboxRepository
 
+    private lateinit var photos: FakePhotoQueue
+
     private val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
@@ -53,7 +55,8 @@ class OutboxRepositoryTest {
             .build()
             .create(ApiService::class.java)
         dao = FakeOutboxDao()
-        repo = OutboxRepository(dao, api, FakePhotoQueue())
+        photos = FakePhotoQueue()
+        repo = OutboxRepository(dao, api, photos)
     }
 
     @After
@@ -287,4 +290,31 @@ class OutboxRepositoryTest {
         assertEquals("bad payload", op.lastError)
         assertEquals(0, server.requestCount)
     }
+    /**
+     * عکسِ یک عملیاتِ ردشده باید با آن رد شود.
+     *
+     * فیلترِ صفِ عکس می‌گوید «تا ردیفِ outbox هست، آپلود نکن». ردیفِ FAILED هم
+     * می‌ماند — پس بدون این، عکس برای همیشه و بی‌صدا در صف قفل می‌شد و کارگر
+     * هیچ‌وقت نمی‌فهمید چرا آپلود نمی‌شود.
+     */
+    @Test
+    fun `رد شدن عملیات، عکسش را هم رد می‌کند`() = runTest {
+        enqueueIn()
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"message":"bad"}"""))
+
+        repo.sync()
+
+        assertEquals(listOf(dao.all().single().clientRequestId), photos.failed)
+    }
+
+    @Test
+    fun `تلاش دوباره‌ی عملیات، عکسش را هم به صف برمی‌گرداند`() = runTest {
+        enqueueIn()
+        val id = dao.all().single().clientRequestId
+
+        repo.retry(id)
+
+        assertEquals(listOf(id), photos.requeued)
+    }
+
 }

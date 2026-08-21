@@ -10,9 +10,12 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 
 /**
- * Uploads queued worker photos. Constrained to unmetered (Wi-Fi) networks — a
- * full shift of ~200 KB photos is real money on a worker's SIM, and the manager
- * only looks at them back at the shop anyway.
+ * Uploads queued worker photos.
+ *
+ * The Wi-Fi rule is enforced here rather than as a WorkManager constraint —
+ * see ANY_NETWORK in PhotoUploadScheduler for why. A full shift of ~200 KB
+ * photos is real money on a worker's SIM, and the manager only looks at them
+ * back at the shop anyway.
  */
 @HiltWorker
 class PhotoUploadWorker @AssistedInject constructor(

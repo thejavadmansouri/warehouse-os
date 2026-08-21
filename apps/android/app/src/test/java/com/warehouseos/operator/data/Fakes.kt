@@ -101,11 +101,22 @@ class FakeCatalogDao : CatalogDao {
     fun all(): List<CatalogProductEntity> = rows.values.toList()
 }
 
-/** No-op photo queue — the outbox only needs the discard hook. */
+/** بدلِ صفِ عکس — هر سه قلابی که outbox صدا می‌زند ثبت می‌شوند تا تست ببیندشان. */
 class FakePhotoQueue : com.warehouseos.operator.data.repository.PhotoQueue {
     val discarded = mutableListOf<String>()
+    val failed = mutableListOf<String>()
+    val requeued = mutableListOf<String>()
+
     override suspend fun discardFor(clientRequestId: String) {
         discarded += clientRequestId
+    }
+
+    override suspend fun failFor(clientRequestId: String, reason: String) {
+        failed += clientRequestId
+    }
+
+    override suspend fun requeueFor(clientRequestId: String) {
+        requeued += clientRequestId
     }
 }
 

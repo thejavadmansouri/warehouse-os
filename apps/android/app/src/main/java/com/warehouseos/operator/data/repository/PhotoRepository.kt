@@ -28,6 +28,12 @@ import javax.inject.Singleton
  */
 interface PhotoQueue {
     suspend fun discardFor(clientRequestId: String)
+
+    /** عملیات از سرور رد شد — عکسش هم باید رد شود، نه اینکه بی‌صدا در صف بماند. */
+    suspend fun failFor(clientRequestId: String, reason: String)
+
+    /** عملیات دوباره تلاش می‌شود — عکسش هم به صف برمی‌گردد. */
+    suspend fun requeueFor(clientRequestId: String)
 }
 
 /**
@@ -136,6 +142,20 @@ class PhotoRepository @Inject constructor(
 
     /** Manual retry of a photo the server rejected. */
     suspend fun retry(id: String) = dao.retry(id)
+
+    /**
+     * عملیات از سرور رد شد ⇒ عکسش هیچ‌وقت پذیرفته نمی‌شود.
+     *
+     * سرور عکس را روی `clientRequestId` همان عملیات می‌گیرد؛ وقتی عملیاتی ثبت
+     * نشده، آپلود همیشه ۴۰۴ می‌گیرد. پس به‌جای انتظارِ بی‌پایان، همان‌جا رد
+     * می‌شود تا کارگر در فهرستِ ردشده‌ها ببیندش.
+     */
+    override suspend fun failFor(clientRequestId: String, reason: String) =
+        dao.failForOperation(clientRequestId, reason)
+
+    /** با تلاشِ دوباره‌ی عملیات، عکسش هم به صف برمی‌گردد. */
+    override suspend fun requeueFor(clientRequestId: String) =
+        dao.requeueForOperation(clientRequestId)
 
     /** Drops a queued photo and its file (worker discarded the operation). */
     override suspend fun discardFor(clientRequestId: String) = withContext(Dispatchers.IO) {

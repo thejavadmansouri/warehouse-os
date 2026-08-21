@@ -8,7 +8,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm, type ControllerRenderProps } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Loader2 } from "lucide-react";
+import { ImageIcon, Loader2 } from "lucide-react";
 
 import {
   Dialog,
@@ -42,6 +42,7 @@ import { Label } from "@/components/ui/label";
 
 import {
   createProduct,
+  uploadProductImage,
   updateProduct,
   getBrands,
   getVehicleModels,
@@ -191,14 +192,63 @@ export function ProductFormDialog({
     form.reset(editValues);
   }, [open, editValues, form]);
 
+  /*
+   * عکس تا وقتی کالا شناسه نگرفته نمی‌تواند آپلود شود — اندپوینتش روی
+   * `/uploads/product/:id/image` است. پس فایل اینجا نگه داشته می‌شود و بعد از
+   * ساختِ موفقِ کالا فرستاده می‌شود.
+   *
+   * تا امروز اصلاً همین فیلد نبود: موقع ساختِ کالا هیچ راهی برای گذاشتنِ عکس
+   * وجود نداشت و باید ذخیره می‌کردی، کالا را باز می‌کردی، و آنجا عکس می‌زدی.
+   */
+  const [imageFile, setImageFile] = React.useState<File | null>(null);
+  const [imagePreview, setImagePreview] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!open) {
+      setImageFile(null);
+      setImagePreview(null);
+    }
+  }, [open]);
+
+  const pickImage = (file: File | null) => {
+    setImageFile(file);
+    setImagePreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  };
+
+  /**
+   * عکس را می‌فرستد و دیالوگ را می‌بندد.
+   *
+   * اگر آپلود شکست بخورد، کالا **ساخته شده باقی می‌ماند** — و همین به کاربر
+   * گفته می‌شود. بستنِ بی‌صدا یعنی او فکر می‌کند عکس رفته.
+   */
+  const finish = async (p: Product) => {
+    if (imageFile) {
+      try {
+        await uploadProductImage(p.id, imageFile);
+      } catch (e) {
+        toast({
+          title: "کالا ساخته شد ولی عکس آپلود نشد",
+          description:
+            e instanceof ApiException ? e.message : "از صفحه‌ی کالا دوباره تلاش کنید",
+          variant: "destructive",
+        });
+      }
+    }
+    qc.invalidateQueries({ queryKey: ["products"] });
+    if (p.id) qc.invalidateQueries({ queryKey: ["product", p.id] });
+    onOpenChange(false);
+    onSuccess?.(p);
+  };
+
   // طبق بخش ۶.۳ — POST /products
   const createM = useMutation({
     mutationFn: (dto: CreateProductDto) => createProduct(dto),
     onSuccess: (p) => {
       toast({ title: "محصول ایجاد شد", description: p.name });
-      qc.invalidateQueries({ queryKey: ["products"] });
-      onOpenChange(false);
-      onSuccess?.(p);
+      void finish(p);
     },
     onError: (e) => {
       toast({
@@ -215,12 +265,7 @@ export function ProductFormDialog({
       updateProduct((initial as Product).id, dto),
     onSuccess: (p) => {
       toast({ title: "محصول به‌روزرسانی شد", description: p.name });
-      qc.invalidateQueries({ queryKey: ["products"] });
-      if (initial?.id) {
-        qc.invalidateQueries({ queryKey: ["product", initial.id] });
-      }
-      onOpenChange(false);
-      onSuccess?.(p);
+      void finish(p);
     },
     onError: (e) => {
       toast({
@@ -293,6 +338,34 @@ export function ProductFormDialog({
             className="flex min-h-0 flex-1 flex-col overflow-hidden"
           >
             <div className="min-h-0 flex-1 overflow-y-auto scroll-thin px-6 py-5">
+              {/* عکس — بین ۳۳ هزار قطعه‌ی شبیه هم، سریع‌ترین راه تشخیص. */}
+              <div className="mb-4 flex items-center gap-4 rounded-lg border p-3">
+                <div className="flex size-20 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                  {imagePreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={imagePreview}
+                      alt=""
+                      className="size-full object-cover"
+                    />
+                  ) : (
+                    <ImageIcon className="size-7 text-muted-foreground" />
+                  )}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => pickImage(e.target.files?.[0] ?? null)}
+                    className="cursor-pointer"
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    اختیاری — بعد از ثبت کالا آپلود می‌شود. حداکثر ۵ مگابایت.
+                  </p>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {/* نام محصول */}
                 <FormField
