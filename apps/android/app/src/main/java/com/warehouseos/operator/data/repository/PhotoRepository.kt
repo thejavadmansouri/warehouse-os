@@ -7,6 +7,7 @@ import com.warehouseos.operator.data.local.PhotoStatus
 import com.warehouseos.operator.data.photo.PhotoStore
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.ApiService
+import com.warehouseos.operator.data.sync.PhotoUploadRequester
 import com.warehouseos.operator.data.remote.safeApiCall
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -51,6 +52,7 @@ class PhotoRepository @Inject constructor(
     private val dao: PendingPhotoDao,
     private val api: ApiService,
     private val store: PhotoStore,
+    private val uploads: PhotoUploadRequester,
 ) : PhotoQueue {
     /** Drives the «N عکس در انتظار ارسال» badge. */
     val pendingCount: Flow<Int> = dao.pendingCount()
@@ -74,6 +76,19 @@ class PhotoRepository @Inject constructor(
                     status = PhotoStatus.PENDING,
                 ),
             )
+
+            /*
+             * همین‌جا درخواستِ ارسال بده.
+             *
+             * تا امروز گرفتنِ عکس هیچ‌چیزی را زمان‌بندی نمی‌کرد: تنها محرک‌ها
+             * پایانِ موفقِ drainِ outbox بود و کارِ دوره‌ایِ ۳۰ دقیقه‌ای. پس عکسی
+             * که برای عملیاتی گرفته می‌شد که **از قبل** سینک شده بود، تا نیم
+             * ساعت در «انتظار» می‌ماند بی‌آنکه چیزی اشتباه باشد.
+             *
+             * اگر عملیاتش هنوز نرفته باشد، این اجرا کاری نمی‌کند و بی‌ضرر است —
+             * فیلترِ DAO عکس را برنمی‌گرداند.
+             */
+            uploads.requestUpload()
             true
         }
 

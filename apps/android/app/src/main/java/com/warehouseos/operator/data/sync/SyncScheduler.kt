@@ -43,7 +43,20 @@ class SyncScheduler @Inject constructor(
             .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
             .build()
 
-        workManager.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request)
+        /*
+         * REPLACE، نه KEEP.
+         *
+         * این یک «الان تلاش کن» است. با KEEP، اگر همین کارِ یکتا از قبل در صف بود —
+         * از جمله وقتی در backoffِ نمایی نشسته (۶۰ ثانیه، ۱۲۰، ۲۴۰، …) — درخواستِ
+         * تازه بی‌صدا دور انداخته می‌شد و کار تا پایانِ همان backoff معطل می‌ماند.
+         *
+         * یعنی هرچه بیشتر شکست خورده بود، دیرتر به تلاشِ تازه جواب می‌داد — دقیقاً
+         * برعکسِ چیزی که کاربر انتظار دارد.
+         *
+         * لغوِ یک اجرای در جریان بی‌خطر است: هر دو drain با کلیدِ کلاینت idempotent‌اند
+         * و عکس فقط بعد از موفقیت پاک می‌شود.
+         */
+        workManager.enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
     /**

@@ -4,6 +4,8 @@ import com.warehouseos.operator.data.repository.PhotoQueue
 import com.warehouseos.operator.data.repository.PhotoRepository
 import com.warehouseos.operator.data.settings.CatalogReadyFlag
 import com.warehouseos.operator.data.settings.SettingsStore
+import com.warehouseos.operator.data.sync.PhotoUploadRequester
+import com.warehouseos.operator.data.sync.PhotoUploadScheduler
 import com.warehouseos.operator.data.sync.SyncRequester
 import com.warehouseos.operator.data.sync.SyncScheduler
 import dagger.Binds
@@ -28,6 +30,10 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindPhotoQueue(impl: PhotoRepository): PhotoQueue
+
+    @Binds
+    @Singleton
+    abstract fun bindPhotoUploadRequester(impl: PhotoUploadScheduler): PhotoUploadRequester
 
     @Binds
     @Singleton
