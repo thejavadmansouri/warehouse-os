@@ -1,9 +1,9 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, PhoneKind } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
-import { normalizePhone } from '../common/phone.util';
+import { normalizePhone, phoneKind } from '../common/phone.util';
 import { LedgerService } from './ledger.service';
 import { CustomerCategoriesService } from './customer-categories.service';
 import { CreateCustomerDto, CustomerPhoneDto } from './dto/customer.dto';
@@ -513,7 +513,12 @@ export class CustomersService {
     if (!phones?.length) return [];
 
     const seen = new Set<string>();
-    const out: { phone:string; label:string | null; isPrimary:boolean }[] = [];
+    const out: {
+      phone:string;
+      label:string | null;
+      isPrimary:boolean;
+      kind: PhoneKind;
+    }[] = [];
 
     for (const p of phones) {
       const normalized = normalizePhone(p.phone);
@@ -533,6 +538,9 @@ export class CustomersService {
         phone: normalized,
         label: p.label ?? null,
         isPrimary: p.isPrimary ?? out.length === 0,
+        // از روی خودِ شماره، نه از روی برچسبی که کاربر زده — وگرنه کسی که
+        // برچسب «موبایل» را روی تلفن مغازه گذاشته باعث می‌شود پیامک به آن برود.
+        kind: phoneKind(normalized) as PhoneKind,
       });
     }
 

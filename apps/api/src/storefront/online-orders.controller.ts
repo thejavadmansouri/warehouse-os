@@ -19,7 +19,7 @@ class ListQueryDto {
   status?: OnlineOrderStatus;
 }
 
-class RejectDto {
+class CancelDto {
   @IsOptional() @IsString() @MaxLength(300)
   reason?: string;
 }
@@ -46,18 +46,24 @@ export class OnlineOrdersController {
     return this.orders.detail(id);
   }
 
-  /** تأیید و تبدیل به فاکتور — تنها نقطه‌ای که کالا از انبار کم می‌شود. */
-  @Post(':id/confirm')
-  confirm(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
-    return this.orders.confirm(id, req.user?.userId);
+  /**
+   * یک مرحله جلو: آماده‌سازی → ارسال → تحویل.
+   *
+   * عمداً «مرحله‌ی بعد» است نه «وضعیت دلخواه»: فروشنده وسط کار نباید بتواند
+   * سفارشی را که هنوز جمع نشده «تحویل‌شده» بزند.
+   */
+  @Post(':id/advance')
+  advance(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.orders.advance(id, req.user?.userId);
   }
 
-  @Post(':id/reject')
-  reject(
+  /** لغو — جنس نبود، یا مشتری پشیمان شد. */
+  @Post(':id/cancel')
+  cancel(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: RejectDto,
+    @Body() dto: CancelDto,
     @Req() req: any,
   ) {
-    return this.orders.reject(id, req.user?.userId, dto.reason);
+    return this.orders.cancel(id, req.user?.userId, dto.reason);
   }
 }

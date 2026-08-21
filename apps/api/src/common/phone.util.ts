@@ -48,6 +48,28 @@ export function normalizePhone(input?: string | null): string | null {
 }
 
 
+/**
+ * نوعِ یک شماره‌ی **نرمال‌شده**.
+ *
+ * از روی خودِ شماره تصمیم می‌گیرد، نه از روی برچسبی که کاربر انتخاب کرده —
+ * کسی که برچسب «موبایل» را روی تلفن مغازه گذاشته باعث نشود پیامک به آن برود.
+ *
+ * ورودی باید از `normalizePhone` آمده باشد؛ روی متنِ خام جواب درست نمی‌دهد.
+ */
+export function phoneKind(phone?: string | null): 'MOBILE' | 'LANDLINE' | 'OTHER' {
+  if (!phone) return 'OTHER';
+  if (/^09\d{9}$/.test(phone)) return 'MOBILE';
+  if (/^0\d{2,10}$/.test(phone)) return 'LANDLINE';
+  return 'OTHER';
+}
+
+
+/** آیا این شماره پیامک می‌گیرد. تنها معیارِ مجاز برای صفِ ارسال. */
+export function canReceiveSms(phone?: string | null): boolean {
+  return phoneKind(phone) === 'MOBILE';
+}
+
+
 /** فقط برای نمایش: 09121112233 → 0912 111 2233 */
 export function formatPhone(phone?: string | null): string {
   if (!phone) return '';

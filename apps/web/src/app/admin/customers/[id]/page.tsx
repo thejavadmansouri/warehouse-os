@@ -47,6 +47,7 @@ import { bpToPercent, percentToBp } from "@/lib/cheque-charge";
 import { useAuthStore } from "@/lib/auth-store";
 import { TakePayment } from "./_components/take-payment";
 import { EditCustomerDialog } from "./_components/edit-customer-dialog";
+import { SmsDialog } from "./_components/sms-dialog";
 import { StatementTable } from "./_components/statement-table";
 import type { Customer, Invoice } from "@/lib/types";
 
@@ -222,6 +223,7 @@ export default function CustomerPage() {
             )}
           </div>
         </div>
+        <SmsDialog customer={c} />
         <EditCustomerDialog customer={c} onDone={refresh} />
         {isManager && (
           <Button

@@ -92,6 +92,27 @@ export class StorefrontCatalogService {
     return s;
   }
 
+  /**
+   * تعدادِ رزروشده — سفارش‌هایی که ثبت شده‌اند ولی مغازه هنوز از موجودیِ خودش
+   * کمشان نکرده.
+   *
+   * جفتِ همان تابع در `StorefrontOrderService` است و هر دو باید یک قاعده را
+   * ببینند، وگرنه چیزی که در فهرست «موجود» دیده می‌شود سرِ ثبت سفارش رد می‌شود.
+   */
+  private async reserved(productIds: string[]): Promise<Map<string, number>> {
+    if (!productIds.length) return new Map();
+
+    const rows = await this.prisma.onlineOrderLine.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: productIds },
+        order: { stockAppliedAt: null, status: { notIn: ['CANCELLED'] } },
+      },
+      _sum: { quantity: true },
+    });
+    return new Map(rows.map((r) => [r.productId, r._sum.quantity ?? 0]));
+  }
+
   /** شرطِ پایه‌ی «این کالا اجازه‌ی دیده‌شدن دارد». هیچ کوئری‌ای بدون این نیست. */
   private get visible(): Prisma.ProductWhereInput {
     return { showOnline: true, isActive: true, deletedAt: null };
@@ -184,13 +205,22 @@ export class StorefrontCatalogService {
      */
     const toSite = (v: number) => convertMoney(v, units.stored, units.site);
 
+    /*
+     * موجودیِ نمایشی = عددِ آخرین سینک منهای سفارش‌هایی که مغازه هنوز فاکتورشان
+     * را نزده. بدون این، کالایی که همه‌اش سفارش داده شده باز هم «موجود» نشان
+     * داده می‌شود و مشتریِ بعدی چیزی می‌خرد که وجود ندارد.
+     */
+    const reserved = await this.reserved(rows.map((r) => r.id));
+
     let list = rows
       .map((p) => ({
         id: p.id,
         name: p.name,
         createdAt: p.createdAt,
         price: p.prices[0]?.salePrice != null ? toSite(p.prices[0].salePrice) : null,
-        stock: p.inventories.reduce((s, i) => s + i.quantity, 0),
+        stock:
+          p.inventories.reduce((s, i) => s + i.quantity, 0) -
+          (reserved.get(p.id) ?? 0),
       }))
       .filter((p) => p.price !== null && p.price > 0);
 
@@ -313,7 +343,10 @@ export class StorefrontCatalogService {
       });
     }
 
-    const stock = p.inventories.reduce((s, i) => s + i.quantity, 0);
+    const reservedHere = await this.reserved([p.id]);
+    const stock =
+      p.inventories.reduce((s, i) => s + i.quantity, 0) -
+      (reservedHere.get(p.id) ?? 0);
 
     return {
       id: p.id,

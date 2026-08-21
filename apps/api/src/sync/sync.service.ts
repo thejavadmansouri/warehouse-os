@@ -242,12 +242,10 @@ export class SyncService {
         address: true,
         note: true,
         createdAt: true,
-        customer: {
-          select: {
-            firstName: true,
-            lastName: true,
-            phones: { where: { isPrimary: true }, select: { phone: true }, take: 1 },
-          },
+        // مشتریِ سایت — نه مشتریِ مغازه. مغازه خودش تصمیم می‌گیرد کِی و آیا
+        // اصلاً پرونده‌ای برایش باز کند (فقط هنگام صدور فاکتور).
+        siteCustomer: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
         },
         lines: {
           select: {
@@ -289,6 +287,12 @@ export class SyncService {
           status: o.status,
           rejectReason: o.rejectReason ?? null,
           decidedAt: new Date(),
+          /*
+           * لحظه‌ای که مغازه می‌گوید «فاکتورش را زدم» رزروِ موجودی برداشته
+           * می‌شود: از آن به بعد کاهش در خودِ عددِ سینک‌شده دیده می‌شود و
+           * نگه‌داشتنِ رزرو یعنی دوبار کسر کردن.
+           */
+          ...(o.stockApplied ? { stockAppliedAt: new Date() } : {}),
         },
       });
       updated += done.count;

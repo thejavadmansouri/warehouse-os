@@ -1701,6 +1701,47 @@ export function getLowStock(p: { page?: number; limit?: number }) {
 }
 
 // =====================================================
+// پیامک مشتری — دستی، با پیش‌نمایش
+// =====================================================
+
+export function getSmsTemplates(): Promise<T.SmsTemplate[]> {
+  return apiFetch<T.SmsTemplate[]>("/sms/templates");
+}
+
+/** متنِ نهایی با مقادیر واقعی. `extra` متغیرهای همان سند را می‌دهد. */
+export function previewSms(
+  customerId: string,
+  templateKey: string,
+  extra: Record<string, string> = {}
+): Promise<T.SmsPreview> {
+  const qs = new URLSearchParams(extra).toString();
+  return apiFetch<T.SmsPreview>(
+    `/sms/preview/${encodeURIComponent(customerId)}/${encodeURIComponent(templateKey)}${qs ? `?${qs}` : ""}`
+  );
+}
+
+export function sendSms(body: {
+  customerId: string;
+  templateKey: string;
+  body: string;
+}): Promise<T.SmsMessage> {
+  return apiFetch<T.SmsMessage>("/sms/send", { method: "POST", body });
+}
+
+/** صف را همین حالا خالی کن — مدیر منتظر زمان‌بندی نماند. */
+export function drainSms(): Promise<{ sent: number; failed: number }> {
+  return apiFetch("/sms/drain", { method: "POST" });
+}
+
+export function getSmsHistory(customerId: string): Promise<T.SmsMessage[]> {
+  return apiFetch<T.SmsMessage[]>(`/sms/history/${encodeURIComponent(customerId)}`);
+}
+
+export function retrySms(id: string): Promise<T.SmsMessage> {
+  return apiFetch<T.SmsMessage>(`/sms/${encodeURIComponent(id)}/retry`, { method: "POST" });
+}
+
+// =====================================================
 // کسری محصول — تقاضایی که جواب نگرفت
 // =====================================================
 

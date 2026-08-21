@@ -190,11 +190,17 @@ export function EditCustomerDialog({
                         <span className="block truncate font-medium tabular-nums" dir="ltr">
                           {toFa(p.phone)}
                         </span>
-                        {p.label && (
-                          <span className="text-[11px] text-muted-foreground">
-                            {p.label}
-                          </span>
-                        )}
+                        <span className="text-[11px] text-muted-foreground">
+                          {/*
+                            پیامک‌پذیری از خودِ شماره می‌آید، نه از برچسب — کسی
+                            که برچسب «موبایل» را روی تلفن مغازه گذاشته نباید
+                            باعث شود پیامک به آن فرستاده شود.
+                          */}
+                          {p.kind === "MOBILE"
+                            ? "موبایل — پیامک‌پذیر"
+                            : "پیامک نمی‌گیرد"}
+                          {p.label ? ` · ${p.label}` : ""}
+                        </span>
                       </span>
                       {p.isPrimary ? (
                         <span className="flex shrink-0 items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">

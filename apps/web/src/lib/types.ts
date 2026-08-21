@@ -791,6 +791,8 @@ export interface SaleResolve {
 }
 
 export interface CustomerPhone {
+  /** از روی خودِ شماره تعیین می‌شود — تنها MOBILE پیامک می‌گیرد. */
+  kind?: "MOBILE" | "LANDLINE" | "OTHER";
   id: string;
   phone: string;
   label?: string | null;
@@ -1588,6 +1590,40 @@ export interface LowStockReport {
     }[];
     meta: ReportMeta;
   };
+}
+
+/** یک قالب پیامک. متنش را مدیر می‌تواند عوض کند. */
+export interface SmsTemplate {
+  id: string;
+  key: string;
+  title: string;
+  body: string;
+  isActive: boolean;
+}
+
+/** متنِ نهایی پیش از ارسال — همان چیزی که مشتری می‌بیند. */
+export interface SmsPreview {
+  body: string;
+  /** شماره‌ی موبایلی که پیامک به آن می‌رود. null یعنی مشتری موبایل ندارد. */
+  phone: string | null;
+  templateTitle: string;
+  isActive: boolean;
+  optedOut: boolean;
+  /** متغیرهایی که مقدار نگرفتند و در متن خام مانده‌اند. */
+  missingVars: string[];
+}
+
+export interface SmsMessage {
+  id: string;
+  customerId: string | null;
+  phone: string;
+  body: string;
+  status: "QUEUED" | "SENT" | "FAILED" | "CANCELLED";
+  provider: string | null;
+  error: string | null;
+  sentAt: string | null;
+  createdAt: string;
+  template?: { key: string; title: string } | null;
 }
 
 /** کسری محصول — تقاضایی که جواب نگرفت. سیگنالِ خرید، نه اصلاحِ موجودی. */

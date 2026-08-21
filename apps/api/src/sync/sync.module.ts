@@ -2,6 +2,7 @@ import { DynamicModule, Module } from '@nestjs/common';
 
 import { PrismaModule } from '../prisma/prisma.module';
 import { RealtimeModule } from '../realtime/realtime.module';
+import { SalesModule } from '../sales/sales.module';
 import { SyncController } from './sync.controller';
 import { SyncService } from './sync.service';
 import { SyncAgentService } from './sync-agent.service';
@@ -39,7 +40,8 @@ export class SyncModule {
     if (role === 'warehouse') {
       return {
         module: SyncModule,
-        imports: [PrismaModule, RealtimeModule],
+        // ایجنت فاکتور صادر می‌کند، پس به سرویس فروش نیاز دارد.
+        imports: [PrismaModule, RealtimeModule, SalesModule],
         providers: [SyncAgentService],
         exports: [SyncAgentService],
       };

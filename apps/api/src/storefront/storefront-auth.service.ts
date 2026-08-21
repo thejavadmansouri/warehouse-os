@@ -8,7 +8,7 @@ import { createHash, randomInt } from 'crypto';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePhone } from '../common/phone.util';
-import { SmsSender } from './sms-sender';
+import { SmsSender } from '../sms/sms-sender';
 import { CustomerTokenService } from './customer-token';
 
 /** کد ۵ رقمی: ۴ رقم برای حدس‌زدن کوتاه است، ۶ رقم بی‌دلیل برای تایپ طولانی. */
@@ -168,7 +168,7 @@ export class StorefrontAuthService {
       data: { consumedAt: new Date() },
     });
 
-    const customer = await this.findOrCreateCustomer(phone, name);
+    const customer = await this.findOrCreateSiteCustomer(phone, name);
 
     return {
       token: this.tokens.sign(customer.id, phone),
@@ -181,44 +181,43 @@ export class StorefrontAuthService {
     };
   }
 
-  private async findOrCreateCustomer(phone: string, name?: string) {
-    const existing = await this.prisma.customerPhone.findUnique({
+  /**
+   * مشتریِ سایت — نه مشتریِ مغازه.
+   *
+   * ⚠️ عمداً به `Customer` دست نمی‌زند. کسی که از سایت وارد می‌شود یک
+   * بازدیدکننده است؛ تا وقتی فاکتوری صادر نشده هیچ کاری در دفتر مغازه ندارد.
+   * پلِ بین این دو فقط هنگام صدور فاکتور زده می‌شود.
+   */
+  private async findOrCreateSiteCustomer(phone: string, name?: string) {
+    const existing = await this.prisma.siteCustomer.findUnique({
       where: { phone },
-      select: {
-        customer: { select: { id: true, firstName: true, lastName: true } },
-      },
+      select: { id: true, firstName: true, lastName: true },
     });
-
-    if (existing?.customer) return existing.customer;
+    if (existing) return existing;
 
     const trimmed = (name ?? '').trim();
     const parts = trimmed.split(/\s+/).filter(Boolean);
 
-    return this.prisma.customer.create({
+    return this.prisma.siteCustomer.create({
       data: {
+        phone,
         // بدون نام هم باید بشود وارد شد؛ شماره تنها چیزی است که واقعاً لازم است.
-        firstName: parts[0] || 'مشتری سایت',
+        firstName: parts[0] || 'مشتری',
         lastName: parts.slice(1).join(' ') || null,
-        searchName: trimmed || phone,
-        phones: { create: { phone, isPrimary: true, label: 'موبایل' } },
       },
       select: { id: true, firstName: true, lastName: true },
     });
   }
 
-  /** پروفایل خودِ مشتری. */
-  async me(customerId: string) {
-    const c = await this.prisma.customer.findUnique({
-      where: { id: customerId },
+  /** پروفایل خودِ مشتریِ سایت. */
+  async me(siteCustomerId: string) {
+    const c = await this.prisma.siteCustomer.findUnique({
+      where: { id: siteCustomerId },
       select: {
         id: true,
         firstName: true,
         lastName: true,
-        phones: {
-          where: { isPrimary: true },
-          select: { phone: true },
-          take: 1,
-        },
+        phone: true,
         addresses: {
           orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
         },
@@ -231,13 +230,6 @@ export class StorefrontAuthService {
         message: 'حساب پیدا نشد',
       });
     }
-
-    return {
-      id: c.id,
-      firstName: c.firstName,
-      lastName: c.lastName,
-      phone: c.phones[0]?.phone ?? null,
-      addresses: c.addresses,
-    };
+    return c;
   }
 }

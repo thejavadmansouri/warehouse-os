@@ -43,16 +43,79 @@ import { BackupsModule } from './backups/backups.module';
 
 import { ShopModule } from './shop/shop.module';
 import { StorefrontModule } from './storefront/storefront.module';
+import { OnlineOrdersModule } from './storefront/online-orders.module';
+import { SiteAdminModule } from './site-admin/site-admin.module';
 import { SyncModule } from './sync/sync.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShortagesModule } from './shortages/shortages.module';
+import { SmsModule } from './sms/sms.module';
+
+/*
+ * ماژول‌هایی که **فقط روی سرور انبار** لود می‌شوند.
+ *
+ * ⚠️ این فهرست خط دفاعِ اصلیِ سرورِ اینترنتی است. سایت روی VPS اجرا می‌شود و
+ * یک لاگینِ مدیر روی اینترنت دارد؛ اگر این ماژول‌ها آنجا هم لود شوند، بیش از
+ * ۲۰۰ endpointِ انبار — از `/users` و `/backups` تا `/reports` و `/locations` —
+ * روی اینترنت مونت می‌شوند و فقط یک توکن از آن‌ها فاصله دارند.
+ *
+ * قاعده: هر ماژولِ تازه‌ای که به انبار مربوط است اینجا می‌آید، نه در فهرست
+ * مشترک. اگر شک داری، اینجا بگذارش.
+ */
+const WAREHOUSE_ONLY = [
+  UsersModule,
+  BarcodeModule,
+  ProductsModule,
+  LocationsModule,
+  LocationTypesModule,
+  WarehousesModule,
+  LocationBuilderModule,
+  InventoryModule,
+  VehicleModelsModule,
+  BrandsModule,
+  InventorySessionModule,
+  InventoryTransferModule,
+  InventoryOperationModule,
+  UploadsModule,
+  InventoryCountModule,
+  MobileModule,
+  PartCatalogModule,
+  ImportsModule,
+  CategoriesModule,
+  SuppliersModule,
+  LabelsModule,
+  PrintJobsModule,
+  PendingOperationsModule,
+  ProductRequestsModule,
+  SalesModule,
+  PurchasesModule,
+  WorkTasksModule,
+  ReportsModule,
+  BackupsModule,
+  ShortagesModule,
+  ShopModule,
+  OnlineOrdersModule,
+];
+
+/**
+ * ماژول‌های مشترک — روی هر دو ماشین لازم‌اند.
+ *
+ * `AuthModule` عمداً اینجاست: پنلِ سایت هم لاگین می‌خواهد. امنیتش از جدا بودنِ
+ * **دیتابیس** می‌آید نه از جدا بودنِ کد — روی VPS جدولِ `User` فقط مدیرِ سایت
+ * را دارد و رمزِ هیچ کارمندِ انباری آنجا نیست.
+ */
+const SHARED = [PrismaModule, AuthModule, StorefrontModule];
+
+function rolePart() {
+  const role = (process.env.APP_ROLE ?? 'warehouse').trim().toLowerCase();
+  // پیش‌فرض «انبار» است تا نصب‌های موجود با به‌روزرسانی چیزی از دست ندهند.
+  return role === 'site' ? [SiteAdminModule] : WAREHOUSE_ONLY;
+}
 
 @Module({
   imports: [
     RealtimeModule,
-    ShortagesModule,
-    ShopModule,
-    StorefrontModule,
+    ...SHARED,
+    ...rolePart(),
     // نیمه‌ی مربوط به این ماشین را لود می‌کند؛ بدون SYNC_ROLE هیچ‌کدام.
     SyncModule.forRole(),
     ScheduleModule.forRoot(),
@@ -74,37 +137,6 @@ import { ShortagesModule } from './shortages/shortages.module';
       rootPath: join(__dirname, '..', 'storage', 'products'),
       serveRoot: '/storage/products',
     }),
-    PrismaModule,
-    AuthModule,
-    UsersModule,
-    BarcodeModule,
-    ProductsModule,
-    LocationsModule,
-    LocationTypesModule,
-    WarehousesModule,
-LocationBuilderModule,
-    InventoryModule,
-    VehicleModelsModule,
-    BrandsModule,
-    InventorySessionModule,
-    InventoryTransferModule,
-    InventoryOperationModule,
-    UploadsModule,
-    InventoryCountModule,
-    MobileModule,
-    PartCatalogModule,
-    ImportsModule,
-    CategoriesModule,
-    SuppliersModule,
-    LabelsModule,
-    PrintJobsModule,
-    PendingOperationsModule,
-    ProductRequestsModule,
-    SalesModule,
-    PurchasesModule,
-    WorkTasksModule,
-    ReportsModule,
-    BackupsModule,
   ],
   controllers: [
     AppController,

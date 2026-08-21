@@ -865,16 +865,32 @@ model CustomerPhone {
   customerId String
   phone      String   @unique // فرم نرمال‌شده — نه چیزی که کاربر تایپ کرده
   label      String? // موبایل / ثابت / محل کار
+  /// موبایل است یا ثابت — **از روی خودِ شماره** موقع ثبت تعیین می‌شود، نه از
+  /// روی برچسبی که کاربر انتخاب کرده.
+  ///
+  /// چرا ستون جدا و نه محاسبه در لحظه: «به همه‌ی بدهکاران پیامک بزن» باید
+  /// بتواند شماره‌های ثابت را با یک `where` کنار بگذارد. بدون این، یا باید
+  /// هزاران ردیف در حافظه تحلیل شوند، یا پیامک به تلفن ثابت فرستاده می‌شود —
+  /// که بی‌صدا شکست می‌خورد و پولش هم حساب می‌شود.
+  kind       PhoneKind @default(OTHER)
   isPrimary  Boolean  @default(false)
   createdAt  DateTime @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
+  // «هر مشتری که موبایل دارد» — کوئریِ هر ارسال گروهی.
+  @@index([kind])
 }
 
 /// قالب پیامک با متغیر — مثل قالب خروجی اکسل، «داده» است نه «کد»، تا متن را
 /// بدون تغییر برنامه عوض کنی. متغیرها: {نام} {شماره_فاکتور} {مبلغ} {مانده}
+enum PhoneKind {
+  MOBILE // 09xxxxxxxxx — تنها نوعی که پیامک می‌گیرد
+  LANDLINE // با کد شهر
+  OTHER // داخلی/کوتاه — نه پیامک می‌گیرد نه شماره‌ی تماس معمولی است
+}
+
 model SmsTemplate {
   id        String   @id @default(uuid())
   key       String   @unique // invoice_created | debt_reminder | ...
@@ -1789,7 +1805,51 @@ enum ChequeStatus {
 /// تبدیل می‌شود و از همان لحظه مسیر عادی فروش را می‌رود.
 /// ═══════════════════════════════════════════════════════════════════════════
 
-/// سفارشی که از سایت آمده — **هنوز فاکتور نیست**.
+/// مشتریِ **سایت** — عمداً جدا از `Customer` مغازه.
+///
+/// کسی که از سایت خرید می‌کند تا وقتی جنسی دستش نرسیده یک بازدیدکننده است، نه
+/// یک پرونده در دفتر مغازه. قاطی‌کردنشان یعنی فهرست مشتریان مغازه پر می‌شود از
+/// کسانی که هیچ‌وقت پایشان به مغازه نرسیده، و آمار و اعتبار و پیامکِ گروهی
+/// همه بی‌معنا می‌شوند.
+///
+/// پلِ بین این دو فقط در یک نقطه زده می‌شود: وقتی فاکتور واقعی صادر شود،
+/// `OnlineOrder.customerId` پر می‌شود. تا آن لحظه null است.
+model SiteCustomer {
+  id        String   @id @default(uuid())
+  /// شماره‌ی نرمال‌شده — همان قاعده‌ی `CustomerPhone.phone`. کلیدِ هویت است.
+  phone     String   @unique
+  firstName String   @default("")
+  lastName  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders    OnlineOrder[]
+  addresses SiteAddress[]
+
+  @@index([createdAt])
+}
+
+/// آدرس تحویلِ مشتری سایت. روی خودِ سفارش هم کپی می‌شود، چون آدرس عوض می‌شود
+/// و سفارشِ هفته‌ی پیش نباید به آدرس تازه برود.
+model SiteAddress {
+  id             String   @id @default(uuid())
+  siteCustomerId String
+  title          String?
+  receiverName   String
+  receiverPhone  String
+  province       String?
+  city           String?
+  postalCode     String?
+  line           String
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  siteCustomer SiteCustomer @relation(fields: [siteCustomerId], references: [id], onDelete: Cascade)
+
+  @@index([siteCustomerId])
+}
+
+/// سفارشی که از سایت آمده.
 model OnlineOrder {
   id             String            @id @default(uuid())
   /// شماره‌ی خوانا برای مشتری و تلفن. جدا از شماره‌ی فاکتور می‌ماند، چون هر
@@ -1797,9 +1857,13 @@ model OnlineOrder {
   number         Int               @unique @default(autoincrement())
   /// کلید یکتای کلاینت: دکمه‌ی دوبار خورده یا retry شبکه دو سفارش نمی‌سازد.
   idempotencyKey String?           @unique
-  customerId     String
+  /// صاحبِ سفارش — همیشه یک مشتریِ **سایت**.
+  siteCustomerId String
+  /// پرونده‌ی مشتری در مغازه. تا وقتی فاکتور صادر نشده null است؛ این تنها
+  /// نقطه‌ای است که دنیای سایت و دنیای مغازه به هم وصل می‌شوند.
+  customerId     String?
   warehouseId    String
-  status         OnlineOrderStatus @default(PENDING)
+  status         OnlineOrderStatus @default(PLACED)
   /// جمع ردیف‌ها (تومان) — از قیمت‌های لحظه‌ی ثبت، نه قیمت امروز.
   subtotal       Int               @default(0)
   shippingFee    Int               @default(0)
@@ -1821,14 +1885,23 @@ model OnlineOrder {
   /// **روی سایت:** لحظه‌ای که ایجنتِ انبار این سفارش را پایین برد. تا وقتی
   /// null است در صفِ تحویل می‌ماند و دوباره فرستاده می‌شود.
   pulledAt       DateTime?
-  /// **روی انبار:** لحظه‌ای که تصمیمِ فروشنده به سایت رسید. تا null است هر
+  /// **روی انبار:** لحظه‌ای که وضعیتِ تازه به سایت رسید. تا null است هر
   /// چرخه دوباره تلاش می‌شود، پس قطعیِ اینترنت وضعیتی را گم نمی‌کند.
   syncedAt       DateTime?
+  /// **روی سایت:** لحظه‌ای که مغازه فاکتور این سفارش را زد و موجودیِ خودش را
+  /// کم کرد.
+  ///
+  /// این ستون رزروِ موجودی روی سایت را کنترل می‌کند: تا null است، تعدادِ این
+  /// سفارش از موجودیِ نمایشیِ سایت کم می‌شود تا دوباره فروخته نشود. بعد از
+  /// آن دیگر کم نمی‌شود، چون سینکِ بعدیِ کاتالوگ خودش کاهش را آورده — وگرنه
+  /// یک کالا دو بار از موجودی کم می‌شد.
+  stockAppliedAt DateTime?
 
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
 
-  customer  Customer          @relation(fields: [customerId], references: [id])
+  siteCustomer SiteCustomer   @relation(fields: [siteCustomerId], references: [id])
+  customer  Customer?         @relation(fields: [customerId], references: [id])
   warehouse Warehouse         @relation(fields: [warehouseId], references: [id])
   invoice   SaleInvoice?      @relation(fields: [invoiceId], references: [id])
   decidedBy User?             @relation("OnlineOrderDecider", fields: [decidedById], references: [id])
@@ -1837,7 +1910,10 @@ model OnlineOrder {
 
   // صف کاری فروشنده: «سفارش‌های در انتظار، تازه‌ترین اول».
   @@index([status, createdAt])
+  @@index([siteCustomerId, createdAt])
   @@index([customerId, createdAt])
+  // «چه چیزی هنوز از موجودی سایت رزرو است» — در هر بار خواندن کاتالوگ لازم است.
+  @@index([stockAppliedAt])
   @@index([warehouseId])
   // صفِ سینک: «چه چیزی هنوز نرفته» — روی هر دو طرف هر ۲ دقیقه پرسیده می‌شود.
   @@index([pulledAt])
@@ -1863,11 +1939,18 @@ model OnlineOrderLine {
   @@index([productId])
 }
 
+/// چرخه‌ی عمر سفارش سایت.
+///
+/// ⚠️ اینجا هیچ وضعیتِ «منتظر تأیید» نیست، و عمداً. فروشگاه اینترنتی ساعت ۴
+/// صبح هم می‌فروشد؛ اگر سفارش برای شروع‌شدن به یک آدم نیاز داشته باشد، یعنی
+/// فروشگاه فقط در ساعات کاری باز است. سفارش همان لحظه‌ی ثبت **قطعی** است و
+/// کارِ مغازه از آن به بعد فقط آماده‌سازی و ارسال است.
 enum OnlineOrderStatus {
-  PENDING // ثبت شده، منتظر تأیید فروشنده
-  CONFIRMED // تأیید شد و به فاکتور تبدیل شد
-  REJECTED // فروشنده رد کرد — ناموجود، تماس بی‌پاسخ
-  CANCELLED // خودِ مشتری پیش از تأیید لغو کرد
+  PLACED // مشتری ثبت کرد و سایت قطعی‌اش کرد — همان لحظه، بدون آدم
+  PREPARING // مغازه دارد جمعش می‌کند (فاکتور خورده و موجودی کم شده)
+  SHIPPED // ارسال شد
+  DELIVERED // به دست مشتری رسید
+  CANCELLED // لغو — مشتری، یا مغازه وقتی جنس واقعاً نبوده
 }
 
 enum OnlinePayMethod {

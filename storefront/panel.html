@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>پنل فروشگاه اینترنتی</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<style>
+/*
+ * رنگ‌ها از docs/DESIGN_SYSTEM.md می‌آیند و قابل مذاکره نیستند — همان اعدادی
+ * که پنل انبار و اپ کارگر رویشان قفل‌اند.
+ */
+:root{
+  --primary:#2563EB; --primary-dark:#1D4ED8;
+  --success:#1A9951; --danger:#E30117; --warning:#B45309; --info:#7C3AED;
+  --text:#0F172A; --muted:#64748B;
+  --bg:#F8FAFC; --surface:#FFFFFF; --border:#E2E8F0; --surface-alt:#F1F5F9;
+  --r:10px; --sh:0 1px 2px rgba(15,23,42,.04), 0 8px 24px -14px rgba(15,23,42,.18);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Vazirmatn',Tahoma,sans-serif; background:var(--bg); color:var(--text);
+  line-height:1.7; font-variant-numeric:tabular-nums; -webkit-font-smoothing:antialiased;
+}
+button,input,select{font-family:inherit;font-size:inherit}
+button{cursor:pointer;border:none;background:none;color:inherit}
+a{color:var(--primary);text-decoration:none}
+
+/* ── ورود ── */
+.login{min-height:100dvh;display:grid;place-items:center;padding:24px}
+.login__card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--border);border-radius:14px;box-shadow:var(--sh);padding:32px}
+.login__title{font-size:1.375rem;font-weight:800;margin-bottom:6px}
+.login__sub{font-size:.875rem;color:var(--muted);margin-bottom:24px}
+.field{margin-bottom:16px}
+.field label{display:block;font-size:.8125rem;font-weight:600;margin-bottom:6px}
+.field input{width:100%;height:44px;padding:0 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+.btn{height:44px;padding:0 20px;border-radius:8px;font-weight:600;font-size:.9375rem;transition:background .15s,opacity .15s}
+.btn--primary{background:var(--primary);color:#fff;width:100%}
+.btn--primary:hover{background:var(--primary-dark)}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.err{background:#FDEDEE;color:var(--danger);border:1px solid var(--danger);border-radius:8px;padding:10px 12px;font-size:.8125rem;margin-bottom:16px}
+
+/* ── چیدمان ── */
+.app{display:none;min-height:100dvh;grid-template-columns:236px 1fr}
+.app.on{display:grid}
+.side{background:var(--surface);border-inline-start:1px solid var(--border);padding:20px 14px;display:flex;flex-direction:column;gap:4px}
+.side__brand{font-weight:800;font-size:1.0625rem;padding:0 10px 18px;display:flex;align-items:center;gap:9px}
+.side__dot{width:9px;height:9px;border-radius:50%;background:var(--primary);flex:none}
+.nav{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;font-size:.9375rem;font-weight:500;color:var(--muted);text-align:start;width:100%;transition:background .12s,color .12s}
+.nav:hover{background:var(--surface-alt);color:var(--text)}
+.nav.on{background:var(--primary);color:#fff}
+.nav svg{width:17px;height:17px;flex:none}
+.side__foot{margin-top:auto;padding-top:16px;border-top:1px solid var(--border);font-size:.8125rem;color:var(--muted)}
+.side__user{padding:0 10px 10px;font-weight:600;color:var(--text)}
+.main{padding:26px 30px 60px;overflow-x:hidden}
+.head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:22px;flex-wrap:wrap}
+h1{font-size:1.5rem;font-weight:800;letter-spacing:-.01em}
+.head__sub{font-size:.8125rem;color:var(--muted)}
+
+/* ── کارت آمار ── */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh)}
+.stat__label{font-size:.8125rem;color:var(--muted);margin-bottom:6px}
+.stat__val{font-size:1.625rem;font-weight:800;letter-spacing:-.02em}
+.stat__unit{font-size:.8125rem;font-weight:500;color:var(--muted);margin-inline-start:4px}
+
+/* ── هشدار سینک ── */
+.sync{display:flex;align-items:flex-start;gap:11px;border-radius:var(--r);padding:14px 16px;margin-bottom:24px;font-size:.875rem;border:1px solid}
+.sync--ok{background:#EAF7F0;border-color:var(--success);color:#12703A}
+.sync--warn{background:#FDF4E7;border-color:var(--warning);color:var(--warning)}
+.sync b{font-weight:700}
+.sync svg{width:18px;height:18px;flex:none;margin-top:2px}
+
+/* ── جدول ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--sh);overflow:hidden}
+.toolbar{display:flex;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border);flex-wrap:wrap;align-items:center}
+.toolbar input,.toolbar select{height:36px;padding:0 11px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);outline:none}
+.toolbar input{flex:1;min-width:180px}
+.toolbar input:focus,.toolbar select:focus{border-color:var(--primary)}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:.875rem;min-width:620px}
+th,td{padding:11px 16px;text-align:start;border-bottom:1px solid var(--border);white-space:nowrap}
+th{background:var(--surface-alt);font-size:.75rem;font-weight:700;color:var(--muted);letter-spacing:.03em}
+tbody tr:last-child td{border-bottom:none}
+tbody tr{transition:background .1s}
+tbody tr[data-click]{cursor:pointer}
+tbody tr[data-click]:hover{background:var(--surface-alt)}
+.num{font-variant-numeric:tabular-nums}
+.wrap-cell{white-space:normal;min-width:220px}
+
+/* وضعیت: رنگ + متن، هیچ‌وقت فقط رنگ (قاعده‌ی سند طراحی) */
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;font-size:.75rem;font-weight:700;border:1px solid currentColor}
+.badge::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.b-placed{color:var(--info);background:#F4EFFE}
+.b-preparing{color:var(--warning);background:#FDF4E7}
+.b-shipped{color:var(--primary);background:#EFF5FF}
+.b-delivered{color:var(--success);background:#EAF7F0}
+.b-cancelled{color:var(--danger);background:#FDEDEE}
+.b-muted{color:var(--muted);background:var(--surface-alt)}
+
+.pager{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-top:1px solid var(--border);font-size:.8125rem;color:var(--muted)}
+.pager button{padding:6px 14px;border:1px solid var(--border);border-radius:7px;font-weight:600;color:var(--text)}
+.pager button:disabled{opacity:.4;cursor:not-allowed}
+
+.empty{padding:56px 20px;text-align:center;color:var(--muted)}
+.empty__icon{font-size:2rem;margin-bottom:8px;opacity:.55}
+
+/* ── کشوی جزئیات ── */
+.ovl{position:fixed;inset:0;background:rgba(15,23,42,.42);opacity:0;pointer-events:none;transition:opacity .18s;z-index:40}
+.ovl.on{opacity:1;pointer-events:auto}
+/*
+ * صفحه همیشه RTL است، پس `inset-inline-start` یعنی سمتِ راست. ترجمه‌ی transform
+ * جهت‌آگاه نیست و همیشه محورِ X را چپ‌به‌راست می‌بیند — برای پنهان‌کردنِ کشو
+ * باید به راست هلش داد (+100%)، نه چپ. با -100% کشو از اول روی صفحه بود.
+ */
+.drawer{position:fixed;inset-block:0;inset-inline-start:0;width:min(460px,100%);background:var(--bg);z-index:50;transform:translateX(100%);transition:transform .22s;display:flex;flex-direction:column;box-shadow:var(--sh)}
+.drawer.on{transform:none}
+.drawer__head{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.drawer__title{font-weight:800;font-size:1.0625rem}
+.drawer__body{padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px}
+.row{display:flex;justify-content:space-between;gap:14px;font-size:.875rem;padding:7px 0;border-bottom:1px dashed var(--border)}
+.row:last-child{border-bottom:none}
+.row__k{color:var(--muted);flex:none}
+.row__v{text-align:end;font-weight:500}
+.sect{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px}
+.sect__t{font-size:.8125rem;font-weight:700;color:var(--muted);margin-bottom:8px}
+.close{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}
+.close:hover{background:var(--surface-alt);color:var(--text)}
+
+.skel{color:var(--muted);padding:40px;text-align:center;font-size:.875rem}
+
+@media (max-width:820px){
+  .app.on{grid-template-columns:1fr}
+  .side{flex-direction:row;overflow-x:auto;border-inline-start:none;border-bottom:1px solid var(--border);padding:10px;align-items:center}
+  .side__brand,.side__foot{display:none}
+  .nav{white-space:nowrap;padding:8px 12px}
+  .main{padding:18px 16px 50px}
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════ ورود ═══════ -->
+<div class="login" id="login">
+  <form class="login__card" onsubmit="doLogin(event)">
+    <h1 class="login__title">پنل فروشگاه اینترنتی</h1>
+    <p class="login__sub">با حساب مدیرِ سایت وارد شوید.</p>
+    <div class="err" id="loginErr" style="display:none"></div>
+    <div class="field">
+      <label for="u">نام کاربری</label>
+      <input id="u" autocomplete="username" required autofocus>
+    </div>
+    <div class="field">
+      <label for="p">رمز عبور</label>
+      <input id="p" type="password" autocomplete="current-password" required>
+    </div>
+    <button class="btn btn--primary" id="loginBtn">ورود</button>
+  </form>
+</div>
+
+<!-- ═══════ پنل ═══════ -->
+<div class="app" id="app">
+  <aside class="side">
+    <div class="side__brand"><span class="side__dot"></span><span>فروشگاه اینترنتی</span></div>
+    <button class="nav on" data-page="overview" onclick="go('overview')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+      یک نگاه
+    </button>
+    <button class="nav" data-page="orders" onclick="go('orders')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+      سفارش‌ها
+    </button>
+    <button class="nav" data-page="customers" onclick="go('customers')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      مشتریان سایت
+    </button>
+    <button class="nav" data-page="products" onclick="go('products')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+      کالاهای سایت
+    </button>
+    <div class="side__foot">
+      <div class="side__user" id="who"></div>
+      <button class="nav" onclick="logout()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>
+        خروج
+      </button>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+</div>
+
+<div class="ovl" id="ovl" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer__head">
+    <span class="drawer__title" id="drawerTitle">جزئیات</span>
+    <button class="close" onclick="closeDrawer()">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <div class="drawer__body" id="drawerBody"></div>
+</aside>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   پنلِ مدیرِ سایت — روی همان VPS که سایت است.
+
+   ⚠️ عمداً هیچ کنشِ نوشتنی ندارد. تحویل، لغو و قیمت کارِ پنلِ انبار است.
+   پنلی که روی اینترنت است اگر فقط بخواند، لو رفتنش چیزی را خراب نمی‌کند.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+const API = (window.PANEL_API || location.origin).replace(/\/$/, '');
+const TOKEN_KEY = 'panel_token';
+let token = localStorage.getItem(TOKEN_KEY) || null;
+let me = null;
+let SHOP = { unit: 'TOMAN' };
+
+const FA = '۰۱۲۳۴۵۶۷۸۹';
+const fa = n => String(n ?? '').replace(/\d/g, d => FA[d]);
+const num = n => (n == null ? '—' : fa(Math.round(n).toLocaleString('en-US')).replace(/,/g, '٬'));
+const UNIT = { RIAL: 'ریال', TOMAN: 'تومان' };
+const unit = () => UNIT[SHOP.unit] || 'تومان';
+const money = n => `${num(n)} ${unit()}`;
+
+/** نام و آدرس از دیتابیس می‌آیند و مستقیم در HTML می‌نشینند. */
+const esc = v => String(v ?? '').replace(/[&<>"']/g,
+  c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+const date = iso => !iso ? '—' :
+  new Intl.DateTimeFormat('fa-IR-u-nu-arabext', { year:'numeric', month:'2-digit', day:'2-digit' })
+    .format(new Date(iso));
+const dateTime = iso => !iso ? '—' :
+  new Intl.DateTimeFormat('fa-IR-u-nu-arabext', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' })
+    .format(new Date(iso));
+
+const STATUS = {
+  PLACED:    { t:'ثبت شد',        c:'b-placed'    },
+  PREPARING: { t:'در حال آماده‌سازی', c:'b-preparing' },
+  SHIPPED:   { t:'ارسال شد',      c:'b-shipped'   },
+  DELIVERED: { t:'تحویل شد',      c:'b-delivered' },
+  CANCELLED: { t:'لغو شد',        c:'b-cancelled' },
+};
+const PAY = { ON_DELIVERY:'پرداخت در محل', TRANSFER:'کارت‌به‌کارت', GATEWAY:'درگاه' };
+const badge = s => {
+  const x = STATUS[s] || { t:s, c:'b-muted' };
+  return `<span class="badge ${x.c}">${x.t}</span>`;
+};
+
+/* ── لایه‌ی API ── */
+async function api(path) {
+  let res;
+  try {
+    res = await fetch(API + path, {
+      headers: token ? { authorization: 'Bearer ' + token } : {},
+    });
+  } catch {
+    throw new Error('ارتباط با سرور برقرار نشد.');
+  }
+  if (res.status === 401) { logout(); throw new Error('نشست منقضی شد — دوباره وارد شوید.'); }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new Error((body && body.message) || 'خطایی رخ داد.');
+  return body;
+}
+
+/* ── ورود ── */
+async function doLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const err = document.getElementById('loginErr');
+  err.style.display = 'none';
+  btn.disabled = true; btn.textContent = 'در حال ورود…';
+  try {
+    const res = await fetch(API + '/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('u').value.trim(),
+        password: document.getElementById('p').value,
+      }),
+    });
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((body && body.message) || 'نام کاربری یا رمز درست نیست.');
+    token = body.access_token;
+    localStorage.setItem(TOKEN_KEY, token);
+    me = body.user;
+    await start();
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.style.display = '';
+  } finally {
+    btn.disabled = false; btn.textContent = 'ورود';
+  }
+}
+
+function logout() {
+  token = null; me = null;
+  localStorage.removeItem(TOKEN_KEY);
+  document.getElementById('app').classList.remove('on');
+  document.getElementById('login').style.display = '';
+  document.getElementById('p').value = '';
+}
+
+async function start() {
+  document.getElementById('login').style.display = 'none';
+  document.getElementById('app').classList.add('on');
+  document.getElementById('who').textContent = me ? (me.fullName || me.username) : '';
+  // واحد پول از تنظیمات عمومی سایت — همان چیزی که مشتری هم می‌بیند.
+  try { SHOP = await (await fetch(API + '/shop/settings')).json() } catch {}
+  go('overview');
+}
+
+/* ── مسیریابی ── */
+let page = 'overview';
+function go(p) {
+  page = p;
+  document.querySelectorAll('.nav[data-page]').forEach(b =>
+    b.classList.toggle('on', b.dataset.page === p));
+  ({ overview: viewOverview, orders: viewOrders, customers: viewCustomers, products: viewProducts })[p]();
+}
+
+const main = () => document.getElementById('main');
+const skel = t => { main().innerHTML = `<div class="skel">${t}</div>` };
+const fail = m => { main().innerHTML =
+  `<div class="card"><div class="empty"><div class="empty__icon">⚠️</div>${esc(m)}</div></div>` };
+
+/* ── یک نگاه ── */
+async function viewOverview() {
+  skel('در حال بارگذاری…');
+  let o, h;
+  try { [o, h] = await Promise.all([api('/site-admin/overview'), api('/site-admin/sync-health')]) }
+  catch (e) { return fail(e.message) }
+
+  /*
+   * «سلامت سینک» مهم‌ترین چیز این صفحه است: اگر ایجنتِ انبار بخوابد، سایت
+   * عادی کار می‌کند و سفارش می‌گیرد ولی هیچ‌کدام به مغازه نمی‌رسند. بدون این
+   * کارت، آن خرابی روزها نامرئی می‌ماند.
+   */
+  const waiting = h.waitingForShop;
+  const syncBox = waiting > 0
+    ? `<div class="sync sync--warn">
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+         <div><b>${fa(waiting)} سفارش هنوز به مغازه نرسیده.</b>
+         اگر این عدد بالا می‌رود یعنی ارتباط با سرور انبار قطع است.
+         آخرین دریافت: ${dateTime(h.lastPullAt)}</div>
+       </div>`
+    : `<div class="sync sync--ok">
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+         <div><b>ارتباط با مغازه برقرار است.</b>
+         همه‌ی سفارش‌ها تحویل داده شده‌اند. آخرین دریافت: ${dateTime(h.lastPullAt)}</div>
+       </div>`;
+
+  main().innerHTML = `
+    <div class="head"><h1>یک نگاه</h1><span class="head__sub">${date(new Date().toISOString())}</span></div>
+    ${syncBox}
+    <div class="stats">
+      <div class="stat"><div class="stat__label">سفارش‌های امروز</div><div class="stat__val">${fa(o.ordersToday)}</div></div>
+      <div class="stat"><div class="stat__label">فروش امروز</div><div class="stat__val">${num(o.salesToday)}<span class="stat__unit">${unit()}</span></div></div>
+      <div class="stat"><div class="stat__label">در جریان</div><div class="stat__val">${fa(o.inFlight)}</div></div>
+      <div class="stat"><div class="stat__label">مشتریان سایت</div><div class="stat__val">${fa(o.customers)}</div></div>
+      <div class="stat"><div class="stat__label">کالاهای روی سایت</div><div class="stat__val">${fa(o.onlineProducts)}</div></div>
+    </div>`;
+}
+
+/* ── سفارش‌ها ── */
+let oState = { page:1, q:'', status:'' };
+
+async function viewOrders(keep) {
+  if (!keep) oState = { page:1, q:'', status:'' };
+  const qs = new URLSearchParams();
+  if (oState.q) qs.set('q', oState.q);
+  if (oState.status) qs.set('status', oState.status);
+  qs.set('page', oState.page);
+
+  main().innerHTML = `
+    <div class="head"><h1>سفارش‌ها</h1></div>
+    <div class="card">
+      <div class="toolbar">
+        <input id="oq" placeholder="جستجوی نام، شماره تماس یا شماره سفارش" value="${esc(oState.q)}">
+        <select id="ost">
+          <option value="">همه‌ی وضعیت‌ها</option>
+          ${Object.entries(STATUS).map(([k,v]) => `<option value="${k}" ${oState.status===k?'selected':''}>${v.t}</option>`).join('')}
+        </select>
+      </div>
+      <div id="obody"><div class="skel">در حال بارگذاری…</div></div>
+    </div>`;
+
+  let sd;
+  document.getElementById('oq').addEventListener('input', e => {
+    clearTimeout(sd);
+    sd = setTimeout(() => { oState.q = e.target.value.trim(); oState.page = 1; viewOrders(true) }, 250);
+  });
+  document.getElementById('ost').addEventListener('change', e => {
+    oState.status = e.target.value; oState.page = 1; viewOrders(true);
+  });
+
+  let r;
+  try { r = await api('/site-admin/orders?' + qs) }
+  catch (e) { document.getElementById('obody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return }
+
+  if (!r.items.length) {
+    document.getElementById('obody').innerHTML =
+      `<div class="empty"><div class="empty__icon">📦</div>سفارشی پیدا نشد</div>`;
+    return;
+  }
+
+  document.getElementById('obody').innerHTML = `
+    <div class="tablewrap"><table>
+      <thead><tr>
+        <th>شماره</th><th>گیرنده</th><th>تماس</th><th>مبلغ</th>
+        <th>وضعیت</th><th>به مغازه رسید؟</th><th>تاریخ</th>
+      </tr></thead>
+      <tbody>${r.items.map(o => `
+        <tr data-click onclick="openOrder('${o.id}')">
+          <td class="num">#${fa(o.number)}</td>
+          <td>${esc(o.receiverName)}</td>
+          <td class="num" dir="ltr">${esc(o.receiverPhone)}</td>
+          <td class="num">${money(o.total)}</td>
+          <td>${badge(o.status)}</td>
+          <td>${o.deliveredToShop
+              ? '<span class="badge b-delivered">رسید</span>'
+              : '<span class="badge b-preparing">در صف</span>'}</td>
+          <td class="num">${date(o.createdAt)}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>
+    ${pager(r, 'oState', 'viewOrders')}`;
+}
+
+async function openOrder(id) {
+  openDrawer('سفارش');
+  let o;
+  try { o = await api('/site-admin/orders/' + id) }
+  catch (e) { document.getElementById('drawerBody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return }
+
+  document.getElementById('drawerTitle').textContent = 'سفارش #' + fa(o.number);
+  const cust = [o.siteCustomer.firstName, o.siteCustomer.lastName].filter(Boolean).join(' ');
+
+  document.getElementById('drawerBody').innerHTML = `
+    <div class="sect">
+      <div class="sect__t">وضعیت</div>
+      <div class="row"><span class="row__k">مرحله</span><span class="row__v">${badge(o.status)}</span></div>
+      <div class="row"><span class="row__k">ثبت</span><span class="row__v num">${dateTime(o.createdAt)}</span></div>
+      <div class="row"><span class="row__k">تحویل به مغازه</span><span class="row__v num">${o.pulledAt ? dateTime(o.pulledAt) : 'هنوز نه'}</span></div>
+      ${o.rejectReason ? `<div class="row"><span class="row__k">دلیل لغو</span><span class="row__v">${esc(o.rejectReason)}</span></div>` : ''}
+    </div>
+
+    <div class="sect">
+      <div class="sect__t">گیرنده</div>
+      <div class="row"><span class="row__k">نام</span><span class="row__v">${esc(o.receiverName)}</span></div>
+      <div class="row"><span class="row__k">تماس</span><span class="row__v num" dir="ltr">${esc(o.receiverPhone)}</span></div>
+      <div class="row"><span class="row__k">آدرس</span><span class="row__v">${esc(o.address)}</span></div>
+      ${o.note ? `<div class="row"><span class="row__k">توضیح</span><span class="row__v">${esc(o.note)}</span></div>` : ''}
+      <div class="row"><span class="row__k">حساب مشتری</span><span class="row__v">${esc(cust)} · <span dir="ltr">${esc(o.siteCustomer.phone)}</span></span></div>
+    </div>
+
+    <div class="sect">
+      <div class="sect__t">اقلام</div>
+      ${o.lines.map(l => `
+        <div class="row">
+          <span class="row__k">${esc(l.productName)} × ${fa(l.quantity)} ${esc(l.unit)}</span>
+          <span class="row__v num">${money(l.lineTotal)}</span>
+        </div>`).join('')}
+    </div>
+
+    <div class="sect">
+      <div class="row"><span class="row__k">جمع کالاها</span><span class="row__v num">${money(o.subtotal)}</span></div>
+      <div class="row"><span class="row__k">ارسال</span><span class="row__v num">${o.shippingFee ? money(o.shippingFee) : 'رایگان'}</span></div>
+      <div class="row"><span class="row__k"><b>قابل پرداخت</b></span><span class="row__v num"><b>${money(o.total)}</b></span></div>
+      <div class="row"><span class="row__k">روش پرداخت</span><span class="row__v">${PAY[o.payMethod] || o.payMethod}</span></div>
+    </div>`;
+}
+
+/* ── مشتریان سایت ── */
+let cState = { page:1, q:'' };
+
+async function viewCustomers(keep) {
+  if (!keep) cState = { page:1, q:'' };
+  const qs = new URLSearchParams();
+  if (cState.q) qs.set('q', cState.q);
+  qs.set('page', cState.page);
+
+  main().innerHTML = `
+    <div class="head">
+      <h1>مشتریان سایت</h1>
+      <span class="head__sub">جدا از مشتریان مغازه</span>
+    </div>
+    <div class="card">
+      <div class="toolbar"><input id="cq" placeholder="جستجوی نام یا شماره" value="${esc(cState.q)}"></div>
+      <div id="cbody"><div class="skel">در حال بارگذاری…</div></div>
+    </div>`;
+
+  let sd;
+  document.getElementById('cq').addEventListener('input', e => {
+    clearTimeout(sd);
+    sd = setTimeout(() => { cState.q = e.target.value.trim(); cState.page = 1; viewCustomers(true) }, 250);
+  });
+
+  let r;
+  try { r = await api('/site-admin/customers?' + qs) }
+  catch (e) { document.getElementById('cbody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return }
+
+  if (!r.items.length) {
+    document.getElementById('cbody').innerHTML =
+      `<div class="empty"><div class="empty__icon">👤</div>مشتری‌ای پیدا نشد</div>`;
+    return;
+  }
+
+  document.getElementById('cbody').innerHTML = `
+    <div class="tablewrap"><table>
+      <thead><tr><th>نام</th><th>شماره</th><th>سفارش‌ها</th><th>جمع خرید</th><th>عضویت</th></tr></thead>
+      <tbody>${r.items.map(c => `
+        <tr>
+          <td>${esc(c.name) || '<span style="color:var(--muted)">بی‌نام</span>'}</td>
+          <td class="num" dir="ltr">${esc(c.phone)}</td>
+          <td class="num">${fa(c.orderCount)}</td>
+          <td class="num">${money(c.totalSpent)}</td>
+          <td class="num">${date(c.createdAt)}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>
+    ${pager(r, 'cState', 'viewCustomers')}`;
+}
+
+/* ── کالاهای سایت (فقط خواندنی) ── */
+let pState = { page:1, q:'' };
+
+async function viewProducts(keep) {
+  if (!keep) pState = { page:1, q:'' };
+  const qs = new URLSearchParams();
+  if (pState.q) qs.set('q', pState.q);
+  qs.set('page', pState.page);
+
+  main().innerHTML = `
+    <div class="head">
+      <h1>کالاهای سایت</h1>
+      <span class="head__sub">قیمت و موجودی از انبار می‌آید — اینجا فقط دیده می‌شود</span>
+    </div>
+    <div class="card">
+      <div class="toolbar"><input id="pq" placeholder="جستجوی نام کالا" value="${esc(pState.q)}"></div>
+      <div id="pbody"><div class="skel">در حال بارگذاری…</div></div>
+    </div>`;
+
+  let sd;
+  document.getElementById('pq').addEventListener('input', e => {
+    clearTimeout(sd);
+    sd = setTimeout(() => { pState.q = e.target.value.trim(); pState.page = 1; viewProducts(true) }, 250);
+  });
+
+  let r;
+  try { r = await api('/site-admin/products?' + qs) }
+  catch (e) { document.getElementById('pbody').innerHTML = `<div class="empty">${esc(e.message)}</div>`; return }
+
+  if (!r.items.length) {
+    document.getElementById('pbody').innerHTML =
+      `<div class="empty"><div class="empty__icon">📦</div>هنوز کالایی روی سایت نیست.<br>
+       در پنل انبار، گزینه‌ی «نمایش در سایت» را برای کالاها روشن کنید.</div>`;
+    return;
+  }
+
+  document.getElementById('pbody').innerHTML = `
+    <div class="tablewrap"><table>
+      <thead><tr><th>نام</th><th>کد</th><th>برند</th><th>قیمت</th><th>موجودی</th></tr></thead>
+      <tbody>${r.items.map(p => `
+        <tr>
+          <td class="wrap-cell">${esc(p.name)}</td>
+          <td class="num" dir="ltr">${esc(p.sku)}</td>
+          <td>${esc(p.brand || '—')}</td>
+          <td class="num">${p.price != null ? money(p.price) : '—'}</td>
+          <td class="num">${p.stock > 0
+              ? fa(p.stock) + ' ' + esc(p.unit)
+              : '<span class="badge b-cancelled">ناموجود</span>'}</td>
+        </tr>`).join('')}</tbody>
+    </table></div>
+    ${pager(r, 'pState', 'viewProducts')}`;
+}
+
+/* ── صفحه‌بندی مشترک ── */
+function pager(r, stateName, fn) {
+  if (r.pageCount <= 1) return '';
+  return `<div class="pager">
+    <button ${r.page <= 1 ? 'disabled' : ''} onclick="${stateName}.page--;${fn}(true)">قبلی</button>
+    <span>صفحه ${fa(r.page)} از ${fa(r.pageCount)} · ${fa(r.total)} مورد</span>
+    <button ${r.page >= r.pageCount ? 'disabled' : ''} onclick="${stateName}.page++;${fn}(true)">بعدی</button>
+  </div>`;
+}
+
+/* ── کشو ── */
+function openDrawer(title) {
+  document.getElementById('drawerTitle').textContent = title;
+  document.getElementById('drawerBody').innerHTML = '<div class="skel">در حال بارگذاری…</div>';
+  document.getElementById('drawer').classList.add('on');
+  document.getElementById('ovl').classList.add('on');
+}
+function closeDrawer() {
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('ovl').classList.remove('on');
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer() });
+
+/* ── بالا آمدن ── */
+(async () => {
+  if (!token) return;
+  // توکنِ ذخیره‌شده ممکن است باطل شده باشد؛ یک درخواستِ سبک محکش می‌زند.
+  try {
+    me = await api('/auth/me');
+    await start();
+  } catch { logout() }
+})();
+</script>
+</body>
+</html>

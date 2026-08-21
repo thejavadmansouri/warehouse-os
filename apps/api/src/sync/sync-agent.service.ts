@@ -3,6 +3,8 @@ import { Cron } from '@nestjs/schedule';
 import { OnlineOrderStatus, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { SalesService } from '../sales/sales.service';
+import { convertMoney } from '../common/money';
 import { EventsGateway } from '../realtime/events.gateway';
 import { normalizePhone } from '../common/phone.util';
 
@@ -28,6 +30,7 @@ export class SyncAgentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly events: EventsGateway,
+    private readonly sales: SalesService,
   ) {}
 
   private get siteUrl(): string {
@@ -157,7 +160,7 @@ export class SyncAgentService {
       id: string; number: number; subtotal: number; shippingFee: number;
       total: number; payMethod: string; receiverName: string; receiverPhone: string;
       address: string; note: string | null; createdAt: string;
-      customer: { firstName: string; lastName: string | null; phones: { phone: string }[] };
+      siteCustomer: { id: string; firstName: string; lastName: string | null; phone: string };
       lines: { productId: string; productName: string; unit: string;
                quantity: number; unitPrice: number; lineTotal: number }[];
     };
@@ -198,12 +201,20 @@ export class SyncAgentService {
     }
   }
 
+  /**
+   * نشاندنِ یک سفارشِ سایت در دیتابیس انبار — **و صدور فاکتورش**.
+   *
+   * فاکتور همین‌جا و خودکار صادر می‌شود، چون سفارش پیش از این قطعی شده: مشتری
+   * ساعت ۴ صبح خرید کرده و منتظر کسی نمانده. فروشنده صبح فقط جنس را جمع
+   * می‌کند. اگر صدور فاکتور شکست بخورد، سفارش باز هم می‌نشیند (بدون فاکتور) تا
+   * فروشنده دستی رسیدگی کند — گم‌شدنِ سفارش بدترین حالتِ ممکن است.
+   */
   private async landOrder(
     o: {
       id: string; number: number; subtotal: number; shippingFee: number; total: number;
       payMethod: string; receiverName: string; receiverPhone: string; address: string;
       note: string | null; createdAt: string;
-      customer: { firstName: string; lastName: string | null; phones: { phone: string }[] };
+      siteCustomer: { id: string; firstName: string; lastName: string | null; phone: string };
       lines: { productId: string; productName: string; unit: string;
                quantity: number; unitPrice: number; lineTotal: number }[];
     },
@@ -213,39 +224,32 @@ export class SyncAgentService {
       where: { id: o.id },
       select: { id: true },
     });
-    if (existing) return; // قبلاً نشسته — ack دوباره کافی است
+    if (existing) return; // قبلاً نشسته — ackِ دوباره کافی است
 
-    const phone =
-      normalizePhone(o.customer.phones[0]?.phone ?? o.receiverPhone) ?? o.receiverPhone;
+    const phone = normalizePhone(o.siteCustomer.phone) ?? o.receiverPhone;
 
     /*
-     * مشتریِ سایت باید به همان پرونده‌ای بچسبد که حضوری هم دارد. کلید، شماره‌ی
-     * نرمال‌شده است — همان قاعده‌ای که کلِ سیستم رویش کار می‌کند.
+     * مشتریِ سایت **در جدول خودش** می‌نشیند، نه در `Customer` مغازه.
+     * فهرست مشتریان مغازه نباید پر شود از کسانی که فقط یک بار از سایت خریده‌اند.
      */
-    const found = await this.prisma.customerPhone.findUnique({
-      where: { phone },
-      select: { customerId: true },
+    await this.prisma.siteCustomer.upsert({
+      where: { id: o.siteCustomer.id },
+      update: {
+        firstName: o.siteCustomer.firstName,
+        lastName: o.siteCustomer.lastName,
+      },
+      create: {
+        id: o.siteCustomer.id,
+        phone,
+        firstName: o.siteCustomer.firstName,
+        lastName: o.siteCustomer.lastName,
+      },
     });
 
-    const customerId =
-      found?.customerId ??
-      (
-        await this.prisma.customer.create({
-          data: {
-            firstName: o.customer.firstName || 'مشتری سایت',
-            lastName: o.customer.lastName,
-            searchName: [o.customer.firstName, o.customer.lastName].filter(Boolean).join(' '),
-            address: o.address,
-            phones: { create: { phone, isPrimary: true, label: 'موبایل' } },
-          },
-          select: { id: true },
-        })
-      ).id;
-
     /*
-     * ردیف‌هایی که کالایشان در انبار نیست کنار گذاشته می‌شوند نه اینکه کلِ
-     * سفارش رد شود — نام و قیمت روی خودِ ردیف کپی شده‌اند، پس فروشنده باز هم
-     * می‌بیند مشتری چه خواسته و می‌تواند دستی اضافه‌اش کند.
+     * ردیفی که کالایش در انبار نیست کنار گذاشته می‌شود نه اینکه کلِ سفارش رد
+     * شود — نام و قیمت روی خودِ ردیف کپی شده‌اند، پس فروشنده باز هم می‌بیند
+     * مشتری چه خواسته.
      */
     const known = await this.prisma.product.findMany({
       where: { id: { in: o.lines.map((l) => l.productId) } },
@@ -264,9 +268,9 @@ export class SyncAgentService {
       data: {
         id: o.id,
         number: o.number,
-        customerId,
+        siteCustomerId: o.siteCustomer.id,
         warehouseId,
-        status: OnlineOrderStatus.PENDING,
+        status: OnlineOrderStatus.PLACED,
         subtotal: o.subtotal,
         shippingFee: o.shippingFee,
         total: o.total,
@@ -279,6 +283,103 @@ export class SyncAgentService {
         lines: { create: lines },
       },
     });
+
+    if (lines.length) await this.invoiceOrder(o.id, warehouseId);
+  }
+
+  /**
+   * صدور فاکتورِ یک سفارشِ نشسته.
+   *
+   * سه نکته که اگر رعایت نشوند خرابی مالی می‌سازند:
+   *
+   *   ۱. **واحد پول برمی‌گردد.** ردیف‌های سفارش به واحدِ *سایت*‌اند (همان
+   *      عددی که مشتری دید)، ولی `SaleInvoice` به واحدِ *دیتابیس* است.
+   *   ۲. **کلیدِ تکرارناپذیری از شناسه‌ی سفارش ساخته می‌شود**، پس اجرای دوباره
+   *      فاکتور دوم نمی‌سازد.
+   *   ۳. **پرداختی ثبت نمی‌شود** — پول هنوز نیامده (پرداخت در محل). فروشنده
+   *      از مسیر عادیِ رسید دریافتش می‌کند.
+   */
+  private async invoiceOrder(orderId: string, warehouseId: string) {
+    const order = await this.prisma.onlineOrder.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true, number: true, note: true, receiverName: true, receiverPhone: true,
+        siteCustomer: { select: { firstName: true, lastName: true, phone: true } },
+        lines: { select: { productId: true, quantity: true, unitPrice: true } },
+      },
+    });
+    if (!order || !order.lines.length) return;
+
+    const shop = await this.prisma.shopSettings.findUnique({
+      where: { id: 'singleton' },
+      select: { storedUnit: true, siteUnit: true },
+    });
+    const storedUnit = shop?.storedUnit ?? 'RIAL';
+    const siteUnit = shop?.siteUnit ?? 'TOMAN';
+
+    try {
+      /*
+       * مشتریِ مغازه فقط **همین‌جا** ساخته می‌شود — لحظه‌ای که فروش واقعی
+       * ثبت می‌شود. اگر همان شماره از قبل مشتریِ حضوری باشد، به همان پرونده
+       * می‌چسبد و سابقه‌اش یکی می‌ماند.
+       */
+      const found = await this.prisma.customerPhone.findUnique({
+        where: { phone: order.siteCustomer.phone },
+        select: { customerId: true },
+      });
+
+      const customerId =
+        found?.customerId ??
+        (
+          await this.prisma.customer.create({
+            data: {
+              firstName: order.siteCustomer.firstName || 'مشتری سایت',
+              lastName: order.siteCustomer.lastName,
+              searchName: [order.siteCustomer.firstName, order.siteCustomer.lastName]
+                .filter(Boolean)
+                .join(' '),
+              phones: {
+                create: { phone: order.siteCustomer.phone, isPrimary: true, label: 'موبایل' },
+              },
+            },
+            select: { id: true },
+          })
+        ).id;
+
+      const invoice = await this.sales.createInvoice(
+        {
+          idempotencyKey: `online-order:${order.id}`,
+          warehouseId,
+          customerId,
+          note: `سفارش سایت #${order.number}${order.note ? ` — ${order.note}` : ''}`,
+          lines: order.lines.map((l) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            unitPrice: convertMoney(l.unitPrice, siteUnit, storedUnit),
+          })),
+        },
+        undefined,
+      );
+
+      await this.prisma.onlineOrder.update({
+        where: { id: order.id },
+        data: {
+          customerId,
+          invoiceId: (invoice as { id: string }).id,
+          // به سایت خبر می‌دهد رزروِ موجودی را بردارد.
+          stockAppliedAt: new Date(),
+          syncedAt: null,
+        },
+      });
+    } catch (e) {
+      /*
+       * سفارش نشسته و گم نشده؛ فقط فاکتور ندارد. فروشنده در صف می‌بیندش
+       * (`invoiceId = null`) و دستی رسیدگی می‌کند.
+       */
+      this.log.error(
+        `فاکتور سفارش ${order.number} صادر نشد: ${(e as Error).message}`,
+      );
+    }
   }
 
   // ─────────────────────────── وضعیت‌ها (بالا) ───────────────────────────
@@ -291,17 +392,22 @@ export class SyncAgentService {
    */
   async pushStatuses() {
     const rows = await this.prisma.onlineOrder.findMany({
-      where: {
-        status: { not: OnlineOrderStatus.PENDING },
-        decidedAt: { not: null },
-        syncedAt: null,
-      },
+      // هر وضعیتی که هنوز بالا نرفته — شاملِ خودِ PLACED نمی‌شود چون سایت
+      // خودش آن را ساخته و می‌داند.
+      where: { syncedAt: null, status: { not: OnlineOrderStatus.PLACED } },
       take: 200,
-      select: { id: true, status: true, rejectReason: true },
+      select: { id: true, status: true, rejectReason: true, stockAppliedAt: true },
     });
     if (!rows.length) return;
 
-    await this.call('/sync/orders/status', { orders: rows });
+    await this.call('/sync/orders/status', {
+      orders: rows.map((r) => ({
+        id: r.id,
+        status: r.status,
+        rejectReason: r.rejectReason,
+        stockApplied: r.stockAppliedAt != null,
+      })),
+    });
 
     await this.prisma.onlineOrder.updateMany({
       where: { id: { in: rows.map((r) => r.id) } },

@@ -2,7 +2,7 @@
  * تست سرتاسری با حجم واقعی.
  *
  *  ۱) ۵۰۰ کالا از کاتالوگ واقعی، هرکدام با قیمت و موجودی و قفسه‌ی متفاوت
- *  ۲) دو کار برداشت برای کارگر انبار (گوشی باید همان لحظه زنگ بزند)
+ *  ۲) یک کار برداشت دوقلمی برای کارگر انبار (گوشی باید همان لحظه زنگ بزند)
  *  ۳) ۴۰ فاکتور فروش پشت سر هم، با زمان‌سنجی
  *  ۴) بررسی اینکه دفتر عملیات با موجودی و مبالغ می‌خواند
  *
@@ -22,12 +22,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SalesService } from '../src/sales/sales.service';
-import { PickTasksService } from '../src/pick-tasks/pick-tasks.service';
+import { WorkTasksService } from '../src/work-tasks/work-tasks.service';
 import { InventoryOperationService } from '../src/inventory-operation/inventory-operation.service';
 
 const PRODUCT_COUNT = 500;
 const INVOICE_COUNT = 40;
-const PICK_TASK_COUNT = 2;
+/** قلم‌های یک کار برداشت — صف برداشت در WorkTask ادغام شد، پس این تعدادِ قلم است نه تعدادِ کار. */
+const PICK_LINE_COUNT = 2;
 const WORKER_USERNAME = 'anbar';
 const SELLER_USERNAME = 'sales';
 
@@ -41,7 +42,7 @@ async function main() {
   const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
   const prisma = app.get(PrismaService);
   const sales = app.get(SalesService);
-  const pickTasks = app.get(PickTasksService);
+  const workTasks = app.get(WorkTasksService);
   const ops = app.get(InventoryOperationService);
 
   const warehouse = await prisma.warehouse.findFirstOrThrow();
@@ -90,25 +91,26 @@ async function main() {
   console.log(`۱) ${stocked.length} کالا قیمت و موجودی و قفسه گرفتند — ${((Date.now() - tStock) / 1000).toFixed(1)} ثانیه`);
 
   // ---------- ۲) کار برداشت برای کارگر ----------
-  const forWorker = stocked.slice(0, PICK_TASK_COUNT);
-  const created = await pickTasks.create(
+  const forWorker = stocked.slice(0, PICK_LINE_COUNT);
+  const created = await workTasks.create(
     {
       warehouseId: warehouse.id,
       assignedToId: worker.id,
+      // یادداشت در WorkTask روی خودِ کار است، نه روی تک‌تک قلم‌ها.
+      note: 'تست بار — لطفاً بیاورید',
       lines: forWorker.map((s) => ({
         productId: s.id,
         locationId: s.locationId,
         quantity: 1,
-        note: 'تست بار — لطفاً بیاورید',
       })),
     },
     seller.id,
   );
-  console.log(`۲) ${created.length} کار برداشت برای «${worker.username}» فرستاده شد (گوشی باید زنگ بزند)`);
+  console.log(`۲) یک کار برداشت با ${created.totalItems} قلم برای «${worker.username}» فرستاده شد (گوشی باید زنگ بزند)`);
 
   // ---------- ۳) ۴۰ فاکتور ----------
   // اقلامی که به کارگر رفته‌اند فروخته نمی‌شوند تا صف کارگر دست‌نخورده بماند.
-  const sellable = stocked.slice(PICK_TASK_COUNT);
+  const sellable = stocked.slice(PICK_LINE_COUNT);
   const remaining = new Map(sellable.map((s) => [s.id, s.qty]));
   const durations: number[] = [];
   let soldValue = 0;
@@ -206,8 +208,8 @@ async function main() {
     console.log(`   (${unregistered} قلم روی «موجودی ثبت‌نشده» منفی است — صف ثبتِ عقب‌افتاده، نه خطا)`);
   }
 
-  const pending = await prisma.pickTask.count({ where: { status: 'PENDING' } });
-  console.log(`   کارهای برداشت در انتظار: ${pending}`);
+  const pending = await prisma.workTask.count({ where: { status: 'PENDING' } });
+  console.log(`   کارهای در انتظار: ${pending}`);
 
   console.log(`\nکل اجرا: ${((Date.now() - t0) / 1000).toFixed(1)} ثانیه`);
   await app.close();

@@ -7,21 +7,22 @@ import { OnlineOrderStatus, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
-import { SalesService } from '../sales/sales.service';
-import { convertMoney } from '../common/money';
 
 /**
- * صفِ سفارش‌های سایت، از دید فروشنده.
+ * سفارش‌های سایت، از دید مغازه.
  *
- * اینجا همان مرزی است که در `StorefrontOrderService` قول داده شد: **تنها جایی
- * که سفارشِ سایت به فاکتور تبدیل می‌شود و کالا واقعاً از انبار کم می‌شود.**
- * تا پیش از `confirm`، سفارش فقط یک درخواست است.
+ * ⚠️ اینجا **تأییدی وجود ندارد**. سفارش پیش از رسیدن به اینجا قطعی شده و
+ * فاکتورش هم موقع پایین‌آمدن خودکار صادر شده (`SyncAgentService.landOrder`).
+ * کارِ این سرویس فقط جلوبردنِ مراحلِ تحویل است: آماده‌سازی → ارسال → تحویل.
+ *
+ * تنها استثنا `cancel` است: وقتی موقع جمع‌کردن معلوم شود جنس واقعاً نیست.
+ * آن هم «رد کردن سفارش» نیست، «لغو یک فروشِ انجام‌شده» است و برای همین
+ * فاکتورش هم باید باطل شود.
  */
 @Injectable()
 export class OnlineOrdersService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly sales: SalesService,
     private readonly events: EventsGateway,
   ) {}
 
@@ -30,7 +31,7 @@ export class OnlineOrdersService {
 
     const rows = await this.prisma.onlineOrder.findMany({
       where,
-      // «در انتظار»ها اول — این صفحه یک صفِ کاری است، نه یک آرشیو.
+      // تازه‌ترین اول — این صفحه یک صفِ کاری است.
       orderBy: [{ status: 'asc' }, { createdAt: 'desc' }],
       take: 200,
       select: {
@@ -41,9 +42,9 @@ export class OnlineOrdersService {
         payMethod: true,
         receiverName: true,
         receiverPhone: true,
+        address: true,
         createdAt: true,
         invoiceId: true,
-        customer: { select: { id: true, firstName: true, lastName: true } },
         _count: { select: { lines: true } },
       },
     });
@@ -56,12 +57,9 @@ export class OnlineOrdersService {
       payMethod: r.payMethod,
       receiverName: r.receiverName,
       receiverPhone: r.receiverPhone,
+      address: r.address,
       createdAt: r.createdAt,
       invoiceId: r.invoiceId,
-      customerId: r.customer.id,
-      customerName: [r.customer.firstName, r.customer.lastName]
-        .filter(Boolean)
-        .join(' '),
       lineCount: r._count.lines,
     }));
   }
@@ -86,10 +84,12 @@ export class OnlineOrdersService {
         decidedAt: true,
         invoiceId: true,
         warehouseId: true,
-        customer: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-        decidedBy: { select: { id: true, username: true } },
+        /*
+         * مشتریِ مغازه فقط وقتی وجود دارد که فاکتور صادر شده باشد. مشتریِ
+         * سایت عمداً اینجا نمی‌آید — نامش و شماره‌اش روی خودِ سفارش کپی شده
+         * و همان چیزی است که فروشنده برای تماس لازم دارد.
+         */
+        customerId: true,
         lines: {
           select: {
             productId: true,
@@ -113,32 +113,22 @@ export class OnlineOrdersService {
   }
 
   /**
-   * تأیید سفارش و ساختِ فاکتور.
+   * جلوبردنِ یک مرحله.
    *
-   * ⚠️ اینجاست که موجودی کم می‌شود. سه نکته‌ای که اگر رعایت نشوند خرابی مالی
-   * می‌سازند:
-   *
-   *   ۱. **واحد پول برمی‌گردد.** ردیف‌های سفارش به واحدِ *سایت* ذخیره شده‌اند
-   *      (چون همان عددی است که مشتری دید و پذیرفت)، ولی `SaleInvoice` به واحدِ
-   *      *دیتابیس* است. بدون این تبدیل، با نمایشِ تومانی هر فاکتور یک‌دهمِ
-   *      مبلغ واقعی ثبت می‌شد.
-   *   ۲. **کلید تکرارناپذیری از روی شناسه‌ی سفارش ساخته می‌شود**، پس دوبار
-   *      زدنِ «تأیید» دو فاکتور نمی‌سازد.
-   *   ۳. **پرداختی ثبت نمی‌شود.** پول هنوز نیامده؛ فروشنده بعداً از مسیر عادیِ
-   *      رسید دریافتش می‌کند. اختراعِ یک پرداختِ فرضی یعنی صندوقی که نمی‌خواند.
+   * مسیر یک‌طرفه است: ثبت‌شده → آماده‌سازی → ارسال → تحویل. برگشتن به عقب
+   * مجاز نیست چون هر مرحله یک کارِ فیزیکیِ انجام‌شده است؛ «برگرداندن» یعنی
+   * لغو، که مسیر خودش را دارد.
    */
-  async confirm(id: string, userId: string) {
+  private static readonly NEXT: Record<string, OnlineOrderStatus | undefined> = {
+    [OnlineOrderStatus.PLACED]: OnlineOrderStatus.PREPARING,
+    [OnlineOrderStatus.PREPARING]: OnlineOrderStatus.SHIPPED,
+    [OnlineOrderStatus.SHIPPED]: OnlineOrderStatus.DELIVERED,
+  };
+
+  async advance(id: string, userId: string) {
     const order = await this.prisma.onlineOrder.findUnique({
       where: { id },
-      select: {
-        id: true,
-        status: true,
-        customerId: true,
-        warehouseId: true,
-        note: true,
-        number: true,
-        lines: { select: { productId: true, quantity: true, unitPrice: true } },
-      },
+      select: { id: true, status: true, warehouseId: true },
     });
 
     if (!order) {
@@ -148,80 +138,83 @@ export class OnlineOrdersService {
       });
     }
 
-    if (order.status !== OnlineOrderStatus.PENDING) {
+    const next = OnlineOrdersService.NEXT[order.status];
+    if (!next) {
       throw new BadRequestException({
-        error: 'ALREADY_DECIDED',
-        message: 'این سفارش قبلاً تعیین تکلیف شده است',
+        error: 'NO_NEXT_STEP',
+        message: 'این سفارش مرحله‌ی بعدی ندارد',
       });
     }
 
-    const shop = await this.prisma.shopSettings.findUnique({
-      where: { id: 'singleton' },
-      select: { storedUnit: true, siteUnit: true },
-    });
-    const storedUnit = shop?.storedUnit ?? 'RIAL';
-    const siteUnit = shop?.siteUnit ?? 'TOMAN';
-
-    const invoice = await this.sales.createInvoice(
-      {
-        idempotencyKey: `online-order:${order.id}`,
-        warehouseId: order.warehouseId,
-        customerId: order.customerId,
-        note: `سفارش سایت #${order.number}${order.note ? ` — ${order.note}` : ''}`,
-        lines: order.lines.map((l) => ({
-          productId: l.productId,
-          quantity: l.quantity,
-          // واحدِ سایت → واحدِ دیتابیس (نکته‌ی ۱ بالا)
-          unitPrice: convertMoney(l.unitPrice, siteUnit, storedUnit),
-        })),
-      },
-      userId,
-    );
-
-    const invoiceId = (invoice as { id: string }).id;
-
     await this.prisma.onlineOrder.update({
-      where: { id: order.id },
+      where: { id },
       data: {
-        status: OnlineOrderStatus.CONFIRMED,
-        invoiceId,
+        status: next,
         decidedAt: new Date(),
         decidedById: userId,
+        // وضعیتِ تازه باید دوباره به سایت برود.
+        syncedAt: null,
       },
     });
 
     this.events.broadcast({
       type: 'online-order.decided',
-      orderId: order.id,
-      customerId: order.customerId,
-      invoiceId,
+      orderId: id,
       warehouseId: order.warehouseId,
     });
 
-    return this.detail(order.id);
+    return this.detail(id);
   }
 
-  /** رد سفارش — ناموجود بودن، تماس بی‌پاسخ، آدرس خارج از محدوده. */
-  async reject(id: string, userId: string, reason?: string) {
-    const done = await this.prisma.onlineOrder.updateMany({
-      where: { id, status: OnlineOrderStatus.PENDING },
-      data: {
-        status: OnlineOrderStatus.REJECTED,
-        rejectReason: reason?.trim() || null,
-        decidedAt: new Date(),
-        decidedById: userId,
-      },
+  /**
+   * لغو — وقتی جنس واقعاً نبود یا مشتری پشیمان شد.
+   *
+   * ⚠️ فاکتورِ این سفارش **خودکار باطل نمی‌شود**. ابطال فاکتور موجودی را
+   * برمی‌گرداند و در دفتر مشتری اثر می‌گذارد؛ آن کار مسیر و مجوز خودش را دارد
+   * و از اینجا انجام نمی‌شود. شماره‌ی فاکتور در پاسخ برمی‌گردد تا فروشنده
+   * بداند کدام را باید باطل کند.
+   */
+  async cancel(id: string, userId: string, reason?: string) {
+    const order = await this.prisma.onlineOrder.findUnique({
+      where: { id },
+      select: { id: true, status: true, invoiceId: true, warehouseId: true },
     });
 
-    if (done.count === 0) {
-      throw new BadRequestException({
-        error: 'ALREADY_DECIDED',
-        message: 'این سفارش قبلاً تعیین تکلیف شده است',
+    if (!order) {
+      throw new NotFoundException({
+        error: 'ORDER_NOT_FOUND',
+        message: 'سفارش پیدا نشد',
       });
     }
 
-    this.events.broadcast({ type: 'online-order.decided', orderId: id });
+    if (order.status === OnlineOrderStatus.DELIVERED) {
+      throw new BadRequestException({
+        error: 'ALREADY_DELIVERED',
+        message: 'سفارشِ تحویل‌شده لغو نمی‌شود — از مسیر مرجوعی اقدام کنید',
+      });
+    }
 
-    return this.detail(id);
+    await this.prisma.onlineOrder.update({
+      where: { id },
+      data: {
+        status: OnlineOrderStatus.CANCELLED,
+        rejectReason: reason?.trim() || null,
+        decidedAt: new Date(),
+        decidedById: userId,
+        syncedAt: null,
+      },
+    });
+
+    this.events.broadcast({
+      type: 'online-order.decided',
+      orderId: id,
+      warehouseId: order.warehouseId,
+    });
+
+    return {
+      ...(await this.detail(id)),
+      /** اگر پر باشد، این فاکتور هنوز باز است و باید دستی باطل شود. */
+      invoiceToCancel: order.invoiceId,
+    };
   }
 }

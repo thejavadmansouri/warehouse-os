@@ -15,12 +15,14 @@ import { normalizePhone } from '../common/phone.util';
 /**
  * سفارش‌های سایت.
  *
- * ⚠️ مهم‌ترین قاعده‌ی این فایل: **هیچ‌جا موجودی کم نمی‌شود.** سفارشِ سایت یک
- * «درخواست» است نه فاکتور. تا وقتی فروشنده در پنل تأییدش نکرده، هیچ کالایی از
- * انبار حرکت نکرده و هیچ ردیفی در دفتر مشتری ننشسته. تبدیل به `SaleInvoice` کارِ
- * ماژول پنل است، نه این فایل.
+ * ⚠️ قاعده‌ی حاکم: **سفارش همان لحظه‌ی ثبت قطعی است.** هیچ آدمی تأییدش نمی‌کند.
+ * مشتری ساعت ۴ صبح سفارش می‌دهد، شماره می‌گیرد و کارش تمام است؛ اگر قرار بود
+ * منتظرِ فروشنده بماند، یعنی فروشگاه فقط در ساعات کاری باز است.
  *
- * دلیلش ساده است: سبد یک غریبه‌ی اینترنتی نباید بتواند موجودیِ مغازه را قفل کند.
+ * موجودی: سایت جدول موجودیِ خودش را **کم نمی‌کند** (آن عدد را انبار می‌فرستد و
+ * هر سینک بازنویسی می‌شود). به‌جایش، تعدادِ سفارش‌هایی که مغازه هنوز فاکتورشان
+ * را نزده از موجودیِ نمایشی کسر می‌شود — همان چیزی که `reserved()` حساب می‌کند.
+ * این‌طور بین دو سینک هم بیش از موجودی فروخته نمی‌شود.
  */
 @Injectable()
 export class StorefrontOrderService {
@@ -52,7 +54,35 @@ export class StorefrontOrderService {
     return w.id;
   }
 
-  async create(customerId: string, dto: CreateOrderDto) {
+  /**
+   * تعدادی که «فروخته شده ولی مغازه هنوز از موجودیِ خودش کم نکرده».
+   *
+   * `Inventory.quantity` روی سایت عکسِ آخرین سینک است. سفارشی که بعد از آن
+   * سینک ثبت شده هنوز در آن عدد دیده نمی‌شود، پس اگر کسر نشود همان کالا
+   * می‌تواند چند بار فروخته شود.
+   *
+   * ملاک `stockAppliedAt` است: به‌محض اینکه مغازه فاکتور زد و موجودیِ واقعی‌اش
+   * کم شد، این رزرو برداشته می‌شود — وگرنه یک کالا دو بار کسر می‌شد.
+   */
+  private async reserved(productIds: string[]): Promise<Map<string, number>> {
+    if (!productIds.length) return new Map();
+
+    const rows = await this.prisma.onlineOrderLine.groupBy({
+      by: ['productId'],
+      where: {
+        productId: { in: productIds },
+        order: {
+          stockAppliedAt: null,
+          status: { notIn: [OnlineOrderStatus.CANCELLED] },
+        },
+      },
+      _sum: { quantity: true },
+    });
+
+    return new Map(rows.map((r) => [r.productId, r._sum.quantity ?? 0]));
+  }
+
+  async create(siteCustomerId: string, dto: CreateOrderDto) {
     const shop = await this.catalog.assertOnline();
 
     /*
@@ -63,16 +93,16 @@ export class StorefrontOrderService {
     if (dto.idempotencyKey) {
       const existing = await this.prisma.onlineOrder.findUnique({
         where: { idempotencyKey: dto.idempotencyKey },
-        select: { id: true, customerId: true },
+        select: { id: true, siteCustomerId: true },
       });
       if (existing) {
-        if (existing.customerId !== customerId) {
+        if (existing.siteCustomerId !== siteCustomerId) {
           throw new BadRequestException({
             error: 'KEY_TAKEN',
             message: 'این درخواست قبلاً ثبت شده است',
           });
         }
-        return this.myOrder(customerId, existing.id);
+        return this.myOrder(siteCustomerId, existing.id);
       }
     }
 
@@ -103,6 +133,7 @@ export class StorefrontOrderService {
     });
 
     const byId = new Map(products.map((p) => [p.id, p]));
+    const reserved = await this.reserved([...wanted.keys()]);
 
     const lines: {
       productId: string;
@@ -132,8 +163,9 @@ export class StorefrontOrderService {
         });
       }
 
-      const stock = p.inventories.reduce((s, i) => s + i.quantity, 0);
-      if (stock < quantity) {
+      const onHand = p.inventories.reduce((s, i) => s + i.quantity, 0);
+      const available = onHand - (reserved.get(productId) ?? 0);
+      if (available < quantity) {
         throw new BadRequestException({
           error: 'INSUFFICIENT_STOCK',
           message: `موجودی «${p.name}» کافی نیست`,
@@ -179,9 +211,10 @@ export class StorefrontOrderService {
     const order = await this.prisma.onlineOrder.create({
       data: {
         idempotencyKey: dto.idempotencyKey ?? null,
-        customerId,
+        siteCustomerId,
         warehouseId,
-        status: OnlineOrderStatus.PENDING,
+        // بدون «منتظر تأیید» — سفارش همان لحظه قطعی است.
+        status: OnlineOrderStatus.PLACED,
         subtotal,
         shippingFee,
         total: subtotal + shippingFee,
@@ -199,17 +232,16 @@ export class StorefrontOrderService {
     this.events.broadcast({
       type: 'online-order.created',
       orderId: order.id,
-      customerId,
       warehouseId,
     });
 
-    return this.myOrder(customerId, order.id);
+    return this.myOrder(siteCustomerId, order.id);
   }
 
   /** فهرست سفارش‌های خودِ مشتری. */
-  async myOrders(customerId: string) {
+  async myOrders(siteCustomerId: string) {
     const rows = await this.prisma.onlineOrder.findMany({
-      where: { customerId },
+      where: { siteCustomerId },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -240,9 +272,9 @@ export class StorefrontOrderService {
    * شرطِ `customerId` داخل `where` است نه یک `if` بعد از خواندن: سفارشِ کسِ
    * دیگر باید ۴۰۴ بدهد، نه ۴۰۳ — وگرنه شماره‌ی سفارش‌های موجود قابل شمارش است.
    */
-  async myOrder(customerId: string, id: string) {
+  async myOrder(siteCustomerId: string, id: string) {
     const o = await this.prisma.onlineOrder.findFirst({
-      where: { id, customerId },
+      where: { id, siteCustomerId },
       select: {
         id: true,
         number: true,
@@ -286,9 +318,9 @@ export class StorefrontOrderService {
    * بعد از تأیید، سفارش دیگر فاکتور دارد و لغوش یعنی ابطال فاکتور؛ آن کار
    * مسیر خودش را دارد و از سایت انجام نمی‌شود.
    */
-  async cancel(customerId: string, id: string) {
+  async cancel(siteCustomerId: string, id: string) {
     const done = await this.prisma.onlineOrder.updateMany({
-      where: { id, customerId, status: OnlineOrderStatus.PENDING },
+      where: { id, siteCustomerId, status: OnlineOrderStatus.PLACED },
       data: {
         status: OnlineOrderStatus.CANCELLED,
         decidedAt: new Date(),
@@ -305,9 +337,8 @@ export class StorefrontOrderService {
     this.events.broadcast({
       type: 'online-order.decided',
       orderId: id,
-      customerId,
     });
 
-    return this.myOrder(customerId, id);
+    return this.myOrder(siteCustomerId, id);
   }
 }

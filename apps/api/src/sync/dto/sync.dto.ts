@@ -104,6 +104,10 @@ export class OrderStatusDto {
 
   @IsOptional() @IsString() @MaxLength(300)
   rejectReason?: string | null;
+
+  /** مغازه فاکتور زده و موجودیِ خودش کم شده — رزروِ سایت باید برداشته شود. */
+  @IsOptional() @IsBoolean()
+  stockApplied?: boolean;
 }
 
 export class PushStatusDto {
