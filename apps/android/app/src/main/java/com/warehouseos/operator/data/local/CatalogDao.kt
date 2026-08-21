@@ -29,6 +29,9 @@ interface CatalogDao {
     @Query("SELECT * FROM catalog_product")
     suspend fun getAll(): List<CatalogProductEntity>
 
+    @Query("SELECT * FROM catalog_product WHERE id = :id LIMIT 1")
+    suspend fun byId(id: String): CatalogProductEntity?
+
     @Query("SELECT * FROM catalog_product WHERE sku = :sku LIMIT 1")
     suspend fun bySku(sku: String): CatalogProductEntity?
 }

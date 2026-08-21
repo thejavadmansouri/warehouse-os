@@ -9,6 +9,7 @@ import com.warehouseos.operator.data.remote.ApiService
 import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
 import com.warehouseos.operator.data.remote.dto.SyncOperationRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
+import com.warehouseos.operator.data.remote.dto.LinkBarcodeRequest
 import com.warehouseos.operator.data.remote.dto.WorkTaskSyncMutationRequest
 import com.warehouseos.operator.data.remote.dto.WorkTaskSyncRequest
 import com.warehouseos.operator.data.remote.dto.WorkTaskTickPayload
@@ -118,6 +119,31 @@ class OutboxRepository @Inject constructor(
     }
 
     /**
+     * صفِ چسباندنِ بارکدِ جعبه به کالا.
+     *
+     * آفلاین کار می‌کند چون شناسه‌ی کالا از کاتالوگِ روی گوشی می‌آید — کارگر
+     * لازم نیست منتظر شبکه بماند تا جعبه‌ی بعدی را بردارد.
+     */
+    suspend fun enqueueBarcodeLink(productId: String, barcode: String) {
+        dao.insert(
+            OutboxEntity(
+                clientRequestId = UUID.randomUUID().toString(),
+                type = OutboxType.BARCODE_LINK,
+                locationBarcode = "",
+                voiceText = null,
+                productId = productId,
+                quantity = 0,
+                unit = null,
+                status = OutboxStatus.PENDING,
+                payload = Json.encodeToString(
+                    LinkBarcodeRequest.serializer(),
+                    LinkBarcodeRequest(productId = productId, barcode = barcode),
+                ),
+            ),
+        )
+    }
+
+    /**
      * Drains all syncable (PENDING) rows. Returns true when every row reached a
      * terminal state (SYNCED or rejected → FAILED); false only when the network
      * blocked progress, so the worker's retry means "try again later" — never
@@ -133,7 +159,13 @@ class OutboxRepository @Inject constructor(
 
         val ticks = ops.filter { it.type == OutboxType.WORK_TASK_TICK }
         val productRequests = ops.filter { it.type == OutboxType.NEW_PRODUCT_REQUEST }
-        val stockOps = ops.filter { it.type != OutboxType.WORK_TASK_TICK && it.type != OutboxType.NEW_PRODUCT_REQUEST }
+        val barcodeLinks = ops.filter { it.type == OutboxType.BARCODE_LINK }
+        // هرچه از سه نوعِ بالا نیست، حرکتِ موجودی است.
+        val stockOps = ops.filter {
+            it.type != OutboxType.WORK_TASK_TICK &&
+                it.type != OutboxType.NEW_PRODUCT_REQUEST &&
+                it.type != OutboxType.BARCODE_LINK
+        }
 
         var allTerminal = true
 
@@ -146,6 +178,9 @@ class OutboxRepository @Inject constructor(
 
         for (op in productRequests) {
             allTerminal = syncProductRequest(op) && allTerminal
+        }
+        for (op in barcodeLinks) {
+            allTerminal = syncBarcodeLink(op) && allTerminal
         }
 
         return allTerminal
@@ -268,6 +303,47 @@ class OutboxRepository @Inject constructor(
         // جنس بین ثبت فاکتور و چیدن جای دیگری رفته — کارگر باید دوباره ببیند.
         "TRANSFER_FAILED" -> "انتقال به قفسه انجام نشد؛ دوباره تلاش کنید"
         else -> null
+    }
+
+    /**
+     * یک اتصالِ بارکد را می‌فرستد.
+     *
+     * `BARCODE_TAKEN` رَدِّ قطعی است نه خطای گذرا: همان رشته به کالای دیگری وصل
+     * شده و تلاشِ دوباره هیچ‌وقت جواب نمی‌دهد. کارگر باید در «ردشده‌ها» ببیندش و
+     * تصمیم بگیرد — چون یعنی یا جعبه را اشتباه گرفته یا دو کالا یک بارکد دارند.
+     */
+    private suspend fun syncBarcodeLink(op: OutboxEntity): Boolean {
+        val body = runCatching {
+            Json.decodeFromString(LinkBarcodeRequest.serializer(), op.payload ?: "")
+        }.getOrNull() ?: run {
+            dao.updateStatus(op.clientRequestId, OutboxStatus.FAILED, op.attemptCount + 1, "bad payload")
+            return true
+        }
+
+        return when (val result = safeApiCall { api.linkBarcode(body) }) {
+            // alreadyLinked هم موفقیت است — کارِ تمام‌شده، نه خطا.
+            is ApiResult.Success -> {
+                dao.updateStatus(op.clientRequestId, OutboxStatus.SYNCED, op.attemptCount, null)
+                dao.clearSynced()
+                true
+            }
+            is ApiResult.NetworkError -> false
+            ApiResult.Unauthorized -> false
+            is ApiResult.ServerError -> {
+                val message = if (result.code == 400) {
+                    "این بارکد به کالای دیگری وصل است"
+                } else {
+                    "ثبت بارکد ناموفق بود"
+                }
+                dao.updateStatus(
+                    op.clientRequestId,
+                    OutboxStatus.FAILED,
+                    op.attemptCount + 1,
+                    message,
+                )
+                true
+            }
+        }
     }
 
     private suspend fun syncProductRequest(op: OutboxEntity): Boolean {

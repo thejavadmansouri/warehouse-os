@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -79,6 +80,7 @@ fun ShiftHomeScreen(
     onCount: () -> Unit,
     onSell: (() -> Unit)? = null,
     onLocate: () -> Unit,
+    onLinkBarcode: () -> Unit,
     onMyWork: () -> Unit,
     onPickTasks: () -> Unit,
     onWorkTasks: () -> Unit,
@@ -188,6 +190,7 @@ fun ShiftHomeScreen(
                         onCount = onCount,
                         onSell = if (viewModel.isManager) onSell else null,
                         onLocate = onLocate,
+                        onLinkBarcode = onLinkBarcode,
                         onMyWork = onMyWork,
                         onPickTasks = onPickTasks,
                         onWorkTasks = onWorkTasks,
@@ -376,6 +379,7 @@ private fun ActiveSessionContent(
     onCount: () -> Unit,
     onSell: (() -> Unit)?,
     onLocate: () -> Unit,
+    onLinkBarcode: () -> Unit,
     onMyWork: () -> Unit,
     onPickTasks: () -> Unit,
     onWorkTasks: () -> Unit,
@@ -435,6 +439,15 @@ private fun ActiveSessionContent(
     val tools = buildList {
         add(HomeAction("انبارگردانی", "شمارش موجودی", Icons.Filled.Checklist, onCount))
         add(HomeAction("یافتن کالا", "آدرس دقیق قفسه", Icons.Filled.Search, onLocate))
+        // کالایی که بارکد خوانا روی جعبه دارد، برچسبِ چاپی لازم ندارد.
+        add(
+            HomeAction(
+                title = "اتصال بارکد",
+                subtitle = "بارکد جعبه را به کالا وصل کن",
+                icon = Icons.Filled.QrCodeScanner,
+                onClick = onLinkBarcode,
+            ),
+        )
         if (onSell != null) {
             add(HomeAction("فروش کالا", "ثبت فروش از انبار", Icons.Filled.ShoppingCart, onSell))
         }

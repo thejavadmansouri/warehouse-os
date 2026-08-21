@@ -37,4 +37,6 @@ object OutboxType {
     const val NEW_PRODUCT_REQUEST = "NEW_PRODUCT_REQUEST"
     /** تیک یک قلمِ «کار انبار» — به POST /work-tasks/sync می‌رود، نه /sync/operations. */
     const val WORK_TASK_TICK = "WORK_TASK_TICK"
+    /** چسباندن بارکد جعبه به کالا — به POST /barcode/link می‌رود. */
+    const val BARCODE_LINK = "BARCODE_LINK"
 }

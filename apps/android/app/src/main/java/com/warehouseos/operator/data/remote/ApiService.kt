@@ -3,6 +3,8 @@ package com.warehouseos.operator.data.remote
 import com.warehouseos.operator.data.remote.dto.AuthMeResponse
 import com.warehouseos.operator.data.remote.dto.CatalogPageDto
 import com.warehouseos.operator.data.remote.dto.CountStartRequest
+import com.warehouseos.operator.data.remote.dto.LinkBarcodeRequest
+import com.warehouseos.operator.data.remote.dto.LinkBarcodeResponse
 import com.warehouseos.operator.data.remote.dto.CountStartResponse
 import com.warehouseos.operator.data.remote.dto.CountVoiceRequest
 import com.warehouseos.operator.data.remote.dto.CountVoiceResponse
@@ -136,6 +138,10 @@ interface ApiService {
     suspend fun pickTaskMarkPicked(@Path("id") id: String): PickTaskDto
 
     // ---- New-product request (worker → manager review) ----
+
+    /** چسباندنِ بارکدِ جعبه به کالا — کارگر همان کسی است که جعبه دستش است. */
+    @POST("barcode/link")
+    suspend fun linkBarcode(@Body body: LinkBarcodeRequest): LinkBarcodeResponse
 
     @POST("product-requests")
     suspend fun createProductRequest(@Body body: CreateProductRequestBody): ProductRequestResult

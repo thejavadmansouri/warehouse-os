@@ -19,6 +19,7 @@ import com.warehouseos.operator.ui.screens.locate.LocateScreen
 import com.warehouseos.operator.ui.screens.newproduct.NewProductRequestScreen
 import com.warehouseos.operator.ui.screens.mywork.MyWorkScreen
 import com.warehouseos.operator.ui.screens.picktasks.PickTasksScreen
+import com.warehouseos.operator.ui.screens.linkbarcode.LinkBarcodeScreen
 import com.warehouseos.operator.ui.screens.sales.SalesScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
@@ -104,6 +105,7 @@ fun OperatorNavGraph(
                 onStockIn = { navController.navigate(Routes.CATALOG_SETUP) },
                 onCount = { navController.navigate(Routes.COUNT) },
                 onLocate = { navController.navigate(Routes.LOCATE) },
+                onLinkBarcode = { navController.navigate(Routes.LINK_BARCODE) },
                 onMyWork = { navController.navigate(Routes.MY_WORK) },
                 onPickTasks = { navController.navigate(Routes.PICK_TASKS) },
                 onWorkTasks = { navController.navigate(Routes.WORK_TASKS) },
@@ -204,6 +206,12 @@ fun OperatorNavGraph(
                         popUpTo(Routes.SHIFT_HOME)
                     }
                 },
+            )
+        }
+
+        composable(Routes.LINK_BARCODE) {
+            LinkBarcodeScreen(
+                onBack = { navController.popBackStack() },
             )
         }
 

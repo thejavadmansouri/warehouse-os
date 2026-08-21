@@ -93,6 +93,8 @@ class FakeCatalogDao : CatalogDao {
 
     override suspend fun getAll(): List<CatalogProductEntity> = rows.values.toList()
 
+    override suspend fun byId(id: String): CatalogProductEntity? = rows[id]
+
     override suspend fun bySku(sku: String): CatalogProductEntity? =
         rows.values.firstOrNull { it.sku == sku }
 

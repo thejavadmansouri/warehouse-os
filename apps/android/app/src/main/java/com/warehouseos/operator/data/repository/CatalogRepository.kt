@@ -140,6 +140,44 @@ class CatalogRepository @Inject constructor(
         OfflineCatalogSearch.search(loadAll(), q)
     }
 
+    /**
+     * کالایی که این بارکد به آن وصل است — از روی کاتالوگِ همین گوشی.
+     *
+     * آفلاین جواب می‌دهد، و همین نکته‌ی اصلی است: کارگر باید قبل از وصل‌کردن
+     * بداند این بارکد قبلاً گرفته شده یا نه، بی‌آنکه منتظر شبکه بماند.
+     */
+    suspend fun findByBarcode(barcode: String): CatalogProductEntity? =
+        withContext(Dispatchers.Default) {
+            val code = barcode.trim()
+            if (code.isEmpty()) return@withContext null
+            loadAll().map { it.p }.firstOrNull { code in it.barcodeList() }
+        }
+
+    /**
+     * بارکدِ تازه را همان لحظه به کاتالوگِ روی گوشی هم اضافه می‌کند.
+     *
+     * بدون این، کارگری که بارکدی را وصل کرده و بلافاصله همان جعبه را برای ثبت
+     * ورود اسکن می‌کند، «کالا پیدا نشد» می‌گیرد — تا سینکِ بعدیِ کاتالوگ. و آن
+     * دقیقاً کاری است که بعد از وصل‌کردن انجام می‌شود.
+     *
+     * حقیقتِ نهایی همچنان سرور است؛ این فقط جلوی یک شکافِ چنددقیقه‌ای را می‌گیرد.
+     */
+    suspend fun addBarcodeLocally(productId: String, barcode: String) {
+        val row = dao.byId(productId) ?: return
+        val codes = row.barcodeList()
+        if (barcode in codes) return
+
+        dao.upsertAll(
+            listOf(
+                row.copy(
+                    barcodes = CatalogProductEntity.joinList(codes + barcode),
+                ),
+            ),
+        )
+        // کشِ درون‌حافظه‌ی جستجو کهنه شد.
+        invalidate()
+    }
+
     fun invalidate() {
         cache = null
     }

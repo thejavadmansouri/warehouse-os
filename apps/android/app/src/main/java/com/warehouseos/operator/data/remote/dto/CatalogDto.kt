@@ -28,3 +28,21 @@ data class CatalogPageDto(
     @SerialName("totalPages") val totalPages: Int = 1,
     @SerialName("hasMore") val hasMore: Boolean = false,
 )
+
+
+/** POST /barcode/link — چسباندنِ بارکدِ روی جعبه به یک کالای موجود. */
+@Serializable
+data class LinkBarcodeRequest(
+    val productId: String,
+    val barcode: String,
+    val type: String = "FACTORY",
+)
+
+@Serializable
+data class LinkBarcodeResponse(
+    val id: String = "",
+    val barcode: String = "",
+    val productId: String = "",
+    /** سرور می‌گوید از قبل وصل بوده — خطا نیست. */
+    val alreadyLinked: Boolean = false,
+)

@@ -30,6 +30,7 @@ object Routes {
     const val PICK_TASKS = "pick_tasks"
     const val WORK_TASKS = "work_tasks"
     const val SETTINGS = "settings"
+    const val LINK_BARCODE = "link_barcode"
 
     // Barcode path argument — used by the voice entry screen.
     const val ARG_BARCODE = "barcode"
