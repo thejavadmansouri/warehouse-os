@@ -43,6 +43,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BarcodeSvg } from "./barcode-svg";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ErrorState, EmptyState } from "@/components/states";
 import {
@@ -62,6 +63,15 @@ const SIZE_PRESETS = [
   { value: "5x3", label: "۵ × ۳ سانتی‌متر", w: "5cm", h: "3cm", qr: "1.7cm", wMm: 50, hMm: 30 },
   { value: "4x2", label: "۴ × ۲ سانتی‌متر", w: "4cm", h: "2cm", qr: "1.1cm", wMm: 40, hMm: 20 },
   { value: "6x4", label: "۶ × ۴ سانتی‌متر", w: "6cm", h: "4cm", qr: "2.5cm", wMm: 60, hMm: 40 },
+  /*
+   * لیبل ۲×۳ — هر دو جهت، چون «۲ در ۳» هر دو را می‌تواند یعنی.
+   *
+   * کارتِ لیبل عمودی چیده شده (نام بالا، QR وسط، کد پایین)، پس حالتِ ایستاده
+   * هم درست درمی‌آید. QR در ایستاده به عرض محدود است و در خوابیده به ارتفاع —
+   * برای همین دو عددِ متفاوت دارند و نه یکی.
+   */
+  { value: "3x2", label: "۳ × ۲ سانتی‌متر (خوابیده)", w: "3cm", h: "2cm", qr: "0.9cm", wMm: 30, hMm: 20 },
+  { value: "2x3", label: "۲ × ۳ سانتی‌متر (ایستاده)", w: "2cm", h: "3cm", qr: "1.3cm", wMm: 20, hMm: 30 },
 ] as const;
 
 const PAPER_OPTIONS: LabelPaper[] = ["A4", "A5", "A6"];
@@ -145,11 +155,15 @@ function ProductLabelCard({
           </p>
         ) : null}
       </div>
-      <img
-        src={label.qrCode}
-        alt="QR"
-        style={{ width: preset.qr, height: preset.qr }}
-        className="object-contain"
+      {/*
+        بارکد خطی، نه QR.
+        چاپِ کالا سمت سرور CODE128 می‌زند؛ تا دیروز پیش‌نمایش QR نشان می‌داد و
+        با خروجی نمی‌خواند. پیش‌نمایشی که دروغ بگوید از نداشتنش بدتر است.
+      */}
+      <BarcodeSvg
+        value={label.barcode}
+        height={26}
+        className="h-auto w-[92%] object-contain"
       />
       <div className="flex w-full flex-col items-center">
         <p
@@ -176,6 +190,14 @@ const PRODUCT_SIZES = [
   { value: "38x21", label: "۳۸ × ۲۱ میلی‌متر (رول)", w: 38, h: 21, cols: 5 },
   { value: "60x40", label: "۶۰ × ۴۰ میلی‌متر", w: 60, h: 40, cols: 3 },
   { value: "70x50", label: "۷۰ × ۵۰ میلی‌متر", w: 70, h: 50, cols: 2 },
+  /*
+   * ۲×۳ سانتی — هر دو جهت، چون «۲ در ۳» هر دو را می‌تواند یعنی و لیبلِ اشتباه
+   * یعنی یک رول کاغذِ دورریز.
+   *
+   * `cols` روی A4 حساب شده: عرض مفید ۲۰۰ میلی‌متر با فاصله‌ی ۴ میلی‌متری.
+   */
+  { value: "30x20", label: "۳۰ × ۲۰ میلی‌متر (خوابیده)", w: 30, h: 20, cols: 5 },
+  { value: "20x30", label: "۲۰ × ۳۰ میلی‌متر (ایستاده)", w: 20, h: 30, cols: 6 },
 ] as const;
 
 export interface LabelPrintDialogProps {
