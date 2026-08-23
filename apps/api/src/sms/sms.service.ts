@@ -3,6 +3,8 @@ import { SmsStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { canReceiveSms } from '../common/phone.util';
+import { convertMoney } from '../common/money';
+import { LedgerService } from '../sales/ledger.service';
 import { SmsSender } from './sms-sender';
 import { SMS_TEMPLATES, renderTemplate } from './sms-templates';
 
@@ -28,6 +30,7 @@ export class SmsService {
   constructor(
     private prisma: PrismaService,
     private sender: SmsSender,
+    private ledger: LedgerService,
   ) {}
 
   /** قالب‌ها را یک بار در دیتابیس می‌کارد. متنِ ویرایش‌شده دست‌نخورده می‌ماند. */
@@ -44,6 +47,62 @@ export class SmsService {
 
   listTemplates() {
     return this.prisma.smsTemplate.findMany({ orderBy: { key: 'asc' } });
+  }
+
+  /**
+   * ویرایش قالب — عنوان، متن یا وضعیت.
+   *
+   * `key` عمداً اینجا نیست: کد روی کلید ارجاع می‌دهد (`queue` با templateKey
+   * صدا زده می‌شود) و عوض‌کردنش فقط تاریخچه‌ی پیامک‌ها را می‌بُرد.
+   *
+   * متنِ خالی یا کوتاه‌تر از ۵ کاراکتر پذیرفته نمی‌شود — همان قاعده‌ای که
+   * `queue` روی متنِ نهایی دارد؛ قالبِ پوچ فقط بعداً پیامکِ پوچ می‌سازد.
+   */
+  async updateTemplate(
+    id: string,
+    dto: { title?: string; body?: string; isActive?: boolean },
+  ) {
+    const template = await this.prisma.smsTemplate.findUnique({ where: { id } });
+    if (!template) {
+      throw new NotFoundException({ error: 'TEMPLATE_NOT_FOUND', message: 'قالب پیدا نشد' });
+    }
+
+    let body = dto.body;
+    if (body !== undefined) {
+      body = body.trim();
+      if (body.length < 5) {
+        throw new BadRequestException({ error: 'EMPTY_BODY', message: 'متن قالب خالی است' });
+      }
+    }
+
+    return this.prisma.smsTemplate.update({
+      where: { id },
+      // undefined یعنی «عوض نکن» — پریمای فیلدِ undefined را نادیده می‌گیرد.
+      data: { title: dto.title, body, isActive: dto.isActive },
+    });
+  }
+
+  /**
+   * قالب‌ها با متادیتای تعریف‌شده‌شان: `vars` و متنِ پیش‌فرض.
+   *
+   * هیچ‌کدام در دیتابیس نیستند؛ مرجعشان `SMS_TEMPLATES` است. چرا اینجا و نه در
+   * فرانت: اگر کسی متغیری اضافه کند یا متنِ پیش‌فرض را عوض کند، مدیر همان لحظه
+   * آن را می‌بیند — نسخه‌ی hardcodeشده در فرانت فقط تا دیپلوی بعدی درست است.
+   *
+   * `defaultBody` فقط برای «بازنشانی به متن اصلی» است؛ متنِ فعلی که مدیر ویرایش
+   * کرده (`body`) دست‌نخورده می‌ماند.
+   */
+  async listTemplatesWithMeta() {
+    const templates = await this.listTemplates();
+    const byKey = new Map(SMS_TEMPLATES.map((t) => [t.key, t]));
+    return templates.map((t) => {
+      const seed = byKey.get(t.key);
+      return {
+        ...t,
+        vars: seed?.vars ?? [],
+        defaultBody: seed?.body,
+      };
+    });
   }
 
   /**
@@ -89,6 +148,9 @@ export class SmsService {
     const body = renderTemplate(template.body, {
       customer: `${customer.firstName} ${customer.lastName ?? ''}`.trim(),
       shop: shopName,
+      balance: await this.balanceToman(customerId),
+      // مقادیرِ سند (شماره‌ی چک، سررسید، …) از صداکننده می‌آیند و بر
+      // پیش‌فرض‌ها می‌چربند.
       ...extra,
     });
 
@@ -268,6 +330,28 @@ export class SmsService {
       data: { status: SmsStatus.QUEUED, error: null },
     });
   }
+
+  /**
+   * مانده‌ی مشتری، **به تومان و با جداکننده‌ی هزارگان**.
+   *
+   * چرا اینجا و نه در قالب: «یادآوری بدهی» پرکاربردترین پیامکِ این کسب‌وکار
+   * است و تا دیروز `{balance}` خام می‌ماند، یعنی آن قالب عملاً بلااستفاده بود.
+   *
+   * سه تصمیم که در خودِ عدد نشسته‌اند:
+   *
+   * - **تومان، نه ریال.** مشتری پیامک را می‌خواند و تومان می‌فهمد؛ عددِ ریالی
+   *   ده‌برابر به‌نظر می‌رسد و تلفنِ بعدی یک دعواست.
+   * - **قدرِ مطلق.** مانده‌ی منفی یعنی بستانکار است؛ «مانده −۵۰٬۰۰۰» در پیامک
+   *   بی‌معنی است. صداکننده باید اصلاً برای چنین مشتری‌ای یادآوری نفرستد، و
+   *   پیش‌نمایش هم عدد را نشان می‌دهد تا دیده شود.
+   * - **بدونِ واحد.** «تومان» در متنِ خودِ قالب است، نه در عدد.
+   */
+  private async balanceToman(customerId: string): Promise<string> {
+    const rial = await this.ledger.balance(customerId);
+    const toman = convertMoney(Math.abs(rial), 'RIAL', 'TOMAN');
+    return toman.toLocaleString('en-US');
+  }
+
 
   private async shopName(): Promise<string> {
     const shop = await this.prisma.shopSettings

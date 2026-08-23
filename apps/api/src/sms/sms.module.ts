@@ -4,9 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SmsController } from './sms.controller';
 import { SmsService } from './sms.service';
 import { SmsSender } from './sms-sender';
+import { SalesModule } from '../sales/sales.module';
 
 
 @Module({
+  // فقط برای `LedgerService` — مانده‌ی مشتری در «یادآوری بدهی» لازم است.
+  imports: [SalesModule],
+
   controllers: [SmsController],
   providers: [PrismaService, SmsService, SmsSender],
   exports: [SmsService, SmsSender],

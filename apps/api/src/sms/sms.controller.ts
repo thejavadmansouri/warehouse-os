@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
 import { Roles } from '../auth/roles.decorator';
@@ -14,7 +14,7 @@ export class SmsController {
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('templates')
   templates() {
-    return this.service.listTemplates();
+    return this.service.listTemplatesWithMeta();
   }
 
 
@@ -63,5 +63,18 @@ export class SmsController {
   @Post(':id/retry')
   retry(@Param('id') id: string) {
     return this.service.retry(id);
+  }
+
+
+  /**
+   * ویرایش قالب — عنوان، متن یا وضعیت. `key` هرگز قابل تغییر نیست.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Patch(':id')
+  updateTemplate(
+    @Param('id') id: string,
+    @Body() dto: { title?: string; body?: string; isActive?: boolean },
+  ) {
+    return this.service.updateTemplate(id, dto);
   }
 }

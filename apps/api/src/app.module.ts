@@ -92,6 +92,7 @@ const WAREHOUSE_ONLY = [
   ReportsModule,
   BackupsModule,
   ShortagesModule,
+  SmsModule,
   ShopModule,
   OnlineOrdersModule,
 ];

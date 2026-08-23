@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * تنظیمات — کاربران، مشخصات مغازه، ورود اکسل، پشتیبان‌گیری و مانیتور صوتی.
+ * تنظیمات — کاربران، مشخصات مغازه، ورود اکسل، پشتیبان‌گیری، مانیتور صوتی و قالب‌های پیامک.
  *
- * پنج صفحه که هیچ‌کدام «جایی که کار روزمره در آن انجام می‌شود» نیستند. مثل هر
+ * شش صفحه که هیچ‌کدام «جایی که کار روزمره در آن انجام می‌شود» نیستند. مثل هر
  * برنامه‌ی دیگری، جایشان یک صفحه‌ی تنظیمات با چند تب است، نه پنج ردیف در منو.
  *
  * ⚠️ نقش‌ها حالا روی **تب** می‌نشینند نه روی آیتمِ منو. تبی که کاربر اجازه‌اش
@@ -23,6 +23,7 @@ import { ShopSettingsPanel } from "../shop-settings/page";
 import { ImportsPanel } from "../imports/page";
 import { BackupsPanel } from "../backups/page";
 import { VoiceInputPanel } from "../voice-input/page";
+import { SmsTemplatesPanel } from "../sms-templates/page";
 
 export default function SettingsPage() {
   const hasRole = useAuthStore((s) => s.hasRole);
@@ -36,7 +37,7 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-6">
       <PageHeader
         title="تنظیمات"
-        description="کاربران، مشخصات مغازه، ورود اطلاعات و پشتیبان‌گیری"
+        description="کاربران، مشخصات مغازه، ورود اطلاعات، پشتیبان‌گیری و پیامک"
         icon={Settings}
       />
 
@@ -47,6 +48,7 @@ export default function SettingsPage() {
           {isManager && <TabsTrigger value="imports">ورود اکسل</TabsTrigger>}
           {isAdmin && <TabsTrigger value="backups">پشتیبان‌گیری</TabsTrigger>}
           {isManager && <TabsTrigger value="voice">مانیتور صوتی</TabsTrigger>}
+          {isManager && <TabsTrigger value="sms">قالب‌های پیامک</TabsTrigger>}
         </TabsList>
 
         {isAdmin && (
@@ -72,6 +74,11 @@ export default function SettingsPage() {
         {isManager && (
           <TabsContent value="voice" className="mt-4">
             <VoiceInputPanel embedded />
+          </TabsContent>
+        )}
+        {isManager && (
+          <TabsContent value="sms" className="mt-4">
+            <SmsTemplatesPanel embedded />
           </TabsContent>
         )}
       </Tabs>

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { LedgerService } from '../sales/ledger.service';
 import { SmsSender } from './sms-sender';
 import { SmsService } from './sms.service';
 import { renderTemplate } from './sms-templates';
@@ -23,6 +24,7 @@ describe('SmsService', () => {
     shopSettings: { findFirst: jest.fn() },
   };
   const sender = { sendText: jest.fn() };
+  const ledger = { balance: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -36,12 +38,15 @@ describe('SmsService', () => {
     prisma.smsMessage.count.mockResolvedValue(0);
     prisma.smsMessage.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'm1', ...data }));
     prisma.shopSettings.findFirst.mockResolvedValue({ name: 'یدکی رضا' });
+    // ۵٬۰۰۰٬۰۰۰ ریال = ۵۰۰٬۰۰۰ تومان
+    ledger.balance.mockResolvedValue(5_000_000);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SmsService,
         { provide: PrismaService, useValue: prisma },
         { provide: SmsSender, useValue: sender },
+        { provide: LedgerService, useValue: ledger },
       ],
     }).compile();
 
@@ -128,7 +133,9 @@ describe('SmsService', () => {
     expect(prisma.smsMessage.update.mock.calls[1][0].data.status).toBe('FAILED');
   });
 
-  it('پیش‌نمایش متغیرهای پرنشده را نام می‌برد', async () => {
+  it('مانده‌ی مشتری خودکار و به تومان جای‌گذاری می‌شود', async () => {
+    // «یادآوری بدهی» پرکاربردترین پیامک است؛ تا دیروز {balance} خام می‌ماند و
+    // آن قالب عملاً بلااستفاده بود.
     prisma.smsTemplate.findUnique.mockResolvedValue({
       id: 't1', isActive: true, title: 'یادآوری بدهی',
       body: '{customer} عزیز، مانده {balance} تومان. {shop}',
@@ -136,10 +143,45 @@ describe('SmsService', () => {
 
     const p = await service.preview('c1', 'debt_reminder');
 
-    // مدیر باید ببیند چه چیزی جای نگرفته، نه اینکه پیامکِ ناقص برود.
-    expect(p.missingVars).toEqual(['balance']);
+    expect(p.missingVars).toEqual([]);
     expect(p.body).toContain('رضا محمدی');
     expect(p.body).toContain('یدکی رضا');
+    // ریال → تومان، با جداکننده. عددِ ریالی ده‌برابر به‌نظر می‌رسد.
+    expect(p.body).toContain('500,000');
+  });
+
+  it('مانده‌ی بستانکار قدرمطلق می‌شود — «مانده −۵۰٬۰۰۰» در پیامک بی‌معنی است', async () => {
+    ledger.balance.mockResolvedValue(-500_000);
+    prisma.smsTemplate.findUnique.mockResolvedValue({
+      id: 't1', isActive: true, title: 'x', body: 'مانده {balance} تومان',
+    });
+
+    const p = await service.preview('c1', 'debt_reminder');
+
+    expect(p.body).toBe('مانده 50,000 تومان');
+  });
+
+  it('مقدارِ سند بر مانده‌ی خودکار می‌چربد', async () => {
+    // رسیدِ دریافت مانده‌ی **بعد از** پرداخت را می‌گوید، نه مانده‌ی جاری را.
+    prisma.smsTemplate.findUnique.mockResolvedValue({
+      id: 't1', isActive: true, title: 'x', body: 'مانده {balance}',
+    });
+
+    const p = await service.preview('c1', 'receipt_confirmation', { balance: '0' });
+
+    expect(p.body).toBe('مانده 0');
+  });
+
+  it('متغیرِ بی‌منبع همچنان نام برده می‌شود', async () => {
+    prisma.smsTemplate.findUnique.mockResolvedValue({
+      id: 't1', isActive: true, title: 'x',
+      body: 'چک {chequeNumber} سررسید {dueDate}',
+    });
+
+    const p = await service.preview('c1', 'cheque_due_reminder');
+
+    // این دو از سندِ چک می‌آیند و هنوز وصل نشده‌اند — باید دیده شوند.
+    expect(p.missingVars).toEqual(['chequeNumber', 'dueDate']);
   });
 });
 

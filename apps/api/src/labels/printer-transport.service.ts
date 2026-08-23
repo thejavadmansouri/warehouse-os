@@ -12,9 +12,14 @@ import { join } from 'path';
  * «خام» کلیدواژه است: اگر بایت‌ها از مسیر عادیِ درایور بروند، درایور آن‌ها را
  * متن می‌بیند و به‌جای چاپ لیبل، خودِ دستورات TSPL را روی کاغذ می‌نویسد.
  *
- * دو مسیر پشتیبانی می‌شود:
- *  - USB روی همان ویندوزی که سرور رویش است → صف چاپ در حالت RAW
- *  - پرینتر شبکه‌ای → سوکت TCP روی پورت ۹۱۰۰ (استاندارد JetDirect)
+ * سه مسیر پشتیبانی می‌شود:
+ *  - USB روی ویندوزِ سرور → `print /d:` روی صفِ RAW
+ *  - USB روی مک/لینوکس  → `lp -o raw` روی صفِ RAW در CUPS
+ *  - پرینتر شبکه‌ای      → سوکت TCP روی پورت ۹۱۰۰ (استاندارد JetDirect)
+ *
+ * در هر سه حالت صفِ چاپ باید RAW باشد. درایورِ کارخانه‌ی پرینتر دقیقاً همان
+ * چیزی است که نباید نصب باشد: کارش رستر‌کردنِ صفحه است و بایت‌های TSPL را
+ * خراب می‌کند.
  */
 
 export interface PrinterTarget {
@@ -34,7 +39,10 @@ export class PrinterTransportService {
       return this.sendTcp(payload, target.host, target.port ?? 9100);
     }
     if (target.name) {
-      return this.sendWindowsRaw(payload, target.name);
+      // ویندوز و POSIX هر دو صفِ RAW دارند، فقط دستورش فرق می‌کند.
+      return process.platform === 'win32'
+        ? this.sendWindowsRaw(payload, target.name)
+        : this.sendPosixRaw(payload, target.name);
     }
     throw new ServiceUnavailableException({
       error: 'PRINTER_NOT_CONFIGURED',
@@ -71,6 +79,51 @@ export class PrinterTransportService {
   }
 
   /**
+   * مک و لینوکس: فایل موقت + `lp -o raw`.
+   *
+   * `-o raw` همان چیزی است که کل ماجرا به آن بند است: به CUPS می‌گوید فایل را
+   * فیلتر نکن و بایت‌به‌بایت به دستگاه بده. بدونِ آن، CUPS سعی می‌کند بایت‌های
+   * TSPL را «متن» فرض کند و همان دستورات را روی لیبل چاپ می‌کند.
+   *
+   * صف هم باید RAW ساخته شده باشد (`lpadmin -m raw`)، وگرنه درایورِ صف حتی
+   * قبل از این مرحله محتوا را رستر می‌کند.
+   */
+  private async sendPosixRaw(payload: Buffer, printerName: string): Promise<void> {
+    const file = join(tmpdir(), `label-${randomUUID()}.bin`);
+    await writeFile(file, payload);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const p = spawn('lp', ['-d', printerName, '-o', 'raw', file]);
+        let stderr = '';
+        p.stderr.on('data', (d) => (stderr += d.toString()));
+        p.on('error', (e) =>
+          reject(
+            new ServiceUnavailableException({
+              error: 'PRINTER_FAILED',
+              message: `اجرای lp ممکن نشد: ${e.message}`,
+            }),
+          ),
+        );
+        p.on('close', (code) =>
+          code === 0
+            ? resolve()
+            : reject(
+                new ServiceUnavailableException({
+                  error: 'PRINTER_FAILED',
+                  // پیامِ خودِ lp معمولاً می‌گوید صف نیست یا متوقف است — همان را
+                  // بالا می‌فرستیم، چون تنها سرنخِ کاربر همین است.
+                  message: `چاپ ناموفق بود (${code}) ${stderr}`.trim(),
+                }),
+              ),
+        );
+      });
+    } finally {
+      await unlink(file).catch(() => undefined);
+    }
+  }
+
+
+  /**
    * ویندوز: فایل موقت + دستور `print /d:`.
    *
    * از نوشتن مستقیم روی `\\.\` استفاده نمی‌شود چون به نام اشتراکِ پرینتر نیاز
@@ -78,14 +131,6 @@ export class PrinterTransportService {
    * Only» یا درایور خود TSC در حالت pass-through بایت‌ها را دست‌نخورده می‌فرستد.
    */
   private async sendWindowsRaw(payload: Buffer, printerName: string): Promise<void> {
-    if (process.platform !== 'win32') {
-      throw new ServiceUnavailableException({
-        error: 'PRINTER_LOCAL_ONLY',
-        message:
-          'چاپ روی پرینتر USB فقط از روی همان ویندوزی که پرینتر به آن وصل است ممکن است',
-      });
-    }
-
     const file = join(tmpdir(), `label-${randomUUID()}.bin`);
     await writeFile(file, payload);
     try {
