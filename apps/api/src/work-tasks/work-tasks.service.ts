@@ -4,7 +4,7 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, WorkTaskStatus, WorkTaskItemStatus, WorkTaskKind, Role } from '@prisma/client';
+import { Prisma, WorkTaskStatus, WorkTaskItemStatus, WorkTaskKind, WorkTaskPriority, Role } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
@@ -99,6 +99,8 @@ export class WorkTasksService {
       idempotencyKey?: string;
       /** پیش‌فرض PICK — رفتارِ همه‌ی صداکننده‌های موجود دست‌نخورده می‌ماند. */
       kind?: WorkTaskKind;
+      /** فوری = مشتری پشت پیشخوان ایستاده. پیش‌فرض عادی. */
+      priority?: WorkTaskPriority;
     },
     requestedById?: string,
   ) {
@@ -131,6 +133,7 @@ export class WorkTasksService {
       data: {
         warehouseId: input.warehouseId,
         kind: input.kind ?? WorkTaskKind.PICK,
+        priority: input.priority ?? WorkTaskPriority.NORMAL,
         invoiceId: input.invoiceId ?? null,
         quotationId: input.quotationId ?? null,
         assignedToId: input.assignedToId ?? null,
@@ -165,7 +168,14 @@ export class WorkTasksService {
         OR: [{ assignedToId: null }, { assignedToId: userId }],
       },
       include: SUMMARY_INCLUDE,
-      orderBy: { createdAt: 'desc' },
+      /*
+       * فوری‌ها اول، بعد قدیمی‌ترها.
+       *
+       * `desc` روی تاریخ غلط بود: تازه‌ترین کار بالا می‌نشست و کاری که سه روز
+       * معطل مانده ته صف. صف کارِ انسانی باید از قدیمی‌ترین خالی شود، وگرنه
+       * همیشه همان یکی می‌ماند.
+       */
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });
     return tasks.map((t) => this.toTaskDto(t));
   }
@@ -456,6 +466,11 @@ export class WorkTasksService {
       // بدونِ این، گوشیِ کارگر نمی‌تواند «بردار و بیاور» را از «ببر بچین» جدا
       // کند و هر دو یک‌شکل نشان داده می‌شوند.
       kind: task.kind,
+      priority: task.priority,
+      /** چند ساعت است که این کار بی‌جواب مانده — «۳ روز است» را کارگر باید ببیند. */
+      ageHours: Math.floor(
+        (Date.now() - new Date(task.createdAt).getTime()) / 3_600_000,
+      ),
       warehouseId: task.warehouseId,
       invoiceId: task.invoiceId,
       quotationId: task.quotationId,

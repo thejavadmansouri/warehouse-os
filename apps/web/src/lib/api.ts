@@ -1143,6 +1143,15 @@ export function rejectProductRequest(
 // فروش — فاکتور، مشتری، کار برداشت
 // =====================================================
 
+// GET /inventory/product/:id/reserved — «چرا این تعداد رزرو شده»
+export function getReservationBreakdown(
+  productId: string
+): Promise<T.ReservationBreakdown> {
+  return apiFetch<T.ReservationBreakdown>(
+    `/inventory/product/${encodeURIComponent(productId)}/reserved`
+  );
+}
+
 // GET /inventory/sale/resolve/:barcode — کالا + مکان‌های دارای موجودی، در یک درخواست
 export function resolveForSale(barcode: string): Promise<T.SaleResolve> {
   return apiFetch<T.SaleResolve>(
@@ -1706,6 +1715,20 @@ export function getLowStock(p: { page?: number; limit?: number }) {
 
 export function getSmsTemplates(): Promise<T.SmsTemplate[]> {
   return apiFetch<T.SmsTemplate[]>("/sms/templates");
+}
+
+/**
+ * PATCH /sms/templates/:id — ویرایش قالب (فقط ADMIN/MANAGER).
+ * `key` هرگز قابل تغییر نیست؛ فیلدی که نفرستاده‌ای یعنی «عوض نکن».
+ */
+export function updateSmsTemplate(
+  id: string,
+  dto: { title?: string; body?: string; isActive?: boolean }
+): Promise<T.SmsTemplate> {
+  return apiFetch<T.SmsTemplate>(`/sms/templates/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: dto,
+  });
 }
 
 /** متنِ نهایی با مقادیر واقعی. `extra` متغیرهای همان سند را می‌دهد. */

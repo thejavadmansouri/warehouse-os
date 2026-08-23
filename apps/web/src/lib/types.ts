@@ -786,8 +786,36 @@ export interface SaleResolve {
     sku?: string | null;
     unit?: string | null;
     salePrice?: number | null;
+    minStock?: number;
   };
   stock: StockLocation[];
+  /** جمعِ موجودیِ همه‌ی قفسه‌ها. */
+  onHand?: number;
+  /** به کسِ دیگری قول داده شده: کار برداشت، پیش‌فاکتور، یا سفارش سایت. */
+  reserved?: number;
+  /** `onHand − reserved`. می‌تواند منفی باشد و همان هم معنادار است. */
+  available?: number;
+  /** موجودیِ قابل‌فروش به حد سفارش رسیده یا پایین‌تر است. */
+  belowMinStock?: boolean;
+}
+
+/** تفکیکِ رزرو — «چرا این تعداد قول داده شده». */
+export interface ReservationBreakdown {
+  pickTasks: {
+    taskId: string;
+    quantity: number;
+    invoiceNumber: number | null;
+    assignedTo: string | null;
+    createdAt: string;
+  }[];
+  quotations: {
+    quotationId: string;
+    number: number;
+    quantity: number;
+    validUntil: string;
+    customer: string | null;
+  }[];
+  onlineOrders: { orderId: string; number: number; quantity: number }[];
 }
 
 export interface CustomerPhone {
@@ -1595,10 +1623,15 @@ export interface LowStockReport {
 /** یک قالب پیامک. متنش را مدیر می‌تواند عوض کند. */
 export interface SmsTemplate {
   id: string;
+  /** کلیدِ قرارداد — کد با آن ارجاع می‌دهد و هرگز قابل تغییر نیست. */
   key: string;
   title: string;
   body: string;
   isActive: boolean;
+  /** متغیرهای مجازِ همین قالب — از تعریف قالب در بک‌اند می‌آید، نه از دیتابیس. */
+  vars?: string[];
+  /** متنِ پیش‌فرضِ تعریف قالب — برای دکمه‌ی «بازنشانی به متن اصلی». */
+  defaultBody?: string;
 }
 
 /** متنِ نهایی پیش از ارسال — همان چیزی که مشتری می‌بیند. */

@@ -21,6 +21,7 @@ import { QueryInventoryLogsDto } from './dto/query-inventory-logs.dto';
 
 import { InventoryService } from './inventory.service';
 import { VoiceInventoryService } from './voice-inventory.service';
+import { ReservationService } from './reservation.service';
 
 
 /** برچسب فارسیِ نوع حرکت برای ستونِ کاردکس. */
@@ -101,7 +102,8 @@ export class InventoryController {
 
   constructor(
     private readonly service: InventoryService,
-    private readonly voiceService: VoiceInventoryService
+    private readonly voiceService: VoiceInventoryService,
+    private readonly reservations: ReservationService,
   ) {}
 
 
@@ -289,6 +291,19 @@ export class InventoryController {
   resolveForSale(@Param('barcode') barcode: string) {
     return this.service.resolveForSale(barcode);
   }
+
+  /**
+   * «چرا این تعداد رزرو شده» — تفکیک به کار برداشت، پیش‌فاکتور و سفارش سایت.
+   *
+   * بدون این، عددِ رزرو یک دیوارِ بی‌توضیح است و فروشنده یا بی‌خیال می‌شود یا
+   * زنگ می‌زند به مدیر.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('product/:productId/reserved')
+  reservedBreakdown(@Param('productId') productId: string) {
+    return this.reservations.explain(productId);
+  }
+
 
   // موجودیِ یک کالا به تفکیک مکان (برای صفحه‌ی فروش)
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)

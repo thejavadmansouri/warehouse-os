@@ -1004,6 +1004,11 @@ model WorkTask {
   /// چرخه‌ی کار یکی است — فهرستی از اقلام که کارگر تیک می‌زند — فقط جهتش فرق
   /// می‌کند، پس جدولِ جدا لازم نیست.
   kind           WorkTaskKind   @default(PICK)
+  /// فوری یا عادی.
+  ///
+  /// مشتری‌ای که پشت پیشخوان ایستاده با سفارشی که برای فرداست یک شکل دیده
+  /// می‌شد. کارگر باید بدون خواندنِ جزئیات بفهمد کدام را اول بردارد.
+  priority       WorkTaskPriority @default(NORMAL)
   warehouseId    String
   /// ارجاع اختیاری به سند — فقط برای نمایش («فاکتور ۱۲۳۴»)، هیچ تأثیری روی سند.
   invoiceId      String?
@@ -1031,6 +1036,8 @@ model WorkTask {
   @@index([invoiceId])
   // صفِ کارگر و صفحه‌ی مدیر هر دو با نوع فیلتر می‌شوند.
   @@index([kind, status])
+  // «فوری‌ها اول، بعد قدیمی‌ترها» — ترتیبِ صفِ کارگر.
+  @@index([priority, createdAt])
 }
 
 /// یک قلمِ کارِ کارگر — کالا + قفسه + تعداد + وضعیت تیک.
@@ -1057,6 +1064,11 @@ model WorkTaskItem {
   doneBy   User?     @relation("WorkTaskItemDoneBy", fields: [doneById], references: [id])
 
   @@index([taskId, status])
+}
+
+enum WorkTaskPriority {
+  NORMAL
+  URGENT
 }
 
 enum WorkTaskKind {
@@ -1688,6 +1700,17 @@ model BackupConfig {
   minute           Int      @default(0)
   /// چند فایل نگه داشته شود؛ قدیمی‌ترها خودکار حذف می‌شوند.
   keepCount        Int      @default(14)
+  /// مقصد دوم — درایو دیگر یا پوشه‌ی شبکه. خالی یعنی غیرفعال.
+  ///
+  /// ⚠️ بک‌آپ روی همان دیسکِ دیتابیس، بک‌آپ نیست: خرابیِ دیسک یا باج‌افزار هر
+  /// دو را با هم می‌برد. این ستون تنها چیزی است که آن حالت را پوشش می‌دهد.
+  mirrorPath       String   @default("")
+  /// آیا پوشه‌ی `storage` (عکس‌ها) هم در بک‌آپ بیاید.
+  ///
+  /// `pg_dump` فقط دیتابیس است. عکس‌های محصول و عکس‌های کارگر فایل‌اند و در
+  /// هیچ دامپی نیستند — بدون این، هر شب بک‌آپی گرفته می‌شود که نصف داده را
+  /// ندارد و کسی خبر ندارد.
+  includeStorage   Boolean  @default(true)
   /// اگر از این تعداد ساعت بیشتر از آخرین بک‌آپ گذشته باشد، هنگام بستن
   /// برنامه به مدیر یادآوری می‌شود.
   remindAfterHours Int      @default(12)
@@ -1710,6 +1733,15 @@ model BackupRun {
   filePath    String?
   sizeBytes   BigInt?
   verified    Boolean      @default(false)
+  /// کپی روی مقصد دوم گرفته شد یا نه. `null` یعنی مقصد دومی تنظیم نشده بود.
+  ///
+  /// جدا از `error` است عمداً: شکستِ کپیِ دوم نباید کلِ بک‌آپ را ناموفق نشان
+  /// دهد — دامپِ اصلی سالم است — ولی باید **دیده شود**، نه اینکه فقط در لاگ
+  /// بماند.
+  mirrored    Boolean?
+  mirrorError String?
+  /// حجم پوشه‌ی عکس‌ها که همراه دامپ آرشیو شد. null یعنی نیامده.
+  storageBytes BigInt?
   error       String?
   startedAt   DateTime     @default(now())
   finishedAt  DateTime?

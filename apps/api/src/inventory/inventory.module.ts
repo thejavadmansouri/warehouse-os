@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { InventoryController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
+import { ReservationService } from './reservation.service';
 import { VoiceInventoryService } from './voice-inventory.service';
 import { ProductMatcherService } from './product-matcher.service';
 import { SystemLocationsService } from './system-locations.service';
@@ -29,6 +30,7 @@ import { ParsingEngineModule } from '../engine/parsing-engine.module';
     PrismaService,
 
     InventoryService,
+    ReservationService,
 
     InventoryOperationService,
 

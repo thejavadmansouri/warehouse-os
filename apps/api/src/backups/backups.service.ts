@@ -260,7 +260,28 @@ export class BackupsService {
         },
       });
 
+      // عکس‌ها: `pg_dump` نمی‌بیندشان. کنارِ دامپ آرشیو می‌شوند تا بازیابی
+      // بتواند هر دو نیمه را برگرداند.
+      const storageBytes = config.includeStorage
+        ? await this.archiveStorage(filePath)
+        : null;
+
+      // مقصد دوم — **بعد از** ثبتِ موفقیتِ دامپ، و شکستش سند را ناموفق نمی‌کند.
+      const mirror = await this.mirror(config.mirrorPath, filePath, storageBytes != null);
+
+      await this.prisma.backupRun.update({
+        where: { id: record.id },
+        data: {
+          storageBytes: storageBytes != null ? BigInt(storageBytes) : null,
+          mirrored: mirror.attempted ? mirror.ok : null,
+          mirrorError: mirror.error ?? null,
+        },
+      });
+
       await this.prune(dir, config.keepCount);
+      if (config.mirrorPath?.trim()) {
+        await this.prune(config.mirrorPath.trim(), config.keepCount).catch(() => undefined);
+      }
 
       this.logger.log(`بک‌آپ موفق: ${filePath} (${stat.size} بایت)`);
 
@@ -762,6 +783,91 @@ export class BackupsService {
 
 
   /** نگه داشتن فقط N فایل آخر. */
+  /**
+   * عکس‌ها را کنارِ دامپ آرشیو می‌کند.
+   *
+   * `pg_dump` فقط دیتابیس است. عکسِ محصول و عکسِ کارگر فایل‌اند در `storage/`،
+   * و بدون این، هر شب بک‌آپی گرفته می‌شود که نصفِ داده را ندارد — و کسی خبر
+   * ندارد تا روزی که بخواهد بازیابی کند.
+   *
+   * نامِ فایل کنارِ دامپ می‌نشیند (`<dump>.storage.tar.gz`) تا `prune` هر دو را
+   * با هم ببیند و نسخه‌های هم‌سن با هم حذف شوند.
+   *
+   * شکستش بک‌آپ را ناموفق نمی‌کند: دیتابیس مهم‌تر است و از قبل سالم ذخیره شده.
+   * برمی‌گرداند: حجم آرشیو، یا null اگر پوشه‌ای نبود یا کار نگرفت.
+   */
+  private async archiveStorage(dumpPath: string): Promise<number | null> {
+    const source = path.join(process.cwd(), 'storage');
+
+    try {
+      const stat = await fs.stat(source).catch(() => null);
+      if (!stat?.isDirectory()) return null;
+
+      const entries = await fs.readdir(source);
+      if (!entries.length) return null;
+
+      const target = `${dumpPath}.storage.tar.gz`;
+
+      // tar روی ویندوز ۱۰ به بعد هست و روی مک/لینوکس هم. `-C` مسیرِ مطلق را
+      // از آرشیو بیرون می‌گذارد تا بازیابی به هر پوشه‌ای ممکن باشد.
+      await run('tar', ['-czf', target, '-C', process.cwd(), 'storage'], {
+        maxBuffer: 1024 * 1024 * 64,
+      });
+
+      const out = await fs.stat(target);
+      return out.size;
+
+    } catch (e: unknown) {
+      this.logger.warn(
+        `آرشیو عکس‌ها انجام نشد: ${redactSecrets(e instanceof Error ? e.message : String(e))}`,
+      );
+      return null;
+    }
+  }
+
+
+  /**
+   * کپیِ بک‌آپ روی مقصد دوم.
+   *
+   * ⚠️ **شکستش کلِ بک‌آپ را ناموفق نشان نمی‌دهد** و این عمدی است: دامپِ اصلی
+   * سالم روی دیسک است و «ناموفق» گفتن یعنی مدیر فکر کند بک‌آپی ندارد. ولی
+   * ساکت هم نمی‌ماند — در `mirrorError` می‌نشیند تا در وضعیت دیده شود.
+   *
+   * چرا اصلاً لازم است: بک‌آپ روی همان دیسکِ دیتابیس بک‌آپ نیست. خرابی دیسک یا
+   * باج‌افزار هر دو را با هم می‌برد.
+   */
+  private async mirror(
+    mirrorPath: string,
+    dumpPath: string,
+    withStorage: boolean,
+  ): Promise<{ attempted: boolean; ok: boolean; error?: string }> {
+
+    const dir = mirrorPath?.trim();
+    if (!dir) return { attempted: false, ok: false };
+
+    try {
+      await fs.mkdir(dir, { recursive: true });
+
+      const files = withStorage
+        ? [dumpPath, `${dumpPath}.storage.tar.gz`]
+        : [dumpPath];
+
+      for (const file of files) {
+        const exists = await fs.stat(file).catch(() => null);
+        if (!exists) continue;
+        await fs.copyFile(file, path.join(dir, path.basename(file)));
+      }
+
+      return { attempted: true, ok: true };
+
+    } catch (e: unknown) {
+      const message = redactSecrets(e instanceof Error ? e.message : String(e));
+      this.logger.error(`کپی روی مقصد دوم شکست خورد: ${message}`);
+      return { attempted: true, ok: false, error: message.slice(0, 500) };
+    }
+  }
+
+
   private async prune(dir: string, keep: number) {
     try {
       const files = (await fs.readdir(dir))

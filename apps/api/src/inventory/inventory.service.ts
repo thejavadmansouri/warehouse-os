@@ -1,13 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { ReservationService } from './reservation.service';
 
 @Injectable()
 export class InventoryService {
 
   constructor(
     private prisma: PrismaService,
-    private operation: InventoryOperationService
+    private operation: InventoryOperationService,
+    private reservations: ReservationService,
   ) {}
 
 
@@ -105,7 +107,12 @@ export class InventoryService {
       });
     }
 
-    const stock = await this.stockByProduct(product.id);
+    const [stock, reserved] = await Promise.all([
+      this.stockByProduct(product.id),
+      this.reservations.forProduct(product.id),
+    ]);
+
+    const onHand = stock.reduce((sum, r) => sum + r.quantity, 0);
 
     return {
       product: {
@@ -114,8 +121,31 @@ export class InventoryService {
         sku: product.sku,
         unit: product.unit,
         salePrice: product.prices?.[0]?.salePrice ?? null,
+        minStock: product.minStock,
       },
       stock,
+      /*
+       * رزرو **هشدار است، نه سد**.
+       *
+       * فروختنِ جنسی که روی قفسه هست نباید به‌خاطر پیش‌فاکتورِ هفته‌ی پیش
+       * متوقف شود؛ مشتری جلوی پیشخوان ایستاده و جنس در دستش است. ولی فروشنده
+       * باید بداند که این تعداد به کسِ دیگری قول داده شده — تصمیمش با خودش.
+       *
+       * `available` می‌تواند منفی شود و همان هم معنادار است: بیشتر از موجودی
+       * قول داده شده.
+       */
+      onHand,
+      reserved,
+      available: onHand - reserved,
+      /*
+       * حدِ سفارش تا امروز فقط در یک گزارش زنده بود — کسی باید یادش می‌افتاد
+       * آن را باز کند. جایی که واقعاً به‌دردش می‌خورد همین‌جاست: لحظه‌ای که
+       * آخرین دانه‌ها دارند فروخته می‌شوند.
+       *
+       * ملاک `available` است نه `onHand`: جنسی که به کسِ دیگری قول داده شده،
+       * برای سفارشِ بعدی موجود نیست.
+       */
+      belowMinStock: product.minStock > 0 && onHand - reserved <= product.minStock,
     };
   }
 

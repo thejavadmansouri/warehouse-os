@@ -566,6 +566,24 @@ export default function PosPage() {
         focusScan();
         return;
       }
+      /*
+       * رزرو **هشدار است، نه سد**.
+       *
+       * جنسی که روی قفسه هست نباید به‌خاطر پیش‌فاکتورِ هفته‌ی پیش نفروخته
+       * بماند — مشتری جلوی پیشخوان ایستاده. ولی فروشنده باید بداند که این
+       * تعداد به کسِ دیگری قول داده شده و خودش تصمیم بگیرد.
+       */
+      if (res.reserved && res.reserved > 0) {
+        toast.warning(
+          `${toFa(res.reserved)} عدد از «${res.product.name}» رزرو شده`,
+          { description: `قابل فروش: ${toFa(res.available ?? 0)} عدد` },
+        );
+      } else if (res.belowMinStock) {
+        // حد سفارش فقط وقتی گفته می‌شود که رزرویی در کار نباشد؛ دو هشدار
+        // پشت‌سرهم روی هم می‌افتند و هیچ‌کدام خوانده نمی‌شوند.
+        toast.warning(`«${res.product.name}» به حد سفارش رسیده`);
+      }
+
       if (res.stock.length === 1) addLine(res.product, res.stock[0]);
       else setPickerStock({ name: res.product.name, product: res.product, stock: res.stock });
     },
