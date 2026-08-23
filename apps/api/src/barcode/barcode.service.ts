@@ -12,28 +12,6 @@ export class BarcodeService {
 
 
 
-  async generateProductBarcode(): Promise<string> {
-
-    const count = await this.prisma.product.count();
-
-    const number = String(count + 1).padStart(9, '0');
-
-    return `WOS${number}`;
-  }
-
-
-
-  async generateLocationBarcode(): Promise<string> {
-
-    const count = await this.prisma.location.count();
-
-    const number = String(count + 1).padStart(6, '0');
-
-    return `LOC${number}`;
-  }
-
-
-
   /**
    * چسباندنِ بارکدِ خودِ جنس به یک کالای موجود.
    *

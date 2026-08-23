@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { buildSearchTokens, tokenizeQuery } from './search-tokens';
@@ -258,9 +259,21 @@ export class ProductsService {
 
 
 
+    /*
+     * بارکدِ داخلی — تصادفی، نه بر پایه‌ی زمان.
+     *
+     * `WOS${Date.now()}` بود و برای یک نفر که فرم را پر می‌کند کافی به‌نظر
+     * می‌رسد؛ ولی دو ساختِ هم‌زمان در یک میلی‌ثانیه همان رشته را می‌دهند و
+     * چون ستون `@unique` است، دومی با یک خطای خامِ P2002 می‌افتد که هیچ‌جا
+     * هم گرفته نمی‌شود.
+     *
+     * همان الگویی که مسیرِ تأییدِ درخواستِ کالا از قبل استفاده می‌کند
+     * (`product-requests.service.ts`) — و کامنتش دقیقاً همین خطر را
+     * توضیح داده بود.
+     */
     const internalBarcode =
       dto.internalBarcode ||
-      `WOS${Date.now()}`;
+      `WOS${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
 
     const barcodesToCreate:{barcode:string; type:'INTERNAL'|'FACTORY'}[] = [
