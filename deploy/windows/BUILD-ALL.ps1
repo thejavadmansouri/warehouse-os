@@ -16,6 +16,12 @@
 #     warehouse-os-source.tar.gz
 # =====================================================================
 
+param(
+    # Reinstall every dependency even when nothing changed. Only needed for a
+    # node_modules that is suspected damaged.
+    [switch]$ForceInstall
+)
+
 $ErrorActionPreference = 'Stop'
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force | Out-Null
 
@@ -54,14 +60,44 @@ if ($nv -notmatch '^v24\.') { throw "Node 24 must be on PATH. Found: $nv" }
 Ok "node $nv"
 
 # ------------------------------------------------------------ source
+#
+#  node_modules survives the re-extract.
+#
+#  This folder is 1.3 GB across 1,624 packages, and rebuilding it means
+#  downloading all of it again - including the 43 MB Prisma engines and the
+#  Windows binaries for sharp and argon2. On a normal connection that is the
+#  difference between a five minute build and an hour, and it was being
+#  thrown away every single time because the whole repo directory was
+#  deleted before extracting.
+#
+#  The source archive carries no node_modules (git archive excludes it), so
+#  extracting over the top cannot corrupt it. What CAN invalidate it is a
+#  dependency change, and that is what the lockfile hash below detects.
+#
 Step "Extracting the source to $Repo"
+
+$modules      = Join-Path $Repo 'node_modules'
+$stash        = 'C:\warehouse-os-node_modules'
+$keptModules  = $false
+
 if (Test-Path $Repo) {
-    Write-Host '  (removing the previous copy first)'
+    if (Test-Path $modules) {
+        Write-Host '  (setting node_modules aside)'
+        if (Test-Path $stash) { Remove-Item $stash -Recurse -Force }
+        Move-Item $modules $stash
+        $keptModules = $true
+    }
+    Write-Host '  (removing the previous copy)'
     Remove-Item $Repo -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $Repo | Out-Null
 & tar.exe -xzf (Join-Path $Src 'warehouse-os-source.tar.gz') -C $Repo
 if ($LASTEXITCODE -ne 0) { throw 'extracting the source archive failed' }
+
+if ($keptModules) {
+    Move-Item $stash $modules
+    Ok 'node_modules restored'
+}
 
 $deploy = Join-Path $Repo 'deploy\windows'
 $bp     = Join-Path $deploy 'build.ps1'
@@ -130,12 +166,23 @@ $gen = Join-Path $deploy 'build.gen.ps1'
 Ok 'build.gen.ps1 written'
 
 # ------------------------------------------------------------ build
-Step 'Building the package (npm ci + API + web + runtimes). 15-25 minutes.'
+#
+#  First run on a machine downloads 1.3 GB of packages and takes the best
+#  part of an hour. Every run after that reuses node_modules and is a few
+#  minutes - unless the lockfile changed, which build.ps1 detects on its own.
+if ($ForceInstall) {
+    Step 'Building the package - forcing a full dependency install.'
+} elseif (Test-Path (Join-Path $Repo 'node_modules')) {
+    Step 'Building the package (API + web + runtimes). Usually 5-10 minutes.'
+} else {
+    Step 'Building the package - first run, so dependencies download too. 20-60 minutes.'
+}
 Write-Host '  Do not press keys in this window while it runs.' -ForegroundColor DarkGray
 $env:WOS_VCREDIST = Join-Path $Src 'vc_redist.x64.exe'
 & $gen -NodeZip (Join-Path $Src 'node.zip') `
        -PgZip   (Join-Path $Src 'pg.zip') `
-       -NssmZip (Join-Path $Src 'nssm.zip')
+       -NssmZip (Join-Path $Src 'nssm.zip') `
+       -ForceInstall:$ForceInstall
 
 # ------------------------------------------------------------ verify
 Step 'Verifying the package is complete'

@@ -23,7 +23,10 @@
 param(
     [Parameter(Mandatory = $true)][string]$NodeZip,
     [Parameter(Mandatory = $true)][string]$PgZip,
-    [Parameter(Mandatory = $true)][string]$NssmZip
+    [Parameter(Mandatory = $true)][string]$NssmZip,
+    # Reinstall dependencies even when the lockfile has not changed. For a
+    # node_modules that is suspected damaged - nothing else needs it.
+    [switch]$ForceInstall
 )
 
 $ErrorActionPreference = 'Stop'
@@ -67,10 +70,44 @@ Remove-Item -Recurse -Force $payload, $staging -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $payload, $staging | Out-Null
 
 # ------------------------------------------------------------ dependencies
-Say 'Installing dependencies (Windows binaries)'
+#
+#  npm ci is skipped when nothing about the dependencies changed.
+#
+#  It is the single slowest step here: 1,624 packages, 1.3 GB, including the
+#  Prisma engines and the Windows binaries for sharp and argon2. Repeating it
+#  for a build whose only change is TypeScript is most of an hour spent
+#  downloading what is already on disk.
+#
+#  The guard is the lockfile's own hash, stored next to node_modules. Nothing
+#  else is trusted: a timestamp is wrong after a checkout, and "node_modules
+#  exists" is wrong after a dependency is added. If the hash file is missing,
+#  unreadable, or different, the install runs.
+#
+#  Pass -ForceInstall to run it regardless - the escape hatch for a
+#  node_modules someone suspects is damaged.
 Push-Location $repo
-npm ci
-if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+
+$lockFile  = Join-Path $repo 'package-lock.json'
+$stampFile = Join-Path $repo 'node_modules\.warehouse-lock-hash'
+$lockHash  = (Get-FileHash -Path $lockFile -Algorithm SHA256).Hash
+
+$needInstall = $true
+if (-not $ForceInstall -and (Test-Path $stampFile)) {
+    $previous = (Get-Content -LiteralPath $stampFile -Raw -ErrorAction SilentlyContinue)
+    if ($previous) { $previous = $previous.Trim() }
+    if ($previous -eq $lockHash) { $needInstall = $false }
+}
+
+if ($needInstall) {
+    Say 'Installing dependencies (Windows binaries)'
+    npm ci
+    if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+    # Written only after success, so an interrupted install is never mistaken
+    # for a finished one.
+    Set-Content -LiteralPath $stampFile -Value $lockHash -Encoding ASCII
+} else {
+    Say 'Dependencies unchanged - skipping npm ci'
+}
 
 Say 'Generating the Prisma client'
 Push-Location (Join-Path $repo 'apps\api')
