@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.KeepScreenOn
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -110,6 +111,9 @@ private fun ScanPhase(
     onStart: (String) -> Unit,
 ) {
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
+
+    // Counting a shelf is long, hands-full work — don't let the screen sleep.
+    KeepScreenOn()
     var manual by remember { mutableStateOf("") }
 
     Column(

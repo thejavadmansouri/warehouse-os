@@ -157,6 +157,3 @@ fun ActionCard(
     }
 }
 
-private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
-private fun faNum(n: Int): String =
-    n.toString().map { if (it.isDigit()) FA_DIGITS[it - '0'] else it }.joinToString("")

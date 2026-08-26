@@ -54,6 +54,7 @@ import com.warehouseos.operator.data.local.WorkTaskEntity
 import com.warehouseos.operator.data.local.WorkTaskItemEntity
 import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.EmptyState
+import com.warehouseos.operator.ui.components.KeepScreenOn
 import com.warehouseos.operator.ui.components.ErrorState
 import com.warehouseos.operator.ui.components.LoadingState
 import android.Manifest
@@ -85,6 +86,9 @@ fun WorkTasksScreen(
     val state by viewModel.uiState.collectAsState()
     val tasks by viewModel.tasks.collectAsState()
     val snackbarHost = remember { SnackbarHostState() }
+
+    // Picking runs for a whole shift with the phone in a holster.
+    KeepScreenOn()
 
     LaunchedEffect(state.toast) {
         state.toast?.let {

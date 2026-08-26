@@ -1,26 +1,35 @@
 package com.warehouseos.operator.ui.screens.newproduct
 
+import android.Manifest
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -34,18 +43,24 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberPermissionState
 import com.warehouseos.operator.ui.components.BannerType
 import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.SecondaryButton
 import com.warehouseos.operator.ui.components.StatusBanner
+import com.warehouseos.operator.ui.components.faNum
+import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun NewProductRequestScreen(
     onBack: () -> Unit,
@@ -53,6 +68,8 @@ fun NewProductRequestScreen(
     viewModel: NewProductRequestViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+    val micPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
+    val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
     val haptic = LocalHapticFeedback.current
 
     LaunchedEffect(state.done) {
@@ -94,21 +111,81 @@ fun NewProductRequestScreen(
                 modifier = Modifier.padding(bottom = Dimens.gap),
             )
 
-            OutlinedTextField(
+            /*
+             * بارکد جعبه.
+             *
+             * اگر از صفحه‌ی قبل آمده، تأییدش را نشان می‌دهیم؛ اگر نه، همین‌جا
+             * قابل اسکن است. کارگری که از مسیر صدا رسیده هیچ بارکدی همراه ندارد
+             * در حالی که جعبه ممکن است بارکد داشته باشد — بدون این دکمه، آن
+             * بارکد برای همیشه از دست می‌رفت و همان جعبه دفعه‌ی بعد باز ناشناس بود.
+             */
+            if (state.scanning) {
+                Text(
+                    text = "بارکد روی جعبه را مقابل دوربین بگیرید",
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier.padding(bottom = Dimens.gapSmall),
+                )
+                if (cameraPermission.status.isGranted) {
+                    BarcodeScanner(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(4f / 3f)
+                            .clip(RoundedCornerShape(Dimens.corner)),
+                        onBarcodeDetected = viewModel::onBarcodeScanned,
+                    )
+                } else {
+                    PrimaryButton(
+                        text = "اجازه دسترسی به دوربین",
+                        onClick = { cameraPermission.launchPermissionRequest() },
+                    )
+                }
+                SecondaryButton(
+                    text = "انصراف",
+                    onClick = viewModel::closeScanner,
+                    modifier = Modifier.padding(top = Dimens.gapSmall, bottom = Dimens.gap),
+                )
+            } else if (state.productBarcode.isNotBlank()) {
+                StatusBanner(
+                    text = "بارکد ${faNum(state.productBarcode)} پس از تأیید مدیر" +
+                        " به همین کالا وصل می‌شود",
+                    type = BannerType.Success,
+                    modifier = Modifier.padding(bottom = Dimens.gapSmall),
+                )
+                SecondaryButton(
+                    text = "اسکن دوباره",
+                    onClick = viewModel::openScanner,
+                    icon = Icons.Filled.QrCodeScanner,
+                    modifier = Modifier.padding(bottom = Dimens.gap),
+                )
+            } else {
+                SecondaryButton(
+                    text = "اسکن بارکد روی جعبه (اختیاری)",
+                    onClick = viewModel::openScanner,
+                    icon = Icons.Filled.QrCodeScanner,
+                    modifier = Modifier.padding(bottom = Dimens.gap),
+                )
+            }
+
+            DictatableField(
                 value = state.name,
                 onValueChange = viewModel::onNameChange,
-                label = { Text("نام کالا") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+                label = "نام کالا",
+                field = DictationField.NAME,
+                state = state,
+                micGranted = micPermission.status.isGranted,
+                onRequestMic = { micPermission.launchPermissionRequest() },
+                onDictate = viewModel::dictate,
             )
-            OutlinedTextField(
+            DictatableField(
                 value = state.brand,
                 onValueChange = viewModel::onBrandChange,
-                label = { Text("برند") },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = Dimens.fieldSpacing),
+                label = "برند",
+                field = DictationField.BRAND,
+                state = state,
+                micGranted = micPermission.status.isGranted,
+                onRequestMic = { micPermission.launchPermissionRequest() },
+                onDictate = viewModel::dictate,
+                modifier = Modifier.padding(top = Dimens.fieldSpacing),
             )
 
             // Compatible vehicles (multiple).
@@ -135,11 +212,15 @@ fun NewProductRequestScreen(
                 }
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                OutlinedTextField(
+                DictatableField(
                     value = state.vehicleInput,
                     onValueChange = viewModel::onVehicleInputChange,
-                    label = { Text("مثلاً پژو ۲۰۶") },
-                    singleLine = true,
+                    label = "مثلاً پژو ۲۰۶",
+                    field = DictationField.VEHICLE,
+                    state = state,
+                    micGranted = micPermission.status.isGranted,
+                    onRequestMic = { micPermission.launchPermissionRequest() },
+                    onDictate = viewModel::dictate,
                     modifier = Modifier.weight(1f),
                 )
                 SecondaryButton(
@@ -180,13 +261,17 @@ fun NewProductRequestScreen(
                     .fillMaxWidth()
                     .padding(top = Dimens.fieldSpacing),
             )
-            OutlinedTextField(
+            DictatableField(
                 value = state.notes,
                 onValueChange = viewModel::onNotesChange,
-                label = { Text("توضیحات (اختیاری)") },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = Dimens.fieldSpacing),
+                label = "توضیحات (اختیاری)",
+                field = DictationField.NOTES,
+                state = state,
+                micGranted = micPermission.status.isGranted,
+                onRequestMic = { micPermission.launchPermissionRequest() },
+                onDictate = viewModel::dictate,
+                singleLine = false,
+                modifier = Modifier.padding(top = Dimens.fieldSpacing),
             )
 
             if (state.error != null) {
@@ -254,5 +339,60 @@ private fun SuccessContent(
             onClick = onNext,
             modifier = Modifier.padding(top = Dimens.gapLarge),
         )
+    }
+}
+
+/**
+ * یک فیلد متنی با دکمه‌ی میکروفون کنارش.
+ *
+ * این فرم بیشترین تایپِ کلِ برنامه را دارد و کارگر با دستکش سرِ پا ایستاده؛
+ * بدون این، عملاً یا توضیحات خالی می‌ماند یا کل فرم گران تمام می‌شود.
+ */
+@Composable
+private fun DictatableField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    label: String,
+    field: DictationField,
+    state: NewProductUiState,
+    micGranted: Boolean,
+    onRequestMic: () -> Unit,
+    onDictate: (DictationField) -> Unit,
+    modifier: Modifier = Modifier,
+    singleLine: Boolean = true,
+) {
+    val listening = state.listeningField == field
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        OutlinedTextField(
+            value = if (listening && state.partialText.isNotBlank()) state.partialText else value,
+            onValueChange = onValueChange,
+            label = { Text(label) },
+            singleLine = singleLine,
+            enabled = !listening,
+            modifier = Modifier.weight(1f),
+        )
+        FilledIconButton(
+            onClick = { if (!micGranted) onRequestMic() else onDictate(field) },
+            modifier = Modifier
+                .padding(start = Dimens.gapSmall)
+                .size(52.dp),
+            shape = CircleShape,
+            colors = if (listening) {
+                IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                IconButtonDefaults.filledIconButtonColors()
+            },
+        ) {
+            Icon(
+                imageVector = if (listening) Icons.Filled.MicOff else Icons.Filled.Mic,
+                contentDescription = if (listening) "توقف" else "گفتن $label",
+                modifier = Modifier.size(Dimens.iconSmall),
+            )
+        }
     }
 }

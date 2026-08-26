@@ -7,12 +7,15 @@ import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
 import com.warehouseos.operator.data.repository.ProductRequestRepository
 import com.warehouseos.operator.data.repository.SessionRepository
+import com.warehouseos.operator.data.speech.SpeechToTextProvider
+import com.warehouseos.operator.data.speech.SttEvent
 import com.warehouseos.operator.ui.navigation.Routes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -27,6 +30,19 @@ data class NewProductUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val done: Boolean = false,
+    /** میکروفون روشن است و برای کدام فیلد. */
+    val listeningField: DictationField? = null,
+    val partialText: String = "",
+    /** دوربینِ اسکنِ بارکدِ کالا باز است. */
+    val scanning: Boolean = false,
+    /**
+     * بارکد کالا — یا از صفحه‌ی قبل آمده یا همین‌جا اسکن شده.
+     *
+     * اینجا هم قابل اسکن است چون کارگری که از مسیر صدا رسیده هیچ بارکدی همراه
+     * ندارد، در حالی که جعبه ممکن است بارکد داشته باشد؛ بدون این، آن بارکد
+     * برای همیشه از دست می‌رفت.
+     */
+    val productBarcode: String = "",
 ) {
     val canSubmit: Boolean get() = name.isNotBlank() && quantity >= 1 && !isSubmitting
 }
@@ -36,14 +52,21 @@ data class NewProductUiState(
  * worker only reviews and submits. Never creates a Product directly — it queues a
  * request for manager approval.
  */
+/** فیلدهایی که می‌شود برایشان حرف زد. */
+enum class DictationField { NAME, BRAND, VEHICLE, NOTES }
+
 @HiltViewModel
 class NewProductRequestViewModel @Inject constructor(
     private val repository: ProductRequestRepository,
     private val sessionRepository: SessionRepository,
+    private val speech: SpeechToTextProvider,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
+    private var listenJob: Job? = null
+
     private val barcode: String = savedStateHandle.get<String>(Routes.ARG_BARCODE).orEmpty()
+
     private val voiceText: String = savedStateHandle.get<String>(Routes.ARG_VOICE).orEmpty()
 
     private val _uiState = MutableStateFlow(
@@ -54,6 +77,8 @@ class NewProductRequestViewModel @Inject constructor(
                 .orEmpty().takeIf { it.isNotBlank() }?.let { listOf(it) } ?: emptyList(),
             quantity = savedStateHandle.get<String>(Routes.ARG_QTY)?.toIntOrNull()?.coerceAtLeast(1) ?: 1,
             unit = savedStateHandle.get<String>(Routes.ARG_UNIT)?.takeIf { it.isNotBlank() } ?: "عدد",
+            // یا از صفحه‌ی قبل آمده، یا کارگر همین‌جا اسکنش می‌کند.
+            productBarcode = savedStateHandle.get<String>(Routes.ARG_PRODUCT_BARCODE).orEmpty(),
         ),
     )
     val uiState: StateFlow<NewProductUiState> = _uiState.asStateFlow()
@@ -74,6 +99,78 @@ class NewProductRequestViewModel @Inject constructor(
     }
 
     fun removeVehicle(v: String) = _uiState.update { it.copy(vehicles = it.vehicles - v) }
+
+    // ---------- Dictation ----------
+    /**
+     * گفتنِ یک فیلد به‌جای تایپ‌کردنش.
+     *
+     * بیشترین تایپِ کلِ برنامه همین فرم است و کارگر با دستکش پایش ایستاده.
+     * متن روی چیزی که هست جایگزین می‌شود، نه اضافه — اصلاحِ یک اشتباه نباید
+     * پاک‌کردنِ دستی لازم داشته باشد.
+     */
+    fun dictate(field: DictationField) {
+        if (_uiState.value.listeningField != null) {
+            stopDictation()
+            return
+        }
+        _uiState.update { it.copy(listeningField = field, partialText = "", error = null) }
+        listenJob = viewModelScope.launch {
+            speech.transcribe().collect { event ->
+                when (event) {
+                    is SttEvent.Partial ->
+                        _uiState.update { it.copy(partialText = event.text) }
+
+                    is SttEvent.Final -> {
+                        val text = event.text.trim()
+                        _uiState.update { st ->
+                            val next = st.copy(listeningField = null, partialText = "")
+                            if (text.isBlank()) next else when (field) {
+                                DictationField.NAME -> next.copy(name = text)
+                                DictationField.BRAND -> next.copy(brand = text)
+                                DictationField.VEHICLE -> next.copy(vehicleInput = text)
+                                DictationField.NOTES -> next.copy(notes = text)
+                            }
+                        }
+                    }
+
+                    is SttEvent.Error ->
+                        _uiState.update {
+                            it.copy(
+                                listeningField = null,
+                                partialText = "",
+                                error = "صدا شنیده نشد — دوباره تلاش کنید یا تایپ کنید",
+                            )
+                        }
+                }
+            }
+        }
+    }
+
+    fun stopDictation() {
+        listenJob?.cancel()
+        listenJob = null
+        _uiState.update { it.copy(listeningField = null, partialText = "") }
+    }
+
+    // ---------- Barcode ----------
+    fun openScanner() = _uiState.update { it.copy(scanning = true, error = null) }
+
+    fun closeScanner() = _uiState.update { it.copy(scanning = false) }
+
+    /** بارکدِ جعبه که همین‌جا اسکن شد — با تأیید مدیر به کالا وصل می‌شود. */
+    fun onBarcodeScanned(raw: String) {
+        val code = raw.trim()
+        _uiState.update {
+            it.copy(scanning = false, productBarcode = code.ifBlank { it.productBarcode })
+        }
+    }
+
+    fun clearBarcode() = _uiState.update { it.copy(productBarcode = "") }
+
+    override fun onCleared() {
+        listenJob?.cancel()
+        super.onCleared()
+    }
 
     fun submit() {
         // Commit a typed-but-not-yet-added vehicle so it isn't silently dropped.
@@ -97,6 +194,7 @@ class NewProductRequestViewModel @Inject constructor(
                 notes = s.notes.trim().ifBlank { null },
                 voiceText = voiceText.ifBlank { null },
                 locationBarcode = barcode.ifBlank { null },
+                productBarcode = s.productBarcode.ifBlank { null },
                 sessionId = sessionRepository.sessionId.value,
             )
             when (val result = repository.submit(body)) {

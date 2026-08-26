@@ -22,6 +22,7 @@ import com.warehouseos.operator.ui.screens.linkbarcode.LinkBarcodeScreen
 import com.warehouseos.operator.ui.screens.scan.ScanScreen
 import com.warehouseos.operator.ui.screens.settings.SettingsScreen
 import com.warehouseos.operator.ui.screens.shifthome.ShiftHomeScreen
+import com.warehouseos.operator.ui.screens.transfer.TransferScreen
 import com.warehouseos.operator.ui.screens.worktasks.WorkTasksScreen
 import com.warehouseos.operator.ui.screens.startup.StartupScreen
 import com.warehouseos.operator.ui.screens.voice.VoiceEntryScreen
@@ -104,6 +105,7 @@ fun OperatorNavGraph(
                 onCount = { navController.navigate(Routes.COUNT) },
                 onLocate = { navController.navigate(Routes.LOCATE) },
                 onLinkBarcode = { navController.navigate(Routes.LINK_BARCODE) },
+                onTransfer = { navController.navigate(Routes.TRANSFER) },
                 onMyWork = { navController.navigate(Routes.MY_WORK) },
                 onWorkTasks = { navController.navigate(Routes.WORK_TASKS) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
@@ -168,7 +170,10 @@ fun OperatorNavGraph(
                 },
                 onRequestNewProduct = { p ->
                     navController.navigate(
-                        Routes.newProduct(p.barcode, p.name, p.brand, p.vehicle, p.qty, p.unit, p.voice),
+                        Routes.newProduct(
+                            p.barcode, p.name, p.brand, p.vehicle, p.qty, p.unit, p.voice,
+                            p.productBarcode,
+                        ),
                     )
                 },
             )
@@ -184,6 +189,7 @@ fun OperatorNavGraph(
                 navArgument(Routes.ARG_QTY) { type = NavType.StringType; defaultValue = "1" },
                 navArgument(Routes.ARG_UNIT) { type = NavType.StringType; defaultValue = "" },
                 navArgument(Routes.ARG_VOICE) { type = NavType.StringType; defaultValue = "" },
+                navArgument(Routes.ARG_PRODUCT_BARCODE) { type = NavType.StringType; defaultValue = "" },
             ),
         ) {
             NewProductRequestScreen(
@@ -204,6 +210,12 @@ fun OperatorNavGraph(
 
         composable(Routes.COUNT) {
             CountScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.TRANSFER) {
+            TransferScreen(
                 onBack = { navController.popBackStack() },
             )
         }

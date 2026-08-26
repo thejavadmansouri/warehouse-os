@@ -14,6 +14,11 @@ data class CreateProductRequestBody(
     val notes: String? = null,
     val voiceText: String? = null,
     val locationBarcode: String? = null,
+    /**
+     * بارکد روی خودِ جعبه که اسکن شد ولی به هیچ کالایی وصل نبود.
+     * سرور موقع تأیید آن را به کالای ساخته‌شده وصل می‌کند.
+     */
+    val productBarcode: String? = null,
     val sessionId: String? = null,
 )
 

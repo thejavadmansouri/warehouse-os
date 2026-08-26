@@ -40,8 +40,10 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.google.accompanist.permissions.shouldShowRationale
 import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.KeepScreenOn
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.SecondaryButton
+import com.warehouseos.operator.ui.components.rememberOperatorTones
 
 /**
  * Location scan screen (Epic 5). Camera barcode/QR scanning via [BarcodeScanner],
@@ -60,12 +62,17 @@ fun ScanScreen(
 ) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
+    val tones = rememberOperatorTones()
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
+
+    // Hands are full while scanning a shelf; don't let the screen time out.
+    KeepScreenOn()
 
     var manualBarcode by remember { mutableStateOf("") }
 
     val reportBarcode: (String) -> Unit = { value ->
         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        tones.success()
         onVoice(value)
     }
 

@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -81,6 +82,7 @@ fun ShiftHomeScreen(
     onCount: () -> Unit,
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
+    onTransfer: () -> Unit,
     onMyWork: () -> Unit,
     onWorkTasks: () -> Unit,
     onSettings: () -> Unit,
@@ -188,6 +190,7 @@ fun ShiftHomeScreen(
                         onCount = onCount,
                         onLocate = onLocate,
                         onLinkBarcode = onLinkBarcode,
+                        onTransfer = onTransfer,
                         onMyWork = onMyWork,
                         onWorkTasks = onWorkTasks,
                         pendingWorkCount = pendingWorkCount,
@@ -352,6 +355,7 @@ private val AccentCount = Color(0xFFB45309) // شمارش — نارنجی
 private val AccentFind = Color(0xFF0F766E) // یافتن — فیروزه‌ای
 private val AccentBarcode = Color(0xFF15803D) // بارکد — سبز
 private val AccentMine = Color(0xFF475569) // کارهای من — خاکستری، عمداً خنثی
+private val AccentTransfer = Color(0xFFBE185D) // انتقال بین قفسه — سرخابی
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -398,6 +402,7 @@ private fun ActiveSessionContent(
     onCount: () -> Unit,
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
+    onTransfer: () -> Unit,
     onMyWork: () -> Unit,
     onWorkTasks: () -> Unit,
     pendingWorkCount: Int,
@@ -465,6 +470,16 @@ private fun ActiveSessionContent(
                 icon = Icons.Filled.QrCodeScanner,
                 onClick = onLinkBarcode,
                 accent = AccentBarcode,
+            ),
+        )
+        // جابه‌جایی موجودی بین قفسه‌ها — اسکن مبدأ، انتخاب کالا، اسکن مقصد.
+        add(
+            HomeAction(
+                title = "انتقال بین قفسه",
+                subtitle = "جابه‌جایی موجودی",
+                icon = Icons.Filled.SwapHoriz,
+                onClick = onTransfer,
+                accent = AccentTransfer,
             ),
         )
         add(

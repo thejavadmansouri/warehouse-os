@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
@@ -61,6 +62,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -68,10 +70,13 @@ import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.warehouseos.operator.ui.components.BannerType
 import com.warehouseos.operator.ui.components.Dimens
+import com.warehouseos.operator.ui.components.KeepScreenOn
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.SecondaryButton
 import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
 import com.warehouseos.operator.ui.components.StatusBanner
+import com.warehouseos.operator.ui.components.faNum
+import com.warehouseos.operator.ui.components.rememberOperatorTones
 import com.warehouseos.operator.ui.navigation.NewProductPrefill
 
 /**
@@ -98,6 +103,10 @@ fun VoiceEntryScreen(
     val micPermission = rememberPermissionState(Manifest.permission.RECORD_AUDIO)
     val cameraPermission = rememberPermissionState(Manifest.permission.CAMERA)
     val haptic = LocalHapticFeedback.current
+    val tones = rememberOperatorTones()
+
+    // The operator speaks with a box in their hands; the screen must not sleep.
+    KeepScreenOn()
 
     val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
         viewModel.onPhotoCaptured(saved)
@@ -122,13 +131,24 @@ fun VoiceEntryScreen(
         qty = state.quantity,
         unit = state.unit ?: "عدد",
         voice = state.transcript,
+        // The box's own barcode, when it was scanned but matched nothing. Losing
+        // it here is what forced the same box to be identified again next time.
+        productBarcode = state.unlinkedBarcode.orEmpty(),
     )
 
     // Warm the speech engine as soon as the screen opens → the first mic tap is instant.
     LaunchedEffect(Unit) { viewModel.prewarmMic() }
 
     LaunchedEffect(state.lastSaved?.clientRequestId) {
-        if (state.lastSaved != null) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+        if (state.lastSaved != null) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            tones.success()
+        }
+    }
+
+    // Audible failure too: a silent error is the one the operator walks away from.
+    LaunchedEffect(state.error) {
+        if (state.error != null) tones.error()
     }
 
     Scaffold(
@@ -211,6 +231,10 @@ fun VoiceEntryScreen(
 
                 VoicePhase.SELECT -> SelectStep(
                     state = state,
+                    micGranted = micPermission.status.isGranted,
+                    onRequestMic = { micPermission.launchPermissionRequest() },
+                    onStartVoiceSearch = viewModel::startListeningForSearch,
+                    onStopVoice = viewModel::stopListening,
                     onSearch = viewModel::onSearchQuery,
                     onPick = viewModel::selectChoice,
                     onAddNew = { query -> onRequestNewProduct(prefill(query)) },
@@ -234,6 +258,64 @@ fun VoiceEntryScreen(
                         modifier = Modifier.padding(top = Dimens.gapLarge),
                     )
                 }
+            }
+
+            ShelfEntryList(entries = state.shelfEntries)
+        }
+    }
+}
+
+/**
+ * What this shelf visit has registered so far, newest first.
+ *
+ * Answers "did that one go through?" without leaving the screen — previously the
+ * only way to check was to back out to another screen and lose the shelf context.
+ */
+@Composable
+private fun ShelfEntryList(entries: List<SavedNotice>) {
+    if (entries.isEmpty()) return
+
+    val total = entries.sumOf { it.quantity }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Dimens.gapLarge, bottom = Dimens.gapLarge),
+    ) {
+        Text(
+            text = "ثبت‌های این قفسه (${faNum(entries.size)} کالا، مجموع ${faNum(total)})",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(bottom = Dimens.gapSmall),
+        )
+        entries.forEach { entry ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = entry.productName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                if (entry.withPhoto) {
+                    Icon(
+                        imageVector = Icons.Filled.PhotoCamera,
+                        contentDescription = "با عکس",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .padding(end = Dimens.gapSmall)
+                            .size(16.dp),
+                    )
+                }
+                Text(
+                    text = faNum(entry.quantity),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
     }
@@ -603,11 +685,14 @@ private fun StepperButton(label: String, onClick: () -> Unit) {
 @Composable
 private fun SelectStep(
     state: VoiceUiState,
+    micGranted: Boolean,
+    onRequestMic: () -> Unit,
+    onStartVoiceSearch: () -> Unit,
+    onStopVoice: () -> Unit,
     onSearch: (String) -> Unit,
     onPick: (ProductChoice) -> Unit,
     onAddNew: (String) -> Unit,
 ) {
-    var query by remember { mutableStateOf("") }
 
     Text(
         text = state.selectionMessage ?: "محصول را انتخاب کنید",
@@ -625,21 +710,66 @@ private fun SelectStep(
     state.choices.forEach { choice -> ChoiceButton(choice, onPick) }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.gapLarge))
-    OutlinedTextField(
-        value = query,
-        onValueChange = {
-            query = it
-            onSearch(it)
-        },
-        label = { Text("جستجوی نام کالا") },
-        singleLine = true,
+
+    /*
+     * صدا کنارِ کادر جست‌وجو، نه به‌جای آن.
+     *
+     * این صفحه معمولاً بعد از اسکنِ یک بارکدِ ناشناس باز می‌شود: جعبه دستِ
+     * کارگر است و دستکش دارد. تایپ در آن لحظه گران‌ترین کارِ ممکن است.
+     */
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
-    )
+    ) {
+        OutlinedTextField(
+            value = state.searchQuery,
+            onValueChange = onSearch,
+            label = { Text("جستجوی نام کالا") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        FilledIconButton(
+            onClick = {
+                if (!micGranted) onRequestMic()
+                else if (state.isListening) onStopVoice() else onStartVoiceSearch()
+            },
+            modifier = Modifier
+                .padding(start = Dimens.gapSmall)
+                .size(56.dp),
+            shape = CircleShape,
+            colors = if (state.isListening) {
+                IconButtonDefaults.filledIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                )
+            } else {
+                IconButtonDefaults.filledIconButtonColors()
+            },
+        ) {
+            Icon(
+                imageVector = if (state.isListening) Icons.Filled.MicOff else Icons.Filled.Mic,
+                contentDescription = if (state.isListening) "توقف" else "گفتن نام کالا",
+                modifier = Modifier.size(Dimens.icon),
+            )
+        }
+    }
+
+    if (state.isListening) {
+        Text(
+            text = state.partialText.ifBlank { "در حال شنیدن…" },
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.primary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = Dimens.gapSmall),
+        )
+    }
+
     state.searchResults.forEach { choice -> ChoiceButton(choice, onPick) }
 
     SecondaryButton(
         text = "+ درخواست افزودن کالای جدید",
-        onClick = { onAddNew(query) },
+        onClick = { onAddNew(state.searchQuery) },
         modifier = Modifier.padding(top = Dimens.gapLarge, bottom = Dimens.gap),
     )
 }

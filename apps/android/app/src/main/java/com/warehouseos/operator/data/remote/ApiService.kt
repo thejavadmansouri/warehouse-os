@@ -19,6 +19,8 @@ import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
 import com.warehouseos.operator.data.remote.dto.MyWorkResponse
 import com.warehouseos.operator.data.remote.dto.PhotoUploadResponse
 import com.warehouseos.operator.data.remote.dto.ReviewItemDto
+import com.warehouseos.operator.data.remote.dto.ShelfStockDto
+import com.warehouseos.operator.data.remote.dto.TransferRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsResponse
 import com.warehouseos.operator.data.remote.dto.VoiceConfirmRequest
@@ -91,6 +93,16 @@ interface ApiService {
     // «یافتن کالا» — سرچ + آدرس دقیقِ موجودی (همه‌ی نقش‌ها)
     @GET("products/locate")
     suspend fun locateProducts(@Query("q") query: String): List<LocateResultDto>
+
+    // ---- Shelf transfer (انتقال بین قفسه) ----
+    // موجودیِ فعلیِ یک قفسه — بارکد را سرور resolve می‌کند؛ items فقط ردیف‌های
+    // با موجودی مثبت است.
+    @GET("mobile/shelf/{barcode}/stock")
+    suspend fun shelfStock(@Path("barcode") barcode: String): ShelfStockDto
+
+    // جابه‌جایی موجودی از یک موقعیت به موقعیت دیگر (همان POST /inventory-transfer).
+    @POST("inventory-transfer")
+    suspend fun transfer(@Body body: TransferRequest)
 
 
 

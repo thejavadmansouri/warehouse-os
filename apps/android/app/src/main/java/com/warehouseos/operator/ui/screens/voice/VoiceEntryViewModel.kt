@@ -63,9 +63,25 @@ data class VoiceUiState(
     val selectionMessage: String? = null,
     val choices: List<ProductChoice> = emptyList(),
     val searchResults: List<ProductChoice> = emptyList(),
+    /**
+     * متن جست‌وجو در مرحله‌ی انتخاب.
+     *
+     * در state است نه داخل خودِ صفحه، چون حالا دو منبع دارد — تایپ و صدا — و
+     * اگر محلی بماند، چیزی که کارگر می‌گوید در کادر دیده نمی‌شود.
+     */
+    val searchQuery: String = "",
     /** Local path of the captured photo, so the worker can verify it before saving. */
     val photoPath: String? = null,
     val lastSaved: SavedNotice? = null,
+    /**
+     * Everything registered on THIS shelf during this visit, newest first.
+     *
+     * Without it the worker has no way to check what they just entered without
+     * leaving the screen, which is the most common "did that go through?" moment
+     * on the floor. In-memory only: it describes the current shelf visit, not
+     * durable state — the outbox already owns durability.
+     */
+    val shelfEntries: List<SavedNotice> = emptyList(),
     val error: String? = null,
     // Parsed voice fields, kept so a "new product request" can be pre-filled.
     val recognizedName: String = "",
@@ -151,6 +167,42 @@ class VoiceEntryViewModel @Inject constructor(
                             it.copy(isListening = false, partialText = "", transcript = event.text)
                         }
                         if (event.text.isNotBlank()) resolveProduct() // confirm step is the safety gate
+                    }
+
+                    is SttEvent.Error ->
+                        _uiState.update {
+                            it.copy(isListening = false, partialText = "", error = event.kind.toUserMessage())
+                        }
+                }
+            }
+        }
+    }
+
+    /**
+     * صدا در مرحله‌ی انتخاب.
+     *
+     * عمداً از [startListening] جداست: آن یکی نتیجه را به تطبیق‌گر می‌دهد و
+     * می‌تواند مرحله را عوض کند، در حالی که اینجا کارگر دارد همان لیست را فیلتر
+     * می‌کند و باید سرِ جایش بماند. بدون این، تنها راهِ ورودِ این صفحه — همان
+     * لحظه‌ای که جعبه دستِ کارگر است — تایپ بود.
+     */
+    fun startListeningForSearch() {
+        if (_uiState.value.isListening) return
+        _uiState.update { it.copy(isListening = true, partialText = "", error = null) }
+        listenJob = viewModelScope.launch {
+            speech.transcribe().collect { event ->
+                when (event) {
+                    is SttEvent.Partial ->
+                        _uiState.update { it.copy(partialText = event.text) }
+
+                    is SttEvent.Final -> {
+                        _uiState.update { it.copy(isListening = false, partialText = "") }
+                        if (event.text.isNotBlank()) {
+                            // فقط نامِ کالا لازم است؛ عدد و واحد اینجا معنا ندارند.
+                            val spoken = LocalVoiceParser.parse(event.text)
+                            val query = spoken.productQuery.ifBlank { event.text }
+                            onSearchQuery(query)
+                        }
                     }
 
                     is SttEvent.Error ->
@@ -299,6 +351,7 @@ class VoiceEntryViewModel @Inject constructor(
     fun onSearchQuery(query: String) {
         searchJob?.cancel()
         val q = query.trim()
+        _uiState.update { it.copy(searchQuery = query) }
         if (q.length < 2) {
             _uiState.update { it.copy(searchResults = emptyList()) }
             return
@@ -384,14 +437,19 @@ class VoiceEntryViewModel @Inject constructor(
 
             syncScheduler.requestSync()
 
-            // Straight back to a clean INPUT, carrying only the transient notice.
+            val previousEntries = _uiState.value.shelfEntries
+
+            // Straight back to a clean INPUT, carrying the transient notice and
+            // the running list of what this shelf visit has produced so far.
+            val notice = SavedNotice(
+                clientRequestId = clientRequestId,
+                productName = name,
+                quantity = quantity,
+                withPhoto = photoQueued,
+            )
             _uiState.value = VoiceUiState(
-                lastSaved = SavedNotice(
-                    clientRequestId = clientRequestId,
-                    productName = name,
-                    quantity = quantity,
-                    withPhoto = photoQueued,
-                ),
+                lastSaved = notice,
+                shelfEntries = listOf(notice) + previousEntries,
             )
             scheduleNoticeDismiss()
         }
@@ -409,6 +467,13 @@ class VoiceEntryViewModel @Inject constructor(
             val removed = outboxRepository.discard(saved.clientRequestId)
             _uiState.update {
                 it.copy(
+                    // A discarded row never reached the server, so it must leave
+                    // the shelf list too or the tally would overstate the shelf.
+                    shelfEntries = if (removed) {
+                        it.shelfEntries.filterNot { e -> e.clientRequestId == saved.clientRequestId }
+                    } else {
+                        it.shelfEntries
+                    },
                     lastSaved = saved.copy(
                         undoResult = if (removed) {
                             "ثبت لغو شد"
@@ -522,6 +587,7 @@ class VoiceEntryViewModel @Inject constructor(
                 selectionMessage = "کالای موردنظر را جستجو کنید",
                 choices = emptyList(),
                 searchResults = emptyList(),
+                searchQuery = "",
                 error = null,
             )
         }

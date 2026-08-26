@@ -4,6 +4,7 @@ import android.net.Uri
 
 /** Prefill carried from voice/search into the new-product request form. */
 data class NewProductPrefill(
+    /** بارکد قفسه — جای فیزیکیِ ثبت. */
     val barcode: String,
     val name: String = "",
     val brand: String = "",
@@ -11,6 +12,14 @@ data class NewProductPrefill(
     val qty: Int = 1,
     val unit: String = "",
     val voice: String = "",
+    /**
+     * بارکد روی خودِ جعبه، اگر اسکن شده و به هیچ کالایی وصل نبوده.
+     *
+     * جدا از [barcode] است و باید جدا بماند: یکی محل است و دیگری خودِ کالا.
+     * بدون این، بارکدِ اسکن‌شده همین‌جا گم می‌شد و همان جعبه دفعه‌ی بعد باز
+     * ناشناس بود.
+     */
+    val productBarcode: String = "",
 )
 
 /**
@@ -29,6 +38,9 @@ object Routes {
     const val WORK_TASKS = "work_tasks"
     const val SETTINGS = "settings"
     const val LINK_BARCODE = "link_barcode"
+
+    // انتقال بین قفسه — جابه‌جایی موجودی با اسکن مبدأ و مقصد.
+    const val TRANSFER = "transfer"
 
     // Barcode path argument — used by the voice entry screen.
     const val ARG_BARCODE = "barcode"
@@ -51,8 +63,9 @@ object Routes {
     const val ARG_QTY = "qty"
     const val ARG_UNIT = "unit"
     const val ARG_VOICE = "voice"
+    const val ARG_PRODUCT_BARCODE = "productBarcode"
     const val NEW_PRODUCT_ROUTE =
-        "$NEW_PRODUCT?$ARG_BARCODE={$ARG_BARCODE}&$ARG_NAME={$ARG_NAME}&$ARG_BRAND={$ARG_BRAND}&$ARG_VEHICLE={$ARG_VEHICLE}&$ARG_QTY={$ARG_QTY}&$ARG_UNIT={$ARG_UNIT}&$ARG_VOICE={$ARG_VOICE}"
+        "$NEW_PRODUCT?$ARG_BARCODE={$ARG_BARCODE}&$ARG_NAME={$ARG_NAME}&$ARG_BRAND={$ARG_BRAND}&$ARG_VEHICLE={$ARG_VEHICLE}&$ARG_QTY={$ARG_QTY}&$ARG_UNIT={$ARG_UNIT}&$ARG_VOICE={$ARG_VOICE}&$ARG_PRODUCT_BARCODE={$ARG_PRODUCT_BARCODE}"
 
     fun newProduct(
         barcode: String,
@@ -62,11 +75,13 @@ object Routes {
         qty: Int = 1,
         unit: String = "",
         voice: String = "",
+        productBarcode: String = "",
     ): String = "$NEW_PRODUCT?$ARG_BARCODE=${Uri.encode(barcode)}" +
         "&$ARG_NAME=${Uri.encode(name)}" +
         "&$ARG_BRAND=${Uri.encode(brand)}" +
         "&$ARG_VEHICLE=${Uri.encode(vehicle)}" +
         "&$ARG_QTY=$qty" +
         "&$ARG_UNIT=${Uri.encode(unit)}" +
-        "&$ARG_VOICE=${Uri.encode(voice)}"
+        "&$ARG_VOICE=${Uri.encode(voice)}" +
+        "&$ARG_PRODUCT_BARCODE=${Uri.encode(productBarcode)}"
 }
