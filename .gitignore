@@ -32,3 +32,6 @@ apps/api/.kardo_verify.cjs
 # حذف کامل از تاریخچه — الگوهای سراسری
 *.dump
 storage/
+
+# Locally produced installers/APKs — build artifacts, not source.
+build-output/
