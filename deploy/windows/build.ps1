@@ -294,6 +294,9 @@ New-Item -ItemType Directory -Force -Path $scriptsOut | Out-Null
 Copy-Item (Join-Path $here 'first-run.ps1')  $scriptsOut
 Copy-Item (Join-Path $here 'services.ps1')   $scriptsOut
 Copy-Item (Join-Path $here 'update.ps1')     $scriptsOut
+# Shipped so a server that loses LAN access can be repaired on site, without
+# a rebuild and without re-running first-run.ps1 (which refuses to run twice).
+Copy-Item (Join-Path $here 'network-fix.ps1') $scriptsOut
 
 Remove-Item -Recurse -Force $staging -ErrorAction SilentlyContinue
 

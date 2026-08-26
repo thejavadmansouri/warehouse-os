@@ -54,6 +54,14 @@ export class CreateOrderDto {
   @IsOptional() @IsString() @MaxLength(500)
   note?: string;
 
+  /** کدِ تخفیف (اختیاری). اعتبار و مبلغ سمت سرور دوباره حساب می‌شود. */
+  @IsOptional() @IsString() @MaxLength(40)
+  couponCode?: string;
+
+  /** منطقه‌ی ارسالِ انتخاب‌شده (اگر منطقه‌بندی فعال باشد). */
+  @IsOptional() @IsUUID()
+  shippingZoneId?: string;
+
   /**
    * کلید یکتای کلاینت — دکمه‌ی دوبار خورده یا retryِ شبکه نباید دو سفارش بسازد.
    * اختیاری است تا کلاینتِ ساده هم کار کند، ولی سایت باید بفرستد.

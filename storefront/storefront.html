@@ -15,6 +15,12 @@ body{font-family:var(--ff);background:var(--c-bg);color:var(--c-text);line-heigh
 a{color:inherit;text-decoration:none}
 button{font-family:inherit;cursor:pointer;border:none;background:none}
 img{display:block;max-width:100%}
+/*
+ * ⚠️ جایِ این خط مهم است: باید **پیش از** media queryها بیاید. وقتی پایین‌تر
+ * بود، همان specificity را داشت ولی دیرتر می‌آمد و `display:block`ِ موبایل را
+ * خنثی می‌کرد — پس‌زمینه هرگز ظاهر نمی‌شد.
+ */
+.filter-overlay{display:none}
 input,select{font-family:inherit}
 
 .header{position:sticky;top:0;z-index:100;height:var(--header-h);background:var(--c-surface);border-bottom:1px solid var(--c-border);display:flex;align-items:center;padding:0 var(--sp-4);gap:var(--sp-4);box-shadow:var(--sh-sm)}
@@ -40,7 +46,8 @@ input,select{font-family:inherit}
 .cat-bar__chip.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
 
 .main{max-width:var(--max-w);margin:0 auto;padding:var(--sp-4)}
-.products-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-4)}
+.products-header{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);margin-bottom:var(--sp-4)}
+.products-header__tools{display:flex;align-items:center;gap:var(--sp-2)}
 .products-header__count{font-size:var(--fs-sm);color:var(--c-text-3)}
 .products-header__sort select{height:36px;padding:0 var(--sp-3);border:1px solid var(--c-border);border-radius:var(--r-md);background:var(--c-surface);font-size:var(--fs-sm);color:var(--c-text);cursor:pointer}
 .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:var(--sp-4)}
@@ -206,7 +213,159 @@ input,select{font-family:inherit}
 .empty-state__icon{font-size:3rem;margin-bottom:var(--sp-4);opacity:.3}
 .empty-state__text{font-size:var(--fs-lg)}
 
-@media(max-width:640px){.header__logo span{display:none}.product-grid{grid-template-columns:repeat(2,1fr);gap:var(--sp-2)}.p-card__body{padding:var(--sp-2) var(--sp-3) var(--sp-3)}.p-card__name{font-size:var(--fs-sm)}.p-card__price{font-size:var(--fs-md)}.p-card__add-btn{width:36px;height:36px}.mobile-nav{display:flex;align-items:center;justify-content:space-around}body{padding-bottom:56px}.detail__hero{grid-template-columns:1fr;gap:var(--sp-4)}.detail__specs{grid-template-columns:1fr}.detail__related-grid{grid-template-columns:repeat(2,1fr)}.profile__stats{grid-template-columns:repeat(3,1fr)}.profile__stat{padding:var(--sp-3)}.profile__stat-val{font-size:var(--fs-lg)}}
+/* ═══════════════════════════════════════════════════════════════════════
+   موبایل — اکثریتِ مطلقِ ترافیکِ یک فروشگاه قطعه، گوشی است.
+   قواعدِ اندازه از docs/DESIGN_SYSTEM.md می‌آیند.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media(max-width:640px){
+
+  /*
+   * ⚠️ iOS اگر فونتِ یک ورودی زیر ۱۶px باشد، هنگام فوکوس **کل صفحه را زوم
+   * می‌کند** و کاربر بعدش باید دستی برگرداند. این تنها دلیلِ این قاعده است؛
+   * ظاهری نیست.
+   */
+  input,select,textarea{font-size:16px}
+
+  /* ── سربرگ: فقط جستجو ──
+   * دکمه‌های سبد و پروفایل از سربرگ حذف می‌شوند چون **در منوی پایین هستند**.
+   * دو بار گذاشتنِ یک کنش، جای جستجو را می‌خورد — و جستجو مهم‌ترین چیزِ این
+   * صفحه است (کسی که دنبال «لنت پراید» است تایپ می‌کند، نه مرور).
+   */
+  .header{height:56px;padding:0 var(--sp-3);gap:var(--sp-2)}
+  .header__logo span{display:none}
+  .header__logo svg{width:26px;height:26px}
+  .header__cart-btn,.header__user-btn{display:none}
+  .header__search{max-width:none}
+  .header__search input{height:40px}
+
+  /* ── نوار دسته ── */
+  .cat-bar__inner{padding:var(--sp-2) var(--sp-3);gap:var(--sp-2)}
+  .cat-bar__chip{padding:var(--sp-2) var(--sp-4);min-height:36px;display:flex;align-items:center}
+
+  /* ── سطرِ «تعداد + مرتب‌سازی + فیلتر» در یک خط ── */
+  .main{padding:var(--sp-3)}
+  /*
+   * مرتب‌سازی و فیلتر در **یک** سطر کنار هم. قبلاً هرکدام یک ردیفِ کامل
+   * می‌گرفتند و کاربر پیش از دیدنِ اولین کالا دو ردیف کنترل رد می‌کرد.
+   */
+  .products-header{gap:var(--sp-2);margin-bottom:var(--sp-3);flex-wrap:nowrap}
+  .products-header__count{font-size:var(--fs-xs);white-space:nowrap;flex:none}
+  .products-header__sort select{height:42px}
+  .filter-toggle{min-height:42px;padding:0 var(--sp-3)}
+
+  /* ── کارت محصول ──
+   * عکس از ۴:۳ به مربع می‌رود و کوچک‌تر می‌شود: در دو ستونی موبایل، تصویرِ
+   * بلند یعنی هر صفحه فقط دو کالا. هدف این است که کاربر بدون اسکرول چهار تا
+   * ببیند.
+   */
+  .product-grid{grid-template-columns:repeat(2,1fr);gap:var(--sp-2)}
+  /*
+   * عکس عمداً کوتاه‌تر از دسکتاپ است. با کارتِ ~۱۶۰px، نسبتِ مربع یعنی هر
+   * صفحه فقط دو کالا — و برای قطعه‌ی خودرو که اغلب عکس هم ندارد، آن فضا
+   * صرفِ یک آیکونِ خاکستری می‌شود. با ۳:۲ چهار کالا در دید اول می‌آید.
+   */
+  .p-card__img{aspect-ratio:3/2}
+  .p-card__img-placeholder{font-size:var(--fs-xl)}
+  .p-card__body{padding:var(--sp-2) var(--sp-3) var(--sp-3)}
+  .p-card__brand{font-size:10px}
+  .p-card__name{font-size:var(--fs-sm);-webkit-line-clamp:2;min-height:2.8em}
+  .p-card__sku{font-size:10px}
+  .p-card__price{font-size:var(--fs-md)}
+
+  /*
+   * قیمت و واحد در یک خط می‌مانند. قبلاً «۱۸٬۵۰۰ تومان /» می‌شکست و «جفت» به
+   * خطِ بعد می‌افتاد — بدترین جای شکستن، چون عدد از واحدش جدا می‌شد.
+   */
+  .p-card__footer{gap:var(--sp-1)}
+  .p-card__footer>div{min-width:0;display:flex;flex-direction:column;line-height:1.3}
+  .p-card__price-unit{font-size:10px;white-space:nowrap}
+
+  /* هیچ هدفِ لمسی زیر ۴۴px — دکمه‌ی ۳۶px با انگشت خطای زیاد می‌داد. */
+  .p-card__add-btn{width:44px;height:44px;flex:none}
+
+  /* ── منوی پایین ──
+   * آیتم‌ها `flex:1` می‌شوند. قبلاً هرکدام فقط **۲۰px** عرض داشتند (فقط به
+   * اندازه‌ی آیکون) و بقیه‌ی نوار مرده بود؛ زدنشان با شست تقریباً ناممکن.
+   */
+  .mobile-nav{
+    display:flex;align-items:stretch;
+    height:auto;padding:0;
+    /* نوارِ خانه‌ی آیفون روی محتوا می‌نشیند؛ این فاصله جلویش را می‌گیرد. */
+    padding-bottom:env(safe-area-inset-bottom,0)
+  }
+  .mobile-nav__item{
+    flex:1;justify-content:center;min-height:56px;padding:var(--sp-2) 0;
+    position:relative
+  }
+  body{padding-bottom:calc(56px + env(safe-area-inset-bottom,0))}
+
+  /* نشانگر تعداد روی «سبد» — چون badgeِ سربرگ دیگر دیده نمی‌شود. */
+  .mobile-nav__badge{
+    position:absolute;top:4px;inset-inline-end:calc(50% - 22px);
+    min-width:18px;height:18px;padding:0 5px;border-radius:var(--r-full);
+    background:var(--c-accent);color:#fff;font-size:10px;font-weight:var(--fw-bold);
+    display:flex;align-items:center;justify-content:center;line-height:1
+  }
+  .mobile-nav__badge:empty{display:none}
+
+  /* ── سبد: تمام‌عرض ── */
+  .cart-drawer{width:100%}
+
+  /* ── مودال‌ها → بلندشونده از پایین ──
+   * روی گوشی، پنجره‌ی وسطِ صفحه یعنی کیبورد آن را می‌پوشاند و دکمه‌ی تأیید
+   * زیر کیبورد گم می‌شود. bottom sheet نزدیکِ شست است و با کیبورد جا می‌شود.
+   */
+  .modal-overlay{align-items:flex-end;padding:0}
+  .modal{
+    max-width:none;border-radius:var(--r-xl) var(--r-xl) 0 0;
+    max-height:92dvh;transform:translateY(100%);
+    padding-bottom:env(safe-area-inset-bottom,0)
+  }
+  .modal-overlay.open .modal{transform:none}
+  .modal__footer{position:sticky;bottom:0;background:var(--c-surface);gap:var(--sp-2)}
+  .modal__footer .btn-primary,.modal__footer .btn-secondary{min-height:48px;flex:1}
+
+  /* ── فیلتر: آن هم از پایین ── */
+  .filter-overlay{
+    display:block;position:fixed;inset:0;z-index:305;
+    background:rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:opacity .2s
+  }
+  .filter-overlay.show{opacity:1;pointer-events:auto}
+  .filter-panel.show{
+    position:fixed;inset-inline:0;bottom:0;z-index:310;
+    margin:0;border-radius:var(--r-xl) var(--r-xl) 0 0;
+    max-height:80dvh;overflow-y:auto;
+    padding:var(--sp-6) var(--sp-4) calc(var(--sp-4) + env(safe-area-inset-bottom,0))
+  }
+  .filter-panel__actions button{min-height:48px}
+
+  /* ── صفحه‌ی جزئیات ── */
+  .detail{padding:var(--sp-3)}
+  .detail__hero{grid-template-columns:1fr;gap:var(--sp-4)}
+  .detail__specs{grid-template-columns:1fr}
+  .detail__related-grid{grid-template-columns:repeat(2,1fr)}
+  .detail__name{font-size:var(--fs-xl)}
+  .detail__qty-row{gap:var(--sp-3)}
+  .detail__qty-btn{width:44px;height:44px}
+  .detail__add-btn{min-height:52px;flex:1}
+
+  /* ── پروفایل و سبد ── */
+  .profile,.cart-page,.blog-page,.blog-detail{padding:var(--sp-3)}
+  .profile__stats{grid-template-columns:repeat(3,1fr);gap:var(--sp-2)}
+  .profile__stat{padding:var(--sp-3)}
+  .profile__stat-val{font-size:var(--fs-lg)}
+  .cart-page__grid{grid-template-columns:1fr}
+  .cart-page__summary{position:static}
+  .blog-page__grid{grid-template-columns:1fr}
+  .filter-panel__range{flex-direction:column}
+}
+
+/* گوشی‌های خیلی باریک (SE و پایین‌تر) */
+@media(max-width:360px){
+  .product-grid{gap:var(--sp-2)}
+  .p-card__name{font-size:var(--fs-xs)}
+  .p-card__price{font-size:var(--fs-sm)}
+}
 @media(min-width:641px) and (max-width:1024px){.product-grid{grid-template-columns:repeat(3,1fr)}}
 ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--c-border);border-radius:var(--r-full)}
 
@@ -242,7 +401,7 @@ input,select{font-family:inherit}
 @media(max-width:768px){.cart-page__grid{grid-template-columns:1fr}.cart-page__summary{position:static}}
 
 /* ========== Advanced Filter ========== */
-.filter-toggle{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-4);border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-medium);background:var(--c-surface);border:1px solid var(--c-border);color:var(--c-text-2);transition:all .15s;margin-bottom:var(--sp-4)}
+.filter-toggle{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-4);border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-medium);background:var(--c-surface);border:1px solid var(--c-border);color:var(--c-text-2);transition:all .15s;white-space:nowrap}
 .filter-toggle:hover{border-color:var(--c-accent);color:var(--c-accent)}
 .filter-toggle.active{background:var(--c-accent);color:#fff;border-color:var(--c-accent)}
 .filter-panel{display:none;background:var(--c-surface);border-radius:var(--r-xl);padding:var(--sp-6);margin-bottom:var(--sp-4);box-shadow:var(--sh-sm);border:1px solid var(--c-border)}
@@ -321,6 +480,89 @@ input,select{font-family:inherit}
 .review-form__btn{margin-top:var(--sp-3);height:42px;padding:0 var(--sp-6);border-radius:var(--r-md);background:var(--c-accent);color:#fff;font-size:var(--fs-sm);font-weight:var(--fw-bold);cursor:pointer;border:none;transition:background .15s}
 .review-form__btn:hover{background:var(--c-accent-hover)}
 @media(max-width:640px){.blog-page__grid{grid-template-columns:1fr}}
+/* ===== انتخاب خودرو (گاراژ من) ===== */
+.garage-bar{display:flex;align-items:center;gap:var(--sp-3);flex-wrap:wrap;max-width:var(--container);margin:0 auto;padding:var(--sp-3) var(--sp-4)}
+.garage-bar__label{display:inline-flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-sm);font-weight:var(--fw-medium);color:var(--c-text-2)}
+.garage-pick{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-4);border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-bold);background:var(--c-accent);color:#fff;border:1px solid var(--c-accent);cursor:pointer;transition:background .15s}
+.garage-pick:hover{background:var(--c-accent-hover)}
+.garage-chip{display:inline-flex;align-items:center;gap:var(--sp-2);padding:var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4);border-radius:var(--r-full);font-size:var(--fs-sm);font-weight:var(--fw-bold);background:var(--c-accent);color:#fff}
+.garage-chip__x{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:var(--r-full);background:rgba(255,255,255,.25);cursor:pointer;font-size:14px;line-height:1}
+.garage-chip__x:hover{background:rgba(255,255,255,.4)}
+.garage-bar__hint{font-size:var(--fs-xs);color:var(--c-text-3)}
+.veh-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:60;display:none;opacity:0;transition:opacity .2s}
+.veh-overlay.show{display:block;opacity:1}
+.veh-modal{position:fixed;z-index:61;left:50%;top:50%;transform:translate(-50%,-50%) scale(.96);width:min(560px,92vw);max-height:82vh;display:none;flex-direction:column;background:var(--c-surface);border-radius:var(--r-xl);box-shadow:var(--sh-lg);opacity:0;transition:opacity .2s,transform .2s}
+.veh-modal.show{display:flex;opacity:1;transform:translate(-50%,-50%) scale(1)}
+.veh-modal__head{display:flex;align-items:center;justify-content:space-between;padding:var(--sp-5) var(--sp-5) var(--sp-3)}
+.veh-modal__title{font-size:var(--fs-lg);font-weight:var(--fw-bold)}
+.veh-modal__close{width:32px;height:32px;border-radius:var(--r-full);background:var(--c-surface-2);color:var(--c-text-2);font-size:18px;cursor:pointer;border:none}
+.veh-modal__search{margin:0 var(--sp-5) var(--sp-3)}
+.veh-modal__search input{width:100%;height:44px;padding:0 var(--sp-4);border:1px solid var(--c-border);border-radius:var(--r-md);font-size:var(--fs-sm);font-family:inherit}
+.veh-modal__search input:focus{border-color:var(--c-accent);outline:none}
+.veh-modal__list{overflow-y:auto;padding:0 var(--sp-3) var(--sp-4);display:flex;flex-direction:column;gap:2px}
+.veh-item{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-3);width:100%;padding:var(--sp-3) var(--sp-4);border-radius:var(--r-md);background:transparent;border:none;cursor:pointer;text-align:right;font-family:inherit;transition:background .12s}
+.veh-item:hover{background:var(--c-surface-2)}
+.veh-item.active{background:var(--c-accent);color:#fff}
+.veh-item__name{font-size:var(--fs-sm);font-weight:var(--fw-medium)}
+.veh-item__meta{font-size:var(--fs-xs);color:var(--c-text-3)}
+.veh-item.active .veh-item__meta{color:rgba(255,255,255,.8)}
+.veh-item__count{font-size:var(--fs-xs);color:var(--c-text-3);white-space:nowrap}
+.veh-item.active .veh-item__count{color:rgba(255,255,255,.85)}
+.veh-modal__empty{padding:var(--sp-8) var(--sp-4);text-align:center;color:var(--c-text-3);font-size:var(--fs-sm)}
+/* ===== علاقه‌مندی ===== */
+.p-card__fav{position:absolute;top:var(--sp-2);left:var(--sp-2);width:34px;height:34px;border-radius:var(--r-full);background:rgba(255,255,255,.9);display:flex;align-items:center;justify-content:center;border:1px solid var(--c-border);cursor:pointer;z-index:2;transition:transform .1s,background .15s;color:var(--c-text-3)}
+.p-card__fav:hover{transform:scale(1.1)}
+.p-card__fav.active{color:#e0245e;border-color:#e0245e;background:#fff}
+.p-card__fav svg{width:18px;height:18px}
+.header__fav-btn{position:relative;width:40px;height:40px;border-radius:var(--r-full);display:flex;align-items:center;justify-content:center;background:var(--c-surface-2);color:var(--c-text-2);border:none;cursor:pointer;transition:background .15s}
+.header__fav-btn:hover{background:var(--c-border)}
+.header__fav-badge{position:absolute;top:-2px;left:-2px;min-width:18px;height:18px;padding:0 4px;background:#e0245e;color:#fff;font-size:10px;font-weight:var(--fw-bold);border-radius:var(--r-full);display:none;align-items:center;justify-content:center}
+.header__fav-badge.show{display:flex}
+/* ===== نظرات (بخش‌های اضافه) ===== */
+.review-summary{display:flex;align-items:center;gap:var(--sp-3);padding:var(--sp-4);background:var(--c-surface-2);border-radius:var(--r-lg);margin-bottom:var(--sp-4)}
+.review-summary__num{font-size:var(--fs-2xl);font-weight:var(--fw-bold);color:var(--c-accent)}
+.review-summary__stars{font-size:var(--fs-lg);letter-spacing:2px}
+.review-summary__count{font-size:var(--fs-sm);color:var(--c-text-3)}
+.review-list{display:flex;flex-direction:column;gap:var(--sp-3);margin-bottom:var(--sp-6)}
+.review-item{background:var(--c-surface-2);border-radius:var(--r-lg);padding:var(--sp-4)}
+.review-item__head{display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-1);gap:var(--sp-2)}
+.review-item__author{font-size:var(--fs-sm);font-weight:var(--fw-bold)}
+.review-item__verified{font-size:var(--fs-xs);color:var(--c-success);font-weight:var(--fw-medium);margin-right:var(--sp-1)}
+.review-item__title{font-size:var(--fs-sm);font-weight:var(--fw-medium);margin-bottom:var(--sp-1)}
+/* ===== کوپن ===== */
+.coupon-row{display:flex;gap:var(--sp-2)}
+.coupon-row input{flex:1}
+.coupon-apply{flex-shrink:0;padding:0 var(--sp-4);border-radius:var(--r-md);background:var(--c-surface-2);color:var(--c-text-2);font-size:var(--fs-sm);font-weight:var(--fw-bold);border:1px solid var(--c-border);cursor:pointer;transition:background .15s}
+.coupon-apply:hover{background:var(--c-border)}
+.coupon-apply.applied{background:var(--c-success);color:#fff;border-color:var(--c-success)}
+.coupon-msg{font-size:var(--fs-xs);margin-top:var(--sp-1);min-height:16px}
+.coupon-msg.ok{color:var(--c-success)}
+.coupon-msg.err{color:#e0245e}
+.checkout-summary__row.discount span:last-child{color:var(--c-success)}
+/* ===== بنر (کروسل) ===== */
+.banner-carousel{position:relative;margin:0 0 var(--sp-4)}
+.banner-carousel__viewport{position:relative;border-radius:var(--r-xl);overflow:hidden;aspect-ratio:1200/360;background:var(--c-surface-2)}
+@media(max-width:640px){.banner-carousel__viewport{aspect-ratio:800/360}}
+.banner-slide{position:absolute;inset:0;opacity:0;transition:opacity .5s;cursor:pointer}
+.banner-slide.active{opacity:1}
+.banner-slide img{width:100%;height:100%;object-fit:cover;display:block}
+.banner-dots{position:absolute;bottom:var(--sp-3);left:0;right:0;display:flex;justify-content:center;gap:var(--sp-2);z-index:2}
+.banner-dot{width:9px;height:9px;border-radius:var(--r-full);background:rgba(255,255,255,.5);border:none;cursor:pointer;padding:0;transition:background .15s}
+.banner-dot.active{background:#fff}
+/* ===== اعلان موجودی ===== */
+.detail__notify-btn{margin-top:var(--sp-3);width:100%;padding:var(--sp-3);border-radius:var(--r-md);background:var(--c-surface-2);color:var(--c-text);border:1px dashed var(--c-border);font-family:inherit;font-weight:var(--fw-medium);cursor:pointer;transition:background .15s}
+.detail__notify-btn:hover{background:var(--c-border)}
+/* ===== فوتر و صفحات محتوا ===== */
+.footer__links{display:flex;flex-wrap:wrap;gap:var(--sp-4);justify-content:center;margin-bottom:var(--sp-3)}
+.footer__links a{color:var(--c-text-2);font-size:var(--fs-sm);cursor:pointer;transition:color .15s}
+.footer__links a:hover{color:var(--c-accent)}
+.content-page{line-height:2;max-width:820px}
+.content-page h1{font-size:var(--fs-2xl);font-weight:var(--fw-bold);margin:var(--sp-4) 0}
+.content-page h3{font-size:var(--fs-lg);font-weight:var(--fw-bold);margin:var(--sp-5) 0 var(--sp-2)}
+.content-page p{color:var(--c-text-2);margin-bottom:var(--sp-3)}
+.content-page ul{padding-right:var(--sp-5);margin-bottom:var(--sp-3);color:var(--c-text-2)}
+.content-page li{margin-bottom:var(--sp-2)}
+.content-page a{color:var(--c-accent)}
 </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
@@ -336,6 +578,10 @@ input,select{font-family:inherit}
     <input type="text" id="searchInput" placeholder="جستجوی محصول، برند یا شماره فنی..." autocomplete="off">
   </div>
   <div class="header__actions">
+    <button class="header__fav-btn" id="favBtn" onclick="showFavorites()" title="علاقه‌مندی‌ها" aria-label="علاقه‌مندی‌ها">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg>
+      <span class="header__fav-badge" id="favBadge"></span>
+    </button>
     <button class="header__user-btn" id="headerUserBtn" onclick="openAuth()" title="ورود / پروفایل">👤</button>
     <button class="header__cart-btn" id="cartBtn" aria-label="سبد خرید">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
@@ -344,14 +590,33 @@ input,select{font-family:inherit}
   </div>
 </header>
 
+<!--
+  گاراژ من: بزرگ‌ترین برگ برنده‌ی یک فروشگاه قطعات. کاربر ماشینش را می‌گوید و
+  کل کاتالوگ به قطعاتِ همان خودرو فیلتر می‌شود. انتخاب در localStorage می‌ماند،
+  پس با رفت‌وبرگشت بین صفحات پاک نمی‌شود.
+-->
+<div class="garage-bar" id="garageBar">
+  <span class="garage-bar__label">🚗 قطعه برای کدام خودرو؟</span>
+  <div id="garageControl"></div>
+  <span class="garage-bar__hint" id="garageHint"></span>
+</div>
+
 <nav class="cat-bar" id="catBarWrap"><div class="cat-bar__inner" id="catBar"><button class="cat-bar__chip active" data-cat="all">همه</button></div></nav>
 
 <main class="main" id="gridView">
+  <!-- بنرهای صفحه‌ی اول؛ اگر بنری نبود این بخش خالی و پنهان می‌ماند. -->
+  <div class="banner-carousel" id="bannerCarousel" style="display:none"><div class="banner-carousel__viewport" id="bannerViewport"></div><div class="banner-dots" id="bannerDots"></div></div>
+  <!--
+    دکمه‌ی فیلتر عمداً داخلِ همین سطر است، نه زیرش: روی موبایل هر ردیفِ کنترل
+    یعنی یک ردیف کالای کمتر در دیدِ اول.
+  -->
   <div class="products-header">
     <span class="products-header__count" id="productsCount"></span>
-    <div class="products-header__sort"><select id="sortSelect"><option value="newest">جدیدترین</option><option value="cheapest">ارزان‌ترین</option><option value="expensive">گران‌ترین</option><option value="name">نام</option></select></div>
+    <div class="products-header__tools">
+      <div class="products-header__sort"><select id="sortSelect"><option value="newest">جدیدترین</option><option value="cheapest">ارزان‌ترین</option><option value="expensive">گران‌ترین</option><option value="name">نام</option></select></div>
+      <button class="filter-toggle" id="filterToggle" onclick="toggleFilter()">🔍 <span class="filter-toggle__label">فیلتر</span></button>
+    </div>
   </div>
-  <button class="filter-toggle" id="filterToggle" onclick="toggleFilter()">🔍 فیلتر پیشرفته</button>
   <div class="filter-panel" id="filterPanel">
     <h3 class="filter-panel__title">فیلتر محصولات</h3>
     <div class="filter-panel__section">
@@ -392,9 +657,11 @@ input,select{font-family:inherit}
   <div class="detail__tabs" id="detailTabs">
     <button class="detail__tab active" data-tab="desc">توضیحات</button>
     <button class="detail__tab" data-tab="specs">مشخصات فنی</button>
+    <button class="detail__tab" data-tab="reviews">نظرات <span id="reviewsTabCount"></span></button>
   </div>
   <div class="detail__tab-panel active" id="tabDesc"></div>
   <div class="detail__tab-panel" id="tabSpecs"></div>
+  <div class="detail__tab-panel" id="tabReviews"></div>
   <div style="margin-top:var(--sp-8)"><h3 class="detail__related-title">محصولات مرتبط</h3><div class="detail__related-grid" id="relatedGrid"></div></div>
 </section>
 
@@ -408,6 +675,25 @@ input,select{font-family:inherit}
   <div class="profile__stats" id="profileStats"></div>
   <h3 class="profile__section-title">تاریخچه سفارش‌ها</h3>
   <div id="orderList"></div>
+</section>
+
+<!-- ===== FAVORITES ===== -->
+<section class="profile" id="favView" style="display:none">
+  <button class="detail__back" onclick="showGrid()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به فروشگاه
+  </button>
+  <h1 class="cart-page__title">💛 علاقه‌مندی‌های من</h1>
+  <div class="product-grid" id="favGrid"></div>
+</section>
+
+<!-- ===== CONTENT PAGE ===== -->
+<section class="profile content-page" id="pageView" style="display:none">
+  <button class="detail__back" onclick="showGrid()">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+    بازگشت به فروشگاه
+  </button>
+  <div id="pageContent"></div>
 </section>
 
 <!-- ===== CART PAGE ===== -->
@@ -442,9 +728,19 @@ input,select{font-family:inherit}
   </button>
   <div id="blogDetailContent"></div>
 </section>
-<footer class="footer"><p>فروشگاه قطعات خودرو — تمامی حقوق محفوظ است</p></footer>
+<footer class="footer">
+  <div class="footer__links">
+    <a onclick="showPage('about')">درباره ما</a>
+    <a onclick="showPage('contact')">تماس با ما</a>
+    <a onclick="showPage('faq')">سوالات متداول</a>
+    <a onclick="showPage('terms')">قوانین و حریم خصوصی</a>
+  </div>
+  <p>فروشگاه قطعات خودرو — تمامی حقوق محفوظ است</p>
+</footer>
 
 <div class="cart-overlay" id="cartOverlay"></div>
+<!-- پس‌زمینه‌ی شیت فیلتر روی موبایل؛ زدنِ بیرون می‌بنددش. -->
+<div class="filter-overlay" id="filterOverlay" onclick="toggleFilter()"></div>
 <aside class="cart-drawer" id="cartDrawer">
   <div class="cart-drawer__header"><h2 class="cart-drawer__title">سبد خرید</h2><button class="cart-drawer__close" id="cartClose" aria-label="بستن"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
   <div class="cart-drawer__items" id="cartItems"><div class="cart-empty" id="cartEmpty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><p>سبد خرید خالی است</p></div></div>
@@ -490,11 +786,20 @@ input,select{font-family:inherit}
       <div class="form-group"><label for="custPhone">شماره تماس</label><input type="tel" id="custPhone" placeholder="09121234567" dir="ltr" style="text-align:left;" inputmode="numeric" required></div>
       <!-- بدون آدرس، سفارش قابل ارسال نیست — این فیلد در ماکت نبود. -->
       <div class="form-group"><label for="custAddress">آدرس تحویل</label><textarea id="custAddress" rows="3" placeholder="شهر، خیابان، پلاک، واحد" required></textarea></div>
+      <div class="form-group" id="zoneGroup" style="display:none"><label for="shipZone">منطقه‌ی ارسال</label><select id="shipZone" onchange="onZoneChange()"></select></div>
       <div class="form-group"><label for="payMethod">روش پرداخت</label><select id="payMethod">
         <option value="ON_DELIVERY">پرداخت در محل</option>
         <option value="TRANSFER">کارت‌به‌کارت</option>
       </select></div>
       <div class="form-group"><label for="custNote">توضیح (اختیاری)</label><input type="text" id="custNote" placeholder="مثلاً: بعدازظهر تماس بگیرید"></div>
+      <div class="form-group">
+        <label for="couponCode">کد تخفیف</label>
+        <div class="coupon-row">
+          <input type="text" id="couponCode" placeholder="کد تخفیف را وارد کنید" autocomplete="off" style="text-transform:uppercase">
+          <button type="button" class="coupon-apply" id="couponApplyBtn" onclick="applyCoupon()">اعمال</button>
+        </div>
+        <div class="coupon-msg" id="couponMsg"></div>
+      </div>
       <div id="checkoutSummary" class="checkout-summary"></div>
     </div>
     <div class="modal__footer"><button class="btn-secondary" id="checkoutCancel">انصراف</button><button class="btn-primary" id="checkoutConfirm">تأیید و ثبت سفارش</button></div>
@@ -503,12 +808,25 @@ input,select{font-family:inherit}
 
 <nav class="mobile-nav">
   <a class="mobile-nav__item active" href="#" onclick="showGrid();return false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>خانه</span></a>
-  <button class="mobile-nav__item" id="mobileCartBtn" onclick="showCartPage();return false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>سبد</span></button>
+  <button class="mobile-nav__item" id="mobileCartBtn" onclick="showCartPage();return false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg><span>سبد</span><span class="mobile-nav__badge" id="mobileCartBadge"></span></button>
   <button class="mobile-nav__item" onclick="showBlogPage()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg><span>مقالات</span></button>
 <button class="mobile-nav__item" onclick="openAuth()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg><span>حساب من</span></button>
 </nav>
 
 <div class="toast" id="toast"></div>
+
+<!-- مودال انتخاب خودرو -->
+<div class="veh-overlay" id="vehOverlay" onclick="closeVehicleModal()"></div>
+<div class="veh-modal" id="vehModal" role="dialog" aria-modal="true" aria-label="انتخاب خودرو">
+  <div class="veh-modal__head">
+    <span class="veh-modal__title">🚗 خودروت رو انتخاب کن</span>
+    <button class="veh-modal__close" onclick="closeVehicleModal()" aria-label="بستن">×</button>
+  </div>
+  <div class="veh-modal__search">
+    <input type="text" id="vehSearch" placeholder="جستجوی خودرو… (مثلاً پراید، ۲۰۶)" autocomplete="off" oninput="renderVehicleList()">
+  </div>
+  <div class="veh-modal__list" id="vehList"></div>
+</div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════════════
@@ -703,6 +1021,7 @@ function applyUser(c){
   const name=[c.firstName,c.lastName].filter(Boolean).join(' ');
   currentUser={ id:c.id, name, phone:c.phone||otpPhone, avatar:initials(name) };
   updateUserBtn();
+  loadFavIds();   // قلب‌ها را برای کاربرِ واردشده پر کن
 }
 
 /** توکنِ ذخیره‌شده معتبر است؟ اگر نه، `api()` خودش پاکش می‌کند. */
@@ -716,6 +1035,7 @@ function logout(){
   setToken(null);
   currentUser=null;
   orders=[];
+  FAVIDS=new Set(); updateFavBadge();
   showGrid();
   updateUserBtn();
   showToast('از حساب خارج شدید');
@@ -758,10 +1078,53 @@ async function submitOrder(payload){
     address: payload.address,
     payMethod: payload.payMethod,
     note: payload.note || undefined,
+    // کد تخفیف اگر اعمال شده — سرور دوباره اعتبار و مبلغ را حساب می‌کند.
+    couponCode: appliedCoupon ? appliedCoupon.code : undefined,
+    shippingZoneId: selectedZone ? selectedZone.id : undefined,
     // retryِ شبکه یا دوبار خوردنِ دکمه نباید دو سفارش بسازد.
     idempotencyKey: payload.key,
   }});
   return order;
+}
+
+/* ===== کوپن تخفیف ===== */
+let appliedCoupon = null;   // { code, discount }
+
+function resetCoupon(){
+  appliedCoupon = null;
+  const inp=document.getElementById('couponCode'); if(inp) inp.value='';
+  const btn=document.getElementById('couponApplyBtn'); if(btn){ btn.classList.remove('applied'); btn.textContent='اعمال'; }
+  const msg=document.getElementById('couponMsg'); if(msg){ msg.textContent=''; msg.className='coupon-msg'; }
+}
+
+async function applyCoupon(){
+  const inp=document.getElementById('couponCode');
+  const msg=document.getElementById('couponMsg');
+  const btn=document.getElementById('couponApplyBtn');
+  const code=(inp.value||'').trim().toUpperCase();
+  if(!code){ resetCoupon(); renderCheckoutSummary(); return; }
+  if(appliedCoupon && appliedCoupon.code===code){ resetCoupon(); renderCheckoutSummary(); return; }  // دکمه دوباره = حذف
+  if(!cart.length){ msg.textContent='سبد خالی است'; msg.className='coupon-msg err'; return; }
+  msg.textContent='در حال بررسی…'; msg.className='coupon-msg';
+  try{
+    const r=await api('/shop/coupon/preview',{method:'POST',body:{code,lines:cart.map(i=>({productId:i.id,quantity:i.qty}))}});
+    if(r.ok){
+      appliedCoupon={ code:r.code, discount:r.discount };
+      msg.textContent=`${r.message} (${faNum(r.discount)} ${unitLabel()} تخفیف)`;
+      msg.className='coupon-msg ok';
+      btn.classList.add('applied'); btn.textContent='حذف';
+    }else{
+      appliedCoupon=null;
+      msg.textContent=r.message||'کد نامعتبر است';
+      msg.className='coupon-msg err';
+      btn.classList.remove('applied'); btn.textContent='اعمال';
+    }
+  }catch(e){
+    appliedCoupon=null;
+    msg.textContent=e.message||'خطا در بررسی کد';
+    msg.className='coupon-msg err';
+  }
+  renderCheckoutSummary();
 }
 
 async function loadMyOrders(){
@@ -794,12 +1157,14 @@ function renderCheckoutSummary(){
   const el=document.getElementById('checkoutSummary');
   if(!el) return;
   const subtotal=cartTotal();
-  const freeShip=SHOP.freeShipOver>0 && subtotal>=SHOP.freeShipOver;
-  const ship=freeShip?0:(SHOP.shippingFee||0);
+  const ship=currentShipping(subtotal);
+  const discount=appliedCoupon?Math.min(appliedCoupon.discount,subtotal):0;
+  const payable=Math.max(0,subtotal+ship-discount);
   el.innerHTML=`
     <div class="checkout-summary__row"><span>جمع کالاها</span><span>${faNum(subtotal)} ${unitLabel()}</span></div>
     <div class="checkout-summary__row"><span>هزینه ارسال</span><span>${ship?faNum(ship)+' '+unitLabel():'رایگان'}</span></div>
-    <div class="checkout-summary__row total"><span>قابل پرداخت</span><span>${faNum(subtotal+ship)} ${unitLabel()}</span></div>`;
+    ${discount?`<div class="checkout-summary__row discount"><span>تخفیف (${esc(appliedCoupon.code)})</span><span>− ${faNum(discount)} ${unitLabel()}</span></div>`:''}
+    <div class="checkout-summary__row total"><span>قابل پرداخت</span><span>${faNum(payable)} ${unitLabel()}</span></div>`;
 }
 
 async function cancelOrder(id){
@@ -865,21 +1230,27 @@ function renderProducts(list){
   if(!list.length){g.innerHTML='<div class="empty-state"><div class="empty-state__icon">🔍</div><div class="empty-state__text">محصولی یافت نشد</div></div>';document.getElementById('productsCount').textContent='';return}
   // شمارشِ کلِ نتیجه‌ی سرور، نه فقط این صفحه.
   document.getElementById('productsCount').textContent=fa(catalogTotal||list.length)+' محصول';
-  g.innerHTML=list.map(p=>{
-    const sl=stockLabel(p.stock);
-    const o=inStock(p.stock)?'':' out-of-stock';
-    // عکس واقعی اگر ثبت شده، وگرنه همان آیکونِ آبرومند.
-    const img=p.image
-      ? `<img class="p-card__photo" src="${API}${p.image}" alt="${esc(p.name)}" loading="lazy">`
-      : '<span class="p-card__img-placeholder">🔧</span>';
-    return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img">${img}<span class="p-card__stock-badge ${sl.cls}">${sl.text}</span></div><div class="p-card__body"><span class="p-card__brand">${esc(p.brand||'')}</span><h3 class="p-card__name">${esc(p.name)}</h3><span class="p-card__sku">${esc(p.sku||'')}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ${unitLabel()} / ${esc(p.unit||'')}</span></div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`
-  }).join('')}
+  g.innerHTML=list.map(cardHTML).join('')}
+
+/* قالبِ کارتِ محصول — مشترکِ گریدِ اصلی و گریدِ علاقه‌مندی. */
+function cardHTML(p){
+  const sl=stockLabel(p.stock);
+  const o=inStock(p.stock)?'':' out-of-stock';
+  // عکس واقعی اگر ثبت شده، وگرنه همان آیکونِ آبرومند.
+  const img=p.image
+    ? `<img class="p-card__photo" src="${API}${p.image}" alt="${esc(p.name)}" loading="lazy">`
+    : '<span class="p-card__img-placeholder">🔧</span>';
+  const favOn=FAVIDS.has(p.id);
+  return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img">${img}<span class="p-card__stock-badge ${sl.cls}">${sl.text}</span><button class="p-card__fav${favOn?' active':''}" onclick="event.stopPropagation();toggleFav('${p.id}',this)" aria-label="افزودن به علاقه‌مندی"><svg viewBox="0 0 24 24" fill="${favOn?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div><div class="p-card__body"><span class="p-card__brand">${esc(p.brand||'')}</span><h3 class="p-card__name">${esc(p.name)}</h3><span class="p-card__sku">${esc(p.sku||'')}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ${unitLabel()} / ${esc(p.unit||'')}</span></div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`;
+}
 
 function handleAdd(id,qty){const p=PRODUCTS.find(x=>x.id===id);if(p&&inStock(p.stock)){addToCart(p,qty);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
 
 let detailQty=1;
 function renderCart(){
   const badge=document.getElementById('cartBadge');const items=document.getElementById('cartItems');const empty=document.getElementById('cartEmpty');const footer=document.getElementById('cartFooter');const c=cartCount();
+  // روی موبایل badgeِ سربرگ دیده نمی‌شود؛ تعداد باید روی منوی پایین بنشیند.
+  const mBadge=document.getElementById('mobileCartBadge');if(mBadge)mBadge.textContent=c?fa(c):'';
   badge.textContent=c>0?fa(c):'';
   if(!cart.length){empty.style.display='';footer.style.display='none';items.querySelectorAll('.cart-item').forEach(e=>e.remove());return}
   empty.style.display='none';footer.style.display='';
@@ -911,6 +1282,150 @@ async function loadFacets(){
   document.getElementById('filterBrands').innerHTML = f.brands.map(b =>
     `<button class="filter-panel__brand" data-brand="${b.id}" onclick="toggleBrand('${b.id}')">${esc(b.name)}</button>`
   ).join('');
+
+  // خودروها برای سلکتورِ گاراژ. مرتب‌شده‌ی سرور است (پرمحصول‌ترین اول).
+  VEHICLES = f.vehicles || [];
+  renderGarageBar();
+}
+
+/* ===== بنرهای صفحه‌ی اول ===== */
+let BANNERS = [], bannerIdx = 0, bannerTimer = null;
+
+async function loadBanners(){
+  let list = [];
+  try{ list = await api('/shop/banners'); }catch(_){}
+  BANNERS = list || [];
+  renderBanners();
+}
+
+function renderBanners(){
+  const wrap = document.getElementById('bannerCarousel');
+  const vp = document.getElementById('bannerViewport');
+  const dots = document.getElementById('bannerDots');
+  if(bannerTimer){ clearInterval(bannerTimer); bannerTimer = null; }
+  if(!BANNERS.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  vp.innerHTML = BANNERS.map((b,i)=>
+    `<div class="banner-slide${i===0?' active':''}" data-i="${i}"${b.linkUrl?` onclick="bannerClick(${i})"`:''}>`
+    + `<img src="${API}${b.imageUrl}" alt="${esc(b.title||'بنر')}" loading="lazy"></div>`
+  ).join('');
+  dots.innerHTML = BANNERS.length>1
+    ? BANNERS.map((_,i)=>`<button class="banner-dot${i===0?' active':''}" onclick="goBanner(${i})" aria-label="بنر ${i+1}"></button>`).join('')
+    : '';
+  bannerIdx = 0;
+  if(BANNERS.length>1) bannerTimer = setInterval(()=>goBanner((bannerIdx+1)%BANNERS.length), 5000);
+}
+
+function goBanner(i){
+  bannerIdx = i;
+  document.querySelectorAll('#bannerViewport .banner-slide').forEach(s=>s.classList.toggle('active', Number(s.dataset.i)===i));
+  document.querySelectorAll('#bannerDots .banner-dot').forEach((d,di)=>d.classList.toggle('active', di===i));
+}
+
+function bannerClick(i){
+  const b = BANNERS[i];
+  if(!b || !b.linkUrl) return;
+  if(/^https?:\/\//i.test(b.linkUrl)) window.open(b.linkUrl, '_blank', 'noopener');
+  else window.location.href = b.linkUrl;
+}
+
+/* ===== اعلان موجود شدن ===== */
+async function notifyMe(productId){
+  // اگر واردشده، شماره‌ی خودش؛ وگرنه یک بار می‌پرسیم — ورود لازم نیست.
+  let phone = currentUser && currentUser.phone ? currentUser.phone : '';
+  phone = window.prompt('شماره موبایل برای اطلاع از موجود شدن:', phone) || '';
+  phone = phone.trim();
+  if(!phone) return;
+  try{
+    const r = await api('/shop/products/'+productId+'/notify',{method:'POST',body:{phone}});
+    showToast(r.message || 'ثبت شد');
+  }catch(e){ showToast(e.message || 'خطا در ثبت'); }
+}
+
+/* ===== صفحات محتوا (درباره/تماس/سوالات/قوانین) ===== */
+function pageHTML(key){
+  const name = (SHOP && SHOP.name) ? SHOP.name : 'فروشگاه قطعات خودرو';
+  const phone = (SHOP && SHOP.phone) ? SHOP.phone : '';
+  const address = (SHOP && SHOP.address) ? SHOP.address : '';
+  if(key==='about') return `
+    <h1>درباره ${esc(name)}</h1>
+    <p>ما عرضه‌کننده‌ی قطعات یدکیِ اصلِ خودروهای ایرانی و خارجی هستیم؛ با تمرکز بر اصالت کالا، قیمت منصفانه و ارسال سریع به سراسر کشور.</p>
+    <p>هدف ما این است که پیدا کردنِ قطعه‌ی درست برای خودروی شما ساده باشد — با انتخاب خودرو، جست‌وجوی هوشمند و مشخصات فنیِ شفاف روی هر کالا.</p>
+    <h3>چرا ما؟</h3>
+    <ul>
+      <li>ضمانت اصالت کالا</li>
+      <li>پشتیبانی و مشاوره‌ی تخصصی</li>
+      <li>ارسال به سراسر ایران</li>
+      <li>قیمت به‌روز و شفاف</li>
+    </ul>`;
+  if(key==='contact') return `
+    <h1>تماس با ما</h1>
+    ${phone?`<p>تلفن: <a href="tel:${esc(phone)}" dir="ltr">${esc(phone)}</a></p>`:''}
+    ${address?`<p>نشانی: ${esc(address)}</p>`:''}
+    <p>ساعات پاسخ‌گویی: شنبه تا پنج‌شنبه، ۹ تا ۱۸.</p>
+    <p>برای سفارش‌ها می‌توانید از طریق همین سایت اقدام کنید و از بخش «سفارش‌های من» وضعیت را دنبال کنید.</p>`;
+  if(key==='faq') return `
+    <h1>سوالات متداول</h1>
+    <h3>ارسال چقدر طول می‌کشد؟</h3>
+    <p>بسته به منطقه‌ی ارسال، معمولاً بین ۱ تا ۳ روز کاری. هزینه‌ی ارسال در مرحله‌ی تسویه بر اساس شهر شما نمایش داده می‌شود.</p>
+    <h3>روش‌های پرداخت چیست؟</h3>
+    <p>پرداخت در محل و کارت‌به‌کارت. درگاه پرداخت آنلاین به‌زودی اضافه می‌شود.</p>
+    <h3>آیا کالاها اصل هستند؟</h3>
+    <p>بله، اصالت کالا تضمین می‌شود. مشخصات فنی و شماره‌ی فنیِ هر قطعه روی صفحه‌ی همان کالا آمده است.</p>
+    <h3>اگر قطعه ناموجود بود چه کنم؟</h3>
+    <p>روی صفحه‌ی کالای ناموجود دکمه‌ی «موجود شد، خبرم کن» را بزنید تا به‌محضِ شارژِ انبار پیامک دریافت کنید.</p>
+    <h3>امکان مرجوعی هست؟</h3>
+    <p>بله، در صورت مغایرت یا ایراد، طبق قوانین فروشگاه امکان مرجوعی وجود دارد؛ برای هماهنگی تماس بگیرید.</p>`;
+  return `
+    <h1>قوانین و حریم خصوصی</h1>
+    <h3>حریم خصوصی</h3>
+    <p>شماره‌ی تماس و اطلاعاتِ سفارشِ شما تنها برای پردازش و ارسالِ سفارش استفاده می‌شود و در اختیار شخص ثالث قرار نمی‌گیرد.</p>
+    <h3>ثبت سفارش</h3>
+    <p>قیمت و موجودی در لحظه‌ی ثبت سفارش قطعی می‌شود. در صورت مغایرت یا اتمام موجودی، فروشگاه با شما هماهنگ می‌کند.</p>
+    <h3>مرجوعی و بازگشت</h3>
+    <p>در صورت مغایرتِ کالا با سفارش یا ایرادِ فنی، مطابق قوانین امکان بازگشت وجود دارد.</p>`;
+}
+
+function showPage(key){
+  ['gridView','detailView','profileView','cartPage','favView','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+  const pv=document.getElementById('pageView'); pv.style.display=''; pv.classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  const gb=document.getElementById('garageBar'); if(gb) gb.style.display='none';
+  document.getElementById('pageContent').innerHTML=pageHTML(key);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ===== منطقه‌ی ارسال ===== */
+let SHIPPING_ZONES = [], selectedZone = null;
+
+async function loadShippingZones(){
+  try{ SHIPPING_ZONES = await api('/shop/shipping-zones') || []; }catch(_){ SHIPPING_ZONES = []; }
+  const grp = document.getElementById('zoneGroup');
+  const sel = document.getElementById('shipZone');
+  if(!SHIPPING_ZONES.length){ grp.style.display = 'none'; selectedZone = null; return; }
+  grp.style.display = '';
+  sel.innerHTML = SHIPPING_ZONES.map(z=>
+    `<option value="${z.id}">${esc(z.name)} — ${z.fee?faNum(z.fee)+' '+unitLabel():'رایگان'}</option>`
+  ).join('');
+  selectedZone = SHIPPING_ZONES[0];
+  sel.value = selectedZone.id;
+}
+
+function onZoneChange(){
+  const id = document.getElementById('shipZone').value;
+  selectedZone = SHIPPING_ZONES.find(z=>z.id===id) || null;
+  renderCheckoutSummary();
+}
+
+/** هزینه‌ی ارسالِ فعلی (تومان) — همان قاعده‌ی سرور: منطقه یا نرخِ ثابت. */
+function currentShipping(subtotal){
+  if(selectedZone){
+    const freeByZone = selectedZone.freeOver != null && subtotal >= selectedZone.freeOver;
+    const freeByShop = SHOP.freeShipOver > 0 && subtotal >= SHOP.freeShipOver;
+    return (freeByZone || freeByShop) ? 0 : (selectedZone.fee || 0);
+  }
+  const freeShip = SHOP.freeShipOver > 0 && subtotal >= SHOP.freeShipOver;
+  return freeShip ? 0 : (SHOP.shippingFee || 0);
 }
 
 /**
@@ -930,7 +1445,8 @@ async function boot(){
   }
 
   if(SHOP.name) document.title = SHOP.name;
-  await Promise.all([loadFacets(), loadProducts()]);
+  renderGarageBar();   // اگر خودرو از قبل در localStorage بود، چیپ فوری دیده شود
+  await Promise.all([loadFacets(), loadProducts(), loadBanners(), loadShippingZones()]);
   if(authToken) refreshMe();
 }
 
@@ -948,6 +1464,7 @@ function catalogParams(){
   const q = new URLSearchParams();
   if(searchQuery) q.set('q', searchQuery);
   if(activeCat !== 'all') q.set('categoryId', activeCat);
+  if(selectedVehicle) q.set('vehicleModelId', selectedVehicle.id);
   if(filterState){
     if(filterState.priceMin > 0) q.set('minPrice', filterState.priceMin);
     if(filterState.priceMax < Infinity) q.set('maxPrice', filterState.priceMax);
@@ -1027,7 +1544,7 @@ async function showDetail(id){
     ? `<img class="detail__photo" src="${API}${p.images[0]}" alt="${esc(p.name)}">`
     : '<span>🔧</span>';
 
-  hero.innerHTML=`<div class="detail__img-box">${img}<span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${esc(p.brand||'')}</span><h1 class="detail__name">${esc(p.name)}</h1><span class="detail__sku">کد: ${esc(p.sku||'')}</span><div class="detail__price-box"><span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">${unitLabel()} / ${esc(p.unit||'')}</span></div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${inStock(p.stock)?'افزودن به سبد':'ناموجود'}</button></div></div>`;
+  hero.innerHTML=`<div class="detail__img-box">${img}<span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${esc(p.brand||'')}</span><h1 class="detail__name">${esc(p.name)}</h1><span class="detail__sku">کد: ${esc(p.sku||'')}</span><div class="detail__price-box"><span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">${unitLabel()} / ${esc(p.unit||'')}</span></div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${inStock(p.stock)?'افزودن به سبد':'ناموجود'}</button></div>${!inStock(p.stock)?`<button class="detail__notify-btn" onclick="notifyMe('${p.id}')">🔔 موجود شد، خبرم کن</button>`:''}</div>`;
 
   document.getElementById('tabDesc').innerHTML=`<p class="detail__desc">${esc(p.description||'توضیحاتی ثبت نشده است.')}</p>`;
 
@@ -1046,9 +1563,80 @@ async function showDetail(id){
       `<div class="detail__spec"><span class="detail__spec-label">${k}</span><span class="detail__spec-val">${esc(v)}</span></div>`
     ).join('') + '</div>';
 
-  document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(t=>{t.onclick=()=>{document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');document.getElementById('tabDesc').classList.toggle('active',t.dataset.tab==='desc');document.getElementById('tabSpecs').classList.toggle('active',t.dataset.tab==='specs')}});
+  const TAB_PANEL={desc:'tabDesc',specs:'tabSpecs',reviews:'tabReviews'};
+  document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(t=>{t.onclick=()=>{
+    document.getElementById('detailTabs').querySelectorAll('.detail__tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    Object.entries(TAB_PANEL).forEach(([k,pid])=>document.getElementById(pid).classList.toggle('active',t.dataset.tab===k));
+  }});
 
   loadRelated(id);
+  loadReviews(id);
+}
+
+/* ===== نظرات و امتیاز ===== */
+function starsHTML(rating, cls){
+  let s='';
+  for(let i=1;i<=5;i++) s+=`<span class="${cls||''}" style="color:${i<=Math.round(rating)?'#f39c12':'var(--c-border)'}">★</span>`;
+  return s;
+}
+
+let reviewFormRating = 0;
+
+async function loadReviews(productId){
+  const panel=document.getElementById('tabReviews');
+  panel.innerHTML='<p style="color:var(--c-text-3)">در حال بارگذاری…</p>';
+  let data={average:0,count:0,items:[]};
+  try{ data=await api('/shop/products/'+productId+'/reviews'); }catch(_){}
+
+  document.getElementById('reviewsTabCount').textContent = data.count?`(${fa(data.count)})`:'';
+
+  const summary = data.count
+    ? `<div class="review-summary"><span class="review-summary__num">${fa(data.average)}</span><span class="review-summary__stars">${starsHTML(data.average)}</span><span class="review-summary__count">از ${fa(data.count)} نظر</span></div>`
+    : '<p style="color:var(--c-text-3);margin-bottom:var(--sp-4)">هنوز نظری ثبت نشده. اولین نفر باشید!</p>';
+
+  const list = data.items.map(r=>`
+    <div class="review-item">
+      <div class="review-item__head">
+        <span class="review-item__author">${esc(r.author)}${r.verified?' <span class="review-item__verified">✓ خرید تأییدشده</span>':''}</span>
+        <span class="review-item__date">${new Date(r.createdAt).toLocaleDateString('fa-IR')}</span>
+      </div>
+      <div class="review-item__stars">${starsHTML(r.rating)}</div>
+      ${r.title?`<div class="review-item__title">${esc(r.title)}</div>`:''}
+      <div class="review-item__text">${esc(r.body)}</div>
+    </div>`).join('');
+
+  reviewFormRating = 0;
+  const form = `
+    <div class="review-form" id="reviewForm">
+      <div class="review-form__title">نظر خود را بنویسید</div>
+      <div class="review-form__stars" id="reviewFormStars">${[1,2,3,4,5].map(i=>`<span class="review-form__star" data-star="${i}" onclick="setReviewRating(${i})">★</span>`).join('')}</div>
+      <input type="text" id="reviewTitle" placeholder="عنوان (اختیاری)" maxlength="120" style="width:100%;height:40px;padding:0 var(--sp-3);border:1px solid var(--c-border);border-radius:var(--r-md);font-family:inherit;margin-bottom:var(--sp-3)">
+      <textarea id="reviewBody" placeholder="تجربه‌ی خود را از این کالا بنویسید…" maxlength="1000"></textarea>
+      <button class="review-form__btn" onclick="submitReview('${productId}')">ثبت نظر</button>
+    </div>`;
+
+  panel.innerHTML = summary + (list?`<div class="review-list">${list}</div>`:'') + form;
+}
+
+function setReviewRating(n){
+  reviewFormRating = n;
+  document.querySelectorAll('#reviewFormStars .review-form__star').forEach(s=>{
+    s.classList.toggle('active', Number(s.dataset.star) <= n);
+  });
+}
+
+async function submitReview(productId){
+  if(!authToken){ showToast('برای ثبت نظر وارد شوید'); openAuth(); return; }
+  if(!reviewFormRating){ showToast('لطفاً امتیاز را انتخاب کنید'); return; }
+  const body=document.getElementById('reviewBody').value.trim();
+  if(body.length<3){ showToast('متن نظر خیلی کوتاه است'); return; }
+  const title=document.getElementById('reviewTitle').value.trim();
+  try{
+    const r=await api('/shop/products/'+productId+'/reviews',{method:'POST',body:{rating:reviewFormRating,title:title||undefined,body}});
+    showToast(r.message||'نظر ثبت شد');
+    loadReviews(productId);   // اگر خریدار تأییدشده بود، نظرش فوری بالا می‌آید
+  }catch(e){ showToast(e.message||'خطا در ثبت نظر'); }
 }
 
 async function loadRelated(id){
@@ -1079,9 +1667,10 @@ async function showProfile(){
 }
 
 function showGrid(){
-  ['detailView','profileView','cartPage'].forEach(v=>{document.getElementById(v).classList.remove('show');document.getElementById(v).style.display=''});
+  ['detailView','profileView','cartPage','favView','pageView','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.classList.remove('show');el.style.display=(el.id==='favView'||el.id==='pageView')?'none':''}});
   document.getElementById('gridView').style.display='';
   document.getElementById('catBarWrap').style.display='';
+  document.getElementById('garageBar').style.display='';
   loadProducts();
 }
 
@@ -1284,6 +1873,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     // مشتریِ واردنشده اول باید وارد شود؛ بهتر است الان بفهمد تا بعد از پرکردن فرم.
     if(!currentUser){ closeCart(); openAuth(); showToast('برای ثبت سفارش وارد شوید'); return }
     prefillCheckout();
+    resetCoupon();               // سبد ممکن است عوض شده باشد؛ کوپن تازه بررسی شود
     renderCheckoutSummary();
     closeCart();
     setTimeout(()=>{document.getElementById('checkoutModal').classList.add('open');document.body.style.overflow='hidden'},300);
@@ -1336,11 +1926,169 @@ document.addEventListener('DOMContentLoaded',()=>{
 /* ===== ADVANCED FILTER ===== */
 let filterState = { priceMin: 0, priceMax: Infinity, brands: [], stock: 'all' };
 
+/* ===== انتخاب خودرو (گاراژ من) =====
+ * خودروها از `/shop/facets` می‌آیند (VEHICLES). انتخاب در localStorage می‌ماند و
+ * فیلترِ بک‌اند از قبل `vehicleModelId` را می‌فهمد، پس اینجا فقط state + UI است.
+ */
+let VEHICLES = [];
+let selectedVehicle = (function(){
+  try { return JSON.parse(localStorage.getItem('wos_vehicle') || 'null'); }
+  catch(_) { return null; }
+})();
+
+function renderGarageBar(){
+  const ctrl = document.getElementById('garageControl');
+  const hint = document.getElementById('garageHint');
+  if(!ctrl) return;
+  if(selectedVehicle){
+    ctrl.innerHTML = `<span class="garage-chip">${esc(selectedVehicle.name)}`
+      + `<span class="garage-chip__x" onclick="clearVehicle()" title="حذف خودرو" role="button" aria-label="حذف خودرو">×</span></span>`;
+    if(hint) hint.textContent = 'فقط قطعاتِ این خودرو نمایش داده می‌شود';
+  }else{
+    ctrl.innerHTML = `<button class="garage-pick" onclick="openVehicleModal()">انتخاب خودرو</button>`;
+    if(hint) hint.textContent = VEHICLES.length ? `${fa(VEHICLES.length)} خودرو` : '';
+  }
+}
+
+function openVehicleModal(){
+  if(!VEHICLES.length){ showToast('فهرست خودروها هنوز آماده نیست'); return; }
+  const s = document.getElementById('vehSearch'); s.value = '';
+  renderVehicleList();
+  document.getElementById('vehOverlay').classList.add('show');
+  document.getElementById('vehModal').classList.add('show');
+  setTimeout(()=>s.focus(), 50);
+}
+
+function closeVehicleModal(){
+  document.getElementById('vehOverlay').classList.remove('show');
+  document.getElementById('vehModal').classList.remove('show');
+}
+
+/* نرمال‌سازیِ ی/ک عربی تا جستجوی خودرو مثل بقیه‌ی سایت رفتار کند. */
+function normFa(s){ return (s||'').replace(/[يى]/g,'ی').replace(/ك/g,'ک'); }
+
+function renderVehicleList(){
+  const t = normFa(document.getElementById('vehSearch').value.trim());
+  const list = t ? VEHICLES.filter(v => normFa(v.name).includes(t)) : VEHICLES;
+  const box = document.getElementById('vehList');
+  if(!list.length){ box.innerHTML = '<div class="veh-modal__empty">خودرویی پیدا نشد</div>'; return; }
+  box.innerHTML = list.map(v => {
+    const active = selectedVehicle && selectedVehicle.id === v.id ? ' active' : '';
+    const years = v.startYear ? ` <span class="veh-item__meta">${fa(v.startYear)}–${fa(v.endYear)}</span>` : '';
+    return `<button class="veh-item${active}" onclick="selectVehicle('${v.id}')">`
+      + `<span class="veh-item__name">${esc(v.name)}${years}</span>`
+      + `<span class="veh-item__count">${fa(v.count)} قطعه</span></button>`;
+  }).join('');
+}
+
+function selectVehicle(id){
+  const v = VEHICLES.find(x => x.id === id);
+  if(!v) return;
+  selectedVehicle = { id: v.id, name: v.name };
+  try{ localStorage.setItem('wos_vehicle', JSON.stringify(selectedVehicle)); }catch(_){}
+  renderGarageBar();
+  closeVehicleModal();
+  page = 1;
+  loadProducts();
+  showToast('خودرو انتخاب شد: ' + v.name);
+}
+
+function clearVehicle(){
+  selectedVehicle = null;
+  try{ localStorage.removeItem('wos_vehicle'); }catch(_){}
+  renderGarageBar();
+  page = 1;
+  loadProducts();
+}
+
+/* ===== علاقه‌مندی (Wishlist) =====
+ * فقط برای کاربرِ واردشده. FAVIDS مجموعه‌ی شناسه‌هاست تا قلبِ کارت‌ها رنگ شود.
+ */
+let FAVIDS = new Set();
+
+async function loadFavIds(){
+  if(!authToken){ FAVIDS = new Set(); updateFavBadge(); return; }
+  try{
+    const r = await api('/shop/favorites/ids');
+    FAVIDS = new Set(r.ids || []);
+  }catch(_){ FAVIDS = new Set(); }
+  updateFavBadge();
+  // کارت‌هایی که همین حالا روی صفحه‌اند و علاقه‌مندی‌اند را رنگ کن.
+  FAVIDS.forEach(id => paintFav(id));
+}
+
+function updateFavBadge(){
+  const b = document.getElementById('favBadge');
+  if(!b) return;
+  b.textContent = fa(FAVIDS.size);
+  b.classList.toggle('show', FAVIDS.size > 0);
+}
+
+async function toggleFav(id, btn){
+  if(!authToken){ showToast('برای علاقه‌مندی وارد شوید'); openAuth(); return; }
+  const on = FAVIDS.has(id);
+  // خوش‌بینانه: فوری در UI، بعد سرور — اگر خطا خورد برمی‌گردانیم.
+  try{
+    if(on){
+      await api('/shop/favorites/' + id, { method:'DELETE' });
+      FAVIDS.delete(id);
+    }else{
+      await api('/shop/favorites/' + id, { method:'POST' });
+      FAVIDS.add(id);
+    }
+    paintFav(id);
+    updateFavBadge();
+    showToast(on ? 'از علاقه‌مندی حذف شد' : 'به علاقه‌مندی اضافه شد');
+  }catch(e){
+    showToast(e.message || 'خطا');
+  }
+}
+
+/* قلبِ همه‌ی نمونه‌های این کالا روی صفحه را با وضعیتِ فعلی هماهنگ کن. */
+function paintFav(id){
+  const on = FAVIDS.has(id);
+  document.querySelectorAll(`.p-card[data-id="${id}"] .p-card__fav`).forEach(btn=>{
+    btn.classList.toggle('active', on);
+    const svg = btn.querySelector('svg');
+    if(svg) svg.setAttribute('fill', on ? 'currentColor' : 'none');
+  });
+}
+
+async function showFavorites(){
+  if(!authToken){ showToast('برای دیدن علاقه‌مندی‌ها وارد شوید'); openAuth(); return; }
+  ['gridView','detailView','profileView','cartPage','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
+  const fv=document.getElementById('favView'); fv.style.display=''; fv.classList.add('show');
+  document.getElementById('catBarWrap').style.display='none';
+  document.getElementById('garageBar').style.display='none';
+  window.scrollTo({top:0,behavior:'smooth'});
+  const grid=document.getElementById('favGrid');
+  grid.innerHTML='<div class="empty-state"><div class="empty-state__icon">⏳</div><div class="empty-state__text">در حال بارگذاری…</div></div>';
+  let items=[];
+  try{ const r=await api('/shop/favorites'); items=r.items||[]; }catch(e){}
+  await loadFavIds();
+  if(!items.length){ grid.innerHTML='<div class="empty-state"><div class="empty-state__icon">💛</div><div class="empty-state__text">هنوز چیزی به علاقه‌مندی اضافه نکرده‌اید</div></div>'; return; }
+  // همان کارتِ گرید اصلی، با رندرِ مستقیم در گریدِ علاقه‌مندی.
+  const prev=document.getElementById('productGrid');
+  renderInto(grid, items);
+}
+
+/* رندرِ کارت‌ها در یک گریدِ دلخواه (بازاستفاده از قالبِ کارت اصلی). */
+function renderInto(grid, list){
+  PRODUCTS = list;   // تا handleAdd/showDetail همین کالاها را ببیند
+  grid.innerHTML = list.map(cardHTML).join('');
+}
+
 function toggleFilter() {
   const panel = document.getElementById('filterPanel');
   const btn = document.getElementById('filterToggle');
-  panel.classList.toggle('show');
-  btn.classList.toggle('active');
+  const ovl = document.getElementById('filterOverlay');
+  const open = !panel.classList.contains('show');
+
+  panel.classList.toggle('show', open);
+  btn.classList.toggle('active', open);
+  ovl.classList.toggle('show', open);
+  // وقتی شیت باز است، صفحه‌ی پشتش نباید زیر انگشت بلغزد.
+  document.body.style.overflow = open ? 'hidden' : '';
 }
 
 // برندها حالا در `loadFacets` از سرور پر می‌شوند؛ این فقط برای سازگاری مانده.
@@ -1453,6 +2201,9 @@ function renderCartPage(){
 
 function openCheckoutFromPage(){
   if(!cart.length)return;
+  if(!currentUser){ openAuth(); showToast('برای ثبت سفارش وارد شوید'); return }
+  resetCoupon();
+  renderCheckoutSummary();
   showGrid();
   setTimeout(()=>{
     document.getElementById('cartDrawer').classList.add('open');

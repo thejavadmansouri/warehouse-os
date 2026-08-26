@@ -6,6 +6,10 @@ import { StorefrontController } from './storefront.controller';
 import { StorefrontCatalogService } from './storefront-catalog.service';
 import { StorefrontAuthService } from './storefront-auth.service';
 import { StorefrontOrderService } from './storefront-order.service';
+import { StorefrontFavoritesService } from './storefront-favorites.service';
+import { StorefrontReviewsService } from './storefront-reviews.service';
+import { CouponService } from './coupon.service';
+import { StorefrontStockNotifyService } from './storefront-stock-notify.service';
 import { CustomerTokenService, CustomerAuthGuard } from './customer-token';
 import { SmsSender } from '../sms/sms-sender';
 
@@ -29,6 +33,10 @@ import { SmsSender } from '../sms/sms-sender';
     StorefrontCatalogService,
     StorefrontAuthService,
     StorefrontOrderService,
+    StorefrontFavoritesService,
+    StorefrontReviewsService,
+    CouponService,
+    StorefrontStockNotifyService,
     CustomerTokenService,
     CustomerAuthGuard,
     SmsSender,

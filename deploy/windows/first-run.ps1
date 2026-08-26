@@ -200,12 +200,37 @@ if ($LASTEXITCODE -ne 0) { throw 'could not set the backup folder' }
 
 # ----------------------------------------------------------------- firewall
 Say 'Opening the ports on the local network'
+<#
+    profile=any, not profile=private,domain.
+
+    Scoping the rules to Private meant that the day Windows reclassified the
+    connection as Public -- a reboot where NLA starts before the network is
+    identified, or a replaced router giving the connection a new signature --
+    the ports silently closed and the till lost the server, with nothing in any
+    log to say why. It happened in the field and cost a day.
+
+    This machine sits behind the warehouse router, so a port that closes itself
+    after a reboot is the bigger risk of the two. The database port is still
+    never opened, which is the boundary that actually matters.
+#>
 foreach ($p in @($ApiPort, $WebPort)) {
-    netsh advfirewall firewall delete rule name="WarehouseOS $p" | Out-Null
+    netsh advfirewall firewall delete rule name="WarehouseOS $p" 2>&1 | Out-Null
     netsh advfirewall firewall add rule name="WarehouseOS $p" `
-        dir=in action=allow protocol=TCP localport=$p profile=private,domain | Out-Null
+        dir=in action=allow protocol=TCP localport=$p profile=any | Out-Null
 }
-# The database port is deliberately never opened.
+
+# A Private network is also what the customer expects (discovery, sharing).
+# Best-effort: the rules above already work regardless, so this must never
+# abort an install. Domain connections are skipped -- Set refuses them.
+try {
+    Get-NetConnectionProfile -ErrorAction Stop |
+        Where-Object { $_.NetworkCategory -eq 'Public' } |
+        ForEach-Object {
+            Set-NetConnectionProfile -InterfaceIndex $_.InterfaceIndex -NetworkCategory Private -ErrorAction Stop
+        }
+} catch {
+    Warn "Could not switch the network to Private (not fatal): $($_.Exception.Message)"
+}
 
 # ---------------------------------------------------------------- shortcuts
 # Created here rather than in installer.iss because the labels are Persian and

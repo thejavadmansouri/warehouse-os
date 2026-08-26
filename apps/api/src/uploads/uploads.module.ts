@@ -4,6 +4,7 @@ import { UploadsController } from './uploads.controller';
 import { UploadsService } from './uploads.service';
 
 import { PrismaModule } from '../prisma/prisma.module';
+import { ImagePipeline } from '../common/image-pipeline';
 
 
 @Module({
@@ -17,6 +18,11 @@ import { PrismaModule } from '../prisma/prisma.module';
   ],
 
   providers:[
+    UploadsService,
+    ImagePipeline
+  ],
+
+  exports:[
     UploadsService
   ]
 

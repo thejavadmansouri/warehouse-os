@@ -49,6 +49,7 @@ import { SyncModule } from './sync/sync.module';
 import { RealtimeModule } from './realtime/realtime.module';
 import { ShortagesModule } from './shortages/shortages.module';
 import { SmsModule } from './sms/sms.module';
+import { ProductImagesModule } from './product-images/product-images.module';
 
 /*
  * ماژول‌هایی که **فقط روی سرور انبار** لود می‌شوند.
@@ -95,6 +96,7 @@ const WAREHOUSE_ONLY = [
   SmsModule,
   ShopModule,
   OnlineOrdersModule,
+  ProductImagesModule,
 ];
 
 /**
@@ -137,6 +139,14 @@ function rolePart() {
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', 'storage', 'products'),
       serveRoot: '/storage/products',
+    }),
+    /*
+     * بنرهای فروشگاه هم عمومی‌اند (روی صفحه‌ی اول دیده می‌شوند). فقط همین
+     * زیرپوشه سرو می‌شود — نه کلِ storage — تا عکس‌های انبار پشتِ توکن بمانند.
+     */
+    ServeStaticModule.forRoot({
+      rootPath: join(__dirname, '..', 'storage', 'banners'),
+      serveRoot: '/storage/banners',
     }),
   ],
   controllers: [

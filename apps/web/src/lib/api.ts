@@ -2136,3 +2136,139 @@ export function updateLabelSettings(
 ): Promise<T.LabelSettings> {
   return apiFetch<T.LabelSettings>("/labels/settings", { method: "PUT", body });
 }
+
+// =====================================================
+// جستجو و بررسی تصویر محصولات
+// =====================================================
+
+export type CandidateFilter =
+  | "ALL"
+  | "PENDING"
+  | "HIGH_CONFIDENCE"
+  | "MEDIUM_CONFIDENCE"
+  | "LOW_CONFIDENCE"
+  | "APPROVED"
+  | "REJECTED"
+  | "FAILED"
+  | "NO_IMAGE_FOUND";
+
+export interface ImageCandidate {
+  id: string;
+  status: string;
+  confidenceScore: number;
+  confidenceLevel: string;
+  matchReason: string | null;
+  sourceUrl: string;
+  sourceDomain: string | null;
+  searchQuery: string | null;
+  localPath: string | null;
+  processedPath: string | null;
+  originalWidth: number | null;
+  originalHeight: number | null;
+  originalSize: number | null;
+  processedWidth: number | null;
+  processedHeight: number | null;
+  processedSize: number | null;
+  backgroundRemoved: boolean;
+  rejectReason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+  product: {
+    id: string;
+    name: string;
+    sku: string;
+    partNumber: string | null;
+    brand: string | null;
+    vehicleModel: string | null;
+    category: string | null;
+  };
+}
+
+export interface ImageStats {
+  totalProducts: number;
+  productsWithoutImages: number;
+  searchQueued: number;
+  searchRunning: number;
+  searchCompleted: number;
+  searchFailed: number;
+  candidatesPending: number;
+  candidatesProcessing: number;
+  candidatesApproved: number;
+  candidatesRejected: number;
+  candidatesFailed: number;
+  highConfidence: number;
+  mediumConfidence: number;
+  lowConfidence: number;
+  noConfidence: number;
+  progress: number;
+}
+
+export function getImageCandidates(params: {
+  page?: number;
+  limit?: number;
+  filter?: CandidateFilter;
+  brandId?: string;
+  categoryId?: string;
+  search?: string;
+  productId?: string;
+}): Promise<{ data: ImageCandidate[]; meta: { total: number; page: number; lastPage: number } }> {
+  const qs = new URLSearchParams();
+  if (params.page) qs.set("page", String(params.page));
+  if (params.limit) qs.set("limit", String(params.limit));
+  if (params.filter && params.filter !== "ALL") qs.set("filter", params.filter);
+  if (params.brandId) qs.set("brandId", params.brandId);
+  if (params.categoryId) qs.set("categoryId", params.categoryId);
+  if (params.search) qs.set("search", params.search);
+  if (params.productId) qs.set("productId", params.productId);
+  return apiFetch(`/admin/product-images?${qs.toString()}`);
+}
+
+export function getImageStats(): Promise<ImageStats> {
+  return apiFetch("/admin/product-images/stats");
+}
+
+export function getCandidate(id: string): Promise<ImageCandidate & { product: any }> {
+  return apiFetch(`/admin/product-images/${encodeURIComponent(id)}`);
+}
+
+export function approveCandidate(id: string): Promise<{ assetId: string }> {
+  return apiFetch(`/admin/product-images/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+  });
+}
+
+export function rejectCandidate(id: string, reason?: string): Promise<{ success: boolean }> {
+  return apiFetch(`/admin/product-images/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    body: { reason },
+  });
+}
+
+export function searchAgain(id: string): Promise<{ queued: number; alreadyQueued: number }> {
+  return apiFetch(`/admin/product-images/${encodeURIComponent(id)}/search-again`, {
+    method: "POST",
+  });
+}
+
+export function startImageSearch(opts: {
+  productIds?: string[];
+  limit?: number;
+  brandId?: string;
+}): Promise<{ queued: number; alreadyQueued: number }> {
+  return apiFetch("/admin/product-images/search", { method: "POST", body: opts });
+}
+
+export function bulkApproveImages(candidateIds: string[]): Promise<{ approved: number; skipped: number }> {
+  return apiFetch("/admin/product-images/bulk-approve", {
+    method: "POST",
+    body: { candidateIds },
+  });
+}
+
+export function bulkRejectImages(candidateIds: string[], reason?: string): Promise<{ rejected: number }> {
+  return apiFetch("/admin/product-images/bulk-reject", {
+    method: "POST",
+    body: { candidateIds, reason },
+  });
+}

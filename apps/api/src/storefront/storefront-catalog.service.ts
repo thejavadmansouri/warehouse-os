@@ -118,6 +118,39 @@ export class StorefrontCatalogService {
     return { showOnline: true, isActive: true, deletedAt: null };
   }
 
+  /** مناطقِ ارسالِ فعال، هزینه به واحدِ سایت. اگر خالی بود یعنی نرخِ ثابت. */
+  async shippingZones() {
+    const shop = await this.settings();
+    const rows = await this.prisma.shippingZone.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, fee: true, freeOver: true },
+    });
+    return rows.map((z) => ({
+      id: z.id,
+      name: z.name,
+      fee: convertMoney(z.fee, shop.storedUnit, shop.unit),
+      freeOver: z.freeOver != null ? convertMoney(z.freeOver, shop.storedUnit, shop.unit) : null,
+    }));
+  }
+
+  /** بنرهای فعالِ صفحه‌ی اول — درونِ بازه‌ی تاریخ، به ترتیبِ چیدمان. */
+  async banners() {
+    const now = new Date();
+    return this.prisma.banner.findMany({
+      where: {
+        isActive: true,
+        AND: [
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+        ],
+      },
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      take: 20,
+      select: { id: true, title: true, imageUrl: true, linkUrl: true },
+    });
+  }
+
   async list(query: CatalogQuery) {
     const shop = await this.assertOnline();
     const units = { stored: shop.storedUnit, site: shop.unit };
@@ -163,6 +196,26 @@ export class StorefrontCatalogService {
       total,
       pageCount: Math.max(1, Math.ceil(total / pageSize)),
     };
+  }
+
+  /**
+   * کارت‌های امنِ چند کالای مشخص — برای لیستِ علاقه‌مندی و «خرید مجدد».
+   *
+   * از همان مسیرِ `list` عبور می‌کند (قیمت، موجودیِ رزروکسر، تبدیل واحد و
+   * `hydrate`ِ بدون‌نشت)، فقط با فیلترِ `id IN`. کالای غیرقابل‌نمایش یا بی‌قیمت
+   * خودبه‌خود می‌افتد — پس علاقه‌مندیِ کالایی که مدیر آفلاینش کرده دیگر دیده
+   * نمی‌شود، بی‌آنکه جای خالی خطا بدهد.
+   */
+  async listByIds(ids: string[]) {
+    if (!ids.length) return [];
+    const shop = await this.assertOnline();
+    const units = { stored: shop.storedUnit, site: shop.unit };
+    const where: Prisma.ProductWhereInput = {
+      ...this.visible,
+      id: { in: ids.slice(0, 200) },
+    };
+    const priced = await this.pricedIds(where, {}, units);
+    return this.hydrate(priced);
   }
 
   /**
@@ -445,6 +498,46 @@ export class StorefrontCatalogService {
     return {
       categories: [...cats.values()].sort(byCount),
       brands: [...brands.values()].sort(byCount),
+      vehicles: await this.vehicleFacet(),
     };
+  }
+
+  /**
+   * فهرست خودروها برای سلکتورِ «انتخاب خودرو».
+   *
+   * برخلاف برند/دسته که تک‌مقداری‌اند، هر قطعه به چند خودرو می‌خورد؛ پس شمارش
+   * روی جدولِ چند-به-چندِ `ProductVehicle` انجام می‌شود، نه روی خودِ محصول.
+   * `groupBy` روی ستونِ ایندکس‌دارِ `vehicleModelId` است و شرطش فقط محصولاتِ
+   * قابل‌نمایش را می‌گیرد — پس خودرویی که هیچ کالای آنلاینی ندارد در سلکتور
+   * ظاهر نمی‌شود (لیستِ خالی سرِ کاربر بازنمی‌کند).
+   */
+  private async vehicleFacet() {
+    const counts = await this.prisma.productVehicle.groupBy({
+      by: ['vehicleModelId'],
+      where: { product: this.visible },
+      _count: { productId: true },
+    });
+    if (!counts.length) return [];
+
+    const models = await this.prisma.vehicleModel.findMany({
+      where: { id: { in: counts.map((c) => c.vehicleModelId) } },
+      select: { id: true, name: true, startYear: true, endYear: true },
+    });
+    const nameOf = new Map(models.map((m) => [m.id, m]));
+
+    return counts
+      .map((c) => {
+        const m = nameOf.get(c.vehicleModelId);
+        if (!m) return null;
+        return {
+          id: m.id,
+          name: m.name,
+          startYear: m.startYear,
+          endYear: m.endYear,
+          count: c._count.productId,
+        };
+      })
+      .filter((v): v is NonNullable<typeof v> => v !== null)
+      .sort((a, b) => b.count - a.count);
   }
 }

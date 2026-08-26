@@ -8,6 +8,7 @@ import { OnlineOrderStatus, OnlinePayMethod } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { StorefrontCatalogService } from './storefront-catalog.service';
+import { CouponService } from './coupon.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { convertMoney } from '../common/money';
 import { normalizePhone } from '../common/phone.util';
@@ -30,6 +31,7 @@ export class StorefrontOrderService {
     private readonly prisma: PrismaService,
     private readonly catalog: StorefrontCatalogService,
     private readonly events: EventsGateway,
+    private readonly coupons: CouponService,
   ) {}
 
   /**
@@ -195,8 +197,55 @@ export class StorefrontOrderService {
      * ارسال رایگان بالای سقف. `freeShipOver === 0` یعنی قاعده خاموش است، نه
      * «همه‌چیز رایگان» — این تفاوت را اگر جا بیندازیم هر سفارشی رایگان می‌شود.
      */
-    const freeShip = shop.freeShipOver > 0 && subtotal >= shop.freeShipOver;
-    const shippingFee = freeShip ? 0 : shop.shippingFee;
+    /*
+     * هزینه‌ی ارسال: اگر مشتری منطقه انتخاب کرده، نرخِ همان منطقه؛ وگرنه نرخِ
+     * ثابتِ فروشگاه (سازگاریِ عقب‌رو). رایگان‌شدن با آستانه‌ی منطقه یا آستانه‌ی
+     * کلیِ فروشگاه — هر کدام زودتر برسد.
+     */
+    let shippingFee: number;
+    let shippingZoneId: string | null = null;
+    const freeByShop = shop.freeShipOver > 0 && subtotal >= shop.freeShipOver;
+    if (dto.shippingZoneId) {
+      const zone = await this.prisma.shippingZone.findFirst({
+        where: { id: dto.shippingZoneId, isActive: true },
+        select: { id: true, fee: true, freeOver: true },
+      });
+      if (!zone) {
+        throw new BadRequestException({
+          error: 'ZONE_INVALID',
+          message: 'منطقه‌ی ارسال نامعتبر است',
+        });
+      }
+      shippingZoneId = zone.id;
+      const zoneFee = convertMoney(zone.fee, shop.storedUnit, shop.unit);
+      const zoneFreeOver =
+        zone.freeOver != null ? convertMoney(zone.freeOver, shop.storedUnit, shop.unit) : null;
+      const freeByZone = zoneFreeOver != null && subtotal >= zoneFreeOver;
+      shippingFee = freeByZone || freeByShop ? 0 : zoneFee;
+    } else {
+      shippingFee = freeByShop ? 0 : shop.shippingFee;
+    }
+
+    /*
+     * کوپن: تخفیف روی جمعِ کالاها (نه ارسال) و سمت سرور دوباره حساب می‌شود —
+     * چیزی که کلاینت در preview دیده فقط نمایشی است. اگر کد نامعتبر باشد ثبت
+     * سفارش می‌شکند تا مشتری با تخفیفِ خیالی جلو نرود.
+     */
+    let discount = 0;
+    let couponId: string | null = null;
+    let couponCode: string | null = null;
+    if (dto.couponCode) {
+      const r = await this.coupons.compute(dto.couponCode, subtotal, siteCustomerId, {
+        storedUnit: shop.storedUnit,
+        unit: shop.unit,
+      });
+      if (!r.ok) {
+        throw new BadRequestException({ error: 'COUPON_INVALID', message: r.message });
+      }
+      discount = r.discount!;
+      couponId = r.couponId!;
+      couponCode = r.code!;
+    }
 
     const phone = normalizePhone(dto.receiverPhone);
     if (!phone) {
@@ -217,7 +266,11 @@ export class StorefrontOrderService {
         status: OnlineOrderStatus.PLACED,
         subtotal,
         shippingFee,
-        total: subtotal + shippingFee,
+        discount,
+        couponId,
+        couponCode,
+        shippingZoneId,
+        total: subtotal + shippingFee - discount,
         payMethod: dto.payMethod ?? OnlinePayMethod.ON_DELIVERY,
         receiverName: dto.receiverName.trim(),
         receiverPhone: phone,
@@ -228,6 +281,9 @@ export class StorefrontOrderService {
       select: { id: true, number: true },
     });
 
+    // شمارنده‌ی کوپن پس از قطعی‌شدنِ سفارش بالا می‌رود.
+    if (couponId) await this.coupons.markUsed(couponId);
+
     // پنل باید سفارش تازه را بدون رفرش ببیند؛ خودِ سفارش از REST گرفته می‌شود.
     this.events.broadcast({
       type: 'online-order.created',
@@ -236,6 +292,51 @@ export class StorefrontOrderService {
     });
 
     return this.myOrder(siteCustomerId, order.id);
+  }
+
+  /**
+   * پیش‌نمایشِ تخفیفِ کوپن روی سبدِ فعلی — نمایشی است، ولی جمعِ سبد را سمت سرور
+   * می‌سازد نه کلاینت، تا عددی که مشتری می‌بیند همان چیزی باشد که سرِ ثبت اعمال
+   * می‌شود. سختگیریِ موجودی اینجا نیست؛ فقط تخمینِ تخفیف است.
+   */
+  async couponPreview(
+    siteCustomerId: string,
+    code: string,
+    lines: { productId: string; quantity: number }[],
+  ) {
+    const shop = await this.catalog.assertOnline();
+
+    const wanted = new Map<string, number>();
+    for (const l of lines) {
+      wanted.set(l.productId, (wanted.get(l.productId) ?? 0) + l.quantity);
+    }
+
+    const products = await this.prisma.product.findMany({
+      where: {
+        id: { in: [...wanted.keys()] },
+        showOnline: true,
+        isActive: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } },
+      },
+    });
+
+    let subtotal = 0;
+    for (const p of products) {
+      const raw = p.prices[0]?.salePrice;
+      if (raw && raw > 0) {
+        subtotal += convertMoney(raw, shop.storedUnit, shop.unit) * (wanted.get(p.id) ?? 0);
+      }
+    }
+
+    const r = await this.coupons.compute(code, subtotal, siteCustomerId, {
+      storedUnit: shop.storedUnit,
+      unit: shop.unit,
+    });
+    return { ...r, subtotal };
   }
 
   /** فهرست سفارش‌های خودِ مشتری. */
@@ -281,6 +382,8 @@ export class StorefrontOrderService {
         status: true,
         subtotal: true,
         shippingFee: true,
+        discount: true,
+        couponCode: true,
         total: true,
         payMethod: true,
         receiverName: true,

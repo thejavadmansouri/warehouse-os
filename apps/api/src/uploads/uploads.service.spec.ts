@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import type { Express } from 'express';
 import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
+import { ImagePipeline } from '../common/image-pipeline';
 import { UploadsService } from './uploads.service';
 
 /** Minimal valid JPEG header (FF D8 FF) padded to the 12-byte sniff minimum. */
@@ -30,7 +31,14 @@ describe('UploadsService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [UploadsService, { provide: PrismaService, useValue: prisma }],
+      // ImagePipeline is provided for real, not mocked: the size/MIME/magic-byte
+      // rules these tests assert now live inside it, so a stub would make them
+      // pass without exercising any validation.
+      providers: [
+        UploadsService,
+        ImagePipeline,
+        { provide: PrismaService, useValue: prisma },
+      ],
     }).compile();
     service = module.get<UploadsService>(UploadsService);
   });

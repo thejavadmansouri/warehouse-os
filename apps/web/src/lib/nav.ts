@@ -19,6 +19,7 @@ import {
   LibraryBig,
   Settings,
   PackagePlus,
+  Image,
 } from "lucide-react";
 
 export interface NavItem {
@@ -134,6 +135,12 @@ export const NAV_SECTIONS: NavSection[] = [
         href: "/admin/products",
         icon: Package,
         roles: ["ADMIN", "MANAGER", "STAFF"],
+      },
+      {
+        title: "تصاویر محصولات",
+        href: "/admin/product-images",
+        icon: Image,
+        roles: ["ADMIN", "MANAGER"],
       },
       {
         // چهار جدولِ مرجع که ماهی یک بار باز می‌شوند، یک ردیف بس است.
