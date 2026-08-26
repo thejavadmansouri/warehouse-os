@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>پیش‌نمایش رنگ بهاری</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;600;700&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Vazirmatn',sans-serif;background:#f0f9f0;color:#333}
+
+/* ===== HEADER ===== */
+.header{background:linear-gradient(135deg,#2E7D32,#388E3C);padding:20px 24px;color:#fff;box-shadow:0 2px 8px rgba(46,125,50,.3)}
+.header h1{font-size:1.3rem;margin-bottom:4px}
+.header p{opacity:.85;font-size:.85rem}
+
+/* ===== COLOR SWATCHES ===== */
+.palette{padding:24px;display:grid;gap:20px}
+.swatch-group h2{font-size:1.1rem;margin-bottom:12px;color:#2E7D32;border-bottom:2px solid #A5D6A7;padding-bottom:6px}
+.swatches{display:flex;flex-wrap:wrap;gap:12px}
+.swatch{width:100px;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.1);transition:transform .2s}
+.swatch:hover{transform:scale(1.05)}
+.swatch .color{height:60px}
+.swatch .label{padding:8px;text-align:center;font-size:.75rem;background:#fff}
+
+/* ===== CARD DEMOS ===== */
+.card-demos{padding:0 24px 24px}
+.card-demos h2{font-size:1.1rem;margin-bottom:12px;color:#2E7D32;border-bottom:2px solid #A5D6A7;padding-bottom:6px}
+.card-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px}
+.demo-card{background:#fff;border-radius:12px;padding:16px;border:1px solid #E8F5E9;box-shadow:0 2px 8px rgba(46,125,50,.08);transition:transform .2s}
+.demo-card:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(46,125,50,.15)}
+.demo-card .brand{font-size:.75rem;color:#999}
+.demo-card .name{font-size:1rem;font-weight:700;margin:4px 0}
+.demo-card .sku{font-size:.75rem;color:#aaa}
+.demo-card .price{font-size:1.2rem;font-weight:700;color:#2E7D32;margin:8px 0}
+.demo-card .stock{display:inline-block;padding:2px 10px;border-radius:20px;font-size:.75rem;font-weight:600}
+.stock-available{background:#E8F5E9;color:#2E7D32}
+.stock-low{background:#FFF3E0;color:#E65100}
+.stock-out{background:#FFEBEE;color:#C62828}
+.demo-card .add-btn{display:block;width:100%;margin-top:10px;padding:10px;border:none;border-radius:8px;background:linear-gradient(135deg,#66BB6A,#43A047);color:#fff;font-family:inherit;font-weight:700;font-size:.9rem;cursor:pointer;transition:background .2s}
+.demo-card .add-btn:hover{background:linear-gradient(135deg,#43A047,#2E7D32)}
+
+/* ===== BUTTONS ===== */
+.buttons{padding:0 24px 24px}
+.buttons h2{font-size:1.1rem;margin-bottom:12px;color:#2E7D32;border-bottom:2px solid #A5D6A7;padding-bottom:6px}
+.btn-row{display:flex;flex-wrap:wrap;gap:12px}
+.btn{padding:10px 24px;border:none;border-radius:8px;font-family:inherit;font-weight:600;font-size:.9rem;cursor:pointer;transition:all .2s}
+.btn-primary{background:linear-gradient(135deg,#66BB6A,#43A047);color:#fff;box-shadow:0 2px 8px rgba(67,160,71,.3)}
+.btn-primary:hover{box-shadow:0 4px 12px rgba(67,160,71,.4);transform:translateY(-1px)}
+.btn-secondary{background:#fff;color:#2E7D32;border:1.5px solid #A5D6A7}
+.btn-secondary:hover{background:#E8F5E9}
+.btn-danger{background:#FFEBEE;color:#C62828;border:1.5px solid #EF9A9A}
+.btn-outline{background:transparent;color:#66BB6A;border:1.5px dashed #A5D6A7}
+
+/* ===== FILTER DEMO ===== */
+.filters{padding:0 24px 24px}
+.filters h2{font-size:1.1rem;margin-bottom:12px;color:#2E7D32;border-bottom:2px solid #A5D6A7;padding-bottom:6px}
+.filter-row{display:flex;flex-wrap:wrap;gap:8px}
+.filter-chip{padding:6px 16px;border-radius:20px;font-size:.85rem;border:1.5px solid #C8E6C9;background:#fff;color:#666;cursor:pointer;transition:all .2s}
+.filter-chip.active{background:#E8F5E9;border-color:#66BB6A;color:#2E7D32;font-weight:600}
+.filter-chip:hover{background:#F1F8E9;border-color:#81C784}
+
+/* ===== NAV DEMO ===== */
+.nav-demo{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #E8F5E9;display:flex;justify-content:space-around;padding:8px 0;box-shadow:0 -2px 8px rgba(46,125,50,.08)}
+.nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.7rem;color:#999;cursor:pointer}
+.nav-item.active{color:#2E7D32}
+.nav-item svg{width:22px;height:22px}
+
+/* ===== EXPLANATION ===== */
+.explanation{padding:0 24px 40px;font-size:.85rem;line-height:1.8;color:#666;background:#f0f9f0}
+.explanation h3{color:#2E7D32;margin:16px 0 8px;font-size:1rem}
+.explanation ul{padding-right:20px}
+.explanation li{margin:4px 0}
+.highlight{background:#FFF9C4;padding:1px 6px;border-radius:4px;font-weight:600;color:#333}
+
+body{padding-bottom:70px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🌿 پالت رنگی بهاری — فروشگاه قطعات خودرو</h1>
+  <p>پیش‌نمایش تغییرات رنگی بدون تغییر ساختار</p>
+</div>
+
+<!-- COLOR SWATCHES -->
+<div class="palette">
+  <div class="swatch-group">
+    <h2>🎨 رنگ‌های اصلی</h2>
+    <div class="swatches">
+      <div class="swatch"><div class="color" style="background:#2E7D32"></div><div class="label">سبز تیره (هدر)<br>#2E7D32</div></div>
+      <div class="swatch"><div class="color" style="background:#43A047"></div><div class="label">سبز اصلی (دکمه)<br>#43A047</div></div>
+      <div class="swatch"><div class="color" style="background:#66BB6A"></div><div class="label">سبز بهاری<br>#66BB6A</div></div>
+      <div class="swatch"><div class="color" style="background:#A5D6A7"></div><div class="label">سبز ملایم<br>#A5D6A7</div></div>
+      <div class="swatch"><div class="color" style="background:#E8F5E9"></div><div class="label">سبز خیلی روشن<br>#E8F5E9</div></div>
+    </div>
+  </div>
+  <div class="swatch-group">
+    <h2>🪨 رنگ‌های پس‌زمینه</h2>
+    <div class="swatches">
+      <div class="swatch"><div class="color" style="background:#f0f9f0"></div><div class="label">سبز بسیار روشن<br>#f0f9f0</div></div>
+      <div class="swatch"><div class="color" style="background:#F5F7F0"></div><div class="label">کرمی گرم<br>#F5F7F0</div></div>
+      <div class="swatch"><div class="color" style="background:#FEFEFE"></div><div class="label">سفید گرم<br>#FEFEFE</div></div>
+      <div class="swatch"><div class="color" style="background:#FFF9C4"></div><div class="label">لیمویی هایلایت<br>#FFF9C4</div></div>
+    </div>
+  </div>
+  <div class="swatch-group">
+    <h2>🏷️ رنگ‌های وضعیت</h2>
+    <div class="swatches">
+      <div class="swatch"><div class="color" style="background:#E8F5E9"></div><div class="label">موجود<br>#E8F5E9</div></div>
+      <div class="swatch"><div class="color" style="background:#FFF3E0"></div><div class="label">کم موجود<br>#FFF3E0</div></div>
+      <div class="swatch"><div class="color" style="background:#FFEBEE"></div><div class="label">ناموجود<br>#FFEBEE</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- CARD DEMOS -->
+<div class="card-demos">
+  <h2>📦 نمای کارت محصولات</h2>
+  <div class="card-row">
+    <div class="demo-card">
+      <div class="brand">آسیا</div>
+      <div class="name">لنت ترمز جلو پراید</div>
+      <div class="sku">LNT-PRY-001</div>
+      <div class="stock stock-available">موجود</div>
+      <div class="price">۱۸۵٬۰۰۰ ریال</div>
+      <button class="add-btn">+ افزودن به سبد</button>
+    </div>
+    <div class="demo-card">
+      <div class="brand">ورتا</div>
+      <div class="name">باطری ۶۰ آمپر</div>
+      <div class="sku">BATT-60A</div>
+      <div class="stock stock-low">۳ موجود</div>
+      <div class="price">۲٬۸۵۰٬۰۰۰ ریال</div>
+      <button class="add-btn">+ افزودن به سبد</button>
+    </div>
+    <div class="demo-card">
+      <div class="brand">آسیا</div>
+      <div class="name">دیسک ترمز عقب</div>
+      <div class="sku">DSK-PRY-R1</div>
+      <div class="stock stock-out">ناموجود</div>
+      <div class="price" style="color:#999">۱۹۵٬۰۰۰ ریال</div>
+      <button class="add-btn" style="background:#E8F5E9;color:#999;cursor:not-allowed" disabled>ناموجود</button>
+    </div>
+  </div>
+</div>
+
+<!-- BUTTONS -->
+<div class="buttons">
+  <h2>🔘 دکمه‌ها</h2>
+  <div class="btn-row">
+    <button class="btn btn-primary">افزودن به سبد</button>
+    <button class="btn btn-secondary">مشاهده جزئیات</button>
+    <button class="btn btn-danger">حذف</button>
+    <button class="btn btn-outline">فیلتر پیشرفته</button>
+  </div>
+</div>
+
+<!-- FILTERS -->
+<div class="filters">
+  <h2>🔍 فیلترها</h2>
+  <div class="filter-row">
+    <span class="filter-chip active">همه</span>
+    <span class="filter-chip">ترمز</span>
+    <span class="filter-chip">موتور</span>
+    <span class="filter-chip">روغن</span>
+    <span class="filter-chip">برقی</span>
+    <span class="filter-chip">فرمان</span>
+    <span class="filter-chip">لاستیک</span>
+  </div>
+</div>
+
+<!-- NAV -->
+<div class="nav-demo">
+  <div class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+    <span>خانه</span>
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>
+    <span>سبد</span>
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+    <span>مقالات</span>
+  </div>
+  <div class="nav-item">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    <span>حساب من</span>
+  </div>
+</div>
+
+<!-- EXPLANATION -->
+<div class="explanation">
+  <h3>💡 چرا این پالت؟</h3>
+  <ul>
+    <li><span class="highlight">سبز زیتونی/مینتی</span> بهاریه ولی چشم رو خسته نمی‌کنه</li>
+    <li><span class="highlight">پس‌زمینه سبز خیلی روشن</span> تازگی می‌ده بدون اینکه خیره‌کننده باشه</li>
+    <li><span class="highlight">قیمت سبز تیره‌تر</span> از بقیه المان‌ها برجسته‌تره (اولویت چشم)</li>
+    <li><span class="highlight">دکمه افزودن</span> با گرادیانت سبز گرم در فروش برجسته‌ست</li>
+    <li><span class="highlight">هایلایت لیمویی</span> برای hover و بخش‌های ویژه</li>
+    <li><span class="highlight">حاشیه سبز ملایم</span> روی کارت‌ها حس طبیعت می‌ده</li>
+    <li><span class="highlight">وضعیت موجودی</span> با رنگ‌بندی واضح: سبز=موجود، نارنجی=کم، قرمز=ناموجود</li>
+  </ul>
+</div>
+
+</body>
+</html>
