@@ -48,6 +48,7 @@ export class ProductRequestsService {
         notes: dto.notes?.trim() || null,
         voiceText: dto.voiceText ?? null,
         locationBarcode: dto.locationBarcode ?? null,
+        productBarcode: dto.productBarcode?.trim() || null,
         warehouseId: location?.warehouseId ?? null,
         locationId: location?.id ?? null,
         sessionId: dto.sessionId ?? null,
@@ -166,6 +167,31 @@ export class ProductRequestsService {
       // unique constraint می‌خوردند.
       const internalBarcode = `WOS${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
+      /*
+       * بارکدِ کارخانه‌ایِ روی جعبه که کارگر اسکن کرده بود.
+       *
+       * اگر وصلش نکنیم، همان جعبه دفعه‌ی بعد باز «ناشناس» است و کارگر باید
+       * دوباره از راه صدا/جست‌وجو برود — یعنی کارِ انجام‌شده دوباره هزینه بدهد.
+       *
+       * اگر این بارکد قبلاً به کالای دیگری وصل شده باشد، بی‌سروصدا ردش می‌کنیم:
+       * تأیید کالا نباید به‌خاطر یک بارکدِ تکراری شکست بخورد، و مالکیتِ بارکدِ
+       * موجود هم نباید عوض شود.
+       */
+      const scanned = req.productBarcode?.trim() || null;
+      const barcodeIsFree = scanned
+        ? (await this.prisma.productBarcode.findUnique({
+            where: { barcode: scanned },
+            select: { id: true },
+          })) === null
+        : false;
+
+      const barcodesToCreate: { barcode: string; type: 'INTERNAL' | 'FACTORY' }[] = [
+        { barcode: internalBarcode, type: 'INTERNAL' },
+      ];
+      if (scanned && barcodeIsFree) {
+        barcodesToCreate.push({ barcode: scanned, type: 'FACTORY' });
+      }
+
       const product = await this.prisma.product.create({
         data: {
           name,
@@ -179,7 +205,7 @@ export class ProductRequestsService {
           isActive: true,
           description: req.notes ?? null,
           barcodes: {
-            create: [{ barcode: internalBarcode, type: 'INTERNAL' }],
+            create: barcodesToCreate,
           },
         },
       });

@@ -38,6 +38,15 @@ export class CreateProductRequestDto {
   @MaxLength(40)
   unit?: string;
 
+  /**
+   * بارکد روی خودِ جعبه، وقتی کارگر اسکنش کرده ولی به هیچ کالایی وصل نبوده.
+   * موقع تأیید به کالای ساخته‌شده وصل می‌شود تا همان جعبه دفعه‌ی بعد شناخته شود.
+   */
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  productBarcode?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(500)

@@ -55,6 +55,8 @@ model User {
   workTasksAssigned       WorkTask[]               @relation("WorkTaskAssignee")
   workTaskItemsDone       WorkTaskItem[]           @relation("WorkTaskItemDoneBy")
   onlineOrdersDecided     OnlineOrder[]            @relation("OnlineOrderDecider")
+  reviewedCandidates      ProductImageCandidate[]
+  imagePublishLogs        ImagePublishLog[]
 }
 
 model Warehouse {
@@ -243,6 +245,12 @@ model Product {
   workTaskItems       WorkTaskItem[]
   shortages           ProductShortage[]
   onlineOrderLines    OnlineOrderLine[]
+  imageCandidates     ProductImageCandidate[]
+  imageSearchJobs     ImageSearchJob[]
+  imagePublishLogs    ImagePublishLog[]
+  favorites           Favorite[]
+  reviews             ProductReview[]
+  stockNotifies       StockNotify[]
 
   @@index([searchTokens], type: Gin)
   @@index([labelPrintedAt])
@@ -755,6 +763,10 @@ model ProductCreationRequest {
   notes            String?
   voiceText        String? // original transcript, if raised from voice
   locationBarcode  String?
+  /// بارکد روی خودِ جعبه که کارگر اسکن کرده ولی به هیچ کالایی وصل نبود.
+  /// موقع تأیید به کالای ساخته‌شده وصل می‌شود (type = FACTORY) — وگرنه همان
+  /// جعبه دفعه‌ی بعد باز «ناشناس» است و کار دوباره تکرار می‌شود.
+  productBarcode   String?
   warehouseId      String?
   locationId       String?
   sessionId        String?
@@ -1857,8 +1869,53 @@ model SiteCustomer {
 
   orders    OnlineOrder[]
   addresses SiteAddress[]
+  favorites Favorite[]
+  reviews   ProductReview[]
 
   @@index([createdAt])
+}
+
+/// نظر و امتیازِ مشتری روی یک کالا.
+/// خریدارِ واقعی (کسی که کالا را سفارش داده) خودکار تأیید و «خرید تأییدشده»
+/// برچسب می‌خورد؛ بقیه در انتظار تأییدِ مدیر می‌مانند تا اسپم روی سایت نرود.
+enum ReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+model ProductReview {
+  id             String       @id @default(uuid())
+  productId      String
+  siteCustomerId String
+  /// ۱ تا ۵. اعتبارسنجیِ بازه در DTO است.
+  rating         Int
+  title          String?
+  body           String
+  status         ReviewStatus @default(PENDING)
+  /// خریدارِ واقعی؟ در لحظه‌ی ثبت از روی سفارش‌ها تعیین می‌شود.
+  verified       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  siteCustomer   SiteCustomer @relation(fields: [siteCustomerId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, siteCustomerId])
+  @@index([productId, status])
+  @@index([status])
+}
+
+/// علاقه‌مندی‌های مشتری سایت (Wishlist).
+/// کلیدِ مرکب یعنی هر کالا فقط یک‌بار در لیستِ هر مشتری؛ افزودنِ دوباره بی‌اثر است.
+model Favorite {
+  siteCustomerId String
+  productId      String
+  createdAt      DateTime     @default(now())
+  siteCustomer   SiteCustomer @relation(fields: [siteCustomerId], references: [id], onDelete: Cascade)
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([siteCustomerId, productId])
+  @@index([productId])
 }
 
 /// آدرس تحویلِ مشتری سایت. روی خودِ سفارش هم کپی می‌شود، چون آدرس عوض می‌شود
@@ -1899,6 +1956,13 @@ model OnlineOrder {
   /// جمع ردیف‌ها (تومان) — از قیمت‌های لحظه‌ی ثبت، نه قیمت امروز.
   subtotal       Int               @default(0)
   shippingFee    Int               @default(0)
+  /// تخفیفِ کوپن (تومان، مثل بقیه‌ی مبالغِ سفارش). total = subtotal + shipping - discount.
+  discount       Int               @default(0)
+  /// کوپنِ اعمال‌شده + کدِ snapshot (کوپن ممکن است بعداً حذف شود، کد روی سفارش می‌ماند).
+  couponId       String?
+  couponCode     String?
+  /// منطقه‌ی ارسالِ انتخاب‌شده (اگر منطقه‌بندی فعال باشد). هزینه‌اش در shippingFee کپی است.
+  shippingZoneId String?
   total          Int               @default(0)
   payMethod      OnlinePayMethod   @default(ON_DELIVERY)
   /// آدرس در لحظه‌ی ثبت کپی می‌شود، نه ارجاع: مشتری آدرسش را عوض می‌کند و
@@ -1937,6 +2001,8 @@ model OnlineOrder {
   warehouse Warehouse         @relation(fields: [warehouseId], references: [id])
   invoice   SaleInvoice?      @relation(fields: [invoiceId], references: [id])
   decidedBy User?             @relation("OnlineOrderDecider", fields: [decidedById], references: [id])
+  coupon    Coupon?           @relation(fields: [couponId], references: [id])
+  shippingZone ShippingZone?  @relation(fields: [shippingZoneId], references: [id])
   lines     OnlineOrderLine[]
   payments  PaymentAttempt[]
 
@@ -1950,6 +2016,97 @@ model OnlineOrder {
   // صفِ سینک: «چه چیزی هنوز نرفته» — روی هر دو طرف هر ۲ دقیقه پرسیده می‌شود.
   @@index([pulledAt])
   @@index([syncedAt])
+  // شمارشِ «این مشتری چند بار از این کوپن استفاده کرده» سرِ هر ثبت سفارش.
+  @@index([couponId])
+}
+
+/// کوپنِ تخفیف.
+///
+/// مبالغ (value برای مبلغ‌ثابت، minSubtotal، maxDiscount) به واحدِ **ذخیره
+/// (ریال)** ذخیره می‌شوند مثل بقیه‌ی جدول‌ها، و لحظه‌ی اعمال به واحدِ سایت تبدیل
+/// می‌شوند. برای نوعِ درصدی، `value` خودِ درصد است (۱ تا ۱۰۰) و واحد ندارد.
+enum CouponType {
+  PERCENT
+  FIXED
+}
+
+model Coupon {
+  id          String     @id @default(uuid())
+  /// کدِ یکتا — همیشه حروفِ بزرگ و بدون فاصله ذخیره می‌شود.
+  code        String     @unique
+  type        CouponType
+  /// درصد (۱ تا ۱۰۰) یا مبلغِ ثابت به ریال.
+  value       Int
+  /// حداقلِ جمعِ سبد برای فعال‌شدن (ریال). صفر یعنی بدون حداقل.
+  minSubtotal Int        @default(0)
+  /// سقفِ تخفیف برای نوعِ درصدی (ریال). null یعنی بی‌سقف.
+  maxDiscount Int?
+  /// کلِ دفعاتِ مجاز. null یعنی نامحدود.
+  usageLimit  Int?
+  usedCount   Int        @default(0)
+  /// دفعاتِ مجاز برای هر مشتری. null یعنی نامحدود.
+  perCustomer Int?
+  startsAt    DateTime?
+  expiresAt   DateTime?
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  orders OnlineOrder[]
+
+  @@index([isActive])
+}
+
+/// بنر/اسلایدِ تبلیغاتیِ صفحه‌ی اول، مدیریت‌شده از پنل.
+/// عکس در `/storage/banners` ذخیره می‌شود (همان pipelineِ عکسِ محصول: حذف EXIF،
+/// تامب‌نیل). `linkUrl` جای رفتنِ کلیک است — دسته/برند/خودرو یا آدرسِ دلخواه.
+model Banner {
+  id           String    @id @default(uuid())
+  title        String?
+  imageUrl     String
+  thumbnailUrl String?
+  linkUrl      String?
+  sortOrder    Int       @default(0)
+  isActive     Boolean   @default(true)
+  startsAt     DateTime?
+  endsAt       DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+/// اشتراکِ «موجود شد خبرم کن» روی یک کالا. شماره نرمال‌شده ذخیره می‌شود.
+/// `notifiedAt` تا null یعنی هنوز خبر نرفته؛ بعد از ارسالِ پیامک پر می‌شود تا
+/// دوباره فرستاده نشود.
+model StockNotify {
+  id         String    @id @default(uuid())
+  productId  String
+  phone      String
+  createdAt  DateTime  @default(now())
+  notifiedAt DateTime?
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, phone])
+  @@index([productId, notifiedAt])
+}
+
+/// منطقه‌ی ارسال (شهر/استان) با هزینه‌ی مخصوصِ خودش.
+/// مبالغ به ریال (واحدِ ذخیره). اگر هیچ منطقه‌ای نباشد، سفارش به نرخِ ثابتِ
+/// `ShopSettings.shippingFee` برمی‌گردد — پس این جدول کاملاً افزودنی است.
+model ShippingZone {
+  id        String        @id @default(uuid())
+  name      String
+  fee       Int
+  freeOver  Int?
+  sortOrder Int           @default(0)
+  isActive  Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  orders OnlineOrder[]
+
+  @@index([isActive, sortOrder])
 }
 
 /// یک ردیف از سفارش سایت. نام و قیمت **کپی** می‌شوند نه ارجاع: قیمت فردا عوض
@@ -2067,4 +2224,137 @@ enum PaymentAttemptStatus {
 enum CurrencyUnit {
   RIAL
   TOMAN
+}
+
+/// ═══════════════════════════════════════════════════════════════════════════
+/// جستجو و بررسی تصویر محصولات — خط لوله‌ی خودکار
+///
+/// تصاویر از منابع خارجی جمع‌آوری، دانلود، پردازش و در فضای staging
+/// نگهداری می‌شوند. تا زمانی که مدیر تأیید نکرده، تصویری به storage
+/// نهایی منتقل نمی‌شود.
+/// ═══════════════════════════════════════════════════════════════════════════
+
+/// وضعیتِ یک کاندیدای تصویر.
+enum CandidateStatus {
+  PENDING     // در انتظار بررسی توسط مدیر
+  PROCESSING  // در حال پردازش (حذف پس‌زمینه، resize و ...)
+  APPROVED    // مدیر تأیید کرد — آماده‌ی انتقال به storage نهایی
+  REJECTED    // مدیر رد کرد
+  FAILED      // پردازش یا دانلود با خطا مواجه شد
+}
+
+/// سطحِ اعتماد به تصویر — بر اساس امتیاز ۰ تا ۱۰۰.
+enum ConfidenceLevel {
+  HIGH    // 90-100
+  MEDIUM  // 75-89
+  LOW     // 50-74
+  NONE    // <50
+}
+
+/// وضعیتِ کلیِ جستجو برای یک محصول.
+enum SearchJobStatus {
+  QUEUED     // در صف پردازش
+  RUNNING    // در حال اجرا
+  COMPLETED  // جستجو تمام شد (ممکن است تصویری پیدا نشده باشد)
+  FAILED     // خطا در حین اجرا
+}
+
+/// یک کاندیدای تصویر برای یک محصول.
+///
+/// تصویر از اینترنت دانلود و در staging ذخیره می‌شود. مدیر بررسی و
+/// تأیید/رد می‌کند. در صورت تأیید، تصویر از staging به storage نهایی
+/// منتقل می‌شود و یک Asset جدید برای محصول ایجاد می‌گردد.
+model ProductImageCandidate {
+  id           String           @id @default(uuid())
+  productId    String
+  sourceUrl    String           // URL تصویر در سایت مبدأ
+  sourceDomain String?          // دامنه‌ی سایت مبدأ
+  searchQuery  String?          // عبارت جستجویی که این تصویر از آن پیدا شد
+
+  /// فایل اصلی خام در staging — مسیر نسبی از ریشهی storage
+  localPath    String?
+  originalFilename String?
+  mimeType     String?
+  originalWidth  Int?
+  originalHeight Int?
+  originalSize   Int?           // حجم فایل خام (بایت)
+
+  /// فایل پردازش‌شده (بدون پس‌زمینه، resize، WebP)
+  processedPath    String?
+  processedWidth   Int?
+  processedHeight  Int?
+  processedSize    Int?
+  backgroundRemoved Boolean @default(false)
+  backgroundRemovalFailed Boolean @default(false)
+
+  /// هش فایل اصلی برای تشخیص تکراری
+  sha256          String?
+  /// هش ادراکی (perceptual hash) برای تشخیص تصاویر مشابه
+  perceptualHash  String?
+
+  /// امتیاز اعتماد ۰ تا ۱۰۰
+  confidenceScore Int            @default(0)
+  confidenceLevel ConfidenceLevel @default(NONE)
+  /// توضیحِ دلیلِ امتیاز (مثلاً: "Part Number exact match +40, Brand match +15")
+  matchReason     String?
+
+  status        CandidateStatus @default(PENDING)
+  rejectReason  String?
+
+  /// اگر مدیر تصویر دیگری جایگزین کرد، به کاندیدای قبلی اشاره دارد
+  replacedById  String?
+  replacedBy    ProductImageCandidate? @relation("CandidateReplacement", fields: [replacedById], references: [id])
+  replaces      ProductImageCandidate[] @relation("CandidateReplacement")
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  reviewedAt    DateTime?
+  reviewedById  String?
+
+  product       Product   @relation(fields: [productId], references: [id])
+  reviewedBy    User?     @relation(fields: [reviewedById], references: [id])
+
+  @@index([productId])
+  @@index([status])
+  @@index([confidenceLevel])
+  @@index([productId, status])
+}
+
+/// صفِ جستجوی تصویر برای یک محصول.
+///
+/// هر ردیف یک محصول است که باید برایش تصویر جستجو شود.
+/// پردازگرِ batch یکی‌یکی از صف بیرون می‌کشد.
+model ImageSearchJob {
+  id           String           @id @default(uuid())
+  productId    String
+  status       SearchJobStatus  @default(QUEUED)
+  priority     Int              @default(0)  // بالاتر = زودتر اجرا شود
+  attempts     Int              @default(0)
+  maxAttempts  Int              @default(3)
+  lastError    String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  product      Product          @relation(fields: [productId], references: [id])
+
+  @@index([status, priority])
+  @@index([productId])
+}
+
+model ImagePublishLog {
+  id          String   @id @default(uuid())
+  productId   String
+  candidateId String
+  action      String   // IMAGE_APPROVED | IMAGE_REJECTED | IMAGE_REPLACED | IMAGE_PUBLISHED | IMAGE_DELETED
+  details     Json?
+  userId      String?
+  createdAt   DateTime @default(now())
+
+  product     Product  @relation(fields: [productId], references: [id])
+  user        User?    @relation(fields: [userId], references: [id])
+
+  @@index([productId, createdAt])
+  @@index([createdAt])
 }

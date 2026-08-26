@@ -6,6 +6,7 @@ import {
   Body,
   Req,
   UseGuards,
+  NotFoundException,
 } from '@nestjs/common';
 
 import { Role } from '@prisma/client';
@@ -63,6 +64,45 @@ export class MobileController {
         location: item.location.name,
         locationBarcode: item.location.barcode,
         quantity: item.quantity,
+      })),
+    };
+  }
+
+  // موجودیِ فعلی یک قفسه برای «انتقال بین قفسه» — همان الگوی count/start که
+  // بارکد را سمت سرور resolve می‌کند. فقط ردیف‌های با موجودی مثبت برمی‌گردد؛
+  // قفسه‌ی خالی یعنی لیست خالی، نه خطا.
+  @Get('shelf/:barcode/stock')
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  async shelfStock(@Param('barcode') barcode: string) {
+    const location = await this.prisma.location.findUnique({
+      where: { barcode },
+    });
+
+    if (!location) {
+      throw new NotFoundException('قفسه یا موقعیت یافت نشد.');
+    }
+
+    const items = await this.prisma.inventory.findMany({
+      where: {
+        locationId: location.id,
+        quantity: { gt: 0 },
+      },
+      include: { product: true },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return {
+      location: {
+        id: location.id,
+        name: location.name,
+        barcode: location.barcode,
+      },
+      items: items.map((i) => ({
+        productId: i.productId,
+        name: i.product.name,
+        sku: i.product.sku,
+        availableQty: i.quantity,
       })),
     };
   }

@@ -51,12 +51,20 @@ function makeItem(over: Record<string, unknown> = {}) {
 
 describe('WorkTasksService', () => {
   let service: WorkTasksService;
-  const prisma = {
+  // مدل‌ها جدا از $transaction تعریف شده‌اند، نه برای تزئین.
+  // قبلاً callback تراکنش خود prisma را صدا می‌زد که یعنی شی داخل
+  // initializer خودش به خودش ارجاع می‌داد؛ TypeScript نمی‌تواند
+  // تایپ را حل کند و با TS7022/TS7024 رد می‌کند.
+  const models = {
     workTask: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
     workTaskItem: { findUnique: jest.fn(), updateMany: jest.fn(), groupBy: jest.fn() },
     location: { findFirst: jest.fn() },
-    // تیک و انتقال در یک تراکنش‌اند؛ بدل با همان mockها اجرا می‌شود.
-    $transaction: jest.fn((fn: any) => fn(prisma)),
+  };
+  const prisma = {
+    ...models,
+    // تیک و انتقال در یک تراکنش‌اند؛ بدل با همان mockها اجرا می‌شود،
+    // پس tx.workTaskItem همان jest.fn() است که تست رویش assert می‌کند.
+    $transaction: jest.fn((fn: (tx: typeof models) => unknown) => fn(models)),
   };
   const operation = { execute: jest.fn() };
   const gateway = { emitCreated: jest.fn(), emitCancelled: jest.fn() };
