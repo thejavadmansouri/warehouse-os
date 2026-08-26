@@ -204,6 +204,11 @@ Must (Join-Path $payload 'scripts\first-run.ps1')                      'scripts\
 Must (Join-Path $payload 'scripts\services.ps1')                       'scripts\services.ps1'
 Must (Join-Path $payload 'app\api\dist\main.js')                       'app\api\dist\main.js'
 Must (Join-Path $payload 'app\api\node_modules\prisma\build\index.js') 'prisma CLI'
+# undici is imported directly by the product-image downloader (its SSRF guard
+# needs a dispatcher, which Node's built-in fetch will not accept). It resolved
+# locally only by workspace hoisting from a web devDependency, so it silently
+# went missing from this payload -- check it explicitly.
+Must (Join-Path $payload 'app\api\node_modules\undici\package.json')     'undici'
 Must (Join-Path $payload 'app\web\server.js')                          'app\web\server.js'
 
 # Native binaries - the whole reason this must build on Windows.
