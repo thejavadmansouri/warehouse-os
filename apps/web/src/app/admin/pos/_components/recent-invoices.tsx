@@ -90,7 +90,7 @@ export function RecentInvoices({
       open={open && !returning && !correcting}
       onOpenChange={(v) => { if (!v && !returning && !correcting) onClose(); }}
     >
-      <DialogContent className="max-w-6xl">
+      <DialogContent className="max-w-6xl" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-base">فاکتورهای امروز</DialogTitle>
         </DialogHeader>
@@ -241,7 +241,24 @@ export function RecentInvoices({
                           )}
                         </td>
                         <td className="max-w-40 truncate p-2">
-                          {inv.customer?.fullName ?? "نقدی گذری"}
+                          {/* بدونِ مشتری، «نقدی گذری» فقط متن است — نه دکمه‌ای که
+                              کلیکش هیچ کاری نکند و ظاهرِ لینکِ مرده بدهد. */}
+                          {inv.customer?.id ? (
+                            <button
+                              type="button"
+                              className="cursor-pointer text-start font-medium text-primary underline-offset-4 hover:underline"
+                              title="باز کردن پرونده‌ی مشتری"
+                              onClick={() => {
+                                if (inv.customer) {
+                                  window.open(`/admin/customers/${inv.customer.id}`, "_blank");
+                                }
+                              }}
+                            >
+                              {inv.customer.fullName}
+                            </button>
+                          ) : (
+                            <span className="text-muted-foreground">نقدی گذری</span>
+                          )}
                           {!cancelled && (tasksByInvoice?.[inv.id]?.length ?? 0) > 0 && (
                             <div className="mt-1 flex flex-col gap-1">
                               {tasksByInvoice![inv.id]!.map((t) => (

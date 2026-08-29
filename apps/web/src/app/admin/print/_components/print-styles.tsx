@@ -61,33 +61,32 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           pointer-events: none;
         }
 
+        /*
+          سربرگ: فروشگاه سمت راست، مشخصاتِ فاکتور و خریدار سمت چپ — یک نوار
+          به‌جای سه بلوکِ پشتِ‌سرِهم. عنوان هم از 1.6em به 1.25em آمد؛ روی
+          برگه‌ای که مشتری می‌گیرد، «فاکتور فروش» را از دور هم می‌خواند.
+        */
         .head {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
+          gap: 6mm;
           border-bottom: 2px solid #000;
-          padding-bottom: 3mm;
+          padding-bottom: 2.5mm;
         }
         .title {
-          font-size: 1.6em;
+          font-size: 1.25em;
           font-weight: 800;
         }
-        .meta td {
-          padding: 0 4px;
-        }
-
-        .party {
-          display: flex;
-          gap: 6mm;
-          flex-wrap: wrap;
-          padding: 3mm 0;
-          border-bottom: 1px solid #cbd5e1;
+        .head-meta {
+          text-align: end;
+          line-height: 1.9;
         }
 
         .items {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 4mm;
+          margin-top: 3mm;
         }
         .items th,
         .items td {
@@ -112,10 +111,16 @@ export function PrintStyles({ size }: { size: PaperSize }) {
         .sku {
           font-size: 0.85em;
         }
+        /* توضیحِ قلم — خطِ دوم، ریزتر و کم‌رنگ‌تر از نامِ کالا. */
+        .line-note {
+          font-size: 0.85em;
+          color: #475569;
+          margin-top: 0.6mm;
+        }
 
         .totals {
           display: flex;
-          margin-top: 4mm;
+          margin-top: 3mm;
         }
         .totals table {
           border-collapse: collapse;
@@ -135,21 +140,33 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           font-weight: 700;
         }
 
-        .pay,
-        .note {
-          margin-top: 3mm;
-        }
-
-        .sign {
+        /*
+          پای برگه یک ردیفِ دوستونه است: چپ اطلاعاتِ پرداخت و بانک، راست
+          امضاها. قبلاً چهار بلوکِ پشتِ‌سرِهم بود و ۱۲ میلی‌متر فاصله‌ی
+          خالی هم بالای امضاها داشت — روی A5 همین برگه را به صفحه‌ی دوم
+          می‌برد حتی با شش قلم.
+        */
+        .foot {
           display: flex;
           justify-content: space-between;
-          margin-top: 12mm;
-          padding-top: 3mm;
+          align-items: flex-end;
+          gap: 6mm;
+          margin-top: 4mm;
         }
-        .sign div {
-          width: 45%;
+        .foot-col {
+          flex: 1;
+          min-width: 0;
+          line-height: 1.8;
+        }
+        .foot-sign {
+          display: flex;
+          gap: 6mm;
+          flex-shrink: 0;
+        }
+        .foot-sign div {
+          width: 34mm;
           border-top: 1px dotted #64748b;
-          padding-top: 2mm;
+          padding-top: 1.5mm;
           text-align: center;
         }
 
@@ -210,8 +227,17 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           /* ردیف جدول وسطِ دو صفحه نصف نشود. */
           .items tr,
           .totals,
-          .sign {
+          .foot {
             break-inside: avoid;
+          }
+          /*
+            سرستون‌ها روی هر صفحه تکرار شوند.
+
+            فاکتورِ ۵۰ قلمی دو-سه صفحه می‌شود و تا حالا صفحه‌ی دوم بی‌سر بود:
+            ستونی که مشتری می‌بیند معلوم نبود «قیمت واحد» است یا «مبلغ».
+          */
+          .items thead {
+            display: table-header-group;
           }
         }
       `}</style>

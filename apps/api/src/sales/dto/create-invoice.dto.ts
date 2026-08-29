@@ -7,6 +7,7 @@ import {
   ArrayMinSize,
   ArrayMaxSize,
   Max,
+  MaxLength,
   Min,
   IsEnum,
   IsDateString,
@@ -45,6 +46,13 @@ export class InvoiceLineDto {
   @IsInt()
   @Min(0)
   unitPrice:number;
+
+
+  /** توضیحِ همین قلم — روی برگه‌ی فاکتور زیرِ نامِ کالا چاپ می‌شود. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  lineNote?:string;
 
 
   @IsOptional()

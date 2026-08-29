@@ -3,7 +3,9 @@ import { Module } from '@nestjs/common';
 import { PrismaModule } from '../prisma/prisma.module';
 import { RealtimeModule } from '../realtime/realtime.module';
 import { StorefrontController } from './storefront.controller';
+import { SeoController } from './seo.controller';
 import { StorefrontCatalogService } from './storefront-catalog.service';
+import { SeoService } from './seo.service';
 import { StorefrontAuthService } from './storefront-auth.service';
 import { StorefrontOrderService } from './storefront-order.service';
 import { StorefrontFavoritesService } from './storefront-favorites.service';
@@ -28,8 +30,9 @@ import { SmsSender } from '../sms/sms-sender';
  */
 @Module({
   imports: [PrismaModule, RealtimeModule],
-  controllers: [StorefrontController],
+  controllers: [StorefrontController, SeoController],
   providers: [
+    SeoService,
     StorefrontCatalogService,
     StorefrontAuthService,
     StorefrontOrderService,

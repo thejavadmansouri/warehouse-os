@@ -3,6 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<!--
+  SEO.
+
+  ⚠️ محدودیتِ واقعی را بدان: این صفحه محصولاتش را با جاوااسکریپت می‌آورد، پس
+  گوگل ممکن است آن‌ها را دیر یا ناقص ببیند. این تگ‌ها و `sitemap.xml` کفِ کار
+  را می‌سازند (اشتراک‌گذاری در پیام‌رسان‌ها، شناختِ دامنه، مسیرِ خزش)، ولی
+  جایگزینِ رندرِ سمت سرور نیستند. آن کارِ جداگانه‌ای است.
+-->
+<meta name="description" id="metaDesc" content="فروشگاه اینترنتی قطعات یدکی خودرو — لنت، فیلتر، روغن، باتری و لاستیک با قیمت روز و ارسال به سراسر ایران.">
+<meta name="theme-color" content="#2563EB">
+<link rel="canonical" id="metaCanonical" href="">
+<meta property="og:type" content="website">
+<meta property="og:site_name" id="metaSite" content="قطعات خودرو">
+<meta property="og:title" id="metaOgTitle" content="فروشگاه اینترنتی قطعات یدکی خودرو">
+<meta property="og:description" id="metaOgDesc" content="لنت، فیلتر، روغن، باتری و لاستیک با قیمت روز و ارسال به سراسر ایران.">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json" id="ldStore">
+{"@context":"https://schema.org","@type":"Store","name":"قطعات خودرو","description":"فروشگاه اینترنتی قطعات یدکی خودرو"}
+</script>
   <meta name="theme-color" content="#1565c0">
   <title>قطعات خودرو | انبار OS</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -67,6 +86,19 @@ input,select{font-family:inherit}
 .p-card__footer{display:flex;align-items:center;justify-content:space-between;gap:var(--sp-2);margin-top:auto}
 .p-card__price{font-size:var(--fs-lg);font-weight:var(--fw-bold);color:var(--c-accent);white-space:nowrap}
 .p-card__price-unit{font-size:var(--fs-xs);color:var(--c-text-3);font-weight:var(--fw-normal)}
+/* قیمتِ پیش از تخفیف — خط‌خورده و کم‌رنگ، بالای قیمت فعلی. */
+.p-card__was{font-size:var(--fs-xs);color:var(--c-text-3);text-decoration:line-through;white-space:nowrap}
+/* درصد تخفیف: قرمز فقط اینجا مجاز است چون «خطا» نیست، «توجه» است. */
+.p-card__off{display:inline-flex;align-items:center;padding:1px 6px;border-radius:var(--r-sm);background:#FDEDEE;color:#E30117;font-size:10px;font-weight:var(--fw-bold);margin-inline-start:4px}
+/* کالای بی‌قیمت: خریدنی نیست ولی دیده می‌شود. */
+.p-card__callus{font-size:var(--fs-sm);font-weight:var(--fw-medium);color:var(--c-text-2);white-space:nowrap}
+.detail__was{font-size:var(--fs-md);color:var(--c-text-3);text-decoration:line-through;margin-inline-end:var(--sp-2)}
+
+/* نوار اعتماد — همان چیزی که هر فروشگاه یدکی ایرانی بالای صفحه دارد. */
+.trust{background:var(--c-surface);border-bottom:1px solid var(--c-border)}
+.trust__inner{max-width:var(--max-w);margin:0 auto;padding:var(--sp-3) var(--sp-4);display:grid;grid-template-columns:repeat(4,1fr);gap:var(--sp-3)}
+.trust__item{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-xs);color:var(--c-text-2)}
+.trust__item svg{width:20px;height:20px;color:var(--c-accent);flex:none}
 .p-card__add-btn{width:40px;height:40px;border-radius:var(--r-full);background:var(--c-accent);color:#fff;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s,transform .1s}
 .p-card__add-btn:hover{background:var(--c-accent-hover);transform:scale(1.1)}
 .p-card__add-btn:active{transform:scale(.95)}
@@ -224,7 +256,18 @@ input,select{font-family:inherit}
    * می‌کند** و کاربر بعدش باید دستی برگرداند. این تنها دلیلِ این قاعده است؛
    * ظاهری نیست.
    */
-  input,select,textarea{font-size:16px}
+  /*
+   * انتخابگرها باید هم‌سطحِ قواعدِ پایه باشند، وگرنه `.form-group input`
+   * (specificity ۰٬۱٬۱) این را می‌بلعد و زوم برمی‌گردد. `!important` عمداً
+   * استفاده نشده — بردنِ specificity به همان سطح، خواناتر و قابل‌ردیابی‌تر است.
+   */
+  input,select,textarea,
+  .form-group input,.form-group select,.form-group textarea,
+  .header__search input,.filter-panel__range input,
+  .products-header__sort select{font-size:16px}
+
+  /* هدف لمسی: ورودی‌های ۴۲px هم کمی کوتاه‌اند. */
+  .form-group input,.form-group select{height:48px}
 
   /* ── سربرگ: فقط جستجو ──
    * دکمه‌های سبد و پروفایل از سربرگ حذف می‌شوند چون **در منوی پایین هستند**.
@@ -237,6 +280,14 @@ input,select{font-family:inherit}
   .header__cart-btn,.header__user-btn{display:none}
   .header__search{max-width:none}
   .header__search input{height:40px}
+
+  /* نوار اعتماد روی موبایل: چهار ستونِ ۹۰پیکسلی خوانا نیست، پس اسکرول افقی. */
+  .trust__inner{
+    grid-template-columns:none;display:flex;overflow-x:auto;
+    scrollbar-width:none;padding:var(--sp-2) var(--sp-3)
+  }
+  .trust__inner::-webkit-scrollbar{display:none}
+  .trust__item{white-space:nowrap;flex:none;padding-inline-end:var(--sp-4)}
 
   /* ── نوار دسته ── */
   .cat-bar__inner{padding:var(--sp-2) var(--sp-3);gap:var(--sp-2)}
@@ -318,9 +369,15 @@ input,select{font-family:inherit}
   .modal-overlay{align-items:flex-end;padding:0}
   .modal{
     max-width:none;border-radius:var(--r-xl) var(--r-xl) 0 0;
-    max-height:92dvh;transform:translateY(100%);
+    max-height:92dvh;
     padding-bottom:env(safe-area-inset-bottom,0)
   }
+  /*
+   * حالتِ بسته و باز هر دو با همان specificity نوشته می‌شوند (۰٬۳٬۰).
+   * قبلاً حالتِ بسته روی خودِ `.modal` بود (۰٬۱٬۰) و باید با قاعده‌ی بازِ
+   * قوی‌تر خنثی می‌شد؛ عملاً نمی‌شد و شیت یک ارتفاعِ کامل زیر صفحه می‌ماند.
+   */
+  .modal-overlay:not(.open) .modal{transform:translateY(100%)}
   .modal-overlay.open .modal{transform:none}
   .modal__footer{position:sticky;bottom:0;background:var(--c-surface);gap:var(--sp-2)}
   .modal__footer .btn-primary,.modal__footer .btn-secondary{min-height:48px;flex:1}
@@ -601,6 +658,33 @@ input,select{font-family:inherit}
   <span class="garage-bar__hint" id="garageHint"></span>
 </div>
 
+<!--
+  نوار اعتماد.
+
+  متن‌ها عمداً ثابت و محافظه‌کارانه‌اند: هر ادعایی که فروشگاه نتواند پشتش
+  بایستد (مثل «۷ روز ضمانت بازگشت») بعداً به شکایت مشتری تبدیل می‌شود. شماره
+  تماس از تنظیمات فروشگاه پر می‌شود.
+-->
+<section class="trust">
+  <div class="trust__inner">
+    <div class="trust__item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+      <span>ضمانت اصالت کالا</span>
+    </div>
+    <div class="trust__item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-4l-3-4h-5v8h2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>
+      <span>ارسال به سراسر ایران</span>
+    </div>
+    <div class="trust__item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+      <span>موجودی لحظه‌ای انبار</span>
+    </div>
+    <div class="trust__item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      <span id="trustPhone">مشاوره‌ی خرید</span>
+    </div>
+  </div>
+</section>
 <nav class="cat-bar" id="catBarWrap"><div class="cat-bar__inner" id="catBar"><button class="cat-bar__chip active" data-cat="all">همه</button></div></nav>
 
 <main class="main" id="gridView">
@@ -914,6 +998,29 @@ let catalogTotal = 0;
 const fa=n=>String(n).replace(/\d/g,d=>'۰۱۲۳۴۵۶۷۸۹'[d]);
 const faNum=n=>n.toLocaleString('fa-IR');
 const toman=n=>faNum(n)+' '+unitLabel();
+
+/**
+ * بلوکِ قیمت یک کالا.
+ *
+ * سه حالت دارد و هر سه لازم‌اند: قیمت‌دار، قیمت‌دار با تخفیف، و بی‌قیمت.
+ * حالت سوم را رقبا هم دارند و دلیلش تجاری است — کالایی که نمایش داده نشود،
+ * مشتری‌اش را به فروشگاه دیگر می‌فرستد.
+ */
+function priceBlock(p, unitName){
+  if(p.price == null){
+    return `<span class="p-card__callus">تماس بگیرید</span>`;
+  }
+  const off = p.compareAt
+    ? Math.round((1 - p.price / p.compareAt) * 100)
+    : 0;
+  const was = off > 0
+    ? `<div><span class="p-card__was">${faNum(p.compareAt)}</span>`
+      + `<span class="p-card__off">${fa(off)}٪</span></div>`
+    : '';
+  return was
+    + `<span class="p-card__price">${faNum(p.price)}</span>`
+    + `<span class="p-card__price-unit"> ${unitLabel()}${unitName?' / '+esc(unitName):''}</span>`;
+}
 
 /*
  * سرور عمداً عددِ موجودی را بیرون نمی‌دهد، فقط سه حالت — رقیب نباید بداند از
@@ -1241,10 +1348,10 @@ function cardHTML(p){
     ? `<img class="p-card__photo" src="${API}${p.image}" alt="${esc(p.name)}" loading="lazy">`
     : '<span class="p-card__img-placeholder">🔧</span>';
   const favOn=FAVIDS.has(p.id);
-  return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img">${img}<span class="p-card__stock-badge ${sl.cls}">${sl.text}</span><button class="p-card__fav${favOn?' active':''}" onclick="event.stopPropagation();toggleFav('${p.id}',this)" aria-label="افزودن به علاقه‌مندی"><svg viewBox="0 0 24 24" fill="${favOn?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div><div class="p-card__body"><span class="p-card__brand">${esc(p.brand||'')}</span><h3 class="p-card__name">${esc(p.name)}</h3><span class="p-card__sku">${esc(p.sku||'')}</span><div class="p-card__footer"><div><span class="p-card__price">${faNum(p.price)}</span><span class="p-card__price-unit"> ${unitLabel()} / ${esc(p.unit||'')}</span></div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`;
+  return`<article class="p-card${o}" data-id="${p.id}" onclick="showDetail('${p.id}')"><div class="p-card__img">${img}<span class="p-card__stock-badge ${sl.cls}">${sl.text}</span><button class="p-card__fav${favOn?' active':''}" onclick="event.stopPropagation();toggleFav('${p.id}',this)" aria-label="افزودن به علاقه‌مندی"><svg viewBox="0 0 24 24" fill="${favOn?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 1 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button></div><div class="p-card__body"><span class="p-card__brand">${esc(p.brand||'')}</span><h3 class="p-card__name">${esc(p.name)}</h3><span class="p-card__sku">${esc(p.sku||'')}</span><div class="p-card__footer"><div>${priceBlock(p, p.unit)}</div><button class="p-card__add-btn" onclick="event.stopPropagation();handleAdd('${p.id}')" ${inStock(p.stock)&&p.price!=null?'':'disabled'}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg></button></div></div></article>`;
 }
 
-function handleAdd(id,qty){const p=PRODUCTS.find(x=>x.id===id);if(p&&inStock(p.stock)){addToCart(p,qty);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
+function handleAdd(id,qty){const p=PRODUCTS.find(x=>x.id===id);if(p&&p.price==null){showToast('برای این کالا تماس بگیرید');return}if(p&&inStock(p.stock)){addToCart(p,qty);const b=document.querySelector(`.p-card[data-id="${id}"] .p-card__add-btn`);if(b){b.classList.add('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M20 6 9 17l-5-5"/></svg>';setTimeout(()=>{b.classList.remove('added');b.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg>'},600)}}}
 
 let detailQty=1;
 function renderCart(){
@@ -1444,7 +1551,17 @@ async function boot(){
     return;
   }
 
-  if(SHOP.name) document.title = SHOP.name;
+  if(SHOP.name){
+    document.title = SHOP.name + ' | فروشگاه اینترنتی قطعات یدکی';
+    const site=document.getElementById('metaSite'); if(site) site.setAttribute('content',SHOP.name);
+  }
+  // شماره‌ی تماس روی نوار اعتماد — «تماس بگیرید» بدون شماره بی‌معناست.
+  if(SHOP.phone){
+    const tp=document.getElementById('trustPhone');
+    if(tp) tp.textContent='مشاوره: '+SHOP.phone;
+  }
+  const can=document.getElementById('metaCanonical');
+  if(can) can.setAttribute('href', location.origin+'/');
   renderGarageBar();   // اگر خودرو از قبل در localStorage بود، چیپ فوری دیده شود
   await Promise.all([loadFacets(), loadProducts(), loadBanners(), loadShippingZones()]);
   if(authToken) refreshMe();
@@ -1517,6 +1634,40 @@ async function loadProducts(){
  */
 let detailProduct = null;
 
+/**
+ * تگ‌های صفحه را برای یک محصول به‌روز می‌کند.
+ *
+ * روی گوگل اثرش محدود است (صفحه کلاینت‌ساید است)، ولی اشتراک‌گذاری در واتساپ
+ * و تلگرام دقیقاً از همین og: می‌خواند — و آن کانالِ اصلیِ ارجاع در ایران است.
+ */
+function seoForProduct(p){
+  const title = `${p.name}${p.brand?' '+p.brand:''} | ${SHOP.name||'قطعات خودرو'}`;
+  const desc = (p.description || `خرید ${p.name}`).slice(0,155);
+  document.title = title;
+  const set = (id, attr, v) => { const e=document.getElementById(id); if(e) e.setAttribute(attr, v) };
+  set('metaDesc','content',desc);
+  set('metaOgTitle','content',title);
+  set('metaOgDesc','content',desc);
+  set('metaCanonical','href',`${location.origin}/?product=${p.id}`);
+
+  // داده‌ی ساختاریافته — همان چیزی که «قیمت» و «موجود بودن» را در نتایج نشان می‌دهد.
+  const ld = document.getElementById('ldStore');
+  if(ld){
+    ld.textContent = JSON.stringify({
+      '@context':'https://schema.org','@type':'Product',
+      name:p.name, sku:p.sku||undefined, brand:p.brand||undefined,
+      description:desc,
+      offers: p.price==null ? undefined : {
+        '@type':'Offer',
+        price:p.price,
+        priceCurrency: SHOP.unit==='RIAL' ? 'IRR' : 'IRT',
+        availability: inStock(p.stock)
+          ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      },
+    });
+  }
+}
+
 async function showDetail(id){
   ['gridView','detailView','profileView','cartPage','blogPage','blogDetail'].forEach(v=>{const el=document.getElementById(v);if(el){el.style.display='none';el.classList.remove('show')}});
   const dv=document.getElementById('detailView');dv.style.display='';dv.classList.add('show');
@@ -1544,8 +1695,11 @@ async function showDetail(id){
     ? `<img class="detail__photo" src="${API}${p.images[0]}" alt="${esc(p.name)}">`
     : '<span>🔧</span>';
 
-  hero.innerHTML=`<div class="detail__img-box">${img}<span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${esc(p.brand||'')}</span><h1 class="detail__name">${esc(p.name)}</h1><span class="detail__sku">کد: ${esc(p.sku||'')}</span><div class="detail__price-box"><span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">${unitLabel()} / ${esc(p.unit||'')}</span></div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${inStock(p.stock)?'':'disabled'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${inStock(p.stock)?'افزودن به سبد':'ناموجود'}</button></div>${!inStock(p.stock)?`<button class="detail__notify-btn" onclick="notifyMe('${p.id}')">🔔 موجود شد، خبرم کن</button>`:''}</div>`;
+  hero.innerHTML=`<div class="detail__img-box">${img}<span class="detail__img-badge ${sl.cls}">${sl.text}</span></div><div class="detail__info"><span class="detail__brand">${esc(p.brand||'')}</span><h1 class="detail__name">${esc(p.name)}</h1><span class="detail__sku">کد: ${esc(p.sku||'')}</span><div class="detail__price-box">${p.price==null
+    ? `<span class="p-card__callus">تماس بگیرید — ${esc(SHOP.phone||'با فروشگاه تماس بگیرید')}</span>`
+    : `${p.compareAt?`<span class="detail__was">${faNum(p.compareAt)}</span><span class="p-card__off">${fa(Math.round((1-p.price/p.compareAt)*100))}٪</span>`:''}<span class="detail__price">${faNum(p.price)}</span><span class="detail__price-unit">${unitLabel()} / ${esc(p.unit||'')}</span>`}</div><div class="detail__qty-row"><div class="detail__qty"><button class="detail__qty-btn" onclick="changeDetailQty(1)">+</button><span class="detail__qty-val" id="detailQtyVal">${fa(1)}</span><button class="detail__qty-btn" onclick="changeDetailQty(-1)">−</button></div><button class="detail__add-btn" id="detailAddBtn" onclick="handleDetailAdd('${p.id}')" ${inStock(p.stock)&&p.price!=null?'':'disabled'}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14"/><path d="M5 12h14"/></svg> ${p.price==null?'تماس بگیرید':inStock(p.stock)?'افزودن به سبد':'ناموجود'}</button></div>${!inStock(p.stock)?`<button class="detail__notify-btn" onclick="notifyMe('${p.id}')">🔔 موجود شد، خبرم کن</button>`:''}</div>`;
 
+  seoForProduct(p);
   document.getElementById('tabDesc').innerHTML=`<p class="detail__desc">${esc(p.description||'توضیحاتی ثبت نشده است.')}</p>`;
 
   // مشخصات از فیلدهای واقعی ساخته می‌شود؛ هرچه خالی است اصلاً ردیف نمی‌گیرد.

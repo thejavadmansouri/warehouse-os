@@ -91,7 +91,7 @@ export function CustomerPicker({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-base">
             {creating ? "مشتری جدید" : "انتخاب مشتری"}
@@ -169,6 +169,7 @@ export function CustomerPicker({
           <div className="flex flex-col gap-3">
             <Input
               autoFocus
+              className="h-11 text-base"
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => {
@@ -187,7 +188,7 @@ export function CustomerPicker({
               placeholder="نام، نام خانوادگی یا شماره تماس…"
             />
 
-            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto">
+            <div className="flex max-h-96 flex-col gap-2 overflow-y-auto">
               {results.isLoading && (
                 <p className="py-6 text-center text-sm text-muted-foreground">
                   در حال جست‌وجو…
@@ -208,7 +209,7 @@ export function CustomerPicker({
                   ref={(el) => {
                     if (i === active) el?.scrollIntoView({ block: "nearest" });
                   }}
-                  className={`flex items-center justify-between gap-3 rounded-lg border p-3 text-right
+                  className={`flex min-h-14 items-center justify-between gap-3 rounded-lg border p-3 text-right
                              hover:border-primary hover:bg-primary/5 focus:outline-none
                              focus:ring-2 focus:ring-primary ${
                                i === active ? "border-primary bg-primary/5" : ""

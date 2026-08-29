@@ -79,8 +79,10 @@ const productSchema = z.object({
   purchasePrice: optionalNumber,
   salePrice: optionalNumber,
   wholesalePrice: optionalNumber,
+  compareAtPrice: optionalNumber,
   minStock: optionalNumber,
   isActive: z.boolean(),
+  showOnline: z.boolean(),
 });
 
 type FormValues = z.infer<typeof productSchema>;
@@ -143,8 +145,10 @@ export function ProductFormDialog({
       purchasePrice: undefined,
       salePrice: undefined,
       wholesalePrice: undefined,
+      compareAtPrice: undefined,
       minStock: undefined,
       isActive: true,
+      showOnline: false,
     }),
     []
   );
@@ -169,8 +173,10 @@ export function ProductFormDialog({
             purchasePrice: initial.purchasePrice ?? undefined,
             salePrice: initial.salePrice ?? undefined,
             wholesalePrice: initial.wholesalePrice ?? undefined,
+            compareAtPrice: initial.compareAtPrice ?? undefined,
             minStock: initial.minStock ?? undefined,
             isActive: initial.isActive ?? true,
+            showOnline: initial.showOnline ?? false,
           }
         : defaults,
     [isEdit, initial, defaults]
@@ -294,8 +300,10 @@ export function ProductFormDialog({
       purchasePrice: values.purchasePrice ?? undefined,
       salePrice: values.salePrice ?? undefined,
       wholesalePrice: values.wholesalePrice ?? undefined,
+      compareAtPrice: values.compareAtPrice ?? undefined,
       minStock: values.minStock ?? undefined,
       isActive: values.isActive,
+      showOnline: values.showOnline,
     };
     if (isEdit) {
       updateM.mutate(dto);
@@ -684,6 +692,37 @@ export function ProductFormDialog({
                   )}
                 />
 
+                {/*
+                  قیمتِ پیش از تخفیف.
+
+                  درصدِ تخفیف عمداً فیلد جدا نیست: از تقسیمِ همین دو حساب
+                  می‌شود، پس هیچ‌وقت با قیمت ناهماهنگ نمی‌شود. خالی یا کمتر از
+                  قیمت فروش یعنی «تخفیفی در کار نیست» و سایت چیزی نشان نمی‌دهد.
+                */}
+                <FormField
+                  control={form.control}
+                  name="compareAtPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>
+                        قیمت پیش از تخفیف ({unitLabel()})
+                      </FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="بدون تخفیف"
+                          min="0"
+                          {...numberFieldProps(field)}
+                        />
+                      </FormControl>
+                      <p className="text-xs text-muted-foreground">
+                        روی سایت خط‌خورده کنار قیمت فعلی می‌نشیند. باید از قیمت
+                        فروش بیشتر باشد.
+                      </p>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 {/* توضیحات */}
                 <FormField
                   control={form.control}
@@ -723,6 +762,42 @@ export function ProductFormDialog({
                         <FormControl>
                           <Switch
                             id="isActive-switch"
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/*
+                  نمایش در سایت.
+
+                  عمداً جدا از «فعال» است: کالای فعال یعنی در مغازه فروختنی،
+                  کالای آنلاین یعنی روی اینترنت دیده می‌شود. اکثر کالاها اولی
+                  هستند و دومی نیستند — ۳۳ هزار قلمِ بی‌عکس فروشگاه اینترنتی
+                  نمی‌سازد.
+                */}
+                <FormField
+                  control={form.control}
+                  name="showOnline"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <div className="flex items-center justify-between rounded-lg border p-3">
+                        <div className="space-y-0.5">
+                          <Label htmlFor="showOnline-switch">
+                            نمایش در سایت
+                          </Label>
+                          <p className="text-xs text-muted-foreground">
+                            روی فروشگاه اینترنتی دیده شود. کالای بدون قیمت فروش
+                            حتی با روشن‌بودن این گزینه نمایش داده نمی‌شود.
+                          </p>
+                        </div>
+                        <FormControl>
+                          <Switch
+                            id="showOnline-switch"
                             checked={field.value}
                             onCheckedChange={field.onChange}
                           />

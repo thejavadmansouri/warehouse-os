@@ -74,6 +74,24 @@ export class CreateProductDto {
   @IsBoolean()
   isActive?: boolean;
 
+
+  /**
+   * روی سایت عمومی دیده شود؟
+   *
+   * پیش‌فرضِ دیتابیس `false` است و عمداً: کاتالوگِ ۳۳ هزار قلمی بدون عکس و
+   * توضیح، فروشگاه اینترنتی نیست. مدیر همان چند صد قلمی را که عکس و قیمت
+   * دارند روشن می‌کند.
+   */
+  @IsOptional()
+  @IsBoolean()
+  showOnline?: boolean;
+
+
+  /** قیمت پیش از تخفیف. باید از `salePrice` بیشتر باشد وگرنه بی‌اثر است. */
+  @IsOptional()
+  @IsNumber()
+  compareAtPrice?: number;
+
   @IsOptional()
   @IsString()
   image?: string;

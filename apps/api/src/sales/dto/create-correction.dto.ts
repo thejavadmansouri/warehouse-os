@@ -3,8 +3,9 @@ import {
   IsInt,
   IsOptional,
   IsArray,
+  IsIn,
   ValidateNested,
-  ArrayMinSize,
+
   ArrayMaxSize,
   Min,
   Max,
@@ -34,6 +35,35 @@ export class CorrectionLineDto {
 }
 
 
+/**
+ * قلمی که در فاکتور نبود و با همین اصلاحیه اضافه می‌شود.
+ *
+ * مشتری بعد از گرفتن فاکتور می‌گوید «این را هم بده» و فروشنده نباید مجبور
+ * شود یک فاکتور دوم بزند. کالا از انبار کم می‌شود، به بدهی اضافه می‌شود، و
+ * ردیفش از این به بعد جزو خودِ فاکتور است.
+ */
+export class CorrectionAddLineDto {
+
+  @IsString()
+  productId:string;
+
+  /** قفسه‌ای که از آن برداشته می‌شود. خالی = مکانِ سیستمی، مثل خودِ فروش. */
+  @IsOptional()
+  @IsString()
+  locationId?:string;
+
+  @IsInt()
+  @Min(1)
+  @Max(1_000_000)
+  quantity:number;
+
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000_000)
+  unitPrice:number;
+}
+
+
 export class CreateCorrectionDto {
 
   /** کلید یکتای کلاینت؛ ارسال دوباره اصلاحیه‌ی تکراری نمی‌سازد. */
@@ -52,10 +82,32 @@ export class CreateCorrectionDto {
   @IsString()
   note?:string;
 
+  /**
+   * ردیف‌های موجود که تصحیح می‌شوند. می‌تواند خالی باشد وقتی اصلاحیه فقط
+   * قلمِ تازه اضافه می‌کند — ولی هر دو با هم خالی، یعنی سندِ بی‌محتوا.
+   */
   @IsArray()
-  @ArrayMinSize(1)
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => CorrectionLineDto)
   lines:CorrectionLineDto[];
+
+  /**
+   * روشِ ردوبدلِ همان لحظه‌ی پول — فقط برای فاکتورِ **بدونِ مشتری**.
+   *
+   * فاکتورِ نقدیِ گذری دفتری ندارد که اختلافِ اصلاح رویش بنشیند؛ پول همان‌جا
+   * سرِ پیشخوان داده یا گرفته می‌شود. این روش روی خودِ فاکتور به‌عنوان
+   * پرداخت ثبت می‌شود (منفی = برگشتِ وجه). پیش‌فرض نقدی.
+   */
+  @IsOptional()
+  @IsIn(['CASH', 'CARD'])
+  settlementMethod?: 'CASH' | 'CARD';
+
+  /** قلم‌های تازه‌ای که به همین فاکتور اضافه می‌شوند. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => CorrectionAddLineDto)
+  addedLines?:CorrectionAddLineDto[];
 }

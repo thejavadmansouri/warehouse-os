@@ -16,6 +16,7 @@ import {
   Loader2,
   Printer,
   BadgeDollarSign,
+  Globe,
 } from "lucide-react";
 
 import {
@@ -24,11 +25,12 @@ import {
   exportProductsCsv,
   deleteProduct,
   assetUrl,
+  bulkSetOnline,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import { useAuthStore } from "@/lib/auth-store";
 import { useToast } from "@/hooks/use-toast";
-import { formatPrice } from "@/lib/format";
+import { formatPrice, toFa } from "@/lib/format";
 
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, EmptyState, ErrorState } from "@/components/states";
@@ -170,6 +172,39 @@ export default function ProductsListPage() {
 
   // --- حذف محصول ---
   const [deleteTarget, setDeleteTarget] = React.useState<Product | null>(null);
+  /**
+   * روشن/خاموش کردنِ گروهیِ «نمایش در سایت» برای ردیف‌های انتخاب‌شده.
+   *
+   * انتخاب صریح است و روی صفحه دیده می‌شود، پس دیالوگ تأیید ندارد؛ برگرداندنش
+   * هم یک کلیک است. عددی که سرور برمی‌گرداند «چند تا واقعاً عوض شدند» است، نه
+   * تعداد انتخاب‌شده‌ها — کالایی که از قبل روی سایت بوده دوباره شمرده نمی‌شود.
+   */
+  const bulkOnline = useMutation({
+    mutationFn: (showOnline: boolean) =>
+      bulkSetOnline({
+        select: { productIds: Array.from(selectedIds) },
+        showOnline,
+      }),
+    onSuccess: (res, showOnline) => {
+      toast({
+        title: showOnline ? "روی سایت قرار گرفت" : "از سایت برداشته شد",
+        description:
+          res.affected > 0
+            ? `${toFa(res.affected)} کالا تغییر کرد`
+            : "هیچ کالایی تغییر نکرد — از قبل همین وضعیت را داشتند",
+      });
+      qc.invalidateQueries({ queryKey: ["products"] });
+      clearSelection();
+    },
+    onError: (e) => {
+      toast({
+        title: "تغییر وضعیت سایت ناموفق بود",
+        description: e instanceof ApiException ? e.message : "خطای غیرمنتظره",
+        variant: "destructive",
+      });
+    },
+  });
+
   const deleteM = useMutation({
     mutationFn: (id: string) => deleteProduct(id),
     onSuccess: () => {
@@ -367,10 +402,33 @@ export default function ProductsListPage() {
               لغو انتخاب
             </Button>
           </div>
-          <Button size="sm" onClick={openBulkPrint}>
-            <Printer className="h-4 w-4" />
-            چاپ لیبل‌های انتخاب‌شده
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
+              بدون این دکمه، `showOnline` فقط در دیتابیس وجود داشت و سایت برای
+              همیشه خالی می‌ماند. تک‌تک زدن برای چند صد کالا واقع‌بینانه نیست.
+            */}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bulkOnline.isPending}
+              onClick={() => bulkOnline.mutate(true)}
+            >
+              <Globe className="h-4 w-4" />
+              نمایش در سایت
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bulkOnline.isPending}
+              onClick={() => bulkOnline.mutate(false)}
+            >
+              برداشتن از سایت
+            </Button>
+            <Button size="sm" onClick={openBulkPrint}>
+              <Printer className="h-4 w-4" />
+              چاپ لیبل‌ها
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -520,6 +578,19 @@ export default function ProductsListPage() {
                           غیرفعال
                         </Badge>
                       )}
+                      {/*
+                        «روی سایت» عمداً badge جدا است نه جایگزینِ وضعیت:
+                        این دو مستقل‌اند و کالا می‌تواند فعال باشد ولی آنلاین نه.
+                      */}
+                      {p.showOnline ? (
+                        <Badge
+                          variant="secondary"
+                          className="ms-1 gap-1 bg-sky-100 text-sky-700 hover:bg-sky-100 dark:bg-sky-500/15 dark:text-sky-400"
+                        >
+                          <Globe className="h-3 w-3" />
+                          سایت
+                        </Badge>
+                      ) : null}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">

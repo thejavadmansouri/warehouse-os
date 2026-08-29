@@ -13,6 +13,7 @@ import { LedgerService } from './ledger.service';
 import { inLockOrder } from '../common/lock-order';
 
 import { CreateReturnDto } from './dto/create-return.dto';
+import { lineBalances } from './line-balance';
 import { EventsGateway } from '../realtime/events.gateway';
 
 
@@ -111,17 +112,24 @@ export class ReturnsService {
       },
     });
 
-    const prior = await this.prisma.saleReturnLine.groupBy({
-      by: ['saleLogId'],
-      where: { saleLogId: { in: saleLines.map((l) => l.id) } },
-      _sum: { quantity: true },
-    });
-    const priorQty = new Map(prior.map((p) => [p.saleLogId, p._sum.quantity ?? 0]));
+    /*
+     * قابل‌برگشت باید اصلاحیه‌ها را هم ببیند.
+     *
+     * ردیفی که با اصلاحیه از ۵۰ به ۱۰ آمده، قبلاً هنوز ۵۰ عدد «قابل‌برگشت»
+     * داشت — یعنی مشتری می‌توانست ۵۰ تا پس بدهد در حالی که فقط ۱۰ تا خریده
+     * بود. تعریفِ واحدِ مانده در line-balance.ts است.
+     */
+    const balances = await lineBalances(
+      this.prisma,
+      saleLines.map((l) => l.id),
+      new Map(saleLines.map((l) => [l.id, l.quantity])),
+    );
 
     const lines = saleLines.map((l) => {
-      const sold = l.quantity;
-      const alreadyReturned = priorQty.get(l.id) ?? 0;
-      const returnable = sold - alreadyReturned;
+      const b = balances.get(l.id)!;
+      const sold = b.sold;
+      const alreadyReturned = b.returned;
+      const returnable = b.outstanding;
       const effTotal = this.effectiveTotal(
         l.unitPrice ?? 0,
         l.lineDiscount ?? 0,
@@ -294,14 +302,11 @@ export class ReturnsService {
         });
         const saleById = new Map(saleLines.map((l) => [l.id, l]));
 
-        // مرجوعی‌های قبلیِ هر ردیف — برای سقفِ قابل‌برگشت.
-        const prior = await tx.saleReturnLine.groupBy({
-          by: ['saleLogId'],
-          where: { saleLogId: { in: saleLines.map((l) => l.id) } },
-          _sum: { quantity: true },
-        });
-        const priorQty = new Map(
-          prior.map((p) => [p.saleLogId, p._sum.quantity ?? 0]),
+        // سقفِ قابل‌برگشتِ هر ردیف — هم مرجوعی‌های قبلی، هم اصلاحیه‌ها.
+        const balances = await lineBalances(
+          tx,
+          saleLines.map((l) => l.id),
+          new Map(saleLines.map((l) => [l.id, l.quantity])),
         );
 
         let refundAmount = 0;
@@ -325,9 +330,10 @@ export class ReturnsService {
             });
           }
 
-          const sold = sale.quantity;
-          const already = priorQty.get(sale.id) ?? 0;
-          const returnable = sold - already;
+          const bal = balances.get(sale.id)!;
+          const sold = bal.sold;
+          const already = bal.returned;
+          const returnable = bal.outstanding;
 
           if (line.quantity > returnable) {
             throw new ConflictException({

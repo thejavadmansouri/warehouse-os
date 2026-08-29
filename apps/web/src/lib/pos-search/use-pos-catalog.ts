@@ -80,13 +80,39 @@ export function usePosCatalog(): PosCatalog {
     }
   }, []);
 
-  // First full load.
+  /*
+   * First full load, with retry.
+   *
+   * The old version awaited `pull` and only then set `ready`. If that first
+   * pull threw — a server restart, a Windows box waking from sleep, one bad
+   * response — `setReady(true)` was never reached, so `search()` returned an
+   * empty array *forever* and the only cure was reloading the page. A seller
+   * just sees "live search is dead" with no way back.
+   *
+   * Now a failure is retried with backoff, and the catch is unconditional so
+   * the promise can never reject unhandled.
+   */
   useEffect(() => {
     let alive = true;
-    (async () => {
-      await pull(undefined);
-      if (alive) setReady(true);
-    })();
+    let attempt = 0;
+
+    const load = async () => {
+      while (alive) {
+        try {
+          await pull(undefined);
+          if (alive) setReady(true);
+          return;
+        } catch {
+          attempt += 1;
+          if (!alive) return;
+          // 1s, 2s, 4s … capped — a shop LAN blip should cost seconds, not a shift.
+          const wait = Math.min(1000 * 2 ** (attempt - 1), 30_000);
+          await new Promise((r) => setTimeout(r, wait));
+        }
+      }
+    };
+
+    void load();
     return () => {
       alive = false;
     };
@@ -95,7 +121,11 @@ export function usePosCatalog(): PosCatalog {
   // Periodic incremental refresh + a refresh when the tab regains focus (the
   // seller comes back to the POS after doing something else).
   useEffect(() => {
-    const tick = () => pull(cursorRef.current ?? undefined);
+    // A failed refresh must never become an unhandled rejection — the catalog
+    // simply stays as it is until the next tick, and search keeps working.
+    const tick = () => {
+      void pull(cursorRef.current ?? undefined).catch(() => {});
+    };
     const id = window.setInterval(tick, REFRESH_MS);
     const onFocus = () => tick();
     window.addEventListener("focus", onFocus);

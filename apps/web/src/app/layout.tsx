@@ -5,6 +5,7 @@ import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { ThemeProvider } from "@/components/theme-provider";
 import { QueryProvider } from "@/components/query-provider";
 import { ServiceWorkerRegister } from "@/components/sw-register";
+import { UiScaleProvider, uiScaleBootScript } from "@/components/ui-scale-provider";
 
 export const metadata: Metadata = {
   title: "کاردو — پنل مدیریت فروشگاه",
@@ -38,6 +39,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="fa" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/* پیش از رنگ‌آمیزی اجرا می‌شود — توضیحش کنار خودِ اسکریپت است. */}
+        <script dangerouslySetInnerHTML={{ __html: uiScaleBootScript }} />
+      </head>
       <body
         className="font-sans antialiased bg-background text-foreground"
       >
@@ -54,6 +59,7 @@ export default function RootLayout({
                 این Toaster، همه‌ی پیام‌های موفقیت/خطای آن‌ها بی‌صدا ناپدید می‌شدند. */}
             <SonnerToaster position="bottom-left" richColors closeButton />
             <ServiceWorkerRegister />
+            <UiScaleProvider />
           </QueryProvider>
         </ThemeProvider>
       </body>

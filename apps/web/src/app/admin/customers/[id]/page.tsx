@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -11,15 +10,14 @@ import {
   ShoppingCart,
   Percent,
   Printer,
-  MapPin,
-  IdCard,
-  Tag,
   TrendingUp,
   ChevronDown,
   ChevronUp,
   ChevronLeft,
   ChevronRight,
   UserX,
+  ReceiptText,
+  BarChart3,
 } from "lucide-react";
 
 import { LoadingState, ErrorState } from "@/components/states";
@@ -49,6 +47,7 @@ import { TakePayment } from "./_components/take-payment";
 import { EditCustomerDialog } from "./_components/edit-customer-dialog";
 import { SmsDialog } from "./_components/sms-dialog";
 import { StatementTable } from "./_components/statement-table";
+import { IconBar, OverlayPanel, type IconAction } from "@/components/document/icon-bar";
 import type { Customer, Invoice } from "@/lib/types";
 
 import { unitLabel } from "@/lib/currency";
@@ -88,6 +87,14 @@ export default function CustomerPage() {
   const qc = useQueryClient();
   const role = useAuthStore((s) => s.user?.role);
   const isManager = role === "ADMIN" || role === "MANAGER";
+
+  /**
+   * پنلی که روی بدنه باز است.
+   *
+   * null یعنی همان چیزی دیده می‌شود که هر روز لازم است: گردش حساب. بقیه —
+   * اقلامِ فاکتورها، آمار، دریافت وجه، شرایط اعتبار — پشتِ آیکن‌اند.
+   */
+  const [panel, setPanel] = React.useState<"invoices" | "reports" | "money" | null>(null);
 
   /** مشتریِ در حال غیرفعال‌سازی — تا تأییدِ مدیر، این‌جا می‌ماند. */
   const [deactivating, setDeactivating] = React.useState(false);
@@ -180,6 +187,14 @@ export default function CustomerPage() {
     (i) => i.status === "CONFIRMED" && i.dueAmount > 0
   );
 
+  /**
+   * بردنِ یک فاکتور به صندوق برای ویرایش.
+   *
+   * خودِ صندوق `?edit=` را می‌خواند و فاکتور را داخل همان صفحه‌ی فروش باز
+   * می‌کند — همان‌جایی که فروشنده بلد است کار کند.
+   */
+  const openInPos = (invoiceId: string) => router.push(`/admin/pos?edit=${invoiceId}`);
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["customer", id] });
     qc.invalidateQueries({ queryKey: ["statement", id] });
@@ -194,336 +209,400 @@ export default function CustomerPage() {
     .filter((r) => r.status !== "CANCELLED")
     .reduce((s, r) => s + r.total, 0);
 
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Link
-          href="/admin/customers"
-          className="text-muted-foreground hover:text-foreground"
-        >
-          <ArrowRight className="size-5" />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-2xl font-bold">{c.fullName}</h1>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            <span dir="ltr">
-              {c.phones?.[0]?.phone ? toFa(c.phones[0].phone) : "بدون شماره"}
-            </span>
-            {c.category && <CustomerCategoryBadge category={c.category} />}
-            {c.nationalId && (
-              <span className="flex items-center gap-1">
-                <IdCard className="size-3.5" /> کد ملی {toFa(c.nationalId)}
-              </span>
-            )}
-            {c.address && (
-              <span className="flex min-w-0 items-center gap-1 truncate">
-                <MapPin className="size-3.5 shrink-0" />
-                <span className="truncate">{c.address}</span>
-              </span>
-            )}
-          </div>
-        </div>
-        <SmsDialog customer={c} />
-        <EditCustomerDialog customer={c} onDone={refresh} />
-        {isManager && (
-          <Button
-            variant="outline"
-            className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-            onClick={() => setDeactivating(true)}
-          >
-            <UserX className="size-4" /> غیرفعال‌سازی
-          </Button>
-        )}
-        {/* برگه‌ای که مشتری می‌خواهد ببرد — پنجره‌ی جدا تا این صفحه بماند. */}
-        <Button
-          variant="outline"
-          onClick={() => window.open(`/admin/print/statement/${c.id}`, "_blank")}
-        >
-          <Printer className="size-4" /> صورت‌حساب
-        </Button>
-        <Button asChild variant="outline">
-          <Link href={`/admin/pos?customer=${c.id}`}>
-            <ShoppingCart className="size-4" /> فروش به این مشتری
-          </Link>
-        </Button>
-      </div>
+  /**
+   * همه‌ی کارهای این صفحه، به‌صورت آیکن.
+   *
+   * قبلاً هشت دکمه‌ی برچسب‌دار در سربرگ بودند و چهار بخشِ همیشه‌باز زیرشان.
+   * چیزی که هر روز لازم است گردش حساب است؛ بقیه یک کلیک فاصله دارند.
+   */
+  const actions: IconAction[] = [
+    { id: "back", icon: ArrowRight, label: "برگشت به فهرست", keyLabel: "Esc",
+      run: () => router.push("/admin/customers") },
 
-      {/* مانده و گزارش‌ها — مربع‌های کوچک، تا تمرکزِ صفحه روی فاکتورها بماند. */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-        <div className="rounded-lg border bg-card p-3">
-          <p className="text-xs text-muted-foreground">مانده‌ی حساب</p>
-          <p
-            className={`mt-0.5 truncate text-xl font-bold tabular-nums ${
-              totalDue > 0
-                ? "text-amber-600 dark:text-amber-400"
-                : totalDue < 0
-                  ? "text-emerald-600 dark:text-emerald-400"
-                  : ""
+    { id: "invoices", icon: ReceiptText, label: "فاکتورها و اقلام", separated: true,
+      active: panel === "invoices",
+      run: () => setPanel((p) => (p === "invoices" ? null : "invoices")) },
+    { id: "money", icon: Wallet, label: "دریافت وجه و شرایط اعتبار",
+      active: panel === "money",
+      run: () => setPanel((p) => (p === "money" ? null : "money")) },
+    { id: "reports", icon: BarChart3, label: "گزارش‌ها و آمار",
+      active: panel === "reports",
+      run: () => setPanel((p) => (p === "reports" ? null : "reports")) },
+
+    { id: "sell", icon: ShoppingCart, label: "فروش به این مشتری", separated: true,
+      primary: true, run: () => router.push(`/admin/pos?customer=${id}`) },
+    { id: "print", icon: Printer, label: "چاپ صورت‌حساب",
+      run: () => window.open(`/admin/print/statement/${id}`, "_blank") },
+  ];
+
+  return (
+    <div
+      tabIndex={-1}
+      className="relative flex h-[calc(100vh-2.5rem)] flex-col outline-none"
+      onKeyDown={(e) => {
+        if (panel || deactivating) return;
+        if (e.key === "Escape") { e.preventDefault(); router.push("/admin/customers"); }
+      }}
+    >
+      {/*
+        یک سطر: نام، شماره، دسته، و مانده‌ی حساب.
+
+        سربرگِ قبلی سه خط بود و هشت دکمه‌ی برچسب‌دار داشت. آن‌ها حالا آیکنِ
+        نوارِ زیرش هستند و این خط فقط می‌گوید «این پرونده‌ی کیست و چقدر
+        بدهکار است» — دو چیزی که همیشه لازم است.
+      */}
+      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-2">
+        <h1 className="text-lg font-bold">{c.fullName}</h1>
+        <span dir="ltr" className="text-sm text-muted-foreground">
+          {c.phones?.[0]?.phone ? toFa(c.phones[0].phone) : "بدون شماره"}
+        </span>
+        {c.category && <CustomerCategoryBadge category={c.category} />}
+        <span className="ms-auto text-sm">
+          مانده:{" "}
+          <b
+            className={`text-lg tabular-nums ${
+              totalDue > 0 ? "text-warning" : totalDue < 0 ? "text-success" : ""
             }`}
           >
             {money(Math.abs(totalDue))}
-          </p>
-          <p className="text-[11px] text-muted-foreground">
+          </b>{" "}
+          <span className="text-xs text-muted-foreground">
             {totalDue > 0 ? "بدهکار" : totalDue < 0 ? "بستانکار" : "تسویه"}
-          </p>
-        </div>
-        <div className="rounded-lg border bg-card p-3">
-          <Stat label="جاری" value={s?.current ?? 0} />
-        </div>
-        <div className="rounded-lg border bg-card p-3">
-          <Stat label="سررسید امروز" value={s?.dueToday ?? 0} tone="amber" />
-        </div>
-        <div className="rounded-lg border bg-card p-3">
-          <Stat label="سررسید گذشته" value={s?.overdue ?? 0} tone="red" />
-        </div>
-        <div className="rounded-lg border bg-card p-3">
-          <Stat label="چک در جریان وصول" value={s?.chequesInHandCount ?? 0} count />
-        </div>
-      </div>
-
-      {(c.creditLimit ?? 0) > 0 && (
-        <p className="text-xs text-muted-foreground">
-          سقف اعتبار {amount(c.creditLimit!)} · اعتبار باقی‌مانده{" "}
-          <span className="tabular-nums">
-            {money(Math.max(0, (c.creditLimit ?? 0) - totalDue))}
           </span>
-          {(c.creditDays ?? 0) > 0 && ` · مهلت ${toFa(c.creditDays!)} روز`}
-        </p>
-      )}
-
-      {/* آمار خرید دوره‌ای — روند خرید مشتری در یک نگاه */}
-      <div className="rounded-lg border bg-card p-3">
-        <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
-          <TrendingUp className="size-4" /> خرید دوره‌ای
-        </div>
-        {stats.isLoading ? (
-          <p className="py-3 text-center text-sm text-muted-foreground">
-            در حال محاسبه…
-          </p>
-        ) : stats.data ? (
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <PeriodStat
-              label="این ماه"
-              total={stats.data.thisMonth.total}
-              count={stats.data.thisMonth.count}
-            />
-            <PeriodStat
-              label="ماه قبل"
-              total={stats.data.lastMonth.total}
-              count={stats.data.lastMonth.count}
-            />
-            <PeriodStat
-              label="کل خرید"
-              total={stats.data.allTime.total}
-              count={stats.data.allTime.count}
-            />
-            <PeriodStat
-              label="میانگین هر فاکتور"
-              total={stats.data.averageInvoice}
-            />
-          </div>
-        ) : null}
+        </span>
       </div>
 
-      {/* فاکتورها و اقلام — همه‌ی خریدهای مشتری، فیلتر «امروز/کلی/بازه» */}
-      <Card className="p-0">
-        <div className="border-b px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">فاکتورها و اقلام خرید</h2>
-            <div className="flex gap-1">
-              {INVOICE_FILTERS.map((f) => (
-                <button
-                  key={f.key}
-                  onClick={() => { setPurchFilter(f.key); setInvPage(1); }}
-                  className={`h-9 rounded-md px-4 text-sm font-medium transition-colors ${
-                    purchFilter === f.key
-                      ? "bg-primary text-primary-foreground"
-                      : "border bg-background hover:bg-primary/5"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+      {/*
+        پیامک و ویرایش هنوز پنجره‌ی خودشان را دارند و کامپوننتشان دکمه‌اش را
+        خودش می‌سازد؛ کنارِ آیکن‌ها می‌نشینند تا همه‌ی کارها یک‌جا باشند.
+      */}
+      <IconBar actions={actions}>
+        <SmsDialog customer={c} />
+        <EditCustomerDialog customer={c} onDone={refresh} />
+        {isManager && (
+          <button
+            type="button"
+            title="غیرفعال‌سازی مشتری"
+            aria-label="غیرفعال‌سازی مشتری"
+            onClick={() => setDeactivating(true)}
+            className="flex size-7 items-center justify-center rounded text-muted-foreground
+                       hover:bg-destructive/10 hover:text-destructive"
+          >
+            <UserX className="size-4" />
+          </button>
+        )}
+      </IconBar>
+
+      {/*
+        بدنه‌ی همیشگی: گردش حساب.
+
+        فاکتورها، تسویه‌ها و پرداخت‌ها همه در همین یک جدول‌اند با مانده‌ی
+        متحرک — یعنی دقیقاً همان سه چیزی که هر روز لازم است. آمار و
+        شرایط اعتبار پشتِ آیکن رفتند: سالی چند بار باز می‌شوند و جایشان
+        بالای صفحه نبود.
+      */}
+      <div className="min-h-0 flex-1 overflow-auto p-3">
+        {/* گردش حساب — صورتحساب با مانده‌ی متحرک، بازه و خروجی اکسل */}
+        <Card className="p-0">
+          <div className="border-b px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="font-semibold">گردش حساب</h2>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">از تاریخ</label>
+                  <JalaliDateInput value={stmtFrom} onChange={setStmtFrom} />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs text-muted-foreground">تا تاریخ</label>
+                  <JalaliDateInput value={stmtTo} onChange={setStmtTo} />
+                </div>
+                {(stmtFrom || stmtTo) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setStmtFrom("");
+                      setStmtTo("");
+                    }}
+                  >
+                    پاک‌کردن بازه
+                  </Button>
+                )}
+              </div>
             </div>
           </div>
 
-          {purchFilter === "range" && (
-            <div className="mt-3 flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">از تاریخ</label>
-                <JalaliDateInput
-                  value={rangeFrom}
-                  onChange={(v) => { setRangeFrom(v); setInvPage(1); }}
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">تا تاریخ</label>
-                <JalaliDateInput
-                  value={rangeTo}
-                  onChange={(v) => { setRangeTo(v); setInvPage(1); }}
-                />
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div className="p-4">
-          {purchases.isLoading ? (
-            <LoadingState />
-          ) : purchaseRows.length === 0 ? (
-            <p className="py-6 text-center text-sm text-muted-foreground">
-              {purchFilter === "today"
-                ? "امروز خریدی برای این مشتری ثبت نشده"
-                : "فاکتوری در این بازه پیدا نشد"}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                <span className="tabular-nums">{toFa(purchaseRows.length)} فاکتور</span>
-                <span>
-                  مجموع خرید:{" "}
-                  <span className="font-bold tabular-nums">{money(purchasesTotal)}</span>
-                </span>
-              </div>
-
-              {/* key عوض‌شدن = remount = حالتِ بازشده برای فیلترِ جدید از نو ساخته می‌شود. */}
-              <CustomerPurchaseRows
-                key={`${purchFilter}-${invPage}-${purchaseRows.length}`}
-                invoices={purchaseRows}
-                defaultExpanded={purchFilter === "today"}
+          <div className="p-4">
+            {statement.isLoading ? (
+              <LoadingState />
+            ) : (
+              <StatementTable
+              onOpenInvoice={openInPos}
+                customerId={id}
+                rows={statement.data?.rows.data ?? []}
+                summary={statement.data?.summary}
+                range={{
+                  startDate: stmtFrom || undefined,
+                  endDate: stmtTo ? endOfDay(stmtTo) : undefined,
+                }}
               />
+            )}
+          </div>
+        </Card>
 
-              {purchasesMeta && purchasesMeta.pageCount > 1 && (
-                <div className="flex items-center justify-center gap-3">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={invPage <= 1}
-                    onClick={() => setInvPage((p) => Math.max(1, p - 1))}
-                  >
-                    <ChevronRight className="size-4" /> قبلی
-                  </Button>
-                  <span className="text-sm text-muted-foreground tabular-nums">
-                    صفحه {toFa(purchasesMeta.page)} از {toFa(purchasesMeta.pageCount)}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={invPage >= purchasesMeta.pageCount}
-                    onClick={() => setInvPage((p) => p + 1)}
-                  >
-                    بعدی <ChevronLeft className="size-4" />
-                  </Button>
+
+      </div>
+
+      {panel === "invoices" && (
+        <OverlayPanel title="فاکتورها و اقلام" onClose={() => setPanel(null)}>
+          {/* فاکتورها و اقلام — همه‌ی خریدهای مشتری، فیلتر «امروز/کلی/بازه» */}
+          <Card className="p-0">
+            <div className="border-b px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-semibold">فاکتورها و اقلام خرید</h2>
+                <div className="flex gap-1">
+                  {INVOICE_FILTERS.map((f) => (
+                    <button
+                      key={f.key}
+                      onClick={() => { setPurchFilter(f.key); setInvPage(1); }}
+                      className={`h-9 rounded-md px-4 text-sm font-medium transition-colors ${
+                        purchFilter === f.key
+                          ? "bg-primary text-primary-foreground"
+                          : "border bg-background hover:bg-primary/5"
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {purchFilter === "range" && (
+                <div className="mt-3 flex flex-wrap items-end gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">از تاریخ</label>
+                    <JalaliDateInput
+                      value={rangeFrom}
+                      onChange={(v) => { setRangeFrom(v); setInvPage(1); }}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">تا تاریخ</label>
+                    <JalaliDateInput
+                      value={rangeTo}
+                      onChange={(v) => { setRangeTo(v); setInvPage(1); }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </Card>
 
-      <TakePayment
-        customerId={id}
-        totalDue={totalDue}
-        chequeRateBp={c.chequeRateBp}
-        chequeRateMode={c.chequeRateMode}
-        onDone={refresh}
-      />
+            <div className="p-4">
+              {purchases.isLoading ? (
+                <LoadingState />
+              ) : purchaseRows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  {purchFilter === "today"
+                    ? "امروز خریدی برای این مشتری ثبت نشده"
+                    : "فاکتوری در این بازه پیدا نشد"}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                    <span className="tabular-nums">{toFa(purchaseRows.length)} فاکتور</span>
+                    <span>
+                      مجموع خرید:{" "}
+                      <span className="font-bold tabular-nums">{money(purchasesTotal)}</span>
+                    </span>
+                  </div>
 
-      {/* فاکتورهای باز — همان‌هایی که این بدهی از آن‌ها آمده. */}
-      {!!openInvoices.length && (
-        <Card className="p-0">
-          <div className="border-b px-4 py-3">
-            <h2 className="font-semibold">فاکتورهای باز</h2>
-          </div>
-          <ul className="divide-y">
-            {openInvoices.map((inv) => {
-              const overdue = inv.dueDate ? new Date(inv.dueDate) < new Date() : false;
-              return (
-                <li key={inv.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                  <span className="w-16 shrink-0 font-medium tabular-nums">
-                    #{toFa(inv.number)}
-                  </span>
-                  <span className="min-w-0 flex-1 text-xs text-muted-foreground">
-                    {inv.dueDate ? (
-                      <>
-                        سررسید{" "}
-                        <span className={overdue ? "font-semibold text-destructive" : ""}>
-                          {faDate(inv.dueDate)}
-                        </span>
-                        {overdue && " — معوق"}
-                      </>
-                    ) : (
-                      "بدون سررسید"
-                    )}
-                  </span>
-                  <span className="shrink-0 font-semibold tabular-nums text-amber-600">
-                    {money(inv.dueAmount)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-      )}
+                  {/* key عوض‌شدن = remount = حالتِ بازشده برای فیلترِ جدید از نو ساخته می‌شود. */}
+                  <CustomerPurchaseRows
+                    key={`${purchFilter}-${invPage}-${purchaseRows.length}`}
+                    onOpenInPos={openInPos}
+                invoices={purchaseRows}
+                    defaultExpanded={purchFilter === "today"}
+                  />
 
-      {isManager && (
-        <CreditSettings customer={c} onDone={refresh} />
-      )}
-
-      {isManager && (
-        <ManagerActions
-          customerId={id}
-          hasOpening={hasOpening}
-          onDone={refresh}
-        />
-      )}
-
-      {/* گردش حساب — صورتحساب با مانده‌ی متحرک، بازه و خروجی اکسل */}
-      <Card className="p-0">
-        <div className="border-b px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-semibold">گردش حساب</h2>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">از تاریخ</label>
-                <JalaliDateInput value={stmtFrom} onChange={setStmtFrom} />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">تا تاریخ</label>
-                <JalaliDateInput value={stmtTo} onChange={setStmtTo} />
-              </div>
-              {(stmtFrom || stmtTo) && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStmtFrom("");
-                    setStmtTo("");
-                  }}
-                >
-                  پاک‌کردن بازه
-                </Button>
+                  {purchasesMeta && purchasesMeta.pageCount > 1 && (
+                    <div className="flex items-center justify-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={invPage <= 1}
+                        onClick={() => setInvPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronRight className="size-4" /> قبلی
+                      </Button>
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        صفحه {toFa(purchasesMeta.page)} از {toFa(purchasesMeta.pageCount)}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={invPage >= purchasesMeta.pageCount}
+                        onClick={() => setInvPage((p) => p + 1)}
+                      >
+                        بعدی <ChevronLeft className="size-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        </div>
+          </Card>
 
-        <div className="p-4">
-          {statement.isLoading ? (
-            <LoadingState />
-          ) : (
-            <StatementTable
-              customerId={id}
-              rows={statement.data?.rows.data ?? []}
-              summary={statement.data?.summary}
-              range={{
-                startDate: stmtFrom || undefined,
-                endDate: stmtTo ? endOfDay(stmtTo) : undefined,
-              }}
-            />
+          {/* فاکتورهای باز — همان‌هایی که این بدهی از آن‌ها آمده. */}
+          {!!openInvoices.length && (
+            <Card className="p-0">
+              <div className="border-b px-4 py-3">
+                <h2 className="font-semibold">فاکتورهای باز</h2>
+              </div>
+              <ul className="divide-y">
+                {openInvoices.map((inv) => {
+                  const overdue = inv.dueDate ? new Date(inv.dueDate) < new Date() : false;
+                  return (
+                    <li key={inv.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                      <span className="w-16 shrink-0 font-medium tabular-nums">
+                        #{toFa(inv.number)}
+                      </span>
+                      <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                        {inv.dueDate ? (
+                          <>
+                            سررسید{" "}
+                            <span className={overdue ? "font-semibold text-destructive" : ""}>
+                              {faDate(inv.dueDate)}
+                            </span>
+                            {overdue && " — معوق"}
+                          </>
+                        ) : (
+                          "بدون سررسید"
+                        )}
+                      </span>
+                      <span className="shrink-0 font-semibold tabular-nums text-amber-600">
+                        {money(inv.dueAmount)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </Card>
           )}
-        </div>
-      </Card>
+
+
+        </OverlayPanel>
+      )}
+
+      {panel === "reports" && (
+        <OverlayPanel title="گزارش‌ها" onClose={() => setPanel(null)}>
+          <div className="space-y-4">
+            {/* مانده و گزارش‌ها — مربع‌های کوچک، تا تمرکزِ صفحه روی فاکتورها بماند. */}
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+              <div className="rounded-lg border bg-card p-3">
+                <p className="text-xs text-muted-foreground">مانده‌ی حساب</p>
+                <p
+                  className={`mt-0.5 truncate text-xl font-bold tabular-nums ${
+                    totalDue > 0
+                      ? "text-amber-600 dark:text-amber-400"
+                      : totalDue < 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : ""
+                  }`}
+                >
+                  {money(Math.abs(totalDue))}
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  {totalDue > 0 ? "بدهکار" : totalDue < 0 ? "بستانکار" : "تسویه"}
+                </p>
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <Stat label="جاری" value={s?.current ?? 0} />
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <Stat label="سررسید امروز" value={s?.dueToday ?? 0} tone="amber" />
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <Stat label="سررسید گذشته" value={s?.overdue ?? 0} tone="red" />
+              </div>
+              <div className="rounded-lg border bg-card p-3">
+                <Stat label="چک در جریان وصول" value={s?.chequesInHandCount ?? 0} count />
+              </div>
+            </div>
+
+            {(c.creditLimit ?? 0) > 0 && (
+              <p className="text-xs text-muted-foreground">
+                سقف اعتبار {amount(c.creditLimit!)} · اعتبار باقی‌مانده{" "}
+                <span className="tabular-nums">
+                  {money(Math.max(0, (c.creditLimit ?? 0) - totalDue))}
+                </span>
+                {(c.creditDays ?? 0) > 0 && ` · مهلت ${toFa(c.creditDays!)} روز`}
+              </p>
+            )}
+
+            {/* آمار خرید دوره‌ای — روند خرید مشتری در یک نگاه */}
+            <div className="rounded-lg border bg-card p-3">
+              <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <TrendingUp className="size-4" /> خرید دوره‌ای
+              </div>
+              {stats.isLoading ? (
+                <p className="py-3 text-center text-sm text-muted-foreground">
+                  در حال محاسبه…
+                </p>
+              ) : stats.data ? (
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <PeriodStat
+                    label="این ماه"
+                    total={stats.data.thisMonth.total}
+                    count={stats.data.thisMonth.count}
+                  />
+                  <PeriodStat
+                    label="ماه قبل"
+                    total={stats.data.lastMonth.total}
+                    count={stats.data.lastMonth.count}
+                  />
+                  <PeriodStat
+                    label="کل خرید"
+                    total={stats.data.allTime.total}
+                    count={stats.data.allTime.count}
+                  />
+                  <PeriodStat
+                    label="میانگین هر فاکتور"
+                    total={stats.data.averageInvoice}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+          </div>
+        </OverlayPanel>
+      )}
+
+      {panel === "money" && (
+        <OverlayPanel title="دریافت وجه و شرایط اعتبار" onClose={() => setPanel(null)}>
+          <div className="space-y-4">
+            <TakePayment
+              customerId={id}
+              totalDue={totalDue}
+              chequeRateBp={c.chequeRateBp}
+              chequeRateMode={c.chequeRateMode}
+              onDone={refresh}
+            />
+
+            {isManager && (
+              <CreditSettings customer={c} onDone={refresh} />
+            )}
+
+            {isManager && (
+              <ManagerActions
+                customerId={id}
+                hasOpening={hasOpening}
+                onDone={refresh}
+              />
+            )}
+
+          </div>
+        </OverlayPanel>
+      )}
 
       {/* تأیید غیرفعال‌سازی — soft delete؛ سابقه‌ی فاکتورها و دفتر پاک نمی‌شود. */}
       <ConfirmDialog
@@ -555,9 +634,12 @@ export default function CustomerPage() {
  * پاسخِ فهرست آمده‌اند (includeLines) — بدون رفت‌وبرگشتِ جدا برای هر فاکتور.
  */
 function CustomerPurchaseRows({
+  onOpenInPos,
   invoices,
   defaultExpanded,
 }: {
+  /** کلیک روی ردیف — فاکتور را در صندوق برای ویرایش باز می‌کند. */
+  onOpenInPos: (invoiceId: string) => void;
   invoices: Invoice[];
   defaultExpanded: boolean;
 }) {
@@ -592,19 +674,35 @@ function CustomerPurchaseRows({
             const isOpen = expanded.has(inv.id);
             return (
               <React.Fragment key={inv.id}>
+                {/*
+                  کلِ ردیف فاکتور را در صندوق باز می‌کند، نه فقط شماره‌اش.
+                  دیدنِ اقلام کارِ فلشِ کنارِ شماره است — دو کارِ متفاوت روی
+                  یک ردیف، پس باید دو ناحیه‌ی جدا داشته باشند.
+                */}
                 <tr
-                  onClick={() => toggle(inv.id)}
+                  onClick={() => onOpenInPos(inv.id)}
+                  title="باز کردن این فاکتور در صندوق برای ویرایش"
                   className={`cursor-pointer border-t transition-colors ${
                     cancelled ? "opacity-60" : ""
                   } ${isOpen ? "bg-muted/40" : "hover:bg-muted/30"}`}
                 >
                   <td className="p-2 font-medium tabular-nums">
                     <span className="inline-flex items-center gap-2">
-                      {isOpen ? (
-                        <ChevronUp className="size-3.5" />
-                      ) : (
-                        <ChevronDown className="size-3.5" />
-                      )}
+                      <button
+                        type="button"
+                        aria-label={isOpen ? "بستن اقلام" : "دیدن اقلام"}
+                        className="rounded p-0.5 hover:bg-muted"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(inv.id);
+                        }}
+                      >
+                        {isOpen ? (
+                          <ChevronUp className="size-3.5" />
+                        ) : (
+                          <ChevronDown className="size-3.5" />
+                        )}
+                      </button>
                       {toFa(inv.number)}
                     </span>
                   </td>

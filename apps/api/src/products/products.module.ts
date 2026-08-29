@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ProductsController } from './products.controller';
+import { ProductPopularityService } from './product-popularity.service';
 import { ProductsService } from './products.service';
 import { BarcodeModule } from '../barcode/barcode.module';
 
@@ -10,9 +11,7 @@ import { BarcodeModule } from '../barcode/barcode.module';
   controllers: [
     ProductsController,
   ],
-  providers: [
-    ProductsService,
-  ],
+  providers: [ProductsService, ProductPopularityService],
   exports: [
     ProductsService,
   ],

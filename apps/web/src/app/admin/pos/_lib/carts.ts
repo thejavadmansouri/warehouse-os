@@ -15,6 +15,67 @@ import { NO_DISCOUNT, type DiscountInput as DiscountValue } from "./discount";
  * نفر بعدی همان‌جا منتظر است. تا حالا فروشنده باید یا سبد را می‌سوزاند یا
  * مشتری دوم را نگه می‌داشت. هر تب یک فاکتورِ کاملاً مستقل است.
  */
+/**
+ * این تب دارد چه سندی می‌سازد.
+ *
+ * یک اتحادیه‌ی تفکیک‌شده، نه چند پرچمِ کنار هم: «در حال ویرایش» و «در حال
+ * مرجوعی» هرگز نمی‌توانند هم‌زمان درست باشند، و تایپ باید همین را بگوید —
+ * وگرنه دیر یا زود جایی هر دو ست می‌شوند و هیچ‌کس نمی‌فهمد کدام برنده است.
+ *
+ * سبد در هر چهار حالت همان سبد است؛ فقط معنیِ «ثبت» عوض می‌شود.
+ */
+export type CartDoc =
+  /** فروشِ تازه — حالتِ پیش‌فرض. */
+  | { type: "sale" }
+  /**
+   * همان سبد، ولی موجودی دست نمی‌خورد و فقط قیمت نگه داشته می‌شود.
+   *
+   * مدتِ اعتبار روی خودِ سند می‌نشیند نه روی صفحه، چون دو تبِ باز می‌توانند
+   * دو پیش‌فاکتور با اعتبارِ متفاوت باشند.
+   */
+  | { type: "quote"; validForMinutes: number }
+  /**
+   * ویرایشِ یک فاکتورِ ثبت‌شده.
+   *
+   * `originals` وضعیتِ همان لحظه‌ی سرور است (تعداد و قیمتِ فعلیِ هر ردیف، یعنی
+   * فروشِ اصلی + اصلاحیه‌های قبلی). موقعِ ثبت، سبد با همین مقایسه می‌شود و فقط
+   * تفاوت‌ها به‌صورت اصلاحیه می‌روند — سبد خودش «حقیقت» نیست، تفاوت است.
+   */
+  | {
+      type: "correction";
+      invoiceId: string;
+      invoiceNumber: number;
+      /** به کلیدِ ردیفِ سبد (که همان saleLogId است برای ردیف‌های موجود). */
+      originals: Record<
+        string,
+        { saleLogId: string; quantity: number; unitPrice: number; note?: string }
+      >;
+    }
+  /**
+   * برگشت از فروشِ یک فاکتور.
+   *
+   * قفل به فاکتور است: کالا و قیمت از سرور می‌آیند و فروشنده فقط تعداد و
+   * سالم/معیوب را می‌گوید. سقفِ هر ردیف «قابل‌برگشت» است (فروخته − مرجوعیِ
+   * قبلی)، پس دو بار برگرداندنِ یک قلم ممکن نیست.
+   */
+  | {
+      type: "return";
+      invoiceId: string;
+      invoiceNumber: number;
+      lines: Record<
+        string,
+        { saleLogId: string; returnable: number; effectiveUnitPrice: number }
+      >;
+      /** روی حساب باز پولی پرداخت نشده — برگشت فقط «کسر از حساب». */
+      isOpenAccount: boolean;
+      hasCustomer: boolean;
+    };
+
+export const SALE_DOC: CartDoc = { type: "sale" };
+
+/** اعتبارِ پیش‌فرضِ پیش‌فاکتور: یک شبانه‌روز. */
+export const QUOTE_DOC: CartDoc = { type: "quote", validForMinutes: 24 * 60 };
+
 export interface Cart {
   id: string;
   /** شماره‌ی نمایشیِ تب — شمارنده‌ی ساده، ربطی به شماره‌ی فاکتور ندارد. */
@@ -38,6 +99,13 @@ export interface Cart {
   note: string;
   activeRow: number;
   errorLine: number | null;
+  /**
+   * نوعِ سندِ این تب.
+   *
+   * روی خودِ تب می‌نشیند نه روی صفحه، چون فروشنده باید بتواند وسطِ ویرایشِ
+   * فاکتورِ دیروزِ آقای الف، تب دو را باز کند و به مشتریِ سرِ پیشخوان برسد.
+   */
+  doc: CartDoc;
 }
 
 function emptyCart(label: number): Cart {
@@ -52,6 +120,7 @@ function emptyCart(label: number): Cart {
     note: "",
     activeRow: 0,
     errorLine: null,
+    doc: SALE_DOC,
   };
 }
 
@@ -165,6 +234,8 @@ export function useCarts() {
       note: "",
       activeRow: 0,
       errorLine: null,
+      // هر سندی با ثبت تمام می‌شود؛ تب به فروشِ عادی برمی‌گردد.
+      doc: SALE_DOC,
     }));
   }, [patch]);
 

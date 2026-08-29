@@ -90,6 +90,37 @@ export class SalesService {
 
     // ---- بررسی‌های ارزان، پیش از باز کردن تراکنش ----
 
+    /*
+     * کلیدِ یکتا اجباری است.
+     *
+     * بدون آن `findUnique` زیر با `undefined` صدا زده می‌شود و Prisma یک خطای
+     * خامِ Validation می‌اندازد — یعنی کاربر ۵۰۰ می‌گیرد به‌جای پیامِ روشن. مهم‌تر
+     * از زشتیِ خطا: فاکتوری که کلید ندارد هیچ محافظی در برابرِ ارسالِ دوباره
+     * ندارد، و همان بازه‌ی Double Sale است که این کلید برای بستنش ساخته شده.
+     */
+    if (typeof dto.idempotencyKey !== 'string' || !dto.idempotencyKey.trim()) {
+      throw new BadRequestException({
+        error:'IDEMPOTENCY_KEY_REQUIRED',
+        message:'کلید یکتای فاکتور الزامی است',
+      });
+    }
+
+    /*
+     * تعدادِ اعشاری همین‌جا رد می‌شود تا خطا `lineIndex` داشته باشد و صندوق
+     * بداند کدام سطر را قرمز کند. گاردِ اصلی در تک‌نقطه‌ی تغییر موجودی است؛
+     * این یکی فقط پیام را دقیق‌تر می‌کند.
+     */
+    dto.lines.forEach((line, i) => {
+      if (!Number.isInteger(line.quantity)) {
+        throw new BadRequestException({
+          error:'INVALID_QUANTITY',
+          lineIndex:i,
+          quantity: line.quantity,
+          message:'تعداد باید عدد صحیح باشد',
+        });
+      }
+    });
+
     const existing =
       await this.prisma.saleInvoice.findUnique({
         where:{ idempotencyKey: dto.idempotencyKey },
@@ -498,6 +529,7 @@ export class SalesService {
                 quantity: line.quantity,
                 unitPrice: line.unitPrice,
                 lineDiscount: line.discount ?? null,
+                lineNote: line.lineNote?.trim() || null,
                 // فروش هیچ‌وقت به‌خاطر عددِ سیستم متوقف نمی‌شود — جنس در انبار
                 // هست، فقط هنوز ثبت نشده. منفی‌شدن خودش گزارش می‌دهد.
                 allowNegative: true,

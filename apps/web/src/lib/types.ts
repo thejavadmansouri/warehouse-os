@@ -59,6 +59,10 @@ export interface Product {
   image?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /** روی فروشگاه اینترنتی دیده می‌شود — مستقل از isActive. */
+  showOnline?: boolean;
+  /** قیمت پیش از تخفیف. */
+  compareAtPrice?: number | null;
   // روابط احتمالی جوین‌شده
   brand?: { id: string; name: string } | null;
   category?: { id: string; name: string } | null;
@@ -97,9 +101,13 @@ export interface CreateProductDto {
   purchasePrice?: number;
   salePrice?: number;
   wholesalePrice?: number;
+  /** قیمت پیش از تخفیف — روی سایت خط‌خورده نشان داده می‌شود. */
+  compareAtPrice?: number;
   minStock?: number;
   isActive?: boolean;
   image?: string;
+  /** روی فروشگاه اینترنتی دیده شود. */
+  showOnline?: boolean;
 }
 
 export type UpdateProductDto = Partial<CreateProductDto>;
@@ -566,7 +574,15 @@ export interface Category {
 export interface Supplier {
   id: string;
   name: string;
+  phone?: string | null;
+  address?: string | null;
   createdAt?: string;
+}
+
+export interface CreateSupplierInput {
+  name: string;
+  phone?: string;
+  address?: string;
 }
 
 // =====================================================
@@ -1055,6 +1071,8 @@ export interface InvoiceLineInput {
   quantity: number;
   unitPrice: number;
   discount?: number;
+  /** توضیحِ همین قلم — روی برگه‌ی فاکتور زیرِ نامِ کالا چاپ می‌شود. */
+  lineNote?: string;
 }
 
 export interface CreateInvoiceDto {
@@ -1369,6 +1387,8 @@ export interface Invoice {
      * سرجمعِ تخفیف‌های ردیفی از اختلاف جمع ردیف‌ها با subtotal قابل استخراج است.
      */
     lineDiscount?: number | null;
+    /** توضیحِ دستیِ فروشنده روی همین قلم — زیرِ نامِ کالا چاپ می‌شود. */
+    lineNote?: string | null;
     product: { id: string; name: string; sku?: string | null; unit?: string | null };
     location: { id: string; name: string; code: string; path: string };
   }[];
@@ -1875,6 +1895,8 @@ export interface SaleReturnListRow {
 
 export interface CorrectableLine {
   saleLogId: string;
+  /** توضیحِ فعلیِ همین قلم روی فاکتور. */
+  lineNote?: string | null;
   product: { id: string; name: string; sku?: string | null; unit?: string | null };
   location: { id: string; name: string; code: string; path: string };
   /** تعدادِ فعلی (فروش + اثر اصلاحیه‌های قبلی). */
@@ -1908,6 +1930,19 @@ export interface CreateCorrectionDto {
   reason: string;
   note?: string;
   lines: { saleLogId: string; newQuantity: number; newUnitPrice: number }[];
+  /**
+   * روشِ ردوبدلِ پول — فقط برای فاکتورِ بدونِ مشتری. روی خودِ فاکتور
+   * به‌عنوان پرداخت ثبت می‌شود (منفی = برگشتِ وجه).
+   */
+  settlementMethod?: "CASH" | "CARD";
+  /** قلم‌هایی که در فاکتور نبودند و با همین اصلاحیه اضافه می‌شوند. */
+  addedLines?: {
+    productId: string;
+    /** خالی = مکان سیستمی، مثل خودِ فروش. */
+    locationId?: string;
+    quantity: number;
+    unitPrice: number;
+  }[];
 }
 
 export interface SaleCorrectionLine {
@@ -1919,6 +1954,8 @@ export interface SaleCorrectionLine {
   oldUnitPrice: number;
   newUnitPrice: number;
   lineAdjust: number;
+  /** این قلم با همین اصلاحیه به فاکتور اضافه شده، تصحیح نشده. */
+  isNewLine?: boolean;
   product: { id: string; name: string; sku?: string | null; unit?: string | null };
   location: { id: string; name: string; code: string; path: string };
 }
@@ -2217,3 +2254,24 @@ export const PURCHASE_STATUS_LABELS: Record<string, string> = {
   CONFIRMED: "ثبت شده",
   CANCELLED: "باطل شده",
 };
+
+
+/** «نمایش در سایت» به‌صورت گروهی — همان شکلِ انتخابِ قیمت‌گذاری گروهی. */
+export interface BulkOnlineRequest {
+  select: {
+    productIds?: string[];
+    brandId?: string;
+    categoryId?: string;
+    search?: string;
+    /** فقط کالاهایی که قیمت فروش دارند. */
+    onlyWithSalePrice?: boolean;
+  };
+  showOnline: boolean;
+  /** فقط بشمار، ننویس. */
+  dryRun?: boolean;
+}
+
+export interface BulkOnlineResult {
+  affected: number;
+  applied: boolean;
+}

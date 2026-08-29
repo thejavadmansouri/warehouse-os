@@ -31,6 +31,7 @@ import { ChequesService } from './cheques.service';
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
 import { CreateReturnDto } from './dto/create-return.dto';
 import { CreateCorrectionDto } from './dto/create-correction.dto';
+import { UpdateLineNotesDto } from './dto/update-line-notes.dto';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
 import {
   ConvertQuotationDto,
@@ -381,6 +382,25 @@ export class SalesController {
     @Req() req: any,
   ){
     return this.corrections.createCorrection(dto, req.user?.userId, req.user?.role);
+  }
+
+
+  /**
+   * تغییرِ توضیحِ ردیف‌های یک فاکتور — بدون ساختنِ سند.
+   * چراییِ جدابودنش از اصلاحیه، بالای `updateLineNotes` نوشته شده.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('invoices/:id/line-notes')
+  updateLineNotes(
+    @Param('id') id: string,
+    @Body() dto: UpdateLineNotesDto,
+    @Req() req: any,
+  ){
+    return this.corrections.updateLineNotes(
+      id,
+      dto.notes.map((n) => ({ saleLogId: n.saleLogId, lineNote: n.lineNote ?? null })),
+      req.user?.role,
+    );
   }
 
 

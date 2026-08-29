@@ -136,16 +136,23 @@ describe('OpenAccountsService', () => {
     });
 
     it('اصلاحیه‌ی قیمت را روی قیمتِ نمایشی و جمع اعمال می‌کند', async () => {
-      prisma.openAccount.findUnique.mockResolvedValue(account([invoice()]));
-      prisma.saleCorrection.groupBy.mockResolvedValue([
-        { invoiceId: 'inv1', _sum: { amountAdjust: -100_000 } },
-      ]);
+      /*
+       * فاکتور با مبلغِ **پس از اصلاح** ماک می‌شود، چون در واقعیت
+       * `corrections.service` همان لحظه `subtotal`/`total` را در جا به‌روز
+       * می‌کند. قبلاً اینجا total روی ۱٬۰۰۰٬۰۰۰ می‌ماند و انتظار می‌رفت دلتای
+       * اصلاحیه پایینش بیاورد — یعنی خودِ تست همان دوباره‌شماری را تثبیت
+       * می‌کرد که روی صورتحسابِ مشتری بدهی را بیشتر از واقع نشان می‌داد.
+       */
+      prisma.openAccount.findUnique.mockResolvedValue(
+        account([invoice({ total: 900_000, dueAmount: 900_000 })]),
+      );
       prisma.saleCorrectionLine.findMany.mockResolvedValue([
         { saleLogId: 'L1', oldQuantity: 10, newQuantity: 10, newUnitPrice: 90_000 },
       ]);
 
       const res = await service.get('acc1');
 
+      // مبلغ دقیقاً یک بار اصلاح شده — نه دو بار.
       expect(res.total).toBe(900_000);
       expect(res.invoices[0].lines[0].unitPrice).toBe(90_000);
       expect(res.invoices[0].lines[0].originalUnitPrice).toBe(100_000);

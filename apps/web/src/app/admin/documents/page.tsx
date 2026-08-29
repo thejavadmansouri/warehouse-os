@@ -16,10 +16,8 @@
  */
 
 import * as React from "react";
-import { Files } from "lucide-react";
 
 import { useAuthStore } from "@/lib/auth-store";
-import { PageHeader } from "@/components/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { InvoicesPanel } from "../invoices/page";
@@ -32,41 +30,38 @@ export default function DocumentsPage() {
   const isManager = hasRole("ADMIN", "MANAGER");
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title="اسناد"
-        description="فاکتور، پیش‌فاکتور، مرجوعی و دریافت وجه"
-        icon={Files}
-      />
+    /*
+      سرصفحه حذف شد: نامِ صفحه در منوی کناری هست و تکرارش فقط یک سطرِ ارتفاع
+      می‌گیرد. تب‌ها خودشان می‌گویند اینجا کجاست.
+    */
+    <Tabs defaultValue="invoices" className="flex h-[calc(100vh-2.5rem)] flex-col gap-0">
+      <TabsList className="h-8 shrink-0 justify-start rounded-none border-b bg-transparent px-2">
+        <TabsTrigger value="invoices">فاکتورها</TabsTrigger>
+        <TabsTrigger value="quotations">پیش‌فاکتورها</TabsTrigger>
+        {isManager && <TabsTrigger value="returns">مرجوعی‌ها</TabsTrigger>}
+        {isManager && <TabsTrigger value="receipts">دریافت‌ها</TabsTrigger>}
+      </TabsList>
 
-      <Tabs defaultValue="invoices">
-        <TabsList>
-          <TabsTrigger value="invoices">فاکتورها</TabsTrigger>
-          <TabsTrigger value="quotations">پیش‌فاکتورها</TabsTrigger>
-          {isManager && <TabsTrigger value="returns">مرجوعی‌ها</TabsTrigger>}
-          {isManager && <TabsTrigger value="receipts">دریافت‌ها</TabsTrigger>}
-        </TabsList>
+      {/* هر تب تمامِ ارتفاعِ باقی‌مانده را می‌گیرد — جدول باید تا پایین برود. */}
+      <TabsContent value="invoices" className="mt-0 flex min-h-0 flex-1 flex-col">
+        <InvoicesPanel embedded />
+      </TabsContent>
 
-        <TabsContent value="invoices" className="mt-4">
-          <InvoicesPanel embedded />
+      <TabsContent value="quotations" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+        <QuotationsPanel embedded />
+      </TabsContent>
+
+      {isManager && (
+        <TabsContent value="returns" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+          <ReturnsPanel embedded />
         </TabsContent>
+      )}
 
-        <TabsContent value="quotations" className="mt-4">
-          <QuotationsPanel embedded />
+      {isManager && (
+        <TabsContent value="receipts" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+          <ReceiptsPanel embedded />
         </TabsContent>
-
-        {isManager && (
-          <TabsContent value="returns" className="mt-4">
-            <ReturnsPanel embedded />
-          </TabsContent>
-        )}
-
-        {isManager && (
-          <TabsContent value="receipts" className="mt-4">
-            <ReceiptsPanel embedded />
-          </TabsContent>
-        )}
-      </Tabs>
-    </div>
+      )}
+    </Tabs>
   );
 }

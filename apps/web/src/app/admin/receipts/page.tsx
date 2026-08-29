@@ -2,9 +2,8 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { HandCoins, User } from "lucide-react";
+import { User } from "lucide-react";
 
-import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -56,15 +55,13 @@ export function ReceiptsPanel({ embedded }: { embedded?: boolean } = {}) {
     (r.payments ?? []).filter((p) => p.method === "CHEQUE" && p.cheque);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        compact={embedded}
-        title="دریافت وجه از بدهکار"
-        description="ثبت پرداخت مشتری بابت فاکتورهای نسیه"
-        icon={HandCoins}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-[24rem_1fr]">
+    /*
+      این یکی فهرست نیست، فرم است — پس الگوی «جدولِ تمام‌صفحه» رویش نمی‌نشیند.
+      فقط سرصفحه‌ی تکراری برداشته شد و فاصله‌ها فشرده شدند تا کنارِ بقیه‌ی
+      تب‌های «اسناد» ناجور نباشد.
+    */
+    <div className={`space-y-3 p-3 ${embedded ? "" : "h-[calc(100vh-2.5rem)] overflow-auto"}`}>
+      <div className="grid gap-3 lg:grid-cols-[24rem_1fr]">
         {/* انتخاب مشتری + فرم ثبت */}
         <div className="h-fit space-y-4">
           <Card className="p-4">

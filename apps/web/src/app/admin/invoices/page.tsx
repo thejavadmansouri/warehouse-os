@@ -1,52 +1,22 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  FileText,
-  Search,
-  Printer,
-  Undo2,
-  Ban,
-  Eye,
-  MoreVertical,
-  ChevronLeft,
-  ChevronRight,
-  PencilLine,
-} from "lucide-react";
+import { Search, Undo2 } from "lucide-react";
 
-import { PageHeader } from "@/components/page-header";
-import { LoadingState, ErrorState } from "@/components/states";
-import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/states";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { JalaliDateInput } from "@/components/jalali-date-input";
 import { StatusBadge } from "@/components/status-badge";
-import { Money } from "@/components/money";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReturnDialog } from "@/app/admin/pos/_components/return-dialog";
 import { CorrectionDialog } from "@/app/admin/pos/_components/correction-dialog";
 import { getInvoices, cancelInvoice } from "@/lib/api";
-import { faDate, toFa, rial } from "@/lib/format";
+import { faDate, faTime, money, toFa, rial } from "@/lib/format";
 import { useAuthStore } from "@/lib/auth-store";
+import type { Invoice } from "@/lib/types";
 
 /**
  * فهرستِ همه‌ی فاکتورها — لنگرِ هابِ «اسناد فروش».
@@ -55,6 +25,9 @@ import { useAuthStore } from "@/lib/auth-store";
  * راهی برای دیدنِ فاکتورهای روزهای قبل، جز از گزارش‌ها، نبود. این صفحه همان
  * فهرست است با جست‌وجو (نام/شماره/تلفن) و صفحه‌بندی.
  */
+const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
+const TD = "px-2 py-1.5 whitespace-nowrap";
+
 const STATUS_TABS = [
   { key: "", label: "همه" },
   // فاکتورهای جاریِ حساب‌های باز — تا تسویه نهایی نشده‌اند.
@@ -90,6 +63,8 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
   /** «مانده‌دار» — پایه‌ی پیگیریِ وصول، پرکاربردترین فیلترِ این صفحه. */
   const [hasDue, setHasDue] = React.useState(false);
   const [page, setPage] = React.useState(1);
+  const [row, setRow] = React.useState(0);
+  const router = useRouter();
 
   // مرجوعی، اصلاحیه و ابطال — از همین‌جا روی هر فاکتوری با سرچ، نه فقط فاکتورهای امروز.
   const [returning, setReturning] = React.useState<string | null>(null);
@@ -136,259 +111,235 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
   const rows = list.data?.data ?? [];
   const meta = list.data?.meta;
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        compact={embedded}
-        title="فاکتورها"
-        description="همه‌ی فاکتورهای فروش — جست‌وجو بر اساس نام مشتری، شماره فاکتور یا تلفن."
-        icon={FileText}
-      />
+  /** ردیفِ فعال همیشه باید دیده شود — کیبورد خودش اسکرول نمی‌کند. */
+  React.useEffect(() => {
+    document.querySelector('[data-active-row="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [row, rows.length]);
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-64 flex-1">
-          <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+  const openInPos = (inv?: Invoice) => {
+    if (inv) router.push(`/admin/pos?edit=${inv.id}`);
+  };
+
+  return (
+    /*
+      یک سطر فیلتر، یک جدول، یک نوار کلید.
+      سرصفحه، کارت، منوی سه‌نقطه‌ی هر ردیف و سه ردیفِ فیلترِ جدا حذف شدند:
+      روی لپ‌تاپِ پیشخوان همه‌ی آن‌ها با هم نصفِ صفحه را می‌گرفتند.
+    */
+    <div
+      tabIndex={-1}
+      className={`flex flex-col outline-none ${embedded ? "min-h-0 flex-1" : "h-[calc(100vh-2.5rem)]"}`}
+      onKeyDown={(e) => {
+        if (returning || correcting || cancelling) return;
+        const inv = rows[row];
+
+        switch (e.key) {
+          case "ArrowDown":
+            e.preventDefault();
+            setRow((r) => Math.min(r + 1, Math.max(rows.length - 1, 0)));
+            return;
+          case "ArrowUp":
+            e.preventDefault();
+            setRow((r) => Math.max(r - 1, 0));
+            return;
+          case "PageDown":
+            e.preventDefault();
+            setRow((r) => Math.min(r + 12, Math.max(rows.length - 1, 0)));
+            return;
+          case "PageUp":
+            e.preventDefault();
+            setRow((r) => Math.max(r - 12, 0));
+            return;
+          case "Enter":
+            e.preventDefault();
+            // Alt+Enter = مرجوعی؛ همان قاعده‌ی پنلِ مشتری در صندوق.
+            if (e.altKey) { if (canManage && inv) setReturning(inv.id); }
+            else openInPos(inv);
+            return;
+        }
+
+        if (!inv) return;
+
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "p") {
+          e.preventDefault();
+          window.open(`/admin/print/invoice/${inv.id}`, "_blank");
+          return;
+        }
+        if ((e.ctrlKey || e.metaKey) && e.key === "Delete") {
+          e.preventDefault();
+          if (canManage && inv.status === "CONFIRMED") {
+            setCancelling({ id: inv.id, number: inv.number, total: inv.total });
+          }
+        }
+      }}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+        <div className="relative min-w-56 flex-1">
+          <Search className="absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="نام مشتری، شماره فاکتور یا تلفن…"
-            className="h-10 pe-10"
+            className="h-8 pe-9 text-sm"
           />
         </div>
 
-        <div className="flex gap-1">
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          aria-label="وضعیت"
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+        >
           {STATUS_TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setStatus(t.key)}
-              className={`h-10 rounded-md px-4 text-sm font-medium transition-colors ${
-                status === t.key
-                  ? "bg-primary text-primary-foreground"
-                  : "border bg-background hover:bg-primary/5"
-              }`}
-            >
+            <option key={t.key} value={t.key}>
               {t.label}
-            </button>
+            </option>
           ))}
-        </div>
-      </div>
+        </select>
 
-      {/*
-        فیلترهای آماده.
+        <button
+          type="button"
+          onClick={() => setHasDue((v) => !v)}
+          className={`h-8 rounded-md border px-3 text-sm font-medium ${
+            hasDue ? "border-warning bg-warning/10 text-warning" : "bg-background"
+          }`}
+        >
+          مانده‌دار
+        </button>
 
-        به‌جای چند آیتمِ منو که هرکدام یک «گزارشِ» ازپیش‌پخته بودند، همان کار با
-        یک کلیک روی همین صفحه انجام می‌شود — و برخلافِ آن آیتم‌ها، بعدش قابلِ
-        دستکاری است: بازه را عوض کن، وضعیت را عوض کن.
-      */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">فیلتر سریع:</span>
-        {(
-          [
-            ["امروز", () => { const t = todayIso(); setFrom(t); setTo(t); }],
-            ["مانده‌دار", () => setHasDue(true)],
-            ["حساب باز", () => setStatus("OPEN")],
-            ["مرجوع‌شده", () => setStatus("RETURNED")],
-          ] as const
-        ).map(([label, apply]) => (
-          <button
-            key={label}
-            type="button"
-            onClick={apply}
-            className="h-8 rounded-full border px-3 text-xs font-medium transition-colors hover:border-primary hover:text-primary"
-          >
-            {label}
-          </button>
-        ))}
+        <button
+          type="button"
+          onClick={() => { const t = todayIso(); setFrom(t); setTo(t); }}
+          className="h-8 rounded-md border bg-background px-3 text-sm font-medium"
+        >
+          امروز
+        </button>
+
+        <JalaliDateInput value={from} onChange={setFrom} />
+        <JalaliDateInput value={to} onChange={setTo} />
 
         {(hasDue || from || to || status) && (
           <button
             type="button"
             onClick={() => { setHasDue(false); setFrom(""); setTo(""); setStatus(""); }}
-            className="h-8 rounded-full border border-dashed px-3 text-xs text-muted-foreground transition-colors hover:border-destructive hover:text-destructive"
+            className="h-8 rounded-md border border-dashed px-3 text-sm text-muted-foreground"
           >
-            پاک‌کردن فیلترها
+            پاک‌کردن
           </button>
         )}
 
-        {hasDue && (
-          <span className="inline-flex h-8 items-center gap-1 rounded-full bg-amber-600/10 px-3 text-xs font-medium text-amber-700 dark:text-amber-400">
-            فقط مانده‌دار
-            <button type="button" onClick={() => setHasDue(false)} aria-label="حذف فیلتر">
-              ✕
+        <span className="text-xs text-muted-foreground">
+          {meta ? `${toFa(meta.total)} فاکتور` : ""}
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {list.isError ? (
+          <ErrorState onRetry={() => list.refetch()} />
+        ) : !rows.length ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            {list.isFetching ? "…" : debouncedQ ? "فاکتوری پیدا نشد" : "هنوز فاکتوری ثبت نشده"}
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted/70 backdrop-blur">
+              <tr>
+                <th className={`${TH} w-20`}>شماره</th>
+                <th className={`${TH} w-24`}>تاریخ</th>
+                <th className={`${TH} w-16`}>ساعت</th>
+                <th className={TH}>مشتری</th>
+                <th className={`${TH} w-28`}>وضعیت</th>
+                <th className={`${TH} w-36`}>مبلغ</th>
+                <th className={`${TH} w-36`}>مانده</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((inv, i) => (
+                <tr
+                  key={inv.id}
+                  data-active-row={i === row}
+                  onMouseEnter={() => setRow(i)}
+                  onClick={() => openInPos(inv)}
+                  title="باز کردن این فاکتور در صندوق برای ویرایش"
+                  className={`cursor-pointer border-b odd:bg-muted/25 ${
+                    inv.status === "CANCELLED" ? "opacity-60" : ""
+                  }`}
+                >
+                  <td className={`${TD} font-bold tabular-nums`}>{toFa(inv.number)}</td>
+                  <td className={`${TD} tabular-nums text-muted-foreground`}>
+                    {faDate(inv.createdAt)}
+                  </td>
+                  <td className={`${TD} tabular-nums text-muted-foreground`}>
+                    {faTime(inv.createdAt)}
+                  </td>
+                  <td className={`${TD} max-w-0 truncate`}>
+                    {inv.customer?.fullName ?? "نقدی گذری"}
+                  </td>
+                  <td className={TD}>
+                    <div className="flex items-center gap-1.5">
+                      <StatusBadge kind="invoice" status={inv.status} />
+                      {inv.hasReturns && <Undo2 className="size-3.5 text-warning" />}
+                    </div>
+                  </td>
+                  <td className={`${TD} text-end font-semibold tabular-nums`}>
+                    {money(inv.total)}
+                  </td>
+                  <td
+                    className={`${TD} text-end font-bold tabular-nums ${
+                      inv.dueAmount > 0 ? "text-warning" : "text-muted-foreground"
+                    }`}
+                  >
+                    {inv.dueAmount > 0 ? money(inv.dueAmount) : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-x-5 overflow-x-auto whitespace-nowrap border-t bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+        {(
+          [
+            ["↑↓", "حرکت"],
+            ["Enter", "ویرایش در صندوق"],
+            ...(canManage ? [["Alt+Enter", "مرجوعی"]] : []),
+            ["Ctrl+P", "چاپ"],
+            ...(canManage ? [["Ctrl+Del", "ابطال"]] : []),
+          ] as [string, string][]
+        ).map(([k, label]) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <kbd className="rounded border bg-background px-1.5 py-0.5 font-sans text-[11px]">
+              {k}
+            </kbd>
+            {label}
+          </span>
+        ))}
+
+        {meta && meta.pageCount > 1 && (
+          <span className="ms-auto flex items-center gap-2">
+            <button
+              type="button"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="rounded border bg-background px-2 py-0.5 disabled:opacity-40"
+            >
+              قبلی
+            </button>
+            <span className="tabular-nums">
+              {toFa(meta.page)} از {toFa(meta.pageCount)}
+            </span>
+            <button
+              type="button"
+              disabled={page >= meta.pageCount}
+              onClick={() => setPage((p) => p + 1)}
+              className="rounded border bg-background px-2 py-0.5 disabled:opacity-40"
+            >
+              بعدی
             </button>
           </span>
         )}
       </div>
-
-      {/* بازه‌ی تاریخ — «مشتری می‌گوید فلان روز خریدم» را همین‌جا پیدا کن. */}
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">از تاریخ</label>
-          <JalaliDateInput value={from} onChange={setFrom} />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-muted-foreground">تا تاریخ</label>
-          <JalaliDateInput value={to} onChange={setTo} />
-        </div>
-        {(from || to) && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-9"
-            onClick={() => { setFrom(""); setTo(""); }}
-          >
-            پاک کردن تاریخ
-          </Button>
-        )}
-      </div>
-
-      {list.isLoading ? (
-        <LoadingState />
-      ) : list.isError ? (
-        <ErrorState onRetry={() => list.refetch()} />
-      ) : rows.length === 0 ? (
-        <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          {debouncedQ ? "فاکتوری با این جست‌وجو پیدا نشد" : "هنوز فاکتوری ثبت نشده است"}
-        </p>
-      ) : (
-        <>
-          <Card className="overflow-hidden p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>شماره</TableHead>
-                  <TableHead>تاریخ</TableHead>
-                  <TableHead>مشتری</TableHead>
-                  <TableHead>وضعیت</TableHead>
-                  <TableHead className="text-start">مبلغ</TableHead>
-                  <TableHead className="text-start">مانده</TableHead>
-                  <TableHead className="w-12" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((inv) => (
-                  <TableRow key={inv.id} className={inv.status === "CANCELLED" ? "opacity-60" : ""}>
-                    <TableCell className="font-medium tabular-nums">
-                      <Link
-                        href={`/admin/invoices/${inv.id}`}
-                        className="text-primary hover:underline"
-                      >
-                        {toFa(inv.number)}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {faDate(inv.createdAt)}
-                    </TableCell>
-                    <TableCell className="max-w-48 truncate">
-                      {inv.customer?.fullName ?? "نقدی گذری"}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1.5">
-                        <StatusBadge kind="invoice" status={inv.status} />
-                        {inv.hasReturns && (
-                          <Badge variant="outline" className="gap-1 text-amber-600">
-                            <Undo2 className="size-3" />
-                            مرجوعی
-                          </Badge>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      <Money value={inv.total} />
-                    </TableCell>
-                    <TableCell>
-                      {inv.dueAmount > 0 ? (
-                        <Money value={inv.dueAmount} tone="due" />
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label="عملیات">
-                            <MoreVertical className="size-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start">
-                          <DropdownMenuItem asChild>
-                            <Link href={`/admin/invoices/${inv.id}`}>
-                              <Eye className="size-4" /> مشاهده
-                            </Link>
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() =>
-                              window.open(`/admin/print/invoice/${inv.id}`, "_blank")
-                            }
-                          >
-                            <Printer className="size-4" /> چاپ
-                          </DropdownMenuItem>
-
-                          {/*
-                            مرجوعی و اصلاحیه روی فاکتورِ نهایی و روی فاکتورِ جاریِ
-                            حساب باز؛ ابطال اما فقط روی نهایی — فاکتورِ حساب باز
-                            با اصلاح/مرجوعی خالی می‌شود، نه با ابطال.
-                          */}
-                          {canManage &&
-                            (inv.status === "CONFIRMED" || inv.status === "OPEN") && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={() => setReturning(inv.id)}>
-                                <Undo2 className="size-4" /> مرجوعی
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => setCorrecting(inv.id)}>
-                                <PencilLine className="size-4" /> اصلاحیه
-                              </DropdownMenuItem>
-                              {inv.status === "CONFIRMED" && (
-                                <DropdownMenuItem
-                                  variant="destructive"
-                                  onClick={() =>
-                                    setCancelling({
-                                      id: inv.id,
-                                      number: inv.number,
-                                      total: inv.total,
-                                    })
-                                  }
-                                >
-                                  <Ban className="size-4" /> ابطال فاکتور
-                                </DropdownMenuItem>
-                              )}
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-
-          {meta && meta.pageCount > 1 && (
-            <div className="flex items-center justify-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                <ChevronRight className="size-4" /> قبلی
-              </Button>
-              <span className="text-sm text-muted-foreground tabular-nums">
-                صفحه {toFa(meta.page)} از {toFa(meta.pageCount)}
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= meta.pageCount}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                بعدی <ChevronLeft className="size-4" />
-              </Button>
-            </div>
-          )}
-        </>
-      )}
 
       <ReturnDialog
         invoiceId={returning}

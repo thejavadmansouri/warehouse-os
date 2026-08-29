@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { buildSearchTokens, tokenizeQuery } from './search-tokens';
 import { nextSku } from './sku.util';
+import { BulkOnlineDto } from './dto/bulk-online.dto';
 import { BulkPriceDto } from './dto/bulk-price.dto';
 
 
@@ -346,13 +347,14 @@ export class ProductsService {
 
         // فقط اگه قیمتی داده شده یه رکورد قیمت هم می‌سازیم
         ...(
-          (dto.purchasePrice != null || dto.salePrice != null)
+          (dto.purchasePrice != null || dto.salePrice != null || dto.compareAtPrice != null)
             ? {
                 prices:{
                   create:{
                     purchasePrice:dto.purchasePrice ?? null,
                     salePrice:dto.salePrice ?? null,
-                    wholesalePrice:dto.wholesalePrice ?? null
+                    wholesalePrice:dto.wholesalePrice ?? null,
+                    compareAtPrice:dto.compareAtPrice ?? null
                   }
                 }
               }
@@ -404,7 +406,8 @@ export class ProductsService {
     if (
       dto.purchasePrice != null ||
       dto.salePrice != null ||
-      dto.wholesalePrice != null
+      dto.wholesalePrice != null ||
+      dto.compareAtPrice != null
     ) {
       await this.setPrice(id, dto);
     }
@@ -587,7 +590,12 @@ export class ProductsService {
    */
   async setPrice(
     productId: string,
-    dto: { purchasePrice?: number | null; salePrice?: number | null; wholesalePrice?: number | null },
+    dto: {
+      purchasePrice?: number | null;
+      salePrice?: number | null;
+      wholesalePrice?: number | null;
+      compareAtPrice?: number | null;
+    },
   ) {
     const product = await this.prisma.product.findUnique({
       where: { id: productId },
@@ -606,13 +614,16 @@ export class ProductsService {
       purchasePrice: dto.purchasePrice ?? latest?.purchasePrice ?? null,
       salePrice: dto.salePrice ?? latest?.salePrice ?? null,
       wholesalePrice: dto.wholesalePrice ?? latest?.wholesalePrice ?? null,
+      compareAtPrice: dto.compareAtPrice ?? latest?.compareAtPrice ?? null,
     };
 
     const unchanged =
       latest &&
       latest.purchasePrice === next.purchasePrice &&
       latest.salePrice === next.salePrice &&
-      latest.wholesalePrice === next.wholesalePrice;
+      latest.wholesalePrice === next.wholesalePrice &&
+      // بدون این، عوض‌کردنِ تنهای «قیمت پیش از تخفیف» ذخیره نمی‌شد.
+      latest.compareAtPrice === next.compareAtPrice;
 
     if (unchanged) return latest;
 
@@ -756,6 +767,49 @@ export class ProductsService {
 
 
   /** فیلترِ انتخاب. برگرداندن null یعنی «هیچ معیاری داده نشده». */
+  /**
+   * روشن/خاموش کردنِ گروهیِ «نمایش در سایت».
+   *
+   * بدون این، `showOnline` فقط در دیتابیس وجود داشت و هیچ راهی برای عوض‌کردنش
+   * نبود — یعنی سایت برای همیشه خالی می‌ماند. تک‌تک زدن هم برای چند صد کالا
+   * واقع‌بینانه نیست.
+   *
+   * ⚠️ مثل قیمتِ گروهی، انتخابِ خالی یعنی خطا نه «همه». یک `PATCH` بی‌فیلتر
+   * روی ۳۳ هزار کالا کلِ کاتالوگ را عمومی می‌کند.
+   */
+  async bulkSetOnline(dto: BulkOnlineDto) {
+    const where = this.buildBulkPriceWhere(dto.select as BulkPriceDto['select']);
+    if (!where) {
+      throw new BadRequestException({
+        error: 'NO_SELECTION',
+        message: 'هیچ کالایی انتخاب نشده — برند، دسته، جست‌وجو یا فهرست کالا لازم است',
+      });
+    }
+
+    /*
+     * کالای بی‌قیمت روی سایت دیده نمی‌شود (کاتالوگ خودش کنارش می‌گذارد)، پس
+     * روشن‌کردنش فقط عددِ «کالاهای سایت» را دروغ می‌کند.
+     */
+    if (dto.select.onlyWithSalePrice) {
+      where.prices = { some: { salePrice: { not: null } } };
+    }
+
+    // فقط آن‌هایی که واقعاً عوض می‌شوند شمرده شوند تا عددِ گزارش درست باشد.
+    const affected = await this.prisma.product.count({
+      where: { ...where, showOnline: !dto.showOnline },
+    });
+
+    if (dto.dryRun) return { affected, applied: false };
+
+    await this.prisma.product.updateMany({
+      where: { ...where, showOnline: !dto.showOnline },
+      data: { showOnline: dto.showOnline },
+    });
+
+    return { affected, applied: true };
+  }
+
+
   private buildBulkPriceWhere(sel: BulkPriceDto['select']): Prisma.ProductWhereInput | null {
     const where: Prisma.ProductWhereInput = { deletedAt: null };
     let hasCriteria = false;
@@ -838,6 +892,16 @@ export class ProductsService {
    */
   // آرایه‌ی خام برمی‌گرداند تا هم اپ اندروید (List<ProductDto>) و هم وب (که هر دو
   // شکل را می‌پذیرد) بتوانند مصرفش کنند.
+  /**
+   * سقفِ پاداشِ «پرفروش‌بودن» در امتیازِ جستجو.
+   *
+   * عمداً سقف دارد: پرفروشی یک **تای‌بریکر** است، نه معیارِ اصلی. بدون سقف،
+   * یک کالای خیلی پرفروش می‌توانست کالایی را که کاربر دقیقاً نامش را تایپ کرده
+   * پایین بیندازد — یعنی جستجو دیگر به تایپِ کاربر گوش نمی‌داد. ۳ در برابرِ
+   * پاداشِ ترتیبِ ۵ یعنی ربطِ متنی همیشه می‌چربد.
+   */
+  private static readonly POPULARITY_BONUS_CAP = 3;
+
   async search(query: string) {
     const q = this.normalizeSearch(query || '');
     if (!q) return [];
@@ -988,6 +1052,7 @@ export class ProductsService {
       CROSS JOIN LATERAL (
         SELECT array_to_string(p."searchTokens", ' ') AS txt
       ) s
+      LEFT JOIN "ProductPopularity" pop ON pop."productId" = p.id
       WHERE p."deletedAt" IS NULL
         AND ${Prisma.join(conditions, ' AND ')}
       ORDER BY
@@ -1000,7 +1065,9 @@ export class ProductsService {
                 WHERE i."productId" = p.id AND i.quantity > 0
               ) THEN 2 ELSE 0
             END
+          + LEAST(COALESCE(pop.score, 0), ${ProductsService.POPULARITY_BONUS_CAP})
         ) DESC,
+        COALESCE(pop.score, 0) DESC,
         cardinality(p."searchTokens") ASC,
         char_length(p.name) ASC
       LIMIT ${limit}
@@ -1011,13 +1078,15 @@ export class ProductsService {
   private async byTokens(tokens: string[], limit: number) {
     if (tokens.length === 0 || limit <= 0) return [];
     return this.prisma.$queryRaw<{ id: string }[]>(Prisma.sql`
-      SELECT id FROM "Product"
-      WHERE "deletedAt" IS NULL
-        AND "searchTokens" @> ${tokens}::text[]
+      SELECT p.id FROM "Product" p
+      LEFT JOIN "ProductPopularity" pop ON pop."productId" = p.id
+      WHERE p."deletedAt" IS NULL
+        AND p."searchTokens" @> ${tokens}::text[]
       ORDER BY
-        (name = ${tokens.join(' ')}) DESC,
-        cardinality("searchTokens") ASC,
-        length(name) ASC
+        (p.name = ${tokens.join(' ')}) DESC,
+        COALESCE(pop.score, 0) DESC,
+        cardinality(p."searchTokens") ASC,
+        length(p.name) ASC
       LIMIT ${limit}
     `);
   }

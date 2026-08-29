@@ -42,12 +42,12 @@ export function FullscreenToggle() {
     <Button
       variant="ghost"
       size="icon"
-      className="h-9 w-9"
+      className="size-7"
       onClick={toggle}
       title={isFull ? "خروج از تمام‌صفحه (Esc)" : "تمام‌صفحه"}
       aria-label={isFull ? "خروج از تمام‌صفحه" : "تمام‌صفحه"}
     >
-      {isFull ? <Minimize className="h-5 w-5" /> : <Maximize className="h-5 w-5" />}
+      {isFull ? <Minimize className="size-4" /> : <Maximize className="size-4" />}
     </Button>
   );
 }

@@ -125,6 +125,7 @@ export class InventoryOperationService {
       voiceRecordId,
       unitPrice,
       lineDiscount,
+      lineNote,
       allowNegative,
       invoiceId,
       saleReturnId,
@@ -165,6 +166,32 @@ export class InventoryOperationService {
 
 
 
+    /*
+     * تعداد باید عددِ صحیح باشد — برای **همه‌ی** حرکت‌ها، حتی ADJUST.
+     *
+     * چرا: ستون `quantity` از نوع INT4 است. یک `2.5` که تا اینجا برسد، در
+     * پستگرس بی‌صدا به `2` گرد می‌شود، در حالی که مبلغِ فاکتور در جاوااسکریپت
+     * با همان `2.5` حساب شده — یعنی مشتری بابتِ ۲.۵ عدد پول می‌دهد و از انبار
+     * ۲ عدد کم می‌شود. اختلاف بی‌صداست و هیچ‌جا گزارش نمی‌شود.
+     *
+     * مسیرِ HTTP با `@IsInt()` محافظت می‌شود، ولی این تک‌نقطه‌ی تغییرِ موجودی
+     * صداکننده‌های دیگری هم دارد (صفِ آفلاینِ موبایل، sync، صوت) که از آن پایپ
+     * رد نمی‌شوند. گارد باید همین‌جا باشد، نه فقط در لبه.
+     *
+     * `Number.isInteger` هم `NaN` را می‌گیرد — که برای ADJUST از فیلترِ پایین
+     * رد می‌شد.
+     */
+    if(!Number.isInteger(quantity)){
+
+      throw new BadRequestException({
+        error:'INVALID_QUANTITY',
+        quantity: dto.quantity,
+        message:'تعداد باید عدد صحیح باشد'
+      });
+
+    }
+
+
     if(type !== 'ADJUST' && (!quantity || quantity <= 0)){
 
       throw new BadRequestException({
@@ -201,6 +228,9 @@ export class InventoryOperationService {
       // تخفیف روی کدام قلم بوده و جمع ردیف‌ها با مبلغ فاکتور نمی‌خواند.
       lineDiscount:
         (type === 'SALE' && lineDiscount != null) ? Number(lineDiscount) : null,
+
+      // توضیحِ دستیِ فروشنده روی همین قلم — فقط برای فروش، و فقط برای چاپ.
+      lineNote: (type === 'SALE' && lineNote) ? String(lineNote) : null,
 
       // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال/مرجوعی). برای بقیه null.
       invoiceId: invoiceId ?? null,
@@ -427,7 +457,8 @@ export class InventoryOperationService {
 
 
 
-        await tx.inventoryLog.create({
+        const log =
+          await tx.inventoryLog.create({
 
           data:{
 
@@ -447,8 +478,14 @@ export class InventoryOperationService {
         });
 
 
+        /*
+           شناسه‌ی لاگ هم برمی‌گردد — افزودنی، مثل شاخه‌ی IN.
 
-        return updated;
+           صداکننده‌های قبلی فقط فیلدهای موجودی را می‌خوانند و این را نادیده
+           می‌گیرند. اصلاحیه لازمش دارد: وقتی قلمِ تازه‌ای به فاکتورِ ثبت‌شده
+           اضافه می‌شود، ردیفِ اصلاحیه باید به همین لاگِ SALE قفل شود.
+        */
+        return { ...updated, inventoryLogId: log.id };
 
 
 

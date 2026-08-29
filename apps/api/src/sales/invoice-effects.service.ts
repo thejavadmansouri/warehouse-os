@@ -15,9 +15,13 @@ export interface LineEffects {
 /**
  * حسابِ «الان واقعاً چه مانده» روی فاکتورها و ردیف‌هایشان.
  *
- * فاکتور و لاگِ انبار append-only هستند: نه `total` عوض می‌شود نه `quantity`.
- * هر تغییری (مرجوعی، اصلاحیه) سندِ جداگانه‌ای کنارشان می‌سازد. پس هر جایی که
- * می‌خواهد عددِ امروز را نشان دهد باید همین دلتاها را روی عددِ اصلی سوار کند.
+ * لاگِ انبار append-only است: `quantity` هیچ ردیفی عوض نمی‌شود و هر تغییری
+ * (مرجوعی، اصلاحیه) حرکتِ جبرانیِ خودش را کنارش می‌سازد. پس `lineEffects` که
+ * روی ردیف‌ها کار می‌کند همیشه باید دلتاها را سوار کند.
+ *
+ * ⚠️ ولی خودِ **سندِ فاکتور** append-only نیست: اصلاحیه `subtotal`/`total` را
+ * در جا به‌روز می‌کند. برای همین `deltaByInvoice` عمداً فقط مرجوعی را
+ * برمی‌گرداند — توضیحِ کاملش روی خودِ همان متد.
  *
  * چرا سرویسِ جدا: پرونده‌ی حساب باز، برگه‌ی چاپیِ حساب، و صورت‌حسابِ مشتری هر سه
  * به همین حساب نیاز دارند. با سه نسخه‌ی کپی‌شده، اولین تغییر در قاعده روی یکی
@@ -35,28 +39,37 @@ export class InvoiceEffectsService {
   async deltaByInvoice(invoiceIds: string[]): Promise<Map<string, number>> {
     if (invoiceIds.length === 0) return new Map();
 
-    const [returns, corrections] = await Promise.all([
-      this.prisma.saleReturn.groupBy({
-        by: ['invoiceId'],
-        where: { invoiceId: { in: invoiceIds } },
-        _sum: { refundAmount: true },
-      }),
-      this.prisma.saleCorrection.groupBy({
-        by: ['invoiceId'],
-        where: { invoiceId: { in: invoiceIds } },
-        _sum: { amountAdjust: true },
-      }),
-    ]);
+    /*
+     * ⚠️ فقط مرجوعی — اصلاحیه عمداً اینجا نیست.
+     *
+     * این دو سند رفتارِ متفاوتی با فاکتور دارند و یکی‌گرفتنشان باعثِ
+     * دوباره‌شماری می‌شد:
+     *
+     *   • مرجوعی فقط `dueAmount` را کم می‌کند و به `total` دست نمی‌زند
+     *     (returns.service). پس اثرش باید همین‌جا به‌صورت دلتا اضافه شود.
+     *
+     *   • اصلاحیه اما `subtotal` و `total` را **در جا** به‌روز می‌کند
+     *     (corrections.service — هر دو شاخه، هرجا amountAdjust ≠ 0). یعنی
+     *     `invoice.total` از قبل مبلغِ اصلاح‌شده است. برگرداندنِ دوباره‌ی
+     *     `amountAdjust` به‌عنوان دلتا، آن را دو بار روی عدد می‌نشاند.
+     *
+     * نمونه‌ی واقعی که این را لو داد: فروشِ ۵×۱۰۰۰ نسیه، اصلاح به ۸ ⇒
+     * بدهیِ واقعی ۸۰۰۰، `invoice.total` هم ۸۰۰۰ (درست)، ولی `total + delta`
+     * برابرِ ۱۱۰۰۰ درمی‌آمد — یعنی صورتحسابِ مشتری ۳۰۰۰ بیشتر از واقع.
+     * دفترِ مشتری همیشه درست بود؛ فقط همین مسیرِ نمایشی غلط بود.
+     *
+     * ⚠️ اگر روزی corrections از به‌روزکردنِ فاکتور دست بردارد (بازگشت به
+     * append-onlyِ کامل)، اصلاحیه باید دوباره به این دلتا اضافه شود.
+     */
+    const returns = await this.prisma.saleReturn.groupBy({
+      by: ['invoiceId'],
+      where: { invoiceId: { in: invoiceIds } },
+      _sum: { refundAmount: true },
+    });
 
     const delta = new Map<string, number>();
-    for (const c of corrections) {
-      delta.set(c.invoiceId, c._sum.amountAdjust ?? 0);
-    }
     for (const r of returns) {
-      delta.set(
-        r.invoiceId,
-        (delta.get(r.invoiceId) ?? 0) - (r._sum.refundAmount ?? 0),
-      );
+      delta.set(r.invoiceId, -(r._sum.refundAmount ?? 0));
     }
     return delta;
   }

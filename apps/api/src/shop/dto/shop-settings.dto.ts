@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsInt,
   IsOptional,
@@ -57,4 +58,8 @@ export class ShopSettingsDto {
   /** واحدِ نمایش در سایت عمومی. */
   @IsOptional() @IsEnum(CurrencyUnit)
   siteUnit?: CurrencyUnit;
+
+  /** کالای بی‌قیمت روی سایت «تماس بگیرید» نشان داده شود؟ */
+  @IsOptional() @IsBoolean()
+  showUnpriced?: boolean;
 }

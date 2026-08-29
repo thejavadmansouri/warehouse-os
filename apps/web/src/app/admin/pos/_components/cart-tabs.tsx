@@ -5,6 +5,29 @@ import { Plus, X } from "lucide-react";
 import { money, toFa } from "@/lib/format";
 import type { Cart } from "../_lib/carts";
 
+/** بیشترین حرفی که روی تب می‌نشیند. بلندتر از این، نوار تب‌ها را جلو می‌برد. */
+const MAX_TAB_NAME = 8;
+
+/**
+ * نامِ کوتاهِ تب.
+ *
+ * اولویت با **نام کوچک** است: تبی که «محمدرضا» بنویسد خواناتر از «محمدرض…» است.
+ * فقط وقتی خودِ نام کوچک هم جا نشود بریده می‌شود.
+ *
+ * سقف بر حسبِ **کاراکتر** است نه عرضِ CSS — با سقفِ عرضی، یک نامِ بلند باز هم
+ * تب را پهن می‌کرد و نوار را جلو می‌برد؛ همان چیزی که آزاردهنده بود.
+ */
+export function tabName(fullName: string, firstName?: string | null): string {
+  const full = (fullName ?? "").trim();
+  if (full.length <= MAX_TAB_NAME) return full;
+
+  const first = (firstName ?? "").trim();
+  if (first && first.length <= MAX_TAB_NAME) return first;
+
+  const source = first || full;
+  return `${source.slice(0, MAX_TAB_NAME)}…`;
+}
+
 /**
  * نوار تب فاکتورها — مثل تب مرورگر.
  *
@@ -30,7 +53,7 @@ export function CartTabs({
   onClose: (id: string) => void;
 }) {
   return (
-    <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+    <div className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-lg border bg-card p-1 shadow-sm">
       {/*
         min-w-0 حیاتی است: بدون آن، min-widthِ پیش‌فرضِ این flex-item برابرِ
         عرضِ محتوا می‌شود و به‌جای اسکرول، کل ردیف صفحه را پهن می‌کند و از کادر
@@ -46,7 +69,7 @@ export function CartTabs({
             onClick={() => onSelect(c.id)}
             className={`group flex shrink-0 cursor-pointer items-center gap-2 rounded-t-lg border-b-2 px-3 py-2 transition-colors ${
               active
-                ? "border-b-primary bg-primary/10"
+                ? "border-b-primary bg-primary/10 shadow-sm"
                 : "border-b-transparent hover:bg-muted"
             }`}
           >
@@ -62,13 +85,13 @@ export function CartTabs({
 
             <span className="text-sm">
               {c.customer ? (
-                // نامِ بلند تب را پهن نکند: سقفِ عرض + truncate تا ۸ تا ۱۰ تب
-                // مرتب کنارِ هم جا شوند. نامِ کامل روی hover.
+                // نامِ بلند تب را پهن نکند: سقفِ کاراکتری (tabName) تا ۸ تا ۱۰
+                // تب مرتب کنارِ هم جا شوند. نامِ کامل روی hover.
                 <span
                   title={c.customer.fullName}
-                  className={`block max-w-[8.5rem] truncate ${active ? "font-semibold" : ""}`}
+                  className={`block whitespace-nowrap ${active ? "font-semibold" : ""}`}
                 >
-                  {c.customer.fullName}
+                  {tabName(c.customer.fullName, c.customer.firstName)}
                 </span>
               ) : count ? (
                 <span className="whitespace-nowrap text-muted-foreground">
@@ -119,7 +142,7 @@ export function CartTabs({
         <button
           type="button"
           onClick={onAdd}
-          title="فاکتور جدید (Ctrl+T)"
+          title="فاکتور جدید (Alt+N)"
           className="flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-2 text-sm text-muted-foreground
                      hover:bg-primary/10 hover:text-primary"
         >

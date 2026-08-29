@@ -14,6 +14,7 @@ import type { Response } from 'express';
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { BulkOnlineDto } from './dto/bulk-online.dto';
 import { BulkPriceDto } from './dto/bulk-price.dto';
 
 import { Role } from '@prisma/client';
@@ -202,6 +203,18 @@ export class ProductsController {
   @Post('prices/bulk')
   bulkSetPrice(@Body() dto: BulkPriceDto) {
     return this.productsService.bulkSetPrice(dto);
+  }
+
+
+  /**
+   * «نمایش در سایت» به‌صورت گروهی.
+   *
+   * فقط مدیر: این تصمیم می‌گیرد چه چیزی از کاتالوگ روی اینترنت دیده شود.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('online/bulk')
+  bulkSetOnline(@Body() dto: BulkOnlineDto) {
+    return this.productsService.bulkSetOnline(dto);
   }
 
 

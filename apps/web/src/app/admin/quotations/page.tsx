@@ -14,10 +14,8 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { PageHeader } from "@/components/page-header";
 import { LoadingState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import {
@@ -45,12 +43,15 @@ import {
   updateQuotation,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
-import { amount, faDate, money, parseNum, qty, toFa } from "@/lib/format";
+import { amount, faDate, faTime, money, parseNum, qty, toFa } from "@/lib/format";
 import { uuid } from "@/lib/uuid";
 import type { Customer, LocateResult, PaymentInput, Quotation } from "@/lib/types";
 import { CustomerPicker } from "../pos/_components/customer-picker";
 import { PaymentDialog } from "../pos/_components/payment-dialog";
 import { ProductSearch } from "../pos/_components/product-search";
+
+const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
+const TD = "px-2 py-1.5 whitespace-nowrap";
 
 const TABS: { id: string; label: string }[] = [
   { id: "ACTIVE", label: "معتبر" },
@@ -93,6 +94,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const qc = useQueryClient();
   const [tab, setTab] = React.useState("ACTIVE");
+  const [row, setRow] = React.useState(0);
   const [openId, setOpenId] = React.useState<string | null>(null);
   /**
    * پیش‌فاکتوری که منتظر انتخاب روش پرداخت است.
@@ -240,86 +242,127 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       toast.error(e instanceof ApiException ? e.message : "ذخیره‌ی تغییرات ناموفق بود"),
   });
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        compact={embedded}
-        title="پیش‌فاکتورها"
-        description="قیمت‌هایی که به مشتری داده شده و هنوز فروش نشده‌اند"
-        icon={FileClock}
-      />
+  const rows = list.data?.data ?? [];
 
-      <div className="flex flex-wrap gap-1.5">
-        {TABS.map((t) => (
-          <Button
-            key={t.id}
-            size="sm"
-            variant={tab === t.id ? "default" : "outline"}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </Button>
-        ))}
+  /** ردیفِ فعال همیشه باید دیده شود — کیبورد خودش اسکرول نمی‌کند. */
+  React.useEffect(() => {
+    document.querySelector('[data-active-row="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [row, rows.length]);
+
+  React.useEffect(() => setRow(0), [tab]);
+
+  return (
+    /* همان الگوی بقیه‌ی فهرست‌ها: یک سطر فیلتر، یک جدول، یک نوار کلید. */
+    <div
+      tabIndex={-1}
+      className={`flex flex-col outline-none ${embedded ? "min-h-0 flex-1" : "h-[calc(100vh-2.5rem)]"}`}
+      onKeyDown={(e) => {
+        if (openId || payingFor) return;
+        switch (e.key) {
+          case "ArrowDown":
+            e.preventDefault();
+            setRow((r) => Math.min(r + 1, Math.max(rows.length - 1, 0)));
+            return;
+          case "ArrowUp":
+            e.preventDefault();
+            setRow((r) => Math.max(r - 1, 0));
+            return;
+          case "Enter":
+            e.preventDefault();
+            if (rows[row]) { setOpenId(rows[row].id); setEditing(false); }
+            return;
+        }
+      }}
+    >
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+        <select
+          value={tab}
+          onChange={(e) => setTab(e.target.value)}
+          aria-label="وضعیت"
+          className="h-8 rounded-md border bg-background px-2 text-sm"
+        >
+          {TABS.map((t) => (
+            <option key={t.id} value={t.id}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-muted-foreground">
+          {toFa(rows.length)} پیش‌فاکتور
+        </span>
       </div>
 
-      {list.isLoading ? (
-        <LoadingState />
-      ) : list.isError ? (
-        <ErrorState onRetry={() => list.refetch()} />
-      ) : !list.data?.data.length ? (
-        <p className="rounded-xl border border-dashed p-12 text-center text-sm text-muted-foreground">
-          پیش‌فاکتوری در این وضعیت نیست.
-          <br />
-          <span className="text-xs">
-            پیش‌فاکتور از صندوق فروش ساخته می‌شود — سبد را ببندید و
-            <kbd className="mx-1 rounded border px-1.5 py-0.5">F8</kbd> بزنید.
-          </span>
-        </p>
-      ) : (
-        <Card className="overflow-hidden p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>شماره</TableHead>
-                <TableHead>مشتری</TableHead>
-                <TableHead className="text-center">اقلام</TableHead>
-                <TableHead>تاریخ</TableHead>
-                <TableHead>اعتبار</TableHead>
-                <TableHead>وضعیت</TableHead>
-                <TableHead className="text-start">مبلغ</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {list.data.data.map((row) => {
-                const s = STATUS_STYLE[row.displayStatus] ?? STATUS_STYLE.ACTIVE;
+      <div className="min-h-0 flex-1 overflow-auto">
+        {list.isError ? (
+          <ErrorState onRetry={() => list.refetch()} />
+        ) : !rows.length ? (
+          <p className="py-10 text-center text-sm text-muted-foreground">
+            پیش‌فاکتوری در این وضعیت نیست — از صندوق با
+            <kbd className="mx-1 rounded border px-1.5 py-0.5">F8</kbd> ساخته می‌شود.
+          </p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-muted/70 backdrop-blur">
+              <tr>
+                <th className={`${TH} w-20`}>شماره</th>
+                <th className={`${TH} w-24`}>تاریخ</th>
+                <th className={`${TH} w-16`}>ساعت</th>
+                <th className={TH}>مشتری</th>
+                <th className={`${TH} w-16 text-center`}>اقلام</th>
+                <th className={`${TH} w-24`}>اعتبار</th>
+                <th className={`${TH} w-28`}>وضعیت</th>
+                <th className={`${TH} w-36`}>مبلغ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => {
+                const st = STATUS_STYLE[r.displayStatus] ?? STATUS_STYLE.ACTIVE;
                 return (
-                  <TableRow
-                    key={row.id}
-                    onClick={() => { setOpenId(row.id); setEditing(false); }}
-                    className="cursor-pointer hover:bg-primary/5"
+                  <tr
+                    key={r.id}
+                    data-active-row={i === row}
+                    onMouseEnter={() => setRow(i)}
+                    onClick={() => { setOpenId(r.id); setEditing(false); }}
+                    className="cursor-pointer border-b odd:bg-muted/25"
                   >
-                    <TableCell className="font-medium tabular-nums">{toFa(row.number)}</TableCell>
-                    <TableCell>{row.customerName ?? "بدون مشتری"}</TableCell>
-                    <TableCell className="text-center tabular-nums">
-                      {toFa(row._count?.lines ?? 0)}
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {faDate(row.createdAt)}
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {row.displayStatus === "ACTIVE" ? remaining(row.remainingMinutes) : "—"}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={s.className}>{s.label}</Badge>
-                    </TableCell>
-                    <TableCell className="font-bold tabular-nums">{money(row.total)}</TableCell>
-                  </TableRow>
+                    <td className={`${TD} font-bold tabular-nums`}>{toFa(r.number)}</td>
+                    <td className={`${TD} tabular-nums text-muted-foreground`}>
+                      {faDate(r.createdAt)}
+                    </td>
+                    <td className={`${TD} tabular-nums text-muted-foreground`}>
+                      {faTime(r.createdAt)}
+                    </td>
+                    <td className={`${TD} max-w-0 truncate`}>
+                      {r.customerName ?? "بدون مشتری"}
+                    </td>
+                    <td className={`${TD} text-center tabular-nums`}>
+                      {toFa(r._count?.lines ?? 0)}
+                    </td>
+                    <td className={`${TD} text-xs`}>
+                      {r.displayStatus === "ACTIVE" ? remaining(r.remainingMinutes) : "—"}
+                    </td>
+                    <td className={TD}>
+                      <Badge variant="outline" className={st.className}>{st.label}</Badge>
+                    </td>
+                    <td className={`${TD} text-end font-bold tabular-nums`}>{money(r.total)}</td>
+                  </tr>
                 );
               })}
-            </TableBody>
-          </Table>
-        </Card>
-      )}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-x-5 border-t bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+        {([["↑↓", "حرکت"], ["Enter", "باز کردن"]] as [string, string][]).map(([k, label]) => (
+          <span key={k} className="flex items-center gap-1.5">
+            <kbd className="rounded border bg-background px-1.5 py-0.5 font-sans text-[11px]">
+              {k}
+            </kbd>
+            {label}
+          </span>
+        ))}
+      </div>
 
       {/* جزئیات */}
       <Dialog

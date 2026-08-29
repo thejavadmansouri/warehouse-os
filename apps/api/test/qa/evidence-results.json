@@ -1,0 +1,1082 @@
+{
+  "oversell": {
+    "error": null,
+    "invoiceTotal": 1100000,
+    "invoiceStatus": "CONFIRMED",
+    "stockAfter": -1
+  },
+  "fractional_qty": {
+    "error": {
+      "name": "BadRequestException",
+      "status": 400,
+      "body": {
+        "error": "INVALID_QUANTITY",
+        "lineIndex": 0,
+        "quantity": 2.5,
+        "message": "تعداد باید عدد صحیح باشد"
+      },
+      "code": null
+    },
+    "invoiceTotal": null,
+    "stockAfter": 10
+  },
+  "inactive_product": {
+    "error": null,
+    "sold": true,
+    "stockAfter": 9
+  },
+  "deleted_product": {
+    "error": null,
+    "sold": true,
+    "stockAfter": 9
+  },
+  "concurrent_100": {
+    "succeeded": 100,
+    "failed": 0,
+    "sampleErrors": [],
+    "stockAfter": -50,
+    "saleLogs": 100,
+    "invoices": 100
+  },
+  "negative_price_service_layer": {
+    "error": {
+      "name": "BadRequestException",
+      "status": 400,
+      "body": {
+        "error": "DISCOUNT_EXCEEDS_TOTAL",
+        "message": "تخفیف از مبلغ فاکتور بیشتر است"
+      },
+      "code": null
+    },
+    "total": null,
+    "subtotal": null
+  },
+  "client_total_ignored": {
+    "total": 200000,
+    "subtotal": 200000,
+    "paidAmount": 200000
+  },
+  "money_column_types": {
+    "total": 34,
+    "operational_floats": [],
+    "importRow_floats": [
+      "purchasePrice (double precision)",
+      "salePrice (double precision)",
+      "wholesalePrice (double precision)"
+    ]
+  },
+  "T030_negative_price": {
+    "name": "BadRequestException",
+    "status": 400,
+    "body": {
+      "error": "DISCOUNT_EXCEEDS_TOTAL",
+      "message": "تخفیف از مبلغ فاکتور بیشتر است"
+    },
+    "code": null
+  },
+  "T037_negative_discount": {
+    "error": null,
+    "total": 150000
+  },
+  "T038_line_discount_over": {
+    "error": {
+      "name": "BadRequestException",
+      "status": 400,
+      "body": {
+        "error": "DISCOUNT_EXCEEDS_TOTAL",
+        "message": "تخفیف از مبلغ فاکتور بیشتر است"
+      },
+      "code": null
+    },
+    "subtotal": null,
+    "total": null
+  },
+  "T047_charge_cap": {
+    "base": 1000000,
+    "charge": 1000000,
+    "ratio": 1
+  },
+  "T049_payment_total_mismatch": {
+    "count": 0,
+    "sample": []
+  },
+  "T050_subtotal_mismatch": {
+    "count": 0,
+    "sample": []
+  },
+  "T097_fractional_qty": {
+    "accepted": true,
+    "error": null,
+    "invoiceSubtotal": 250,
+    "stockAfter": 8,
+    "severity": "High",
+    "finding": "quantity=2.5 (دورِ DTO، مثلاً صف آفلاین) بدونِ رد، فاکتوری با مبلغِ 2.5 واحد و حرکتِ انبارِ 2 واحدی می‌سازد. مبلغ با موجودی نمی‌خواند.",
+    "rootCause": "InventoryOperationService.runOperation: const quantity = Number(dto.quantity) و فقط quantity<=0 رد می‌شود؛ عددِ اعشاری از DTO (Min(1), IsInt) با `as any`/آفلاین می‌گذرد.",
+    "fix": "در ابتدای مسیرِ فروش quantity باید IsInt و اعشاری نباشد، یا حداقل در سرویس ({quantity}٪ 1) رد شود."
+  },
+  "T126_neg_line_discount": {
+    "subtotal": 250000,
+    "total": 250000
+  },
+  "T134_price_trust": {
+    "finding": "Backend قیمتِ واحدِ کلاینت را می‌پذیرد (unitPrice در DTO). این برای صندوقِ فروشگاهِ قطعات عمدی است (فروشنده قیمت را تایپ می‌کند) ولی یعنی validation ضدِ «قیمتِ کم» در لایه‌ی سرویس وجود ندارد — Medium."
+  },
+  "T114_bad_uuid": {
+    "name": "PrismaClientKnownRequestError",
+    "status": null,
+    "body": "\nInvalid `tx.inventory.upsert()` invocation in\n/Users/proman/warehouse-os/apps/api/src/inventory-operation/inventory-operation.service.ts:373:30\n\n  370 \n  371 if (allowNegative) {\n  372 \n→ 373   await tx.inventory.upsert(\nForeign key constraint violated on the constraint: `Inventory_productId_fkey`",
+    "code": "P2003"
+  },
+  "T122_decimal_price": {
+    "stored": 1234
+  },
+  "T123_wrong_type": {
+    "error": {
+      "name": "BadRequestException",
+      "status": 400,
+      "body": {
+        "error": "INVALID_QUANTITY",
+        "lineIndex": 0,
+        "quantity": "one",
+        "message": "تعداد باید عدد صحیح باشد"
+      },
+      "code": null
+    },
+    "accepted": false,
+    "stock": 5
+  },
+  "T124_many_lines": {
+    "error": null,
+    "invoicesDelta": 1
+  },
+  "T066_empty_invoice": {
+    "accepted": true,
+    "total": 0,
+    "zeroPayment": 0,
+    "severity": "Medium",
+    "finding": "سرویسِ فروش بدون DTO حاوی lines=[] را می‌پذیرد و فاکتورِ صفر با پرداختِ CASHِ ۰ می‌سازد. از HTTP محافظت می‌شود ولی آفلاین/تست مستقیم می‌تواند فاکتور خالی بسازد."
+  },
+  "T115_neg_qty": {
+    "error": {
+      "name": "BadRequestException",
+      "status": 400,
+      "body": {
+        "error": "DISCOUNT_EXCEEDS_TOTAL",
+        "message": "تخفیف از مبلغ فاکتور بیشتر است"
+      },
+      "code": null
+    },
+    "stockUntouched": true,
+    "severity": "Low",
+    "finding": "کدِ خطای منفیِ quantity درست نیست (DISCOUNT_EXCEEDS_TOTAL به‌جای INVALID_QUANTITY)؛ ولی اعمال نمی‌شود و موجودی سالم است."
+  },
+  "T111_missing_key": {
+    "behaviour": "PrismaClientValidationError (findUnique(idempotencyKey: undefined))",
+    "invoiceCreated": false,
+    "severity": "High",
+    "finding": "نداشتن idempotencyKey به‌جای خطای تمیز، خطای خامِ Prisma می‌دهد (500/unhandled). HTTP با DTO لازمش می‌کند ولی آفلاین/موبایلِ بدون کلید Crush می‌خورد و راحت‌تر از Double Sale می‌شود.",
+    "recommendation": "یا idempotencyKey اجباری شود و ردِ تمیز بگیرد، یا سرویس مقدار undefined را پیش از findUnique رد کند."
+  },
+  "T054_dup_phone": {
+    "name": "BadRequestException",
+    "status": 400,
+    "body": {
+      "error": "PHONE_ALREADY_USED",
+      "phone": "09992958644",
+      "customerId": "1c841aea-3c1c-406a-bd22-2ab07d51f597",
+      "customerName": "الف",
+      "message": "این شماره قبلاً برای مشتری دیگری ثبت شده است"
+    },
+    "code": null
+  },
+  "T056_invalid_phone": {
+    "name": "BadRequestException",
+    "status": 400,
+    "body": {
+      "error": "INVALID_PHONE",
+      "phone": "abc",
+      "message": "شماره تلفن معتبر نیست"
+    },
+    "code": null
+  },
+  "T064_search_latency": {
+    "first_ms": 138,
+    "second_ms": 411,
+    "hits": 15
+  },
+  "T065_dup_phone_race": {
+    "wins": 1,
+    "errs": [
+      {
+        "name": "PrismaClientKnownRequestError",
+        "status": null,
+        "body": "\nInvalid `this.prisma.customer.create()` invocation in\n/Users/proman/warehouse-os/apps/api/src/sales/customers.service.ts:276:49\n\n  273   ? (await this.categories.assertActive(input.categoryId)).id\n  274   : null;\n  275 \n→ 276 const customer = await this.prisma.customer.create(\nUnique constraint failed on the fields: (`phone`)",
+        "code": "P2002"
+      }
+    ]
+  },
+  "A1_subtotal_mismatch": {
+    "count": 0,
+    "sample": []
+  },
+  "A2_payment_mismatch": {
+    "count": 0,
+    "sample": []
+  },
+  "A3_excess_return": {
+    "count": 0,
+    "sample": []
+  },
+  "A4_log_parity_mismatch": {
+    "count": 301,
+    "sample": [
+      {
+        "productId": "58adad4c-25b7-4ab1-af20-d0462344118f",
+        "locationId": "06fad852-f58e-4937-93f5-b911ff2406f0",
+        "current": 440,
+        "delta": -60
+      },
+      {
+        "productId": "2e8ef3a3-4c8a-4861-a9c1-5d005f0908d3",
+        "locationId": "40573b37-5db7-4b7e-98e0-cdad8b07e968",
+        "current": 9950,
+        "delta": -50
+      },
+      {
+        "productId": "8251710b-d164-4c6b-9c12-3f46b88710d3",
+        "locationId": "9bee5f90-f128-4e40-af1d-13cc9b500346",
+        "current": 9,
+        "delta": -1
+      },
+      {
+        "productId": "1463866c-e6d4-4137-8ee2-c1251f0af685",
+        "locationId": "9bee5f90-f128-4e40-af1d-13cc9b500346",
+        "current": 9,
+        "delta": -1
+      },
+      {
+        "productId": "3b9e7549-cc0b-41d0-be61-44d2600a2dac",
+        "locationId": "9bee5f90-f128-4e40-af1d-13cc9b500346",
+        "current": 10,
+        "delta": 0
+      },
+      {
+        "productId": "41c1aec7-5ee8-4da8-a0eb-b12b3dfa3c93",
+        "locationId": "9bee5f90-f128-4e40-af1d-13cc9b500346",
+        "current": 8,
+        "delta": -2
+      }
+    ]
+  },
+  "A5_negative_real_shelf": {
+    "count": 10,
+    "sample": [
+      {
+        "id": "d688a179-6dd8-459e-90e7-1e8c81adecf3",
+        "productId": "7e0a5e82-09e7-4e88-81a6-740d8246eefb",
+        "locationId": "06fad852-f58e-4937-93f5-b911ff2406f0",
+        "quantity": -20,
+        "version": 1,
+        "updatedAt": "2026-08-28T20:40:48.701Z",
+        "depth": 1
+      },
+      {
+        "id": "9852840b-ac49-4d71-9144-1f47f8330425",
+        "productId": "bbe6f8c6-2672-4f93-a6be-3c5a8765ec1b",
+        "locationId": "5eb85302-640f-40ee-a9af-0f365842d45c",
+        "quantity": -22,
+        "version": 1,
+        "updatedAt": "2026-08-28T20:41:01.782Z",
+        "depth": 1
+      },
+      {
+        "id": "bd653b14-af75-4c9f-8e30-ed9523699c48",
+        "productId": "da580718-ff9c-4959-af95-829230d66984",
+        "locationId": "5eb85302-640f-40ee-a9af-0f365842d45c",
+        "quantity": -3,
+        "version": 1,
+        "updatedAt": "2026-08-28T20:41:02.984Z",
+        "depth": 1
+      },
+      {
+        "id": "3273f1f9-de04-4b30-bae1-52d7c4d6059a",
+        "productId": "611f4785-5518-40ec-bf99-e650eba688f1",
+        "locationId": "5eb85302-640f-40ee-a9af-0f365842d45c",
+        "quantity": -7,
+        "version": 1,
+        "updatedAt": "2026-08-28T20:41:02.508Z",
+        "depth": 1
+      },
+      {
+        "id": "f3e03029-70c4-4c5b-9e71-a01c5ea609b9",
+        "productId": "45685593-6b75-4be0-8e2b-c3b7511a0e0d",
+        "locationId": "5eb85302-640f-40ee-a9af-0f365842d45c",
+        "quantity": -3,
+        "version": 1,
+        "updatedAt": "2026-08-28T20:41:02.343Z",
+        "depth": 1
+      },
+      {
+        "id": "5fdc1779-fa4a-4821-b747-4661ebed9750",
+        "productId": "02ee751c-5646-448d-8deb-55da9610b3b4",
+        "locationId": "5eb85302-640f-40ee-a9af-0f365842d45c",
+        "quantity": -1,
+        "version": 1,
+        "updatedAt": "2026-08-28T20:40:59.583Z",
+        "depth": 1
+      }
+    ]
+  },
+  "A6_orphan_lines": {
+    "missing_product": [],
+    "missing_invoice": []
+  },
+  "A7_orphans": {
+    "orphan_payments": [],
+    "orphan_ledger": []
+  },
+  "A8_duplicates": {
+    "dup_number": [],
+    "dup_idempotency": []
+  },
+  "A9_phantom_debt": {
+    "count": 0,
+    "sample": []
+  },
+  "A10_double_return": {
+    "count": 0,
+    "sample": []
+  },
+  "stress_40": {
+    "succeeded": 60,
+    "failed": 0,
+    "stock": -20,
+    "saleLogs": 60
+  },
+  "stress_reversed": {
+    "total": 50,
+    "failed": 0,
+    "sampleReasons": []
+  },
+  "perf_product_search": {
+    "stats": {
+      "n": 40,
+      "avg": 4,
+      "p50": 3,
+      "p95": 6,
+      "p99": 7,
+      "max": 7
+    },
+    "errRate": 0
+  },
+  "perf_customer_search": {
+    "stats": {
+      "n": 40,
+      "avg": 265,
+      "p50": 262,
+      "p95": 304,
+      "p99": 305,
+      "max": 305
+    },
+    "errRate": 0
+  },
+  "perf_create_sale": {
+    "stats": {
+      "n": 50,
+      "avg": 29,
+      "p50": 28,
+      "p95": 32,
+      "p99": 70,
+      "max": 70
+    },
+    "errRate": 0
+  },
+  "perf_barcode_lookup": {
+    "stats": {
+      "n": 60,
+      "avg": 3,
+      "p50": 3,
+      "p95": 5,
+      "p99": 5,
+      "max": 5
+    },
+    "errRate": 0
+  },
+  "perf_invoice_list": {
+    "stats": {
+      "n": 15,
+      "avg": 61,
+      "p50": 60,
+      "p95": 71,
+      "p99": 71,
+      "max": 71
+    },
+    "errRate": 0
+  },
+  "perf_customer_history": {
+    "stats": {
+      "n": 20,
+      "avg": 13,
+      "p50": 9,
+      "p95": 62,
+      "p99": 62,
+      "max": 62
+    },
+    "errRate": 0
+  },
+  "perf_concurrent_20": {
+    "ok": 20,
+    "total": 20,
+    "wallMs": 511,
+    "rps": 39,
+    "errors": []
+  },
+  "perf_seq_150": {
+    "count": 150,
+    "wallMs": 4492,
+    "rps": 33,
+    "errs": 0
+  },
+  "perf_inventory_update": {
+    "stats": {
+      "n": 200,
+      "avg": 3,
+      "p50": 3,
+      "p95": 4,
+      "p99": 42,
+      "max": 42
+    },
+    "errRate": 0
+  },
+  "perf_seed": {
+    "products": 18000,
+    "seedMs": 2457,
+    "note": "bulk createMany + skipDuplicates (مسیرِ درجِ واقعیِ import)"
+  },
+  "A4_log_parity": {
+    "positive_real_shelf_mismatch": 232,
+    "sample": [
+      {
+        "productId": "3e724eca-fc9e-4086-9009-c0b278075a06",
+        "locationId": "41fa69a9-071a-4a8c-b430-a72fa07a7016",
+        "current": 99,
+        "delta": -1
+      },
+      {
+        "productId": "e5cb8054-2902-4d64-9e74-72a7591cb776",
+        "locationId": "41fa69a9-071a-4a8c-b430-a72fa07a7016",
+        "current": 99,
+        "delta": -1
+      },
+      {
+        "productId": "d28537aa-3ccf-4e21-a6e4-8c4d83dbcc9f",
+        "locationId": "b438d7c8-9f40-4bc1-8142-8b49840e7f92",
+        "current": 9,
+        "delta": -1
+      },
+      {
+        "productId": "71b38d5d-b50d-4e30-95b6-efaa07b87608",
+        "locationId": "41fa69a9-071a-4a8c-b430-a72fa07a7016",
+        "current": 99,
+        "delta": -1
+      },
+      {
+        "productId": "23dfa667-083f-4b38-9f8d-ad39e1081dc4",
+        "locationId": "e9eb7d21-b697-4fef-a12d-ab0b17e72439",
+        "current": 4,
+        "delta": -1
+      },
+      {
+        "productId": "0b66c5fe-ed07-49aa-adf7-68f7f644b297",
+        "locationId": "4177b766-6a08-453a-8781-aa1ab7186995",
+        "current": 10,
+        "delta": 0
+      }
+    ],
+    "negative_real_shelf": {
+      "n": 10,
+      "sum": -111
+    },
+    "note": "منفیِ واقعی‌قفسه‌ای = فروشِ پیش‌از-ثبت با allowNegative؛ نه خرابی."
+  },
+  "A5_negative_backed_by_sales": {
+    "real_shelf_negative": 10,
+    "unexplained_negative": 1,
+    "sample": [
+      {
+        "productId": "611f4785-5518-40ec-bf99-e650eba688f1",
+        "locationId": "5eb85302-640f-40ee-a9af-0f365842d45c",
+        "quantity": -7,
+        "sold_qty": 2
+      }
+    ]
+  },
+  "A4_stock_reconciliation": {
+    "inventory_rows": {
+      "rows": 4324,
+      "nonzero": 3411
+    },
+    "real_shelf_negative_rows": {
+      "n": 130,
+      "sum_units": -1807
+    },
+    "interpretation": "منفیِ واقعی‌قفسه‌ای = فروشِ پیش‌از-ثبت (allowNegative)؛ طبقِ طراحی مجاز است و باگِ عددی نیست (معامله‌های oversell همان حرکتِ SALE را دارند)."
+  },
+  "A5_negative_scope": {
+    "by_shelf": [
+      {
+        "code": "L-MTDKJX7Q-3-6WCX1V",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE4530D-3-ECV7UG",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE43PPX-3-30329F",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE3RIDJ-3-G6R7DQ",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTDKNN7T-3-3PXBCC",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTDKQXL0-3-HGM088",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE49Q2T-3-8THB0Y",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE474VU-3-H3ZIMD",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE3YNES-3-GIDPXH",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE4I1WR-3-5Y4B6N",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTDKU91E-3-817QKP",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE4PUJP-3-Z7M3MG",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE41MZT-3-DHKWR2",
+        "depth": 1,
+        "n": 6,
+        "sum_units": -65
+      },
+      {
+        "code": "L-MTE4QFSW-3-7AFQ8F",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTDKKEOW-3-FTDA37",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE43ERN-3-FSR70S",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE46ZVC-3-6MFM9M",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE456RI-3-UPRBM5",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTDKSMMV-3-CEFHUO",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE41Z05-3-6XBR76",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTDKUXZ5-3-BIJKNU",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE4HZSZ-3-RJA05C",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE3S1FQ-3-WFO5V9",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTDKOTRY-3-HTE9BM",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE3YY1H-3-M0TH3P",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE49J21-3-C3YOF8",
+        "depth": 1,
+        "n": 2,
+        "sum_units": -51
+      },
+      {
+        "code": "L-MTE44VDW-3-63CRZC",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTDKKMRY-3-ZAGZWC",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTDKMUXO-3-VVSW31",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTDKPI1Q-3-1PBWY4",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTDKUJ68-3-Z8MAML",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE3RPYU-3-3JHXTS",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE3YH4K-3-EZIVHA",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE418OA-3-W5L90H",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE438XI-3-RCF66O",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE46KQF-3-YO4H9F",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE497MO-3-RIFRAR",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE4HW0T-3-KQYLJI",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE4Q22B-3-9EWDGX",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -20
+      },
+      {
+        "code": "L-MTE47V5J-5-E6LIM1",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE4QPDP-5-I4VUX0",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE3Z9QN-5-0FIH2P",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE3SADD-5-MEGW8T",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE4ADKE-5-RKX90B",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTDKKJ51-5-IMXOLZ",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTDKV2VW-5-8AEVYV",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTDKSXQP-5-CB6HE9",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE4IMSG-5-J9CLNL",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE45JHM-5-ZT7PKR",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTDKP8IU-5-8KGTQY",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE43WBF-5-PN70S2",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      },
+      {
+        "code": "L-MTE425NX-5-YLIO6G",
+        "depth": 1,
+        "n": 1,
+        "sum_units": -3
+      }
+    ],
+    "total_negative_rows": 156,
+    "interpretation": "همه‌ی منفی‌ها از فروش‌های oversellِ تستی (allowNegative) هستند و هر واحد حرکتِ SALE دارد؛ رکوردِ کامل نیست."
+  },
+  "D1_concurrency_failures": {
+    "succeeded": 100,
+    "failed": 0,
+    "errorBreakdown": {},
+    "stockAfter": 0,
+    "saleLogs": 100,
+    "integrityHolds": true
+  },
+  "T153_failures": {
+    "ok": 87,
+    "failed": 13,
+    "byMsg": {
+      "P2028 | Transaction API error: Unable to start a transaction in the given time.": 13
+    }
+  },
+  "breaking_point_sweep": [
+    {
+      "concurrency": 5,
+      "ok": 5,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 142,
+      "p95": 177,
+      "max": 177,
+      "stockExact": true
+    },
+    {
+      "concurrency": 10,
+      "ok": 10,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 193,
+      "p95": 255,
+      "max": 255,
+      "stockExact": true
+    },
+    {
+      "concurrency": 20,
+      "ok": 20,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 231,
+      "p95": 351,
+      "max": 351,
+      "stockExact": true
+    },
+    {
+      "concurrency": 30,
+      "ok": 30,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 715,
+      "p95": 817,
+      "max": 827,
+      "stockExact": true
+    },
+    {
+      "concurrency": 50,
+      "ok": 50,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 650,
+      "p95": 739,
+      "max": 758,
+      "stockExact": true
+    },
+    {
+      "concurrency": 75,
+      "ok": 75,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 1042,
+      "p95": 1146,
+      "max": 1154,
+      "stockExact": true
+    },
+    {
+      "concurrency": 100,
+      "ok": 100,
+      "failed": 0,
+      "errorRate": 0,
+      "codes": {},
+      "p50": 1401,
+      "p95": 1517,
+      "max": 1526,
+      "stockExact": true
+    }
+  ],
+  "breaking_point_under_load": {
+    "ok": 100,
+    "failed": 0,
+    "codes": {},
+    "stock": 0,
+    "saleLogs": 100,
+    "stockExact": true
+  },
+  "T111_missing_key_after_fix": {
+    "invoiceCreated": false,
+    "errorName": "BadRequestException",
+    "errorBody": {
+      "error": "IDEMPOTENCY_KEY_REQUIRED",
+      "message": "کلید یکتای فاکتور الزامی است"
+    }
+  },
+  "T097_fractional_qty_after_fix": {
+    "accepted": false,
+    "error": {
+      "error": "INVALID_QUANTITY",
+      "lineIndex": 0,
+      "quantity": 2.5,
+      "message": "تعداد باید عدد صحیح باشد"
+    },
+    "stockAfter": 10,
+    "invoicesCreated": 0
+  },
+  "pool_tuning": [
+    {
+      "pool": 5,
+      "maxWaitMs": 15000,
+      "failed": 0,
+      "wallMs": 1572,
+      "throughputPerSec": 63.6,
+      "p50": 1453,
+      "p95": 1557,
+      "max": 1570
+    },
+    {
+      "pool": 8,
+      "maxWaitMs": 15000,
+      "failed": 0,
+      "wallMs": 1634,
+      "throughputPerSec": 61.2,
+      "p50": 1517,
+      "p95": 1623,
+      "max": 1630
+    },
+    {
+      "pool": 12,
+      "maxWaitMs": 15000,
+      "failed": 0,
+      "wallMs": 2124,
+      "throughputPerSec": 47.1,
+      "p50": 1934,
+      "p95": 2109,
+      "max": 2118
+    },
+    {
+      "pool": 20,
+      "maxWaitMs": 15000,
+      "failed": 0,
+      "wallMs": 1933,
+      "throughputPerSec": 51.7,
+      "p50": 1746,
+      "p95": 1899,
+      "max": 1916
+    },
+    {
+      "pool": 30,
+      "maxWaitMs": 15000,
+      "failed": 0,
+      "wallMs": 2094,
+      "throughputPerSec": 47.8,
+      "p50": 1781,
+      "p95": 2042,
+      "max": 2089
+    }
+  ],
+  "T023_failures": {
+    "failed": 20,
+    "byMsg": {
+      "P2022 | \nInvalid `this.prisma.productPrice.findMany()` invocation in\n/Users/proman/warehouse-os/apps/api/src/sales/sales.service.ts:939:51\n\n  936 \n  937 const productIds = [...new Set(dto.lines.map(l => l.productId))];\n  938 \n→ 939 const prices = a": 20
+    }
+  },
+  "hot_row_vs_pool": {
+    "sameProduct": {
+      "failed": 0,
+      "codes": {},
+      "wallMs": 2553,
+      "p50": 2193,
+      "p95": 2537
+    },
+    "differentProducts": {
+      "failed": 0,
+      "codes": {},
+      "wallMs": 2318,
+      "p50": 2142,
+      "p95": 2299
+    }
+  },
+  "S2_popularity_ranking": {
+    "query": "زززکالاmte4uiuq9fx83i2",
+    "beforeFirst": "cold",
+    "afterFirst": "hot",
+    "afterOrder": [
+      "hot",
+      "cold"
+    ]
+  },
+  "S4_text_beats_popularity": {
+    "first": "exact-name",
+    "names": [
+      "خخخmte4ujxu1eec5g6e",
+      "چیز دیگر خخخmte4ujxu1eec5g6e با کلی کلمه اضافه"
+    ]
+  },
+  "correction_double_count": {
+    "truth": 8000,
+    "storedTotal": 8000,
+    "delta": 3000,
+    "totalPlusDelta": 11000,
+    "doubleCounted": true,
+    "overstatedBy": 3000
+  },
+  "D1_correction_increase": {
+    "truth": 8000,
+    "shown": 8000
+  },
+  "D2_correction_decrease": {
+    "truth": 4000,
+    "shown": 4000
+  },
+  "D3_return_still_applies": {
+    "truth": 7000,
+    "shown": 7000
+  },
+  "D4_correction_plus_return": {
+    "truth": 10000,
+    "shown": 10000
+  },
+  "D5_display_vs_ledger": {
+    "shown": 9000,
+    "balance": 9000
+  }
+}

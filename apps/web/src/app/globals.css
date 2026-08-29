@@ -90,12 +90,42 @@
   --font-vazirmatn: "Vazirmatn Variable";
   --radius: 0.75rem;
 
+  /*
+   * بزرگ‌نماییِ کلِ رابط — «حالت مغازه».
+   *
+   * پشتِ پیشخوان، مانیتور دور است و نور زیاد؛ اندازه‌ای که پشت میز خوب بود
+   * آنجا خوانده نمی‌شود. زوم مرورگر جواب نیست: با هر رفرش/کاربر برمی‌گردد و
+   * روی چاپ هم اثر می‌گذارد. اینجا خودِ ریشه بزرگ می‌شود، پس هر چیزی که با
+   * rem ساخته شده (یعنی همه‌چیزِ Tailwind) با هم بزرگ می‌شود و نسبت‌ها
+   * به‌هم نمی‌ریزد. مقدارش را ui-scale.ts روی <html> می‌نشاند.
+   */
+  --ui-scale: 1;
+
+  /*
+   * تفکیکِ ستون‌های جدولِ سند.
+   *
+   * از خودِ پارسیان نمونه‌برداری شده (فاکتور خرید، تصویر مرجع): سه ته‌رنگِ
+   * بسیار روشن و کم‌اشباع که کنار هم می‌نشینند تا هیچ دو ستونِ همسایه‌ای
+   * یک‌رنگ نباشند. چشم ستون را از روی رنگ پیدا می‌کند، نه از روی شمردنِ
+   * خطوط — و چون اشباع نزدیک صفر است، بعد از یک ساعت کار خسته‌کننده نیست.
+   *
+   * صورتی عمداً فقط برای «تعداد» است: پرتایپ‌ترین خانه‌ی فاکتور و جایی که
+   * نگاه باید بی‌درنگ رویش بنشیند.
+   */
+  --grid-cream: #fffbf0;
+  --grid-mint: #eaffea;
+  --grid-pink: #ffe6ff;
+
+  /* وزنِ پایه‌ی متن. ویندوز صاف‌سازیِ فونت ندارد و وزن ۴۰۰ فارسی روی کروم
+     نازک و کم‌جان دیده می‌شود؛ ۴۵۰ همان متن است با یک‌خط پررنگ‌تر. */
+  --ui-weight: 450;
+
   /* Light background — near-white, faint blue cast */
   /* گرم‌کردن زمینه (پیشنهاد ۴): hue از ۲۵۰ (ته‌آبی) به ۸۸ (ته‌کرم).
      کرومای 0.006 → 0.008 (نسخهٔ آشکارتر — مقایسه در docs/pos-palette-preview.html).
      بازگشت به سرد: oklch(0.985 0.004 250) */
   --background: oklch(0.985 0.008 88);
-  --foreground: oklch(0.23 0.02 256);
+  --foreground: oklch(0.19 0.022 256);
 
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.23 0.02 256);
@@ -112,7 +142,8 @@
   --secondary-foreground: oklch(0.33 0.05 256);
 
   --muted: oklch(0.97 0.008 88);
-  --muted-foreground: oklch(0.53 0.02 256);
+  /* پررنگ‌تر از ۰٫۵۳: متنِ کم‌رنگ روی مانیتورِ پیشخوان محو می‌شد. */
+  --muted-foreground: oklch(0.455 0.022 256);
 
   /* Accent: same brand blue (used for icons/highlights across pages) */
   --accent: oklch(0.55 0.19 254);
@@ -133,9 +164,10 @@
   --info: oklch(0.6 0.13 235);
   --info-foreground: oklch(0.99 0 0);
 
-  /* hue 88 — گرم (قبلی: 252) */
-  --border: oklch(0.928 0.008 88);
-  --input: oklch(0.928 0.008 88);
+  /* hue 88 — گرم (قبلی: 252). روشنی از ۰٫۹۲۸ به ۰٫۸۸ آمد: خطوطِ جدول
+     زیر نورِ مغازه باید دیده شوند، وگرنه ردیف‌ها در هم می‌روند. */
+  --border: oklch(0.88 0.01 88);
+  --input: oklch(0.855 0.012 88);
   /* Lighter/brighter than --primary and far from --destructive red */
   --ring: oklch(0.64 0.15 254);
 
@@ -157,6 +189,11 @@
 }
 
 .dark {
+  /* همان سه ته‌رنگ، این بار تیره — نسبتِ کنتراستِ متن دست‌نخورده می‌ماند. */
+  --grid-cream: oklch(0.255 0.012 95);
+  --grid-mint: oklch(0.255 0.028 155);
+  --grid-pink: oklch(0.255 0.03 330);
+
   --background: oklch(0.18 0.02 258);
   --foreground: oklch(0.95 0.005 250);
 
@@ -227,9 +264,30 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    text-rendering: optimizeLegibility;
+  }
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "ss01";
+    /* باید با «حالت مغازه» مقیاس بگیرد، وگرنه متنِ بدون کلاس و کنترل‌هایی که
+       `font: inherit` می‌گیرند روی ۱۵px ثابت می‌مانند و در بزرگ‌نمایی از
+       عناصرِ rem-محور عقب می‌افتند. پایه‌ی ۱۵px در ۱۰۰٪ دست‌نخورده می‌ماند. */
+    font-size: calc(15px * var(--ui-scale));
+    line-height: 1.7;
+  }
+
+  /* چگالی خوانا برای محیط فروشگاه؛ کنترل‌ها و ردیف‌ها با یک ریتم ثابت دیده شوند. */
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
   }
 
   /* RTL-friendly numerals stay Latin for clarity in inventory numbers */
@@ -257,5 +315,127 @@
   }
   .dark .scroll-thin::-webkit-scrollbar-thumb:hover {
     background: oklch(0.46 0.02 252);
+  }
+}
+
+/* ==========================================================================
+   خوانایی پشتِ پیشخوان
+   ==========================================================================
+   سه چیز جدا که با هم «دیده‌شدن» را می‌سازند:
+   ۱. اندازه  — var(--ui-scale) روی ریشه (Ctrl+Alt+↑/↓ یا کلیدِ نوار بالا)
+   ۲. کنتراست — [data-contrast="high"] برای نورِ زیادِ مغازه
+   ۳. فوکوس   — وقتی کار کیبوردی است، «الان کجام؟» باید از دو متری معلوم باشد
+   -------------------------------------------------------------------------- */
+
+@layer base {
+  /*
+   * ریشه بزرگ می‌شود، نه body — تا rem و em هر دو با هم بروند بالا.
+   * ۱۶px پایه‌ی مرورگر است؛ ضرب‌کردنش یعنی هیچ اندازه‌ای دستی تنظیم نشده و
+   * صفحه‌ای که امروز درست است، فردا هم در بزرگ‌نمایی درست می‌ماند.
+   */
+  html {
+    font-size: calc(16px * var(--ui-scale));
+  }
+
+  /*
+   * بزرگ‌نمایی فقط برای رابط است، نه برگه‌ی چاپی (قولِ ui-scale.ts). بدونِ
+   * این reset، فاکتورِ چاپ‌شده در حالت مغازه با همان مقیاس بزرگ به کاغذ
+   * می‌رفت و ستون‌های برگه به‌هم می‌ریخت.
+   */
+  @media print {
+    html { font-size: 16px; }
+    body { font-size: 15px; }
+  }
+
+  body {
+    font-weight: var(--ui-weight);
+    /* ارتفاعِ خطِ فارسی باید از لاتین بازتر باشد؛ زیر و زبرها لازمش دارند. */
+    line-height: 1.7;
+    /* عددها هم‌عرض — ستونِ مبلغ نباید با هر رقم بلرزد. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* عنوان‌ها یک پله پررنگ‌تر از متن، تا سلسله‌مراتب از دور هم خوانده شود. */
+  h1, h2, h3, th {
+    font-weight: 700;
+  }
+
+  /*
+   * فوکوس دیده‌شدنی — ستونِ فقراتِ کار با کیبورد.
+   *
+   * حلقه‌ی قبلی (outline-ring/50) کم‌رنگ بود و روی ردیف‌های جدول اصلاً پیدا
+   * نمی‌شد. حالا خطِ توپر + هاله‌ی بیرونی: هم روی زمینه‌ی روشن، هم روی
+   * ردیفِ انتخاب‌شده‌ی آبی.
+   */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /*
+   * ردیفِ فعالِ لیست‌های کیبوردی.
+   *
+   * همه‌ی لیست‌های ناوبری‌پذیر (مشتری، فاکتور، نتیجه‌ی جست‌وجو) همین صفت را
+   * می‌گذارند تا «انتخاب‌شده» همه‌جا یک شکل باشد — نه هر صفحه یک رنگ.
+   * نوارِ کناری لازم است چون در زمینه‌ی روشن، تفاوتِ رنگِ تنها کافی نیست.
+   */
+  [data-active-row="true"] {
+    background: color-mix(in oklab, var(--primary) 14%, transparent);
+    /* آفستِ منفی = نوار به لبه‌ی آغازین می‌نشیند (راست در RTL). آفستِ مثبت
+       سایه‌ی inset را به لبه‌ی چپ می‌فرستد که در رابطِ راست‌چین سمتِ اشتباه است. */
+    box-shadow: inset -3px 0 0 0 var(--primary);
+  }
+  .dark [data-active-row="true"] {
+    background: color-mix(in oklab, var(--primary) 24%, transparent);
+  }
+}
+
+/*
+ * حالت کنتراست بالا.
+ *
+ * زیر نورِ مستقیم، خاکستری‌های ملایم ناپدید می‌شوند. اینجا فقط توکن‌ها عوض
+ * می‌شوند، پس هیچ صفحه‌ای لازم نیست چیزی بداند: متن سیاه‌تر، خط‌ها تیره‌تر،
+ * متنِ کم‌رنگ دیگر آن‌قدرها کم‌رنگ نیست.
+ */
+:root[data-contrast="high"]:not(.dark) {
+  --foreground: oklch(0.12 0.02 256);
+  --card-foreground: oklch(0.12 0.02 256);
+  --popover-foreground: oklch(0.12 0.02 256);
+  --muted-foreground: oklch(0.36 0.02 256);
+  --secondary-foreground: oklch(0.2 0.04 256);
+  --border: oklch(0.76 0.014 88);
+  --input: oklch(0.7 0.016 88);
+  --ring: oklch(0.5 0.2 254);
+  --ui-weight: 500;
+}
+
+:root[data-contrast="high"].dark {
+  --foreground: oklch(0.99 0.003 250);
+  --card-foreground: oklch(0.99 0.003 250);
+  --popover-foreground: oklch(0.99 0.003 250);
+  --muted-foreground: oklch(0.84 0.012 250);
+  --border: oklch(1 0 0 / 26%);
+  --input: oklch(1 0 0 / 32%);
+  --ui-weight: 500;
+}
+
+/*
+ * ستون‌های جدولِ سند.
+ *
+ * فقط جدولِ اقلامِ فاکتور این ته‌رنگ‌ها را می‌گیرد. فهرست‌ها و ریزگردشِ حساب
+ * نمی‌گیرند — آنجا ردیف واحدِ خواندن است نه ستون، و راه‌راهِ ردیفی جواب می‌دهد.
+ */
+@layer components {
+  .col-cream { background-color: var(--grid-cream); }
+  .col-mint  { background-color: var(--grid-mint); }
+  .col-pink  { background-color: var(--grid-pink); }
+
+  /* ردیفِ انتخاب‌شده روی ته‌رنگِ ستون‌ها می‌نشیند، نه زیرشان. */
+  tr[data-row-active="true"] > td {
+    background-color: color-mix(in oklab, var(--primary) 16%, transparent);
+  }
+  .dark tr[data-row-active="true"] > td {
+    background-color: color-mix(in oklab, var(--primary) 26%, transparent);
   }
 }

@@ -1,5 +1,7 @@
 package com.warehouseos.operator.data.remote
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -38,12 +40,48 @@ suspend fun <T> safeApiCall(block: suspend () -> T): ApiResult<T> =
         } else {
             ApiResult.ServerError(e.code(), e.extractServerMessage())
         }
+    } catch (e: CancellationException) {
+        /*
+         * لغو باید بالا برود، نه اینکه به نتیجه تبدیل شود.
+         *
+         * قبلاً در شاخه‌ی عمومیِ Exception گیر می‌افتاد و به NetworkError تبدیل
+         * می‌شد. یعنی وقتی کاربر صفحه را ترک می‌کرد یا سرویس متوقف می‌شد،
+         * صداکننده به‌جای «لغو شد» یک «خطای شبکه» می‌گرفت و کارش را ادامه
+         * می‌داد — و همزمانیِ ساختاریِ کوروتین‌ها می‌شکست.
+         */
+        throw e
+    } catch (e: SerializationException) {
+        /*
+         * پاسخِ ناخوانا **خطای شبکه** حساب می‌شود، نه ردِ قطعی.
+         *
+         * وسوسه‌کننده است که آن را قطعی بگیریم تا صفِ آفلاین بی‌صدا تا ابد
+         * دوباره نفرستد. ولی روی LANِ انبار، قطعِ وسطِ بدنه هم دقیقاً همین
+         * استثنا را می‌دهد و هیچ نشانه‌ای در زنجیره‌ی cause ندارد (بدنه‌ی خالی
+         * ⇒ «Expected start of the object but had EOF»). قطعی‌گرفتنش یعنی
+         * کارِ ثبت‌شده‌ی کارگر با یک قطعیِ لحظه‌ای دور ریخته شود — و آن بدتر
+         * از یک صفِ کندِ چرخان است.
+         *
+         * اگر روزی خواستیم حلقه‌ی بی‌پایان را ببندیم، راهش شمردنِ تلاش‌ها و
+         * نشان‌دادنش به کارگر است، نه دورانداختنِ داده.
+         */
+        ApiResult.NetworkError(e)
     } catch (e: IOException) {
         ApiResult.NetworkError(e)
     } catch (e: Exception) {
-        // Serialization or other unexpected failures — surface, don't crash.
+        // بقیه‌ی خطاهای پیش‌بینی‌نشده — به‌جای کرش، قابلِ تلاشِ دوباره.
         ApiResult.NetworkError(e)
     }
+
+/** آیا این خطا در نهایت از یک قطعیِ ورودی/خروجی آمده؟ */
+private fun Throwable.hasIoCause(): Boolean {
+    var t: Throwable? = this
+    // سقفِ ۸ حلقه: زنجیره‌ی cause می‌تواند حلقه‌ی بسته باشد.
+    repeat(8) {
+        if (t is IOException) return true
+        t = t?.cause ?: return false
+    }
+    return false
+}
 
 // Lenient parser used only to pull a message out of an error body.
 private val errorJson = Json { ignoreUnknownKeys = true; isLenient = true }

@@ -136,6 +136,29 @@ export function faDate(iso?: string | null): string {
   }).format(d);
 }
 
+/**
+ * ساعت و دقیقه با ارقام فارسی: ۱۴:۰۶
+ *
+ * روی فاکتور لازم است نه تزئینی: وقتی یک مشتری در یک روز سه بار می‌خرد،
+ * تاریخِ تنها هر سه ردیف را یکسان نشان می‌دهد و معلوم نیست کدام جلوتر بوده.
+ */
+export function faTime(iso?: string | null): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return new Intl.DateTimeFormat("fa-IR-u-nu-arabext", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(d);
+}
+
+/** تاریخ و ساعت کنار هم: ۱۴۰۵/۰۵/۱۲ ۱۴:۰۶ */
+export function faDateTime(iso?: string | null): string {
+  if (!iso) return "—";
+  return `${faDate(iso)} ${faTime(iso)}`;
+}
+
 export const PAYMENT_LABELS: Record<string, string> = {
   CASH: "نقد",
   CARD: "کارتخوان",

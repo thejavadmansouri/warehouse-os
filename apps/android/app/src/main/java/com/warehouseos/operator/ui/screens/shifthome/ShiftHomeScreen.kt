@@ -20,16 +20,14 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assignment
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Inventory2
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -53,28 +51,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.warehouseos.operator.R
 import com.warehouseos.operator.data.local.OutboxEntity
 import com.warehouseos.operator.data.local.OutboxType
 import com.warehouseos.operator.ui.components.ActionCard
-import com.warehouseos.operator.ui.components.BrandMark
 import com.warehouseos.operator.ui.components.BannerType
+import com.warehouseos.operator.ui.components.BrandMark
 import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.StatusBanner
 
-/**
- * Shift home — the operator hub. No active session → a single "start shift"
- * action; active session → a big primary CTA plus a 2-column grid of actions.
- * The «کار برداشت» card carries a live badge of pending tasks, and the whole
- * grid is sized and animated for gloved hands on the warehouse floor.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShiftHomeScreen(
@@ -100,21 +91,13 @@ fun ShiftHomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.customer_name)) },
+                title = { Text("خانه اپراتور", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onSettings) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = "تنظیمات",
-                            modifier = Modifier.size(Dimens.icon),
-                        )
+                        Icon(Icons.Filled.Settings, "تنظیمات", Modifier.size(Dimens.icon))
                     }
                     IconButton(onClick = { showLogoutConfirm = true }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Logout,
-                            contentDescription = "خروج",
-                            modifier = Modifier.size(Dimens.icon),
-                        )
+                        Icon(Icons.AutoMirrored.Filled.Logout, "خروج", Modifier.size(Dimens.icon))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -127,76 +110,46 @@ fun ShiftHomeScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(Dimens.screenPadding),
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.screenPadding, vertical = Dimens.gap),
+            verticalArrangement = Arrangement.spacedBy(Dimens.gap),
         ) {
-            GreetingHeader(
-                fullName = viewModel.fullName,
-                roleLabel = viewModel.roleLabel,
-            )
+            GreetingHeader(viewModel.fullName, viewModel.roleLabel)
 
             if (pendingCount > 0) {
                 StatusBanner(
-                    text = "$pendingCount مورد در انتظار همگام‌سازی — برای ارسال لمس کنید",
+                    text = "${faNum(pendingCount)} عملیات در انتظار ارسال",
                     type = BannerType.Warning,
                     icon = Icons.Filled.CloudUpload,
                     onClick = viewModel::syncNow,
-                    modifier = Modifier.padding(top = Dimens.gap),
                 )
             }
-
-            // Photos are Wi-Fi-only, so they can legitimately sit while operations
-            // sync over mobile data. Naming the reason stops it reading as "stuck".
             if (pendingPhotoCount > 0) {
                 StatusBanner(
                     text = "${faNum(pendingPhotoCount)} عکس در انتظار وای‌فای مغازه",
                     type = BannerType.Info,
                     icon = Icons.Filled.PhotoCamera,
-                    modifier = Modifier.padding(top = Dimens.gapSmall),
                 )
             }
+            if (failedItems.isNotEmpty()) {
+                FailedSyncSection(failedItems, viewModel::retryFailed, viewModel::discardFailed)
+            }
 
-            // Scrollable: the action grid plus the greeting, sync banner and primary
-            // CTA overflow a short phone, and without this the last row and the
-            // "شروع شیفت جدید" button are silently clipped off the bottom.
-            //
-            // Top-aligned, NOT centered: centering inside a scrolling column makes
-            // the content jump as banners appear and disappear, and on a short
-            // phone it pushes the primary CTA below the fold on first paint.
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                if (failedItems.isNotEmpty()) {
-                    FailedSyncSection(
-                        items = failedItems,
-                        onRetry = viewModel::retryFailed,
-                        onDiscard = viewModel::discardFailed,
-                    )
-                }
-
-                if (sessionId == null) {
-                    NoSessionContent(
-                        isStarting = uiState.isStarting,
-                        error = uiState.error,
-                        onStartShift = viewModel::startShift,
-                    )
-                } else {
-                    ActiveSessionContent(
-                        isStarting = uiState.isStarting,
-                        onStockIn = onStockIn,
-                        onCount = onCount,
-                        onLocate = onLocate,
-                        onLinkBarcode = onLinkBarcode,
-                        onTransfer = onTransfer,
-                        onMyWork = onMyWork,
-                        onWorkTasks = onWorkTasks,
-                        pendingWorkCount = pendingWorkCount,
-                        onNewShift = viewModel::startShift,
-                    )
-                }
+            if (sessionId == null) {
+                NoSessionContent(uiState.isStarting, uiState.error, viewModel::startShift)
+            } else {
+                ActiveSessionContent(
+                    isStarting = uiState.isStarting,
+                    onStockIn = onStockIn,
+                    onCount = onCount,
+                    onLocate = onLocate,
+                    onLinkBarcode = onLinkBarcode,
+                    onTransfer = onTransfer,
+                    onMyWork = onMyWork,
+                    onWorkTasks = onWorkTasks,
+                    pendingWorkCount = pendingWorkCount,
+                    onNewShift = viewModel::startShift,
+                )
             }
         }
     }
@@ -213,77 +166,49 @@ fun ShiftHomeScreen(
                     onLogout()
                 }) { Text("خروج") }
             },
-            dismissButton = {
-                TextButton(onClick = { showLogoutConfirm = false }) { Text("انصراف") }
-            },
+            dismissButton = { TextButton(onClick = { showLogoutConfirm = false }) { Text("انصراف") } },
         )
     }
 }
 
 @Composable
-private fun GreetingHeader(
-    fullName: String,
-    roleLabel: String,
-) {
-    if (fullName.isBlank()) return
-
+private fun GreetingHeader(fullName: String, roleLabel: String) {
     Row(
-        verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Avatar — initial letter in a tinted circle.
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.primary,
         ) {
-            Box(
-                modifier = Modifier.size(52.dp),
-                contentAlignment = Alignment.Center,
-            ) {
+            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
                 Text(
-                    text = fullName.trim().firstOrNull()?.uppercase() ?: "؟",
+                    fullName.trim().firstOrNull()?.uppercase() ?: "؟",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
             }
         }
-
-        Column(modifier = Modifier.padding(start = Dimens.gap)) {
+        Column(Modifier.padding(start = Dimens.gap)) {
             Text(
-                /*
-                 * وقتی نام کامل ثبت نشده، `fullName` نامِ کاربری است — و «سلام،
-                 * worker» یعنی یک کلمه‌ی لاتین وسطِ جمله‌ی فارسی، که هم بد
-                 * می‌نشیند هم چیزی به کارگر نمی‌گوید. در آن حالت فقط «سلام».
-                 */
-                text = if (fullName.any { it in 'ا'..'ی' }) "سلام، $fullName" else "سلام",
+                if (fullName.any { it in 'ا'..'ی' }) "سلام، $fullName" else "سلام",
                 style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Bold,
             )
             if (roleLabel.isNotBlank()) {
-                Surface(
-                    shape = RoundedCornerShape(50),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                ) {
-                    Text(
-                        text = roleLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
-                    )
-                }
+                Text(
+                    roleLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
-    Spacer(Modifier.height(Dimens.gapLarge))
 }
 
 @Composable
-private fun NoSessionContent(
-    isStarting: Boolean,
-    error: String?,
-    onStartShift: () -> Unit,
-) {
+private fun NoSessionContent(isStarting: Boolean, error: String?, onStartShift: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(Dimens.corner),
         color = MaterialTheme.colorScheme.surfaceContainer,
@@ -291,94 +216,56 @@ private fun NoSessionContent(
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(Dimens.gapLarge * 2),
+            modifier = Modifier.padding(Dimens.gapLarge),
         ) {
             BrandMark(size = Dimens.iconHuge)
             Text(
-                text = "شیفت کاری خود را آغاز کنید",
+                "شیفت کاری خود را آغاز کنید",
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = Dimens.gap),
             )
             Text(
-                text = "برای شروع ثبت کالا، ابتدا یک شیفت جدید باز کنید",
+                "برای شروع ثبت کالا، ابتدا یک شیفت جدید باز کنید",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = Dimens.gapSmall, bottom = Dimens.gapLarge),
             )
-            PrimaryButton(
-                text = "شروع شیفت",
-                onClick = onStartShift,
-                loading = isStarting,
-                icon = Icons.Filled.Add,
-            )
+            PrimaryButton("شروع شیفت", onStartShift, loading = isStarting, icon = Icons.Filled.Add)
         }
     }
-    if (error != null) {
-        StatusBanner(
-            text = error,
-            type = BannerType.Error,
-            modifier = Modifier.padding(top = Dimens.gap),
-        )
-    }
+    if (error != null) StatusBanner(error, BannerType.Error)
 }
 
-/**
- * One home action. A data class rather than nested Pair/Triple so the subtitle
- * travels with its card — the previous version looked the subtitle up by
- * matching on the Persian title, which silently broke on any label change.
- */
 private data class HomeAction(
     val title: String,
     val subtitle: String,
     val icon: androidx.compose.ui.graphics.vector.ImageVector,
     val onClick: () -> Unit,
     val badge: Int? = null,
-    /** رنگِ کارکردیِ آیکن — از فاصله‌ی بازو زودتر از متن خوانده می‌شود. */
     val accent: Color? = null,
 )
 
-/*
- * رنگِ هر کار.
- *
- * شش کاشی با شش دایره‌ی آبیِ یکسان یعنی کارگر باید متن را بخواند تا تشخیص
- * دهد. رنگ از فاصله‌ی بازو و با دستکش زودتر از متن خوانده می‌شود، و بعد از
- * چند روز دست خودش مسیر را حفظ می‌کند.
- *
- * تیره انتخاب شده‌اند نه پاستلی: صفحه‌ی ارزانِ گوشیِ کارگر زیر نورِ سوله
- * کنتراست کم را می‌بلعد.
- */
-private val AccentPick = Color(0xFF1D4ED8) // برداشتن — آبی
-private val AccentWork = Color(0xFF7C3AED) // کارهای انبار — بنفش
-private val AccentCount = Color(0xFFB45309) // شمارش — نارنجی
-private val AccentFind = Color(0xFF0F766E) // یافتن — فیروزه‌ای
-private val AccentBarcode = Color(0xFF15803D) // بارکد — سبز
-private val AccentMine = Color(0xFF475569) // کارهای من — خاکستری، عمداً خنثی
-private val AccentTransfer = Color(0xFFBE185D) // انتقال بین قفسه — سرخابی
+private val AccentPick = Color(0xFF1D4ED8)
+private val AccentWork = Color(0xFF7C3AED)
+private val AccentCount = Color(0xFFB45309)
+private val AccentFind = Color(0xFF0F766E)
+private val AccentBarcode = Color(0xFF15803D)
+private val AccentMine = Color(0xFF475569)
+private val AccentTransfer = Color(0xFFBE185D)
 
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = Dimens.gapSmall),
+        text,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.fillMaxWidth(),
     )
 }
 
-/**
- * فهرستِ کارها — **تک‌ستونه**.
- *
- * قبلاً دوستونه بود و هر برچسبی بریده می‌شد: «کارهای ان..»، «کار برداش..»،
- * «آدرس دقیق قف..». روی صفحه‌ی ۳۶۰dp هر کارت ۱۵۴dp می‌شد و بعد از پدینگ و آیکن
- * حدود ۷۰dp برای متن می‌ماند — که هیچ عبارتِ فارسیِ دوکلمه‌ای در آن جا نمی‌شود.
- *
- * اسکرول عمودی مجانی است، عرض نیست. ردیفِ تمام‌عرض هدفِ لمسیِ بزرگ‌تری هم هست،
- * و کارگرِ انبار دستکش دستش است.
- */
 @Composable
 private fun ActionGrid(actions: List<HomeAction>, highlightBadged: Boolean) {
     actions.forEach { action ->
@@ -390,7 +277,6 @@ private fun ActionGrid(actions: List<HomeAction>, highlightBadged: Boolean) {
             badge = action.badge,
             accent = action.accent,
             highlighted = highlightBadged && (action.badge ?: 0) > 0,
-            modifier = Modifier.padding(bottom = Dimens.gap),
         )
     }
 }
@@ -408,132 +294,55 @@ private fun ActiveSessionContent(
     pendingWorkCount: Int,
     onNewShift: () -> Unit,
 ) {
-    /*
-     * بنرِ «شیفت فعال است» برداشته شد.
-     *
-     * تقریباً همیشه درست بود — یعنی یک نوارِ تمام‌عرضِ دائمی که هیچ خبری نمی‌داد
-     * و فقط دکمه‌ی اصلی را پایین می‌برد. وقتی شیفت فعال نباشد اصلاً این بخش
-     * رندر نمی‌شود، پس خودِ دیده‌شدنِ دکمه‌ی «ثبت ورود کالا» همان پیام است.
-     *
-     * بنرِ عکس‌های در انتظار سرِ جایش ماند: آن یکی واقعاً خبر دارد.
-     */
-
-    // Primary CTA stays the biggest thing on screen.
     PrimaryButton(
         text = "ثبت ورود کالا",
         onClick = onStockIn,
         icon = Icons.Filled.Add,
         height = Dimens.hugeActionHeight,
     )
-    Spacer(Modifier.height(Dimens.gapLarge))
 
-    // Split by who is waiting, not by feature. Work someone else queued for this
-    // worker is time-sensitive and goes first; the tools they reach for on their
-    // own initiative sit below. A flat grid of six equal cards made an idle
-    // "یافتن کالا" look as urgent as five picks a seller is standing there for.
-    val waiting = buildList {
-        add(
+    Spacer(Modifier.height(Dimens.gapSmall))
+    SectionLabel(if (pendingWorkCount > 0) "کارهای فوری" else "کارهای ارجاعی")
+    ActionGrid(
+        listOf(
             HomeAction(
-                title = "کارهای انبار",
-                subtitle = if (pendingWorkCount > 0) {
-                    "${faNum(pendingWorkCount)} کار در جریان"
-                } else {
-                    // دیگر فقط از POS نمی‌آید: چیدنِ کالای فاکتور خرید هم همین‌جاست.
-                    "برداشتن و چیدن کالا"
-                },
-                icon = Icons.Filled.Assignment,
-                onClick = onWorkTasks,
-                badge = pendingWorkCount,
-                accent = AccentWork,
+                "کارهای انبار",
+                if (pendingWorkCount > 0) "${faNum(pendingWorkCount)} کار در جریان" else "برداشتن و چیدن کالا",
+                Icons.Filled.Assignment,
+                onWorkTasks,
+                pendingWorkCount,
+                AccentWork,
             ),
-        )
-    }
-
-    val tools = buildList {
-        add(
-            HomeAction(
-                "انبارگردانی", "شمارش موجودی",
-                Icons.Filled.Checklist, onCount, accent = AccentCount,
-            ),
-        )
-        add(
-            HomeAction(
-                "یافتن کالا", "آدرس دقیق قفسه",
-                Icons.Filled.Search, onLocate, accent = AccentFind,
-            ),
-        )
-        // کالایی که بارکد خوانا روی جعبه دارد، برچسبِ چاپی لازم ندارد.
-        add(
-            HomeAction(
-                title = "اتصال بارکد",
-                subtitle = "بارکد جعبه را به کالا وصل کن",
-                icon = Icons.Filled.QrCodeScanner,
-                onClick = onLinkBarcode,
-                accent = AccentBarcode,
-            ),
-        )
-        // جابه‌جایی موجودی بین قفسه‌ها — اسکن مبدأ، انتخاب کالا، اسکن مقصد.
-        add(
-            HomeAction(
-                title = "انتقال بین قفسه",
-                subtitle = "جابه‌جایی موجودی",
-                icon = Icons.Filled.SwapHoriz,
-                onClick = onTransfer,
-                accent = AccentTransfer,
-            ),
-        )
-        add(
-            HomeAction(
-                "کارهای من", "ثبت‌ها و تأییدها",
-                Icons.Filled.History, onMyWork, accent = AccentMine,
-            ),
-        )
-    }
-
-    SectionLabel(
-        text = if (waiting.any { (it.badge ?: 0) > 0 }) "در انتظار شما" else "کارهای ارجاعی",
+        ),
+        highlightBadged = true,
     )
-    ActionGrid(actions = waiting, highlightBadged = true)
 
-    SectionLabel(text = "ابزارها")
-    ActionGrid(actions = tools, highlightBadged = false)
+    SectionLabel("ابزارهای انبار")
+    ActionGrid(
+        listOf(
+            HomeAction("انبارگردانی", "شمارش موجودی", Icons.Filled.Checklist, onCount, accent = AccentCount),
+            HomeAction("یافتن کالا", "آدرس دقیق قفسه", Icons.Filled.Search, onLocate, accent = AccentFind),
+            HomeAction("اتصال بارکد", "اتصال بارکد جعبه به کالا", Icons.Filled.QrCodeScanner, onLinkBarcode, accent = AccentBarcode),
+            HomeAction("انتقال بین قفسه", "جابه‌جایی موجودی", Icons.Filled.SwapHoriz, onTransfer, accent = AccentTransfer),
+            HomeAction("کارهای من", "ثبت‌ها و تأییدها", Icons.Filled.History, onMyWork, accent = AccentMine),
+        ),
+        highlightBadged = false,
+    )
 
     TextButton(
         onClick = onNewShift,
         enabled = !isStarting,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = Dimens.gapSmall),
-    ) {
-        Text(
-            text = "شروع شیفت جدید",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
+        modifier = Modifier.fillMaxWidth(),
+    ) { Text("شروع شیفت جدید") }
 }
 
-private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
-private fun faNum(n: Int): String =
-    n.toString().map { if (it.isDigit()) FA_DIGITS[it - '0'] else it }.joinToString("")
-
-/**
- * ردیف‌هایی که سرور رد کرده (FAILED). بدون این بخش، یک خطای دائمی بی‌صدا
- * هرگز ثبت نمی‌شود و کارگر فکر می‌کند کارش انجام شده. هر ردیف پیام خطای
- * سرور + دکمه‌های «تلاش دوباره» و «حذف» دارد.
- */
 @Composable
 private fun FailedSyncSection(
     items: List<OutboxEntity>,
     onRetry: (OutboxEntity) -> Unit,
     onDiscard: (OutboxEntity) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = Dimens.gapLarge),
-        verticalArrangement = Arrangement.spacedBy(Dimens.gapSmall),
-    ) {
+    Column(verticalArrangement = Arrangement.spacedBy(Dimens.gapSmall)) {
         StatusBanner(
             text = "${faNum(items.size)} مورد در ارسال با خطا مواجه شد",
             type = BannerType.Error,
@@ -549,36 +358,17 @@ private fun FailedSyncSection(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(start = Dimens.cardPadding, end = Dimens.gapSmall, top = Dimens.gapSmall, bottom = Dimens.gapSmall),
+                    modifier = Modifier.padding(Dimens.cardPadding),
                 ) {
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = Dimens.gapSmall),
-                    ) {
-                        Text(
-                            text = item.label(),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = item.lastError ?: "خطای نامشخص",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                    Column(Modifier.weight(1f)) {
+                        Text(item.label(), fontWeight = FontWeight.SemiBold)
+                        Text(item.lastError ?: "خطای نامشخص", style = MaterialTheme.typography.bodySmall)
                     }
                     IconButton(onClick = { onRetry(item) }) {
-                        Icon(
-                            Icons.Filled.Refresh,
-                            contentDescription = "تلاش دوباره",
-                            modifier = Modifier.size(Dimens.iconSmall),
-                        )
+                        Icon(Icons.Filled.Refresh, "تلاش دوباره", Modifier.size(Dimens.iconSmall))
                     }
                     IconButton(onClick = { onDiscard(item) }) {
-                        Icon(
-                            Icons.Filled.Delete,
-                            contentDescription = "حذف",
-                            modifier = Modifier.size(Dimens.iconSmall),
-                        )
+                        Icon(Icons.Filled.Delete, "حذف", Modifier.size(Dimens.iconSmall))
                     }
                 }
             }
@@ -586,10 +376,11 @@ private fun FailedSyncSection(
     }
 }
 
-/** برچسب فارسیِ کوتاه برای یک ردیف صف — بر اساس نوع عملیات. */
+private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
+private fun faNum(n: Int): String = n.toString().map { if (it.isDigit()) FA_DIGITS[it - '0'] else it }.joinToString("")
+
 private fun OutboxEntity.label(): String {
-    val shelf = locationBarcode.takeIf { it.isNotBlank() }
-    val where = shelf?.let { " · قفسه $it" } ?: ""
+    val where = locationBarcode.takeIf { it.isNotBlank() }?.let { " · قفسه $it" } ?: ""
     return when (type) {
         OutboxType.NEW_PRODUCT_REQUEST -> "درخواست کالای جدید$where"
         OutboxType.IN -> "ثبت کالا$where"

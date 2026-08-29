@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { User, CreditCard, Clock, ShoppingCart, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
+import { User, CreditCard, Clock, ShoppingCart, AlertTriangle, ChevronDown, ChevronUp, ExternalLink } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { getCustomer } from "@/lib/api";
@@ -58,8 +58,7 @@ export function CustomerSummary({
 
   return (
     <div className="rounded-lg border bg-card">
-      {/* هدر مشتری */}
-      <div className="flex items-center justify-between border-b p-3">
+      {/* هدر مشتری */}          <div className="flex items-center justify-between border-b bg-muted/20 p-3">
         <div className="flex items-center gap-2 min-w-0">
           <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
             <User className="size-4 text-primary" />
@@ -72,25 +71,24 @@ export function CustomerSummary({
               </div>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onOpenFullProfile}
-            className="text-xs"
-          >
-            پرونده
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onShowTodayPurchases}
-            className="text-xs"
-          >
-            امروز
-          </Button>
-        </div>
+        </div>          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onShowTodayPurchases}
+              className="h-8 gap-1 text-xs"
+            >
+              فاکتورها
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onOpenFullProfile}
+              className="h-8 gap-1 text-xs"
+            >
+              <ExternalLink className="size-3.5" /> پرونده
+            </Button>
+          </div>
       </div>
 
       {/* اطلاعات مالی */}
@@ -185,10 +183,10 @@ export function CustomerSummary({
                 {recentInvoices.map((inv) => (
                   <div
                     key={inv.id}
-                    className="flex items-center justify-between rounded-md bg-muted/30 px-2 py-1 text-xs"
+                    className="flex items-center justify-between rounded-md border bg-muted/30 px-2 py-1.5 text-xs"
                   >
-                    <span className="truncate">فاکتور {toFa(inv.number)}</span>
-                    <span className="shrink-0 tabular-nums">{rial(inv.total)}</span>
+                    <span className="truncate font-medium">فاکتور {toFa(inv.number)}</span>
+                    <span className="shrink-0 tabular-nums text-primary">{rial(inv.total)}</span>
                   </div>
                 ))}
               </div>

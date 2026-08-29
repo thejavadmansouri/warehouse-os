@@ -73,8 +73,8 @@ export function NotificationBell() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9" title="اعلان‌ها">
-          <Bell className="h-[18px] w-[18px]" />
+        <Button variant="ghost" size="icon" className="relative size-7" title="اعلان‌ها">
+          <Bell className="size-4" />
           {unseen && (
             <span
               className="absolute -end-0.5 -top-0.5 flex min-w-4 items-center justify-center

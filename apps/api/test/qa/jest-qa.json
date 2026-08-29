@@ -1,0 +1,12 @@
+{
+  "rootDir": "../..",
+  "moduleFileExtensions": ["js", "json", "ts"],
+  "testRegex": "test/qa/.*\\.qa\\.ts$",
+  "transform": { "^.+\\.(t|j)s$": "ts-jest" },
+  "testEnvironment": "node",
+  "setupFiles": ["<rootDir>/test/qa/env.ts"],
+  "testTimeout": 300000,
+  "maxWorkers": 1,
+  "verbose": false,
+  "reporters": ["default"]
+}

@@ -143,6 +143,14 @@ function toErrorBody(parsed: unknown, status: number): ApiErrorBody {
   return fallback;
 }
 
+/**
+ * سقفِ زمانِ هر درخواست.
+ *
+ * سخاوتمندانه انتخاب شده تا کاتالوگِ ۳۳ هزارتایی روی LANِ کند هم جا شود، ولی
+ * محدود — چون هدف گرفتنِ «هرگز جواب نمی‌دهد» است، نه «کُند است».
+ */
+const REQUEST_TIMEOUT_MS = 30_000;
+
 // fetch پایین‌سطحی — بدون تزریق خودکار توکن، بدون redirect
 async function rawFetch<R>(
   path: string,
@@ -158,14 +166,31 @@ async function rawFetch<R>(
    * پنل از آن رد می‌شوند، پس وضعیت ارتباط همین‌جا به‌روز می‌شود و هیچ صفحه‌ای
    * لازم نیست خودش چیزی چک کند.
    */
+  /*
+   * مهلتِ سخت روی هر درخواست.
+   *
+   * بدون این، یک اتصالِ نیمه‌مرده (ویندوزی که از sleep برگشته، وای‌فای که
+   * افتاده و برگشته، سروری که TCP را نبسته) باعث می‌شود fetch **هرگز** نه
+   * resolve شود نه reject. آن وقت هر چیزی که پشتِ آن درخواست منتظر است برای
+   * همیشه معلق می‌ماند — و چون هیچ خطایی پرتاب نمی‌شود، نه بنر «قطع شد» بالا
+   * می‌آید نه retry اتفاق می‌افتد. دقیقاً همان حالتی که کاتالوگِ لوکالِ صندوق
+   * را بعد از چند دقیقه بی‌کاری برای همیشه از کار می‌انداخت.
+   */
+  const timeout = new AbortController();
+  const timer = setTimeout(() => timeout.abort(), REQUEST_TIMEOUT_MS);
+
   try {
     res = await fetch(`${apiUrl()}${path}`, {
       credentials: "include",
       ...buildInit(init),
+      // بعد از spread — تا هیچ صداکننده‌ای نتواند ناخواسته مهلت را بردارد.
+      signal: timeout.signal,
     });
   } catch (e) {
     useConnectionStore.getState().setOnline(false);
     throw e;
+  } finally {
+    clearTimeout(timer);
   }
 
   useConnectionStore.getState().setOnline(true);
@@ -521,6 +546,15 @@ export function setProductPrice(
  */
 export function bulkSetPrice(body: T.BulkPriceRequest): Promise<T.BulkPriceResult> {
   return apiFetch<T.BulkPriceResult>("/products/prices/bulk", {
+    method: "POST",
+    body,
+  });
+}
+
+
+/** روشن/خاموش کردنِ گروهیِ «نمایش در سایت». */
+export function bulkSetOnline(body: T.BulkOnlineRequest): Promise<T.BulkOnlineResult> {
+  return apiFetch<T.BulkOnlineResult>("/products/online/bulk", {
     method: "POST",
     body,
   });
@@ -1249,6 +1283,22 @@ export function getCorrectableLines(invoiceId: string): Promise<T.CorrectableInv
 }
 
 // POST /sales/corrections — ثبت اصلاحیه: سندِ جدا با شماره‌ی خودش و دلیلِ اجباری.
+/**
+ * عوض‌کردنِ توضیحِ ردیف‌های یک فاکتور — بدون ساختنِ سند.
+ *
+ * توضیح متن است نه عدد؛ اصلاحیه‌ی مالی برایش ساخته نمی‌شود (و سرور هم
+ * اصلاحیه‌ی با اثرِ صفر را رد می‌کند).
+ */
+export function updateInvoiceLineNotes(
+  invoiceId: string,
+  notes: { saleLogId: string; lineNote?: string }[],
+): Promise<{ updated: number }> {
+  return apiFetch(`/sales/invoices/${encodeURIComponent(invoiceId)}/line-notes`, {
+    method: "POST",
+    body: { notes },
+  });
+}
+
 export function createCorrection(dto: T.CreateCorrectionDto): Promise<T.SaleCorrection> {
   return apiFetch<T.SaleCorrection>("/sales/corrections", { method: "POST", body: dto });
 }
@@ -1952,6 +2002,10 @@ export function getSuppliers(): Promise<T.Supplier[]> {
   return apiFetch<T.Supplier[] | { data?: T.Supplier[] }>("/suppliers").then((r) =>
     Array.isArray(r) ? r : (r.data ?? []),
   );
+}
+
+export function createSupplier(body: T.CreateSupplierInput): Promise<T.Supplier> {
+  return apiFetch<T.Supplier>("/suppliers", { method: "POST", body });
 }
 
 export function createPurchase(body: T.CreatePurchaseInput): Promise<T.Purchase> {

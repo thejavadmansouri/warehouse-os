@@ -71,6 +71,8 @@ export class StorefrontCatalogService {
       freeShipOver: convertMoney(s.freeShipOver, s.storedUnit, s.siteUnit),
       /** برچسبی که کنار هر قیمت چاپ می‌شود. */
       unit: s.siteUnit,
+      /** کالای بی‌قیمت «تماس بگیرید» نشان داده می‌شود؟ */
+      showUnpriced: s.showUnpriced,
       storedUnit: s.storedUnit,
     };
   }
@@ -184,7 +186,7 @@ export class StorefrontCatalogService {
       }));
     }
 
-    const priced = await this.pricedIds(where, query, units);
+    const priced = await this.pricedIds(where, query, units, shop.showUnpriced);
 
     const total = priced.length;
     const slice = priced.slice((page - 1) * pageSize, page * pageSize);
@@ -214,7 +216,8 @@ export class StorefrontCatalogService {
       ...this.visible,
       id: { in: ids.slice(0, 200) },
     };
-    const priced = await this.pricedIds(where, {}, units);
+    // در فهرست علاقه‌مندی کالای بی‌قیمت نمایش داده نمی‌شود؛ آنجا هدف خرید است.
+    const priced = await this.pricedIds(where, {}, units, false);
     return this.hydrate(priced);
   }
 
@@ -228,6 +231,7 @@ export class StorefrontCatalogService {
     where: Prisma.ProductWhereInput,
     query: CatalogQuery,
     units: { stored: CurrencyUnit; site: CurrencyUnit },
+    showUnpriced: boolean,
   ) {
     const rows = await this.prisma.product.findMany({
       where,
@@ -238,7 +242,7 @@ export class StorefrontCatalogService {
         prices: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { salePrice: true },
+          select: { salePrice: true, compareAtPrice: true },
         },
         inventories: { select: { quantity: true } },
       },
@@ -266,27 +270,58 @@ export class StorefrontCatalogService {
     const reserved = await this.reserved(rows.map((r) => r.id));
 
     let list = rows
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        createdAt: p.createdAt,
-        price: p.prices[0]?.salePrice != null ? toSite(p.prices[0].salePrice) : null,
-        stock:
-          p.inventories.reduce((s, i) => s + i.quantity, 0) -
-          (reserved.get(p.id) ?? 0),
-      }))
-      .filter((p) => p.price !== null && p.price > 0);
+      .map((p) => {
+        const raw = p.prices[0]?.salePrice ?? null;
+        const rawCompare = p.prices[0]?.compareAtPrice ?? null;
+        const price = raw != null && raw > 0 ? toSite(raw) : null;
 
-    if (query.minPrice != null) list = list.filter((p) => p.price! >= query.minPrice!);
-    if (query.maxPrice != null) list = list.filter((p) => p.price! <= query.maxPrice!);
+        /*
+         * «قیمتِ قبل» فقط وقتی معنا دارد که واقعاً بیشتر از قیمت فعلی باشد.
+         * وگرنه یک خطِ خورده‌ی بی‌معنا — یا بدتر، تخفیفِ منفی — نشان می‌دادیم.
+         */
+        const compareAt =
+          price != null && rawCompare != null && toSite(rawCompare) > price
+            ? toSite(rawCompare)
+            : null;
+
+        return {
+          id: p.id,
+          name: p.name,
+          createdAt: p.createdAt,
+          price,
+          compareAt,
+          stock:
+            p.inventories.reduce((s, i) => s + i.quantity, 0) -
+            (reserved.get(p.id) ?? 0),
+        };
+      })
+      /*
+       * کالای بی‌قیمت اگر مدیر خواسته باشد می‌ماند و «تماس بگیرید» می‌شود.
+       * خریدنی نیست (سرویسِ سفارش جداگانه ردش می‌کند)، ولی دیده می‌شود —
+       * کالایی که نمایش داده نشود، مشتری‌اش را به فروشگاه دیگر می‌فرستد.
+       */
+      .filter((p) => p.price !== null || showUnpriced);
+
+    // فیلترِ قیمت فقط روی کالاهای قیمت‌دار معنا دارد؛ بی‌قیمت‌ها کنار می‌روند.
+    if (query.minPrice != null)
+      list = list.filter((p) => p.price != null && p.price >= query.minPrice!);
+    if (query.maxPrice != null)
+      list = list.filter((p) => p.price != null && p.price <= query.maxPrice!);
     if (query.inStock) list = list.filter((p) => p.stock > 0);
 
+    /** بی‌قیمت = ۱، یعنی بعد از همه‌ی قیمت‌دارها. */
+    const rank = (p: { price: number | null }) => (p.price == null ? 1 : 0);
+
     switch (query.sort) {
+      /*
+       * کالای بی‌قیمت همیشه ته فهرست می‌رود، در هر دو جهت مرتب‌سازی —
+       * «ارزان‌ترین» نباید با یک مشت «تماس بگیرید» شروع شود.
+       */
       case 'cheapest':
-        list.sort((a, b) => a.price! - b.price!);
+        list.sort((a, b) => rank(a) - rank(b) || a.price! - b.price!);
         break;
       case 'expensive':
-        list.sort((a, b) => b.price! - a.price!);
+        list.sort((a, b) => rank(a) - rank(b) || b.price! - a.price!);
         break;
       case 'name':
         list.sort((a, b) => a.name.localeCompare(b.name, 'fa'));
@@ -304,7 +339,12 @@ export class StorefrontCatalogService {
   }
 
   private async hydrate(
-    slice: { id: string; price: number | null; stock: number }[],
+    slice: {
+      id: string;
+      price: number | null;
+      compareAt?: number | null;
+      stock: number;
+    }[],
   ) {
     if (!slice.length) return [];
 
@@ -344,6 +384,8 @@ export class StorefrontCatalogService {
           category: p.category?.name ?? null,
           categoryId: p.category?.id ?? null,
           price: s.price,
+          /** قیمت پیش از تخفیف؛ null یعنی تخفیفی نیست. */
+          compareAt: s.compareAt ?? null,
           stock: stockBand(s.stock),
           image: p.assets[0]?.thumbnailPath ?? p.assets[0]?.path ?? null,
         };
@@ -372,7 +414,7 @@ export class StorefrontCatalogService {
         prices: {
           orderBy: { createdAt: 'desc' },
           take: 1,
-          select: { salePrice: true },
+          select: { salePrice: true, compareAtPrice: true },
         },
         inventories: { select: { quantity: true } },
         assets: {
@@ -384,12 +426,24 @@ export class StorefrontCatalogService {
     });
 
     // مثل `pricedIds`، تبدیل در همان لحظه‌ی استخراج — نه در لبه‌ی خروجی.
-    const raw = p?.prices[0]?.salePrice ?? null;
-    const price =
-      raw != null ? convertMoney(raw, shop.storedUnit, shop.unit) : null;
+    const toSite = (v: number) => convertMoney(v, shop.storedUnit, shop.unit);
 
-    // کالای بی‌قیمت روی سایت اصلاً وجود ندارد — نه «موجود نیست»، بلکه ۴۰۴.
-    if (!p || !price) {
+    const raw = p?.prices[0]?.salePrice ?? null;
+    const price = raw != null && raw > 0 ? toSite(raw) : null;
+
+    const rawCompare = p?.prices[0]?.compareAtPrice ?? null;
+    // فقط تخفیفِ واقعی: قیمتِ قبل باید از قیمت فعلی بیشتر باشد.
+    const compareAt =
+      price != null && rawCompare != null && toSite(rawCompare) > price
+        ? toSite(rawCompare)
+        : null;
+
+    /*
+     * کالای بی‌قیمت اگر مدیر خواسته باشد صفحه دارد و «تماس بگیرید» نشان
+     * می‌دهد. اگر نخواسته باشد، ۴۰۴ — نه «موجود نیست»، چون اصلاً نباید
+     * وجودش لو برود.
+     */
+    if (!p || (price == null && !shop.showUnpriced)) {
       throw new NotFoundException({
         error: 'PRODUCT_NOT_FOUND',
         message: 'این کالا در فروشگاه اینترنتی موجود نیست',
@@ -415,6 +469,7 @@ export class StorefrontCatalogService {
       categoryId: p.category?.id ?? null,
       vehicles: p.vehicles.map((v) => v.vehicleModel.name),
       price,
+      compareAt,
       stock: stockBand(stock),
       images: p.assets.map((a) => a.path),
     };

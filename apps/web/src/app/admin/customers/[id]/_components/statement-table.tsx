@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 
 import { ExportButton } from "@/app/admin/reports/_components/shared";
 import { money, toFa, faDate } from "@/lib/format";
@@ -36,12 +35,21 @@ export function StatementTable({
   rows,
   summary,
   range,
+  onOpenInvoice,
 }: {
   customerId: string;
   rows: LedgerEntryRow[];
   summary?: StatementSummary | null;
   /** بازه‌ی فعال — برای خروجی اکسل همان بازه صادر می‌شود. */
   range: { startDate?: string; endDate?: string };
+  /**
+   * کلیک روی ردیفِ یک فاکتور.
+   *
+   * ردیف‌هایی که فاکتور ندارند (دریافت، اصلاحیه، مانده‌ی اول دوره) کلیک‌شدنی
+   * نیستند و نشانگرِ ماوس هم عوض نمی‌شود — وگرنه کاربر روی هر ردیفی کلیک
+   * می‌کند و هیچ اتفاقی نمی‌افتد.
+   */
+  onOpenInvoice?: (invoiceId: string) => void;
 }) {
   const closing = summary?.closingBalance ?? 0;
 
@@ -102,7 +110,11 @@ export function StatementTable({
                 return (
                   <tr
                     key={e.id}
-                    className="border-b last:border-0 hover:bg-muted/40"
+                    onClick={() => e.invoice && onOpenInvoice?.(e.invoice.id)}
+                    title={e.invoice ? "باز کردن این فاکتور در صندوق برای ویرایش" : undefined}
+                    className={`border-b last:border-0 hover:bg-muted/40 ${
+                      e.invoice && onOpenInvoice ? "cursor-pointer" : ""
+                    }`}
                   >
                     <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                       {faDate(e.createdAt)}
@@ -111,15 +123,7 @@ export function StatementTable({
                       <span className="block text-sm font-medium">
                         {ENTRY_LABELS[e.type]}
                         {e.invoice && (
-                          <>
-                            {" "}
-                            <Link
-                              href={`/admin/invoices/${e.invoice.id}`}
-                              className="text-primary hover:underline"
-                            >
-                              #{toFa(e.invoice.number)}
-                            </Link>
-                          </>
+                          <span className="text-primary"> #{toFa(e.invoice.number)}</span>
                         )}
                         {e.receipt && ` #${toFa(e.receipt.number)}`}
                       </span>

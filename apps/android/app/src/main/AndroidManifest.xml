@@ -51,7 +51,7 @@
              Hilt WorkerFactory (OperatorApplication.Configuration.Provider) is used. -->
         <!-- Watches the worker pick queue and rings the phone on new tasks. -->
         <service
-            android:name=".data.notifications.PickTaskWatcherService"
+            android:name=".data.notifications.WorkTaskWatcherService"
             android:exported="false"
             android:foregroundServiceType="specialUse">
             <property

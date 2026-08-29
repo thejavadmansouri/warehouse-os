@@ -2,6 +2,7 @@ package com.warehouseos.operator.ui.screens.scan
 
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
+import androidx.annotation.OptIn as AndroidXOptIn
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -52,7 +53,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * screens that scan need the same escape hatch. The button only appears when the
  * device actually reports a flash unit.
  */
-@OptIn(ExperimentalGetImage::class)
+@AndroidXOptIn(markerClass = [ExperimentalGetImage::class])
 @Composable
 fun BarcodeScanner(
     modifier: Modifier = Modifier,
@@ -143,7 +144,7 @@ fun BarcodeScanner(
     }
 }
 
-@OptIn(ExperimentalGetImage::class)
+@AndroidXOptIn(markerClass = [ExperimentalGetImage::class])
 private fun analyze(
     scanner: com.google.mlkit.vision.barcode.BarcodeScanner,
     imageProxy: ImageProxy,

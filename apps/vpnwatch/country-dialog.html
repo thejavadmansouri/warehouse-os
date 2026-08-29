@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", sans-serif;
+    background: #f5f5f7;
+    padding: 20px;
+    user-select: none;
+  }
+  h1 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  p { font-size: 12px; color: #666; margin-bottom: 14px; }
+  input {
+    width: 100%;
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 4px;
+    padding: 8px;
+    border: 1px solid #d0d0d5;
+    border-radius: 8px;
+    outline: none;
+    margin-bottom: 14px;
+  }
+  input:focus { border-color: #007aff; box-shadow: 0 0 0 3px rgba(0,122,255,.2); }
+  .row { display: flex; gap: 8px; }
+  button {
+    flex: 1;
+    font-size: 14px;
+    padding: 8px 0;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid #d0d0d5;
+    background: #fff;
+    color: #333;
+  }
+  button.primary { background: #007aff; border-color: #007aff; color: #fff; font-weight: 600; }
+  button:active { opacity: .8; }
+</style>
+</head>
+<body>
+  <h1>افزودن کشور مجاز</h1>
+  <p>کد دوحرفی کشور را وارد کنید (مثلاً DE برای آلمان):</p>
+  <input id="code" placeholder="GB" maxlength="2" autocomplete="off" spellcheck="false">
+  <div class="row">
+    <button class="primary" id="add">افزودن</button>
+    <button id="cancel">انصراف</button>
+  </div>
+<script>
+  const input = document.getElementById('code');
+  const submit = () => window.vpnwatch.submit(input.value);
+  document.getElementById('add').addEventListener('click', submit);
+  document.getElementById('cancel').addEventListener('click', () => window.vpnwatch.cancel());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submit();
+    if (e.key === 'Escape') window.vpnwatch.cancel();
+  });
+  input.focus();
+</script>
+</body>
+</html>

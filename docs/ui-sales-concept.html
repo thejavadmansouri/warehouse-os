@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>کانسپت رابط فروشگاه حرفه‌ای</title>
+  <style>
+    :root {
+      --navy: #d9e4f2;
+      --navy-2: #19375d;
+      --blue: #1769d2;
+      --blue-soft: #eaf3ff;
+      --ink: #172236;
+      --muted: #64748b;
+      --line: #dbe3ee;
+      --surface: #fff;
+      --bg: #f3f6fa;
+      --green: #138a5b;
+      --green-soft: #e8f7ef;
+      --amber: #a76700;
+      --amber-soft: #fff5df;
+      --red: #bd3c3c;
+      --shadow: 0 10px 28px rgba(21, 42, 73, .08);
+      font-family: Vazirmatn, Tahoma, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: var(--bg); font-size: 14px; }
+    button, input { font: inherit; }
+    .app { min-height: 100vh; display: flex; flex-direction: row; }
+    .sidebar { order: 2; width: 252px; background: var(--navy); color: #243b5b; padding: 12px 10px; display: flex; flex-direction: column; gap: 14px; border-left: 1px solid #b8c9dd; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 0 10px 12px; border-bottom: 1px solid #b8c9dd; }
+    .brand-mark { width: 38px; height: 38px; border-radius: 12px; display:grid; place-items:center; color:#fff; font-weight:800; background: linear-gradient(135deg,#2686ed,#5db5ff); box-shadow: 0 5px 14px rgba(34,126,225,.3); }
+    .brand strong { display:block; color:#172b49; font-size:17px; }
+    .brand span { color:#59708f; font-size:11px; }
+    .section-label { color:#5d7493; font-size:11px; padding: 0 12px 4px; font-weight:700; }
+    .nav { display:flex; flex-direction:column; gap:4px; }
+    .nav-item { display:flex; align-items:center; gap:11px; padding:9px 12px; border-radius:5px; color:#304b70; text-decoration:none; border:1px solid transparent; }
+    .nav-item .ico { width:22px; text-align:center; font-size:17px; opacity:.9; }
+    .nav-item.active { color:#123f78; background:#fff; border-color:#abc4e2; box-shadow: inset -3px 0 0 #1769d2; font-weight:800; }
+    .nav-item:hover { background: rgba(255,255,255,.65); }
+    .sidebar-foot { margin-top:auto; border-top:1px solid #b8c9dd; padding:14px 10px 0; color:#59708f; font-size:12px; }
+    .main { order: 1; min-width:0; flex:1; display:flex; flex-direction:column; }
+    .topbar { height:58px; background:#e9f0f8; border-bottom:1px solid #b8c9dd; display:flex; align-items:center; gap:16px; padding:0 18px; }
+    .top-title { font-size:18px; font-weight:800; }
+    .top-sub { color:var(--muted); font-size:12px; margin-top:2px; }
+    .top-spacer { flex:1; }
+    .connection { display:flex; align-items:center; gap:7px; padding:7px 11px; border-radius:8px; color:var(--green); background:var(--green-soft); font-size:12px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:#20a56e; }
+    .top-icon { border:0; background:transparent; color:#596b83; font-size:18px; }
+    .user { display:flex; align-items:center; gap:8px; border-right:1px solid var(--line); padding-right:15px; }
+    .avatar { width:31px; height:31px; display:grid; place-items:center; border-radius:50%; background:var(--blue); color:#fff; font-weight:700; }
+    .user small { color:var(--muted); display:block; font-size:11px; }
+    .content { padding:12px 18px 18px; display:flex; flex-direction:column; gap:10px; min-height:0; }
+    .toolbar { display:flex; align-items:center; gap:10px; }
+    .toolbar h1 { font-size:20px; margin:0; }
+    .toolbar small { color:var(--muted); }
+    .toolbar-spacer { flex:1; }
+    .btn { border:1px solid #a9bdd5; background:linear-gradient(#fff,#edf3f9); color:#223958; border-radius:3px; padding:8px 13px; cursor:pointer; display:inline-flex; align-items:center; gap:7px; font-weight:700; }
+    .btn:hover { border-color:#9cb6d5; }
+    .btn.primary { background:linear-gradient(#2d83df,#125caf); color:#fff; border-color:#0e559f; box-shadow:0 2px 4px rgba(23,105,210,.2); }
+    .btn.success { background:var(--green); color:#fff; border-color:var(--green); }
+    .tabs { display:flex; align-items:center; gap:2px; background:#dce7f3; border:1px solid #b9c9dc; border-radius:4px; padding:3px; overflow:hidden; }
+    .tab { background:transparent; border:0; border-radius:3px; padding:8px 14px; color:#526b8b; cursor:pointer; white-space:nowrap; }
+    .tab.active { background:#fff; color:#173f72; box-shadow:0 1px 3px rgba(35,58,89,.15); font-weight:800; border:1px solid #aac2df; }
+    .tab b { background:var(--blue-soft); color:var(--blue); border-radius:5px; padding:2px 6px; margin-left:6px; font-size:11px; }
+    .filters { display:grid; grid-template-columns:minmax(280px,1fr) 210px 175px auto; gap:6px; }
+    .input-wrap { position:relative; }
+    .input-wrap span { position:absolute; right:12px; top:10px; color:#71839a; font-size:17px; }
+    input, select { width:100%; height:36px; border:1px solid #aebfd3; border-radius:3px; background:#fff; color:var(--ink); padding:0 10px; outline:0; }
+    .input-wrap input { padding-right:38px; }
+    input:focus, select:focus { border-color:#5797dc; box-shadow:0 0 0 3px rgba(23,105,210,.12); }
+    .workspace { display:grid; grid-template-columns:minmax(0,1fr) 335px; gap:15px; min-height:560px; }
+    .card { background:var(--surface); border:1px solid #b9c9dc; border-radius:4px; box-shadow:0 2px 5px rgba(21,42,73,.08); overflow:hidden; }
+    .card-head { display:flex; align-items:center; justify-content:space-between; padding:14px 17px; border-bottom:1px solid var(--line); }
+    .card-head strong { font-size:15px; }
+    .card-head small { color:var(--muted); }
+    .items { min-width:0; }
+    table { width:100%; border-collapse:collapse; }
+    th { background:#f7f9fc; color:#5f7087; font-size:12px; font-weight:700; padding:11px 12px; text-align:right; white-space:nowrap; }
+    td { padding:10px 12px; border-top:1px solid #edf1f5; vertical-align:middle; }
+    tr.selected { background:#f0f6ff; box-shadow:inset -3px 0 var(--blue); }
+    .check { width:17px; height:17px; accent-color:var(--blue); }
+    .product { display:flex; align-items:center; gap:9px; min-width:170px; }
+    .product-icon { width:31px; height:31px; border-radius:7px; display:grid; place-items:center; background:#eef4fb; color:var(--blue); font-size:15px; }
+    .product strong { display:block; font-size:13px; }
+    .product small { color:var(--muted); font-size:11px; }
+    .number-input { height:32px; width:68px; text-align:center; padding:0 5px; font-weight:700; }
+    .money-input { height:32px; width:130px; direction:ltr; text-align:right; padding:0 8px; font-weight:700; }
+    .price { direction:ltr; text-align:right; font-weight:700; white-space:nowrap; }
+    .green { color:var(--green); }
+    .amber { color:var(--amber); }
+    .badge { display:inline-flex; align-items:center; gap:4px; border-radius:5px; padding:3px 7px; font-size:10px; font-weight:700; white-space:nowrap; }
+    .badge.green { background:var(--green-soft); }
+    .badge.amber { background:var(--amber-soft); }
+    .table-foot { display:flex; justify-content:space-between; align-items:center; padding:13px 17px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+    .customer-card { display:flex; flex-direction:column; }
+    .customer-head { display:flex; gap:10px; align-items:center; padding:12px 13px; background:#edf4fb; border-bottom:1px solid #b9c9dc; }
+    .customer-avatar { width:43px; height:43px; display:grid; place-items:center; border-radius:50%; background:#dcecff; color:var(--blue); font-size:19px; font-weight:800; }
+    .customer-head strong { display:block; font-size:15px; }
+    .customer-head small { color:var(--muted); direction:ltr; display:block; margin-top:3px; }
+    .head-actions { margin-right:auto; display:flex; gap:5px; }
+    .mini-btn { border:1px solid var(--line); background:#fff; color:var(--blue); border-radius:6px; padding:6px 8px; font-size:11px; cursor:pointer; }
+    .finance { padding:13px 15px; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .metric { background:#f7f9fc; border-radius:7px; padding:8px 9px; }
+    .metric small { color:var(--muted); display:block; font-size:11px; }
+    .metric strong { display:block; margin-top:3px; font-size:13px; direction:ltr; text-align:right; }
+    .customer-section { border-top:1px solid var(--line); padding:13px 15px; }
+    .section-title { display:flex; justify-content:space-between; align-items:center; margin-bottom:9px; font-weight:800; font-size:13px; }
+    .section-title a { color:var(--blue); font-size:11px; text-decoration:none; }
+    .invoice { display:flex; justify-content:space-between; align-items:center; border:1px solid var(--line); border-radius:7px; padding:9px; margin-top:7px; cursor:pointer; }
+    .invoice:hover, .invoice.active { border-color:#72a8e0; background:#f4f9ff; }
+    .invoice strong { display:block; font-size:12px; }
+    .invoice small { color:var(--muted); font-size:11px; }
+    .invoice .amount { color:var(--blue); font-weight:800; direction:ltr; }
+    .total { margin-top:auto; padding:15px; background:#f7f9fc; border-top:1px solid var(--line); }
+    .total-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:7px; color:var(--muted); font-size:12px; }
+    .total-row.final { color:var(--ink); font-size:16px; font-weight:800; margin:12px 0; }
+    .total-row.final strong { color:var(--blue); direction:ltr; }
+    .checkout { width:100%; justify-content:center; height:43px; font-size:14px; }
+    .shortcuts { display:flex; align-items:center; gap:15px; color:var(--muted); font-size:11px; padding:0 2px; }
+    kbd { border:1px solid #cbd5e1; background:#fff; border-radius:4px; padding:2px 5px; color:#46566c; font-size:10px; }
+    @media (max-width: 1050px) { .sidebar { width:205px; } .workspace { grid-template-columns:minmax(0,1fr) 290px; } .filters { grid-template-columns:1fr 170px auto; } .filters select { display:none; } .product { min-width:130px; } }
+    @media (max-width: 780px) { .sidebar { display:none; } .content { padding:15px; } .topbar { padding:0 15px; } .workspace { grid-template-columns:1fr; } .customer-card { min-height:400px; } .filters { grid-template-columns:1fr auto; } .filters select { display:block; } .toolbar small { display:none; } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">ک</div><div><strong>کاردو</strong><span>فروش و انبارداری</span></div></div>
+      <div><div class="section-label">دسترسی سریع</div><nav class="nav"><a class="nav-item active" href="#"><span class="ico">▣</span>صندوق فروش</a><a class="nav-item" href="#"><span class="ico">◉</span>مشتریان</a><a class="nav-item" href="#"><span class="ico">▤</span>فاکتورها</a></nav></div>
+      <div><div class="section-label">مدیریت فروشگاه</div><nav class="nav"><a class="nav-item" href="#"><span class="ico">▦</span>کالا و انبار</a><a class="nav-item" href="#"><span class="ico">⇄</span>خرید و تأمین</a><a class="nav-item" href="#"><span class="ico">₮</span>دریافت و پرداخت</a><a class="nav-item" href="#"><span class="ico">◒</span>گزارش‌ها</a></nav></div>
+      <div class="sidebar-foot">نسخه ۰٫۸٫۰<br><span>آخرین همگام‌سازی: همین حالا</span></div>
+    </aside>
+    <main class="main">
+      <header class="topbar"><div><div class="top-title">صندوق فروش</div><div class="top-sub">ثبت سریع فروش و مدیریت فاکتور</div></div><div class="top-spacer"></div><div class="connection"><span class="dot"></span>اتصال برقرار است</div><button class="top-icon">◐</button><button class="top-icon">⚙</button><div class="user"><div class="avatar">م</div><div><strong>محمد رضایی</strong><small>فروشنده</small></div></div></header>
+      <section class="content">
+        <div class="toolbar"><div><h1>فاکتورهای باز</h1><small>فاکتور را انتخاب کنید یا فروش جدید شروع کنید</small></div><div class="toolbar-spacer"></div><button class="btn">⊞ مشتری جدید</button><button class="btn primary">＋ فاکتور جدید</button></div>
+        <div class="tabs"><button class="tab active"><b>۱</b> علی اکبری <span class="badge amber">حساب باز</span></button><button class="tab"><b>۲</b> مشتری گذری</button><button class="tab"><b>۳</b> شرکت پارس</button><button class="tab">＋ فاکتور جدید</button></div>
+        <div class="filters"><div class="input-wrap"><span>⌕</span><input value="" placeholder="بارکد یا نام کالا را وارد کنید…" /></div><select><option>انبار اصلی</option></select><select><option>همه دسته‌ها</option></select><button class="btn">فیلترها ⌄</button></div>
+        <div class="workspace">
+          <section class="card items"><div class="card-head"><div><strong>اقلام فاکتور</strong><small> · ۴ قلم</small></div><button class="btn">+ افزودن کالا</button></div><table><thead><tr><th style="width:34px"></th><th>کالا و محل نگهداری</th><th>تعداد</th><th>قیمت واحد (ریال)</th><th>تخفیف</th><th>جمع</th><th style="width:40px"></th></tr></thead><tbody>
+            <tr class="selected"><td><input class="check" type="checkbox" checked /></td><td><div class="product"><div class="product-icon">⚙</div><div><strong>فیلتر روغن پژو ۴۰۵</strong><small>انبار اصلی / قفسه A-12 · <span class="green">موجودی ۲۴</span></small></div></div></td><td><input class="number-input" value="۲" /></td><td><input class="money-input" value="۱٬۸۵۰٬۰۰۰" /></td><td><span class="badge green">۵٪</span></td><td class="price">۳٬۵۱۵٬۰۰۰</td><td>⋮</td></tr>
+            <tr><td><input class="check" type="checkbox" checked /></td><td><div class="product"><div class="product-icon">◈</div><div><strong>لنت ترمز جلو سمند</strong><small>انبار اصلی / قفسه B-04 · <span class="amber">موجودی ۳</span></small></div></div></td><td><input class="number-input" value="۱" /></td><td><input class="money-input" value="۳٬۲۰۰٬۰۰۰" /></td><td><span class="badge">بدون تخفیف</span></td><td class="price">۳٬۲۰۰٬۰۰۰</td><td>⋮</td></tr>
+            <tr><td><input class="check" type="checkbox" checked /></td><td><div class="product"><div class="product-icon">◫</div><div><strong>روغن موتور اسپیدی ۴ لیتری</strong><small>انبار اصلی / قفسه C-02 · <span class="green">موجودی ۱۸</span></small></div></div></td><td><input class="number-input" value="۱" /></td><td><input class="money-input" value="۲٬۷۵۰٬۰۰۰" /></td><td><span class="badge">بدون تخفیف</span></td><td class="price">۲٬۷۵۰٬۰۰۰</td><td>⋮</td></tr>
+            <tr><td><input class="check" type="checkbox" /></td><td><div class="product"><div class="product-icon">◇</div><div><strong>لامپ چراغ جلو H7</strong><small>این قلم فعلاً از فاکتور کنار گذاشته شده</small></div></div></td><td><input class="number-input" value="۱" /></td><td><input class="money-input" value="۹۵۰٬۰۰۰" /></td><td><span class="badge">بدون تخفیف</span></td><td class="price">۹۵۰٬۰۰۰</td><td>⋮</td></tr>
+          </tbody></table><div class="table-foot"><span>برای تغییر ردیف، روی آن کلیک کنید · با Enter به فیلد بعدی بروید</span><strong>۳ قلم انتخاب شده</strong></div></section>
+          <aside class="card customer-card"><div class="customer-head"><div class="customer-avatar">ع</div><div><strong>علی اکبری</strong><small>۰۹۱۲ ۱۲۳ ۴۵۶۷</small></div><div class="head-actions"><button class="mini-btn">فاکتورها</button><button class="mini-btn">پرونده ↗</button></div></div><div class="finance"><div class="metric"><small>بدهی فعلی</small><strong class="amber">۲۴٬۸۰۰٬۰۰۰ ریال</strong></div><div class="metric"><small>سقف اعتبار</small><strong>۵۰٬۰۰۰٬۰۰۰ ریال</strong></div><div class="metric"><small>مانده اعتبار</small><strong class="green">۲۵٬۲۰۰٬۰۰۰ ریال</strong></div><div class="metric"><small>خرید امروز</small><strong>۳ فاکتور</strong></div></div><div class="customer-section"><div class="section-title"><span>آخرین فاکتورها</span><a href="#">مشاهده همه</a></div><div class="invoice active"><div><strong>فاکتور ۱۰۲۴۵</strong><small>امروز · ساعت ۱۰:۳۲ · ۴ قلم</small></div><span class="amount">۸٬۴۵۰٬۰۰۰</span></div><div class="invoice"><div><strong>فاکتور ۱۰۱۹۸</strong><small>دیروز · ۶ قلم</small></div><span class="amount">۱۲٬۷۰۰٬۰۰۰</span></div><div class="invoice"><div><strong>فاکتور ۱۰۱۶۰</strong><small>۲ روز پیش · تسویه‌شده</small></div><span class="amount">۴٬۲۵۰٬۰۰۰</span></div></div><div class="total"><div class="total-row"><span>جمع اقلام</span><strong>۹٬۴۶۵٬۰۰۰</strong></div><div class="total-row"><span>تخفیف فاکتور</span><strong class="green">− ۴۷۵٬۰۰۰</strong></div><div class="total-row final"><span>مبلغ قابل پرداخت</span><strong>۸٬۹۹۰٬۰۰۰ ریال</strong></div><button class="btn success checkout">ثبت و تسویه <span>F2</span> ←</button></div></aside>
+        </div>
+        <div class="shortcuts"><span><kbd>F2</kbd> تسویه</span><span><kbd>F4</kbd> انتخاب مشتری</span><span><kbd>F7</kbd> پرداخت</span><span><kbd>F10</kbd> فاکتورهای امروز</span><span style="margin-right:auto">حالت خوانا · اندازه ۱۰۰٪</span></div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

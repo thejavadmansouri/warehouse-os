@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { createCorrection, getCorrectableLines } from "@/lib/api";
 import { money, rial, toFa, faToEn } from "@/lib/format";
 import { ApiException } from "@/lib/api-error-messages";
+import { EditDiffSummary, type EditDiffRow } from "./edit-diff-summary";
 
 /**
  * اصلاحیه‌ی فاکتور — تصحیحِ قیمت/تعدادِ یک فاکتورِ نهایی با سندِ جدا.
@@ -35,6 +36,8 @@ export function CorrectionDialog({
   const [priceById, setPriceById] = useState<Record<string, string>>({});
   const [reason, setReason] = useState("");
   const [note, setNote] = useState("");
+  // «ویرایش» یا مرحله‌ی تأییدِ قبل‌از-ثبت («قبل ← بعد»).
+  const [step, setStep] = useState<"edit" | "confirm">("edit");
 
   // هر بار سند عوض شد، فرم قبلی نباید به فاکتور جدید نشت کند.
   useEffect(() => {
@@ -42,6 +45,7 @@ export function CorrectionDialog({
     setPriceById({});
     setReason("");
     setNote("");
+    setStep("edit");
   }, [invoiceId]);
 
   const data = useQuery({
@@ -72,6 +76,23 @@ export function CorrectionDialog({
         const { qty, price } = parseNew(l.saleLogId, qtyById, priceById, l);
         return sum + (qty * price - l.oldQuantity * l.oldUnitPrice);
       }, 0),
+    [changedLines, qtyById, priceById],
+  );
+
+  // ردیف‌های «قبل ← بعد» برای مرحله‌ی تأیید.
+  const diffRows = useMemo<EditDiffRow[]>(
+    () =>
+      changedLines.map((l) => {
+        const { qty, price } = parseNew(l.saleLogId, qtyById, priceById, l);
+        return {
+          productName: l.product.name,
+          oldQuantity: l.oldQuantity,
+          newQuantity: qty,
+          oldUnitPrice: l.oldUnitPrice,
+          newUnitPrice: price,
+          unit: l.product.unit ?? "عدد",
+        };
+      }),
     [changedLines, qtyById, priceById],
   );
 
@@ -153,132 +174,186 @@ export function CorrectionDialog({
               </div>
             )}
 
-            <p className="text-xs text-muted-foreground">
-              فقط ردیف‌هایی که تغییر می‌دهید ارسال می‌شوند؛ فاکتور اصلی دست نمی‌خورد و
-              دفتر و موجودی به‌اندازه‌ی همان تغییر جبران می‌شود. افزایش تعداد یعنی
-              کسر بیشتر از انبار، کاهش یعنی برگشت.
-            </p>
+            {step === "edit" && (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  فقط ردیف‌هایی که تغییر می‌دهید ارسال می‌شوند؛ فاکتور اصلی دست
+                  نمی‌خورد و دفتر و موجودی به‌اندازه‌ی همان تغییر جبران می‌شود.
+                  افزایش تعداد یعنی کسر بیشتر از انبار، کاهش یعنی برگشت.
+                </p>
 
-            <div className="max-h-[45vh] overflow-y-auto rounded-lg border">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted/60 backdrop-blur">
-                  <tr className="text-muted-foreground">
-                    <th className="p-2 text-start font-medium">کالا</th>
-                    <th className="w-20 p-2 text-center font-medium">فعلی</th>
-                    <th className="w-24 p-2 text-center font-medium">تعداد جدید</th>
-                    <th className="w-28 p-2 text-center font-medium">قیمت جدید</th>
-                    <th className="w-28 p-2 text-end font-medium">اثر</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l) => {
-                    const changed = changedLines.some((c) => c.saleLogId === l.saleLogId);
-                    return (
-                      <tr
-                        key={l.saleLogId}
-                        className={`border-t ${changed ? "bg-primary/5" : ""}`}
-                      >
-                        <td className="p-2">
-                          <div className="font-medium">{l.product.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {money(l.oldUnitPrice)} / واحد
-                            {l.correctedBy !== 0 && (
-                              <span className="ms-2 text-primary">
-                                اصلاح شده: {toFa(l.correctedBy)}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="p-2 text-center tabular-nums">
-                          {toFa(l.oldQuantity)}
-                        </td>
-                        <td className="p-2">
-                          <Input
-                            inputMode="numeric"
-                            value={qtyById[l.saleLogId] ?? ""}
-                            onChange={(e) =>
-                              setQtyById((m) => ({ ...m, [l.saleLogId]: e.target.value }))
-                            }
-                            placeholder={toFa(l.oldQuantity)}
-                            className="h-9 text-center tabular-nums"
-                          />
-                        </td>
-                        <td className="p-2">
-                          <Input
-                            inputMode="numeric"
-                            value={priceById[l.saleLogId] ?? ""}
-                            onChange={(e) =>
-                              setPriceById((m) => ({
-                                ...m,
-                                [l.saleLogId]: e.target.value,
-                              }))
-                            }
-                            placeholder={toFa(l.oldUnitPrice)}
-                            className="h-9 text-center tabular-nums ltr"
-                          />
-                        </td>
-                        <td className="p-2 text-end font-semibold tabular-nums">                              {changed ? money(lineEffect(l, qtyById, priceById)) : "—"}
-                        </td>
+                <div className="max-h-[45vh] overflow-y-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-muted/60 backdrop-blur">
+                      <tr className="text-muted-foreground">
+                        <th className="p-2 text-start font-medium">کالا</th>
+                        <th className="w-20 p-2 text-center font-medium">فعلی</th>
+                        <th className="w-24 p-2 text-center font-medium">تعداد جدید</th>
+                        <th className="w-28 p-2 text-center font-medium">قیمت جدید</th>
+                        <th className="w-28 p-2 text-end font-medium">اثر</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody>
+                      {lines.map((l) => {
+                        const changed = changedLines.some((c) => c.saleLogId === l.saleLogId);
+                        return (
+                          <tr
+                            key={l.saleLogId}
+                            className={`border-t ${changed ? "bg-primary/5" : ""}`}
+                          >
+                            <td className="p-2">
+                              <div className="font-medium">{l.product.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {money(l.oldUnitPrice)} / واحد
+                                {l.correctedBy !== 0 && (
+                                  <span className="ms-2 text-primary">
+                                    اصلاح شده: {toFa(l.correctedBy)}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-2 text-center tabular-nums">
+                              {toFa(l.oldQuantity)}
+                            </td>
+                            <td className="p-2">
+                              <Input
+                                inputMode="numeric"
+                                value={qtyById[l.saleLogId] ?? ""}
+                                onChange={(e) =>
+                                  setQtyById((m) => ({ ...m, [l.saleLogId]: e.target.value }))
+                                }
+                                placeholder={toFa(l.oldQuantity)}
+                                className="h-9 text-center tabular-nums"
+                              />
+                            </td>
+                            <td className="p-2">
+                              <Input
+                                inputMode="numeric"
+                                value={priceById[l.saleLogId] ?? ""}
+                                onChange={(e) =>
+                                  setPriceById((m) => ({
+                                    ...m,
+                                    [l.saleLogId]: e.target.value,
+                                  }))
+                                }
+                                placeholder={toFa(l.oldUnitPrice)}
+                                className="h-9 text-center tabular-nums ltr"
+                              />
+                            </td>
+                            <td className="p-2 text-end font-semibold tabular-nums">                              {changed ? money(lineEffect(l, qtyById, priceById)) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">
-                  دلیل اصلاحیه (اجباری)
-                </label>
-                <Input
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  maxLength={200}
-                  placeholder="مثلاً: قیمت پایه اشتباه ثبت شده بود"
-                  className="h-10"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">
-                  توضیح (اختیاری)
-                </label>
-                <Input
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  maxLength={300}
-                  placeholder="…"
-                  className="h-10"
-                />
-              </div>
-            </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">
+                      دلیل اصلاحیه (اجباری)
+                    </label>
+                    <Input
+                      value={reason}
+                      onChange={(e) => setReason(e.target.value)}
+                      maxLength={200}
+                      placeholder="مثلاً: قیمت پایه اشتباه ثبت شده بود"
+                      className="h-10"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs text-muted-foreground">
+                      توضیح (اختیاری)
+                    </label>
+                    <Input
+                      value={note}
+                      onChange={(e) => setNote(e.target.value)}
+                      maxLength={300}
+                      placeholder="…"
+                      className="h-10"
+                    />
+                  </div>
+                </div>
 
-            <div className="flex items-center justify-between border-t pt-3">
-              <div className="text-sm">
-                اثر اصلاحیه:{" "}
-                <span className={`font-bold tabular-nums ${adjustPreview < 0 ? "text-primary" : "text-amber-600"}`}>
-                  {rial(adjustPreview > 0 ? adjustPreview : -adjustPreview)}
-                </span>
-                {adjustPreview > 0 && (
-                  <span className="ms-2 text-xs text-amber-600">
-                    (بدهیِ مشتری زیاد می‌شود)
-                  </span>
+                <div className="flex items-center justify-between border-t pt-3">
+                  <div className="text-sm">
+                    اثر اصلاحیه:{" "}
+                    <span className={`font-bold tabular-nums ${adjustPreview < 0 ? "text-primary" : "text-amber-600"}`}>
+                      {rial(adjustPreview > 0 ? adjustPreview : -adjustPreview)}
+                    </span>
+                    {adjustPreview > 0 && (
+                      <span className="ms-2 text-xs text-amber-600">
+                        (بدهیِ مشتری زیاد می‌شود)
+                      </span>
+                    )}
+                    {adjustPreview < 0 && (
+                      <span className="ms-2 text-xs text-primary">
+                        (بدهیِ مشتری کم می‌شود)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" disabled={submit.isPending} onClick={onClose}>
+                      انصراف
+                    </Button>
+                    <Button
+                      disabled={changedLines.length === 0}
+                      onClick={() => setStep("confirm")}
+                    >
+                      ادامه و بررسی
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {step === "confirm" && invoice && (
+              <>
+                <div className="max-h-[45vh] overflow-y-auto rounded-lg border p-3">
+                  <EditDiffSummary
+                    rows={diffRows}
+                    netAdjust={adjustPreview}
+                    invoiceNumber={invoice.number}
+                  />
+                </div>
+
+                {(reason.trim() || note.trim()) && (
+                  <div className="rounded-lg bg-muted/40 p-3 text-sm">
+                    {reason.trim() && (
+                      <p>
+                        <span className="text-muted-foreground">دلیل: </span>
+                        {reason}
+                      </p>
+                    )}
+                    {note.trim() && (
+                      <p className="mt-1">
+                        <span className="text-muted-foreground">توضیح: </span>
+                        {note}
+                      </p>
+                    )}
+                  </div>
                 )}
-                {adjustPreview < 0 && (
-                  <span className="ms-2 text-xs text-primary">
-                    (بدهیِ مشتری کم می‌شود)
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" disabled={submit.isPending} onClick={onClose}>
-                  انصراف
-                </Button>
-                <Button disabled={!canSubmit} onClick={() => submit.mutate()}>
-                  {submit.isPending ? "در حال ثبت…" : "ثبت اصلاحیه"}
-                </Button>
-              </div>
-            </div>
+
+                <div className="flex items-center justify-between border-t pt-3">
+                  <p className="text-sm text-muted-foreground">
+                    با ثبت، یک اصلاحیه با این اثر مالی صادر می‌شود.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      disabled={submit.isPending}
+                      onClick={() => setStep("edit")}
+                    >
+                      بازگشت
+                    </Button>
+                    <Button disabled={!canSubmit} onClick={() => submit.mutate()}>
+                      {submit.isPending ? "در حال ثبت…" : "تأیید و ثبت اصلاحیه"}
+                    </Button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
       </DialogContent>

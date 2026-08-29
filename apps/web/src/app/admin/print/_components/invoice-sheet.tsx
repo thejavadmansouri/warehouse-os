@@ -44,37 +44,36 @@ export function InvoiceSheet({
       <div className={`sheet ${size}`} dir="rtl">
         {cancelled && <div className="void">باطل شده</div>}
 
+        {/*
+          سربرگ، مشخصات و خریدار در یک نوار.
+
+          قبلاً سه بلوکِ جدا بودند (عنوان + جدولِ شماره/تاریخ + بخشِ خریدار) و
+          روی A5 نزدیک یک‌سومِ برگه را می‌گرفتند پیش از آنکه اولین قلم بیاید.
+          محتوا همان است، فقط دیگر هرکدام سطرِ خودشان را نمی‌خواهند.
+        */}
         <header className="head">
-          <div>
+          <div className="head-shop">
             <div className="title">فاکتور فروش</div>
             <ShopHeader fallbackName={inv.warehouse?.name} />
           </div>
-          <table className="meta">
-            <tbody>
-              <tr>
-                <td className="muted">شماره</td>
-                <td className="num strong">{toFa(inv.number)}</td>
-              </tr>
-              <tr>
-                <td className="muted">تاریخ</td>
-                <td className="num">{faDate(inv.createdAt)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </header>
 
-        <section className="party">
-          <div>
-            <span className="muted">خریدار: </span>
-            <span className="strong">{inv.customer?.fullName ?? "مشتری نقدی"}</span>
-          </div>
-          {inv.customer?.phones?.[0]?.phone && (
-            <div dir="ltr" className="num muted">
-              {toFa(inv.customer.phones[0].phone)}
+          <div className="head-meta">
+            <div>
+              <span className="muted">شماره </span>
+              <span className="num strong">{toFa(inv.number)}</span>
+              <span className="muted"> · تاریخ </span>
+              <span className="num">{faDate(inv.createdAt)}</span>
             </div>
-          )}
-          {inv.user && <div className="muted">فروشنده: {inv.user.fullName}</div>}
-        </section>
+            <div>
+              <span className="muted">خریدار </span>
+              <span className="strong">{inv.customer?.fullName ?? "مشتری نقدی"}</span>
+              {inv.customer?.phones?.[0]?.phone && (
+                <span className="num muted"> · {toFa(inv.customer.phones[0].phone)}</span>
+              )}
+            </div>
+            {inv.user && <div className="muted">فروشنده: {inv.user.fullName}</div>}
+          </div>
+        </header>
 
         <table className="items">
           <thead>
@@ -100,6 +99,8 @@ export function InvoiceSheet({
                     {l.product?.sku && (
                       <span className="muted sku"> · کد {toFa(l.product.sku)}</span>
                     )}
+                    {/* توضیحِ دستیِ فروشنده — خطِ دوم، ریزتر. */}
+                    {l.lineNote && <div className="line-note">{l.lineNote}</div>}
                   </td>
                   <td className="num center">
                     {qty(q)} {l.product?.unit ?? ""}
@@ -157,22 +158,29 @@ export function InvoiceSheet({
           </table>
         </section>
 
-        {(inv.payments ?? []).length > 0 && (
-          <section className="pay muted">
-            نحوه‌ی پرداخت:{" "}
-            {inv.payments!
-              .map((p) => `${PAYMENT_LABELS[p.method] ?? p.method} ${money(p.amount)}`)
-              .join(" · ")}
-          </section>
-        )}
+        {/*
+          پرداخت، توضیح، اطلاعات بانکی و امضاها — یک ردیفِ سه‌ستونه به‌جای
+          چهار بلوکِ پشتِ‌سرِ‌هم. روی A5 همین چهار بلوک بود که برگه را به
+          صفحه‌ی دوم می‌برد، حتی وقتی فقط شش قلم داشت.
+        */}
+        <footer className="foot">
+          <div className="foot-col">
+            {(inv.payments ?? []).length > 0 && (
+              <div className="muted">
+                پرداخت:{" "}
+                {inv.payments!
+                  .map((p) => `${PAYMENT_LABELS[p.method] ?? p.method} ${money(p.amount)}`)
+                  .join(" · ")}
+              </div>
+            )}
+            {inv.note && <div className="muted">توضیح: {inv.note}</div>}
+            <ShopPaymentInfo />
+          </div>
 
-        {inv.note && <section className="note">توضیح: {inv.note}</section>}
-
-        <ShopPaymentInfo />
-
-        <footer className="sign">
-          <div>مهر و امضای فروشنده</div>
-          <div>امضای خریدار</div>
+          <div className="foot-sign">
+            <div>مهر و امضای فروشنده</div>
+            <div>امضای خریدار</div>
+          </div>
         </footer>
 
         <div className="credit">نرم‌افزار کاردو</div>

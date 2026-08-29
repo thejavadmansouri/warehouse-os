@@ -9,11 +9,13 @@ import { Prisma, InvoiceStatus, LedgerEntryType, Role } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { SystemLocationsService } from '../inventory/system-locations.service';
 import { LedgerService } from './ledger.service';
 import { inLockOrder } from '../common/lock-order';
 import { EventsGateway } from '../realtime/events.gateway';
 
 import { CreateCorrectionDto } from './dto/create-correction.dto';
+import { lineBalances } from './line-balance';
 
 
 /**
@@ -30,6 +32,7 @@ export class CorrectionsService {
   constructor(
     private prisma: PrismaService,
     private operation: InventoryOperationService,
+    private systemLocations: SystemLocationsService,
     private ledger: LedgerService,
     private realtime: EventsGateway,
   ) {}
@@ -74,14 +77,11 @@ export class CorrectionsService {
       },
     });
 
-    // اثرِ اصلاحیه‌های قبلی روی هر ردیف — جمعِ دلتاها، ساده و قطعی.
-    const deltas = await this.prisma.saleCorrectionLine.groupBy({
-      by: ['saleLogId'],
-      where: { saleLogId: { in: saleLines.map((l) => l.id) } },
-      _sum: { newQuantity: true, oldQuantity: true },
-    });
-    const sumByLog = new Map(
-      deltas.map((d) => [d.saleLogId, (d._sum.newQuantity ?? 0) - (d._sum.oldQuantity ?? 0)])
+    // مانده‌ی هر ردیف — چراییِ سه‌جزئی‌بودنش در line-balance.ts نوشته شده.
+    const balances = await lineBalances(
+      this.prisma,
+      saleLines.map((l) => l.id),
+      new Map(saleLines.map((l) => [l.id, l.quantity])),
     );
 
     // آخرین اصلاحیه روی هر ردیف — برای «قیمتِ فعلی» (در صورت گران‌کردن).
@@ -96,16 +96,18 @@ export class CorrectionsService {
     }
 
     const lines = saleLines.map((l) => {
-      const sold = l.quantity + (sumByLog.get(l.id) ?? 0);
+      const b = balances.get(l.id)!;
       const currentPrice = lastPriceByLog.get(l.id) ?? l.unitPrice ?? 0;
       return {
         saleLogId: l.id,
         product: l.product,
         location: l.location,
-        oldQuantity: sold,
+        lineNote: l.lineNote,
+        // آنچه فروشنده می‌بیند و ویرایش می‌کند = آنچه واقعاً دستِ مشتری است.
+        oldQuantity: b.outstanding,
         oldUnitPrice: currentPrice,
-        sold: l.quantity,
-        correctedBy: sumByLog.get(l.id) ?? 0,
+        sold: b.sold,
+        correctedBy: b.correctionDelta,
       };
     });
 
@@ -156,6 +158,13 @@ export class CorrectionsService {
       if (existing) return this.findOne(existing.id);
     }
 
+    if (!dto.lines.length && !dto.addedLines?.length) {
+      throw new BadRequestException({
+        error: 'EMPTY_CORRECTION',
+        message: 'اصلاحیه باید دست‌کم یک ردیف داشته باشد',
+      });
+    }
+
     const seen = new Set<string>();
     for (const line of dto.lines) {
       if (seen.has(line.saleLogId)) {
@@ -180,6 +189,8 @@ export class CorrectionsService {
             status: true,
             subtotal: true,
             discount: true,
+            total: true,
+            paidAmount: true,
             customerId: true,
             warehouseId: true,
             dueAmount: true,
@@ -232,13 +243,11 @@ export class CorrectionsService {
 
         // اثرِ اصلاحیه‌های قبلی روی هر ردیف (تعداد فعلی و آخرین قیمتِ تصحیح‌شده)،
         // تا «از چه» یعنی وضعیتِ واقعیِ الان، نه نسخه‌ی کهنه.
-        const deltas = await tx.saleCorrectionLine.groupBy({
-          by: ['saleLogId'],
-          where: { saleLogId: { in: saleLines.map((l) => l.id) } },
-          _sum: { newQuantity: true, oldQuantity: true },
-        });
-        const deltaByLog = new Map(
-          deltas.map((d) => [d.saleLogId, (d._sum.newQuantity ?? 0) - (d._sum.oldQuantity ?? 0)])
+        // همان تعریفِ واحدِ مانده که مسیرِ خواندن هم از آن می‌خواند.
+        const balances = await lineBalances(
+          tx,
+          saleLines.map((l) => l.id),
+          new Map(saleLines.map((l) => [l.id, l.quantity])),
         );
 
         const prevCorrections = await tx.saleCorrectionLine.findMany({
@@ -273,25 +282,15 @@ export class CorrectionsService {
             });
           }
 
-          const oldQty = sale.quantity + (deltaByLog.get(sale.id) ?? 0);
-          // سقف: نمی‌توانی از «فروشِ اصلی − مرجوعی‌شده» هم کمتر بکنی.
-          const returned = await tx.saleReturnLine.aggregate({
-            where: { saleLogId: sale.id },
-            _sum: { quantity: true },
-          });
-          const alreadyReturned = returned._sum.quantity ?? 0;
-          const minQty = alreadyReturned;
-
-          if (line.newQuantity < minQty) {
-            throw new ConflictException({
-              error: 'CORRECTION_BELOW_RETURNED',
-              saleLogId: sale.id,
-              alreadyReturned,
-              minimum: minQty,
-              requested: line.newQuantity,
-              message: `تعداد از مرجوعیِ ثبت‌شده کم‌تر نمی‌شود (حداقل ${minQty})`,
-            });
-          }
+          /*
+           * «از چه» همان مانده است، نه فروشِ اصلی.
+           *
+           * قبلاً مرجوعی‌های ثبت‌شده کسر نمی‌شدند و یک نگهبانِ جداگانه
+           * (`CORRECTION_BELOW_RETURNED`) جلوی بدترین حالت را می‌گرفت. آن
+           * نگهبان حالا لازم نیست: وقتی مبنا خودِ مانده باشد، صفر یعنی «همه‌ی
+           * باقی‌مانده برگشت» و بیش از این هم ممکن نیست.
+           */
+          const oldQty = balances.get(sale.id)!.outstanding;
 
           const oldPrice = lastPriceByLog.get(sale.id) ?? sale.unitPrice ?? 0;
           const lineAdjust = line.newQuantity * line.newUnitPrice - oldQty * oldPrice;
@@ -318,7 +317,17 @@ export class CorrectionsService {
           });
         }
 
-        if (amountAdjust === 0) {
+        /*
+         * قلم‌های تازه پیش از ساختِ سند حساب می‌شوند چون `amountAdjust` روی
+         * خودِ رکوردِ اصلاحیه می‌نشیند و بعداً بازنویسی‌اش یعنی یک لحظه سندِ
+         * نادرست در پایگاه داده.
+         */
+        const added = dto.addedLines ?? [];
+        const addedAdjust = added.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0);
+        amountAdjust += addedAdjust;
+
+        // قلمِ تازه حتی با قیمت صفر یک تغییرِ واقعی است (جنس از انبار رفته).
+        if (amountAdjust === 0 && !added.length) {
           throw new BadRequestException({
             error: 'NO_AMOUNT_CHANGE',
             message: 'مجموعِ تغییرات صفر است — اصلاحیه‌ای ثبت نمی‌شود',
@@ -367,24 +376,143 @@ export class CorrectionsService {
           );
         }
 
-        // ----- جبران دفتر: بدهیِ مشتری به‌اندازه‌ی اصلاحیه کم/زیاد می‌شود. -----
-        if (invoice.customerId && amountAdjust !== 0) {
-          await this.ledger.record(tx, {
-            customerId: invoice.customerId,
-            type: LedgerEntryType.CORRECTION,
-            amount: amountAdjust,
-            invoiceId: invoice.id,
-            correctionId: correction.id,
-            userId: userId ?? null,
-            note: `اصلاحیه ${correction.number} — فاکتور ${invoice.number}: ${reason}`,
-          });
+        /*
+         * ----- قلم‌های تازه -----
+         *
+         * هر قلم دو چیز می‌سازد: یک لاگِ SALE که از این به بعد **جزو خودِ
+         * فاکتور** است (چون `invoiceId` می‌خورد، پس دفعه‌ی بعد در فهرستِ
+         * قابل‌اصلاح می‌آید)، و یک ردیفِ اصلاحیه‌ی ۰←N که علامتِ isNewLine
+         * دارد تا در جمعِ دلتاها دوباره شمرده نشود.
+         *
+         * موجودیِ منفی مجاز است، دقیقاً مثل خودِ فروش.
+         *
+         * قبلاً اینجا بسته بود و نتیجه‌اش این شد که یک کالا از صفحه‌ی فروش
+         * فروختنی بود ولی همان کالا به فاکتورِ در حالِ ویرایش اضافه نمی‌شد و
+         * خطای «موجودی کافی نیست (−۱)» می‌داد. عددِ منفی در این سیستم یعنی
+         * «جنس در انبار هست، هنوز ثبت نشده» — نه «نداریم».
+         */
+        if (added.length) {
+          const needsFallback = added.some((l) => !l.locationId);
+          const fallbackLocationId = needsFallback
+            ? await this.systemLocations.unregisteredStock(tx, invoice.warehouseId)
+            : null;
 
-          // مانده‌ی خودِ فاکتور هم هماهنگ می‌شود (مثل مرجوعی)؛ منفی نمی‌شود.
-          const newDue = Math.max(0, invoice.dueAmount + amountAdjust);
-          if (newDue !== invoice.dueAmount) {
+          const orderedAdds = inLockOrder(
+            added.map((line) => ({
+              line,
+              productId: line.productId,
+              locationId: line.locationId ?? fallbackLocationId!,
+            })),
+          );
+
+          for (const { line, productId, locationId } of orderedAdds) {
+            const res = await this.operation.execute(
+              {
+                type: 'SALE',
+                productId,
+                locationId,
+                quantity: line.quantity,
+                unitPrice: line.unitPrice,
+                invoiceId: invoice.id,
+                correctionId: correction.id,
+                userId: userId ?? null,
+                allowNegative: true,
+                source: 'SALE_CORRECTION',
+                note: `اصلاحیه ${correction.number} — قلم تازه در فاکتور ${invoice.number}`,
+              },
+              tx,
+            );
+
+            const saleLogId: string | undefined = res?.inventoryLogId;
+            if (!saleLogId) {
+              // بدون این شناسه، ردیفِ اصلاحیه به هیچ لاگی قفل نمی‌شود و کلِ
+              // حسابِ «تعدادِ فعلی» می‌لنگد. بهتر است تراکنش برگردد.
+              throw new BadRequestException({
+                error: 'ADD_LINE_FAILED',
+                productId,
+                message: 'ثبت قلم تازه ناموفق بود',
+              });
+            }
+
+            await tx.saleCorrectionLine.create({
+              data: {
+                correctionId: correction.id,
+                saleLogId,
+                productId,
+                locationId,
+                oldQuantity: 0,
+                newQuantity: line.quantity,
+                oldUnitPrice: 0,
+                newUnitPrice: line.unitPrice,
+                lineAdjust: line.quantity * line.unitPrice,
+                isNewLine: true,
+              },
+            });
+          }
+        }
+
+        /*
+         * ----- اثرِ مالی -----
+         *
+         * مبلغِ خودِ فاکتور همیشه جابه‌جا می‌شود، چه مشتری داشته باشد چه نه.
+         * پیش از این فقط دفترِ مشتری به‌روز می‌شد و `total` فاکتور دست‌نخورده
+         * می‌ماند؛ نتیجه‌اش این بود که فاکتورِ نقدیِ گذری بعد از اصلاح هیچ ردِ
+         * مالی نداشت — انبار درست کم می‌شد ولی هیچ‌جا ثبت نمی‌شد که پولِ
+         * بیشتری گرفته شده، و صندوق با سیستم اختلاف پیدا می‌کرد.
+         */
+        if (amountAdjust !== 0) {
+          const newSubtotal = invoice.subtotal + amountAdjust;
+          const newTotal = invoice.total + amountAdjust;
+
+          if (invoice.customerId) {
+            // دارای مشتری ⇒ اختلاف در دفترش می‌نشیند و مانده‌ی فاکتور هم همان‌قدر.
+            await this.ledger.record(tx, {
+              customerId: invoice.customerId,
+              type: LedgerEntryType.CORRECTION,
+              amount: amountAdjust,
+              invoiceId: invoice.id,
+              correctionId: correction.id,
+              userId: userId ?? null,
+              note: `اصلاحیه ${correction.number} — فاکتور ${invoice.number}: ${reason}`,
+            });
+
             await tx.saleInvoice.update({
               where: { id: invoice.id },
-              data: { dueAmount: newDue },
+              data: {
+                subtotal: newSubtotal,
+                total: newTotal,
+                // منفی نمی‌شود: اضافه‌پرداخت در دفترِ مشتری بستانکار می‌ماند.
+                dueAmount: Math.max(0, invoice.dueAmount + amountAdjust),
+              },
+            });
+          } else {
+            /*
+             * نقدیِ گذری ⇒ دفتری در کار نیست و پول همان لحظه ردوبدل می‌شود.
+             * اختلاف به‌عنوان یک پرداختِ روی همین فاکتور ثبت می‌شود؛ منفی
+             * یعنی وجه به مشتری برگشته. این‌طور `total − paidAmount` سرِ جای
+             * خودش صفر می‌ماند و صندوق با فاکتور می‌خواند.
+             */
+            const method = dto.settlementMethod ?? 'CASH';
+            await tx.payment.create({
+              data: {
+                invoiceId: invoice.id,
+                method,
+                amount: amountAdjust,
+                note:
+                  amountAdjust > 0
+                    ? `اصلاحیه ${correction.number} — دریافت اختلاف`
+                    : `اصلاحیه ${correction.number} — برگشت اختلاف`,
+              },
+            });
+
+            await tx.saleInvoice.update({
+              where: { id: invoice.id },
+              data: {
+                subtotal: newSubtotal,
+                total: newTotal,
+                paidAmount: invoice.paidAmount + amountAdjust,
+                dueAmount: Math.max(0, newTotal - (invoice.paidAmount + amountAdjust)),
+              },
             });
           }
         }
@@ -408,6 +536,58 @@ export class CorrectionsService {
       }
       throw err;
     }
+  }
+
+
+  /**
+   * عوض‌کردنِ توضیحِ ردیف‌های یک فاکتور.
+   *
+   * عمداً از اصلاحیه جداست و سندی نمی‌سازد: توضیح یک **متن** است، نه عدد.
+   * نه موجودی را تکان می‌دهد نه دفتر را، و ساختنِ سندِ مالی با اثرِ صفر برای
+   * تغییرِ «رنگ مشکی» به «رنگ سفید» هم بی‌معناست هم از خودِ اصلاحیه رد
+   * می‌شود (اثرِ صفر پذیرفته نمی‌شود).
+   *
+   * همان قاعده‌ی دسترسیِ اصلاحیه: صندوق‌دار فقط روی فاکتورِ جاریِ حساب باز.
+   */
+  async updateLineNotes(
+    invoiceId: string,
+    notes: { saleLogId: string; lineNote: string | null }[],
+    role?: Role,
+  ) {
+    const invoice = await this.prisma.saleInvoice.findUnique({
+      where: { id: invoiceId },
+      select: { id: true, status: true },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException({
+        error: 'INVOICE_NOT_FOUND',
+        message: 'فاکتور پیدا نشد',
+      });
+    }
+
+    if (role === Role.SALES && invoice.status !== InvoiceStatus.OPEN) {
+      throw new ForbiddenException({
+        error: 'CORRECTION_REQUIRES_MANAGER',
+        message: 'تغییرِ فاکتورِ نهایی را فقط مدیر ثبت می‌کند',
+      });
+    }
+
+    /*
+     * `invoiceId` در شرط می‌ماند حتی با اینکه شناسه‌ی ردیف یکتاست: بدون آن،
+     * یک شناسه‌ی حدس‌زده‌شده می‌توانست ردیفِ فاکتورِ دیگری را عوض کند.
+     */
+    await this.prisma.$transaction(
+      notes.map((n) =>
+        this.prisma.inventoryLog.updateMany({
+          where: { id: n.saleLogId, invoiceId: invoice.id, action: 'SALE' },
+          data: { lineNote: n.lineNote?.trim() || null },
+        }),
+      ),
+    );
+
+    this.realtime.broadcast({ type: 'correction.created', invoiceId: invoice.id });
+    return { updated: notes.length };
   }
 
 

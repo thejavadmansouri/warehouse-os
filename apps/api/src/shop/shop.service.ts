@@ -20,6 +20,7 @@ export interface ShopSettingsInput {
   storedUnit?: CurrencyUnit;
   panelUnit?: CurrencyUnit;
   siteUnit?: CurrencyUnit;
+  showUnpriced?: boolean;
 }
 
 
@@ -62,6 +63,7 @@ export class ShopService {
       ...(input.storedUnit !== undefined ? { storedUnit: input.storedUnit } : {}),
       ...(input.panelUnit !== undefined ? { panelUnit: input.panelUnit } : {}),
       ...(input.siteUnit !== undefined ? { siteUnit: input.siteUnit } : {}),
+      ...(input.showUnpriced !== undefined ? { showUnpriced: input.showUnpriced } : {}),
     };
 
     return this.prisma.shopSettings.upsert({

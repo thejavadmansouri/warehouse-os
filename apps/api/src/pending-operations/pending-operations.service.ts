@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,6 +12,8 @@ import { SyncOperationItemDto } from './dto/sync-operations.dto';
 
 @Injectable()
 export class PendingOperationsService {
+  private readonly logger = new Logger(PendingOperationsService.name);
+
   constructor(
     private prisma: PrismaService,
     private parsingEngine: ParsingEngineService,
@@ -27,6 +30,7 @@ export class PendingOperationsService {
     const results: { clientRequestId: string; id: string; status: string }[] = [];
 
     for (const op of operations) {
+      try {
       const existing = await this.prisma.pendingOperation.findUnique({
         where: { clientRequestId: op.clientRequestId },
       });
@@ -108,9 +112,31 @@ export class PendingOperationsService {
         id: created.id,
         status: created.status,
       });
+      } catch (err) {
+        /*
+         * یک قلمِ خراب نباید کلِ دسته را بیندازد.
+         *
+         * این حلقه تراکنشی نیست: تا اینجا هرچه ساخته شده، ساخته شده. اگر
+         * استثنا بالا برود، پاسخ ۵۰۰ می‌شود و گوشیِ کارگر **همه‌ی** ردیف‌های
+         * دسته را «ردشده» علامت می‌زند — حتی آن‌هایی که واقعاً ثبت شده‌اند.
+         * کارگر ده ردیف قرمز می‌بیند که نصفشان روی سرور هستند.
+         *
+         * حالا خطا به همان قلم می‌چسبد و بقیه‌ی دسته می‌روند جلو. تکرارِ
+         * ارسال هم بی‌خطر است: clientRequestId یکتاست و بالای همین حلقه
+         * dedupe می‌شود.
+         */
+        this.logger.error(
+          `sync: قلم ${op.clientRequestId} ثبت نشد — ${err instanceof Error ? err.message : err}`,
+        );
+        results.push({
+          clientRequestId: op.clientRequestId,
+          id: '',
+          status: 'ERROR',
+        });
+      }
     }
 
-    return { synced: results.length, results };
+    return { synced: results.filter((r) => r.status !== 'ERROR').length, results };
   }
 
   /** Manager review queue for a warehouse (or all). */

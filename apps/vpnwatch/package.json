@@ -1,0 +1,14 @@
+{
+  "name": "vpnwatch",
+  "version": "1.0.0",
+  "description": "Menu-bar VPN/IP monitor with kill switch",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-packager . VpnWatch --platform=darwin --arch=x64 --overwrite --icon=icon.icns --app-bundle-id=com.proman.vpnwatch --app-version=1.0.0 --out=dist --no-prune --ignore='^(dist|build|\\.git|node_modules/\\.cache)'"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}

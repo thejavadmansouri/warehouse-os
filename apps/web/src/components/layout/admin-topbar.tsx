@@ -1,15 +1,12 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Menu, Moon, Sun, LogOut, UserCircle,
-  Wallet, ClipboardList, ReceiptText, Users, PackagePlus, PackageX,
+  Menu, Moon, Sun, LogOut,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
-import { usePosUiStore } from "@/app/admin/pos/_lib/pos-ui-store";
 import {
   Sheet,
   SheetContent,
@@ -27,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { AdminSidebar, SidebarCollapseToggle } from "./admin-sidebar";
 import { FullscreenToggle } from "./fullscreen-toggle";
+import { ReadabilityToggle } from "./readability-toggle";
 import { cn } from "@/lib/utils";
 import { LiveClock } from "@/components/live-clock";
 import { NotificationBell } from "@/components/notification-bell";
@@ -39,19 +37,19 @@ function ThemeToggle() {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   if (!mounted)
-    return <div className="h-9 w-9" />;
+    return <div className="size-7" />;
   return (
     <Button
       variant="ghost"
       size="icon"
-      className="h-9 w-9"
+      className="size-7"
       onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
       title="تغییر تم"
     >
       {theme === "dark" ? (
-        <Sun className="h-[18px] w-[18px]" />
+        <Sun className="size-4" />
       ) : (
-        <Moon className="h-[18px] w-[18px]" />
+        <Moon className="size-4" />
       )}
     </Button>
   );
@@ -90,7 +88,12 @@ export function AdminTopbar({
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/95 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70">
+    /*
+      ارتفاع از ۶۴ به ۴۰ پیکسل آمد و همه‌ی کنترل‌ها هم‌اندازه‌ی آیکن‌های نوار
+      فرمان شدند. آن ۲۴ پیکسل مستقیماً به ارتفاعِ جدولِ فروش اضافه می‌شود —
+      یعنی یک ردیف کالای بیشتر در هر صفحه.
+    */
+    <header className="sticky top-0 z-30 flex h-10 items-center gap-1 border-b bg-background px-2">
       {/* دکمه منوی موبایل */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetTrigger asChild>
@@ -101,10 +104,10 @@ export function AdminTopbar({
               روی صندوق سایدبارِ ثابت رندر نمی‌شود، پس این دکمه تنها راهِ رسیدن
               به منوست و باید در هر اندازه‌ای دیده شود — نه فقط روی موبایل.
             */
-            className={cn("h-9 w-9", !isPos && "lg:hidden")}
+            className={cn("size-7", !isPos && "lg:hidden")}
             title="منو"
           >
-            <Menu className="h-5 w-5" />
+            <Menu className="size-4" />
           </Button>
         </SheetTrigger>
         <SheetContent side="right" className="w-72 p-0">
@@ -124,72 +127,14 @@ export function AdminTopbar({
 
       <div className="flex-1" />
 
-      {/* چیدمان راست‌به‌چپ است، پس هرچه بعد از فاصله‌انداز بیاید سمت چپ می‌نشیند. */}
-      {isPos && (
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            className="h-9 border-amber-600/50 text-amber-600 hover:bg-amber-600/10 hover:text-amber-600/80
-                       dark:border-amber-600/50 dark:text-amber-400 dark:hover:bg-amber-600/10 dark:hover:text-amber-300"
-            onClick={() => usePosUiStore.getState().openAccounts(true)}
-            title="فهرست بدهکاران"
-          >
-            <Wallet className="size-4" />
-            <span className="hidden md:inline">حساب باز</span>
-          </Button>
+      {/*
+        دکمه‌های صندوق (حساب باز، کارهای انبار، افزودن کالا، کسری، فاکتورهای
+        امروز، مشتری‌ها) از اینجا برداشته شدند.
 
-          <Button
-            variant="outline"
-            className="h-9"
-            onClick={() => usePosUiStore.getState().workTasks(true)}
-            title="کارهای ارسال‌شده به کارگران انبار"
-          >
-            <ClipboardList className="size-4" />
-            <span className="hidden md:inline">کارهای انبار</span>
-          </Button>
-
-          <Button
-            variant="outline"
-            className="h-9"
-            onClick={() => usePosUiStore.getState().addProduct(true)}
-            title="ساخت کالای تازه بدون ترک‌کردن صندوق"
-          >
-            <PackagePlus className="size-4" />
-            <span className="hidden md:inline">افزودن محصول</span>
-          </Button>
-
-          {/* «کسری» عمداً کنارِ کارهای انبار است نه کنارِ فروش: چیزی که ثبت
-              می‌کند تقاضای جواب‌نگرفته است، و مقصدش میزِ خرید است. */}
-          <Button
-            variant="outline"
-            className="h-9"
-            onClick={() => usePosUiStore.getState().shortage(true)}
-            title="کالایی که مشتری خواست و نداشتیم"
-          >
-            <PackageX className="size-4" />
-            <span className="hidden md:inline">کسری محصول</span>
-          </Button>
-
-          {/* سبز عمدی است: تنها دکمه‌ی «نگاه به گذشته» بین ابزارهای فروش، و
-              فروشنده باید بدون خواندن متن پیدایش کند. */}
-          <Button
-            className="h-9 bg-emerald-600 text-white shadow-sm hover:bg-emerald-700
-                       dark:bg-emerald-600 dark:hover:bg-emerald-500"
-            onClick={() => usePosUiStore.getState().recent(true)}
-            title="فاکتورهای ثبت‌شده‌ی امروز"
-          >
-            <ReceiptText className="size-4" />
-            <span className="hidden md:inline">فاکتورهای امروز</span>
-          </Button>
-
-          <Button asChild variant="outline" className="h-9">
-            <Link href="/admin/customers" title="پنل مشتری‌ها">
-              <Users className="size-4" />
-              <span className="hidden md:inline">مشتری‌ها</span>
-            </Link>
-          </Button>
-        </div>
-      )}
+        همه‌شان حالا آیکنِ نوار فرمانِ خودِ سند هستند (components/document/
+        commands.ts) — یعنی هم کلید دارند، هم جایشان ثابت است، هم این نوار
+        دیگر نیمی از عرضش را به دکمه‌هایی نمی‌دهد که فقط در یک صفحه معنی دارند.
+      */}
 
       <LiveClock />
 
@@ -198,18 +143,25 @@ export function AdminTopbar({
       {/* تمام‌صفحه فقط سرِ صندوق معنا دارد؛ جای دیگر فقط یک دکمه‌ی اضافه است. */}
       {isPos && <FullscreenToggle />}
 
+      <ReadabilityToggle />
+
       <ThemeToggle />
 
       {/* منوی کاربر */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="h-9 gap-2 px-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
-              {user?.fullName?.charAt(0) ?? user?.username.charAt(0)}
-            </div>
-            <span className="hidden text-sm font-medium sm:inline">
-              {user?.fullName}
-            </span>
+          {/*
+            فقط حرفِ اولِ نام. نامِ کامل و نقش داخلِ منو هستند — روی نوار،
+            نامِ فروشنده هیچ تصمیمی را عوض نمی‌کند و فقط عرض می‌گیرد.
+          */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 rounded-full bg-primary text-xs font-bold text-primary-foreground
+                       hover:bg-primary/90 hover:text-primary-foreground"
+            title={user?.fullName ?? "حساب کاربری"}
+          >
+            {user?.fullName?.charAt(0) ?? user?.username.charAt(0)}
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-52">

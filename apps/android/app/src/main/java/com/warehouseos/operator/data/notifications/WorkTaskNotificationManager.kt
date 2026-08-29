@@ -3,13 +3,16 @@ package com.warehouseos.operator.data.notifications
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.Manifest
 import android.app.PendingIntent
 import android.content.Context
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.media.RingtoneManager
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.warehouseos.operator.MainActivity
 import com.warehouseos.operator.data.local.WorkTaskEntity
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -39,6 +42,26 @@ class WorkTaskNotificationManager @Inject constructor(
 
     init {
         createChannels()
+    }
+
+    /**
+     * آیا اصلاً می‌شود زنگ زد؟
+     *
+     * روی اندروید ۱۳ به بعد اگر کارگر اجازه‌ی اعلان را رد کرده باشد،
+     * `notify()` **بی‌صدا هیچ کاری نمی‌کند** — یعنی کلِ قابلیتِ «گوشی زنگ
+     * می‌زند» مرده است بی‌آنکه جایی خطایی دیده شود. برای کسی که کارش به
+     * شنیدنِ همین زنگ بند است، بدترین حالتِ ممکن همین سکوت است.
+     *
+     * صفحه‌ها این را می‌خوانند تا هشدار نشان دهند، و خودِ notify هم پشتش
+     * محافظت می‌شود تا روی بعضی گوشی‌ها SecurityException نیندازد.
+     */
+    fun alertsEnabled(): Boolean {
+        if (!notificationManager.areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) == PackageManager.PERMISSION_GRANTED
     }
 
     private fun createChannels() {
@@ -136,7 +159,21 @@ class WorkTaskNotificationManager @Inject constructor(
         // Replace the previous alert so the tray stays tidy; sound plays on each one.
         // Must NOT reuse the foreground-service id, or this would silently overwrite
         // the ongoing chip instead of raising a heads-up alert.
-        notificationManager.notify(ALERT_NOTIFICATION_ID, notification)
+        //
+        // بدون این محافظ، روی اندروید ۱۳+ با اجازه‌ی ردشده یا هیچ اتفاقی
+        // نمی‌افتد یا SecurityException بالا می‌آید و سرویس را می‌کشد.
+        if (!alertsEnabled()) return
+        /*
+         * حتی با اجازه‌ی گرفته‌شده هم بعضی گوشی‌ها (سازنده‌های چینی با
+         * مدیریتِ اعلانِ خودشان) می‌توانند SecurityException بدهند. اینجا
+         * سرویسِ پیش‌زمینه در جریان است؛ یک استثنای نگرفته کلِ اپ را می‌کشد و
+         * کارگر تا راه‌اندازیِ دوباره هیچ کاری دریافت نمی‌کند.
+         */
+        try {
+            notificationManager.notify(ALERT_NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {
+            // اجازه پس گرفته شده — بی‌صدا رد شو، نه اینکه سرویس بمیرد.
+        }
     }
 
     /** Silent, low-importance notification shown while the watcher service runs. */
