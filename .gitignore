@@ -18,6 +18,8 @@ apps/api/storage/
 # دامپ‌های دیتابیس — داده‌ی واقعی است و در گیت جایی ندارد
 backup/*.dump
 backup/*.sql
+backup/*.tar.gz
+backup/*.bak
 
 # نمونه‌ی تنظیمات باید کامیت شود؛ فقط مقادیر واقعی نه.
 !.env.example
@@ -35,3 +37,9 @@ storage/
 
 # Locally produced installers/APKs — build artifacts, not source.
 build-output/
+
+# فایل‌های حساس و حجیم — نباید در Git باشند
+apps/vpnwatch/
+prisma/migrations_backup/
+docs/refrence-ui/
+apps/web/docs/
