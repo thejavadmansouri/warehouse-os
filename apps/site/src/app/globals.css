@@ -1,0 +1,441 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Vazirmatn — self-hosted, subset by unicode-range.
+ * Generated from the official variable font (rastikerdar/vazirmatn,
+ * v33) with fonttools pyftsubset, keeping the ss01 feature (Farsi
+ * digits, used by .nums-fa). Browser loads only the subset it needs.
+ */
+@font-face {
+  font-family: "Vazirmatn Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(./fonts/Vazirmatn-arabic.woff2) format("woff2-variations");
+  unicode-range: U+0600-06FF, U+0750-077F, U+0870-088E, U+0890-0891, U+0897-08E1,
+    U+08E3-08FF, U+200C-200E, U+2010-2011, U+204F, U+2E41, U+FB50-FDFF,
+    U+FE70-FE74, U+FE76-FEFC, U+102E0-102FB, U+10E60-10E7E, U+10EC2-10EC4,
+    U+10EFC-10EFF, U+1EE00-1EE03, U+1EE05-1EE1F, U+1EE21-1EE22, U+1EE24,
+    U+1EE27, U+1EE29-1EE32, U+1EE34-1EE37, U+1EE39, U+1EE3B, U+1EE42, U+1EE47,
+    U+1EE49, U+1EE4B, U+1EE4D-1EE4F, U+1EE51-1EE52, U+1EE54, U+1EE57, U+1EE59,
+    U+1EE5B, U+1EE5D, U+1EE5F, U+1EE61-1EE62, U+1EE64, U+1EE67-1EE6A,
+    U+1EE6C-1EE72, U+1EE74-1EE77, U+1EE79-1EE7C, U+1EE7E, U+1EE80-1EE89,
+    U+1EE8B-1EE9B, U+1EEA1-1EEA3, U+1EEA5-1EEA9, U+1EEAB-1EEBB, U+1EEF0-1EEF1;
+}
+
+@font-face {
+  font-family: "Vazirmatn Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url(./fonts/Vazirmatn-latin.woff2) format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA,
+    U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193,
+    U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-vazirmatn);
+  --font-mono: var(--font-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  /* Self-hosted Vazirmatn. Font-family defined here so --font-sans
+     (tailwind font-sans) picks it up; unicode-range subsetting is
+     handled by the @font-face rules above. */
+  --font-vazirmatn: "Vazirmatn Variable";
+  --radius: 0.75rem;
+
+  /*
+   * بزرگ‌نماییِ کلِ رابط — «حالت مغازه».
+   *
+   * پشتِ پیشخوان، مانیتور دور است و نور زیاد؛ اندازه‌ای که پشت میز خوب بود
+   * آنجا خوانده نمی‌شود. زوم مرورگر جواب نیست: با هر رفرش/کاربر برمی‌گردد و
+   * روی چاپ هم اثر می‌گذارد. اینجا خودِ ریشه بزرگ می‌شود، پس هر چیزی که با
+   * rem ساخته شده (یعنی همه‌چیزِ Tailwind) با هم بزرگ می‌شود و نسبت‌ها
+   * به‌هم نمی‌ریزد. مقدارش را ui-scale.ts روی <html> می‌نشاند.
+   */
+  --ui-scale: 1;
+
+  /*
+   * تفکیکِ ستون‌های جدولِ سند.
+   *
+   * از خودِ پارسیان نمونه‌برداری شده (فاکتور خرید، تصویر مرجع): سه ته‌رنگِ
+   * بسیار روشن و کم‌اشباع که کنار هم می‌نشینند تا هیچ دو ستونِ همسایه‌ای
+   * یک‌رنگ نباشند. چشم ستون را از روی رنگ پیدا می‌کند، نه از روی شمردنِ
+   * خطوط — و چون اشباع نزدیک صفر است، بعد از یک ساعت کار خسته‌کننده نیست.
+   *
+   * صورتی عمداً فقط برای «تعداد» است: پرتایپ‌ترین خانه‌ی فاکتور و جایی که
+   * نگاه باید بی‌درنگ رویش بنشیند.
+   */
+  --grid-cream: #fffbf0;
+  --grid-mint: #eaffea;
+  --grid-pink: #ffe6ff;
+
+  /* وزنِ پایه‌ی متن. ویندوز صاف‌سازیِ فونت ندارد و وزن ۴۰۰ فارسی روی کروم
+     نازک و کم‌جان دیده می‌شود؛ ۴۵۰ همان متن است با یک‌خط پررنگ‌تر. */
+  --ui-weight: 450;
+
+  /* Light background — near-white, faint blue cast */
+  /* گرم‌کردن زمینه (پیشنهاد ۴): hue از ۲۵۰ (ته‌آبی) به ۸۸ (ته‌کرم).
+     کرومای 0.006 → 0.008 (نسخهٔ آشکارتر — مقایسه در docs/pos-palette-preview.html).
+     بازگشت به سرد: oklch(0.985 0.004 250) */
+  --background: oklch(0.985 0.008 88);
+  --foreground: oklch(0.19 0.022 256);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.23 0.02 256);
+
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.23 0.02 256);
+
+  /* Primary: brand blue */
+  --primary: oklch(0.55 0.19 254);
+  --primary-foreground: oklch(0.99 0.005 250);
+
+  /* hue 88 — هم‌خانواده با پس‌زمینهٔ گرم (قبلی: 252) */
+  --secondary: oklch(0.968 0.008 88);
+  --secondary-foreground: oklch(0.33 0.05 256);
+
+  --muted: oklch(0.97 0.008 88);
+  /* پررنگ‌تر از ۰٫۵۳: متنِ کم‌رنگ روی مانیتورِ پیشخوان محو می‌شد. */
+  --muted-foreground: oklch(0.455 0.022 256);
+
+  /* Accent: same brand blue (used for icons/highlights across pages) */
+  --accent: oklch(0.55 0.19 254);
+  --accent-foreground: oklch(0.99 0.005 250);
+
+  --destructive: oklch(0.58 0.22 27);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /* رنگ‌های معنایی — تا «موفق/هشدار/اطلاع» یک منبع واحد داشته باشند و همه‌جا
+     دستی text-emerald-600/text-amber-600 تکرار نشود. success=دریافت/بستانکار،
+     warning=بدهی/سررسید، info=خنثیِ آبی. */
+  --success: oklch(0.6 0.14 155);
+  --success-foreground: oklch(0.99 0 0);
+  /* warning روی زمینهٔ روشن باید ≥ 4.5:1 باشد. مقدار قبلی (0.7) فقط ~2.8:1
+     داشت و زیر حد AA بود؛ L=0.555 معادل amber-700 است (~5:1). */
+  --warning: oklch(0.555 0.16 60);
+  --warning-foreground: oklch(0.3 0.05 70);
+  --info: oklch(0.6 0.13 235);
+  --info-foreground: oklch(0.99 0 0);
+
+  /* hue 88 — گرم (قبلی: 252). روشنی از ۰٫۹۲۸ به ۰٫۸۸ آمد: خطوطِ جدول
+     زیر نورِ مغازه باید دیده شوند، وگرنه ردیف‌ها در هم می‌روند. */
+  --border: oklch(0.88 0.01 88);
+  --input: oklch(0.855 0.012 88);
+  /* Lighter/brighter than --primary and far from --destructive red */
+  --ring: oklch(0.64 0.15 254);
+
+  --chart-1: oklch(0.55 0.19 254);
+  --chart-2: oklch(0.66 0.14 232);
+  --chart-3: oklch(0.72 0.12 200);
+  --chart-4: oklch(0.45 0.16 268);
+  --chart-5: oklch(0.78 0.09 246);
+
+  /* Sidebar: white, blue active state */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.28 0.02 256);
+  --sidebar-primary: oklch(0.55 0.19 254);
+  --sidebar-primary-foreground: oklch(0.99 0.005 250);
+  --sidebar-accent: oklch(0.96 0.02 254);
+  --sidebar-accent-foreground: oklch(0.45 0.16 256);
+  --sidebar-border: oklch(0.93 0.007 252);
+  --sidebar-ring: oklch(0.64 0.15 254);
+}
+
+.dark {
+  /* همان سه ته‌رنگ، این بار تیره — نسبتِ کنتراستِ متن دست‌نخورده می‌ماند. */
+  --grid-cream: oklch(0.255 0.012 95);
+  --grid-mint: oklch(0.255 0.028 155);
+  --grid-pink: oklch(0.255 0.03 330);
+
+  --background: oklch(0.18 0.02 258);
+  --foreground: oklch(0.95 0.005 250);
+
+  --card: oklch(0.22 0.022 258);
+  --card-foreground: oklch(0.95 0.005 250);
+
+  --popover: oklch(0.22 0.022 258);
+  --popover-foreground: oklch(0.95 0.005 250);
+
+  --primary: oklch(0.66 0.17 254);
+  --primary-foreground: oklch(0.16 0.02 258);
+
+  --secondary: oklch(0.27 0.025 258);
+  --secondary-foreground: oklch(0.95 0.005 250);
+
+  --muted: oklch(0.27 0.025 258);
+  --muted-foreground: oklch(0.72 0.015 250);
+
+  --accent: oklch(0.66 0.17 254);
+  --accent-foreground: oklch(0.16 0.02 258);
+
+  --destructive: oklch(0.7 0.19 22);
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /* نسخه‌ی روشن‌ترِ رنگ‌های معنایی برای زمینه‌ی تیره. */
+  --success: oklch(0.72 0.15 155);
+  --success-foreground: oklch(0.16 0.02 155);
+  --warning: oklch(0.8 0.15 75);
+  --warning-foreground: oklch(0.22 0.04 70);
+  --info: oklch(0.72 0.13 235);
+  --info-foreground: oklch(0.16 0.02 235);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  /* Brighter than --primary and far from --destructive red */
+  --ring: oklch(0.72 0.13 254);
+
+  --chart-1: oklch(0.66 0.17 254);
+  --chart-2: oklch(0.7 0.13 232);
+  --chart-3: oklch(0.76 0.11 200);
+  --chart-4: oklch(0.56 0.16 268);
+  --chart-5: oklch(0.82 0.07 246);
+
+  --sidebar: oklch(0.21 0.022 258);
+  --sidebar-foreground: oklch(0.92 0.01 250);
+  --sidebar-primary: oklch(0.66 0.17 254);
+  --sidebar-primary-foreground: oklch(0.16 0.02 258);
+  --sidebar-accent: oklch(0.29 0.03 258);
+  --sidebar-accent-foreground: oklch(0.96 0.01 250);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.72 0.13 254);
+}
+
+/*
+ * هشدار/بدهی در حالت روشن: amber-600 (~3.1:1) و orange-600 (~3.6:1) روی سفید
+ * زیر حد AA (4.5:1) هستند؛ در حالت روشن به amber-700 / orange-700 (~5:1) تیره
+ * می‌شوند. حالت تیره دست نمی‌خورد: کلاس‌های dark:text-amber-400 و مانند آن سر
+ * جایشان هستند و این قوانین فقط وقتی <html> کلاس .dark ندارد (حالت روشن) فعالند.
+ */
+:root:not(.dark) .text-amber-600 {
+  color: oklch(0.555 0.163 49); /* amber-700 — 5.07:1 روی سفید */
+}
+:root:not(.dark) .text-orange-600 {
+  color: oklch(0.553 0.195 38.4); /* orange-700 — 5.25:1 روی سفید */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01";
+    /* باید با «حالت مغازه» مقیاس بگیرد، وگرنه متنِ بدون کلاس و کنترل‌هایی که
+       `font: inherit` می‌گیرند روی ۱۵px ثابت می‌مانند و در بزرگ‌نمایی از
+       عناصرِ rem-محور عقب می‌افتند. پایه‌ی ۱۵px در ۱۰۰٪ دست‌نخورده می‌ماند. */
+    font-size: calc(15px * var(--ui-scale));
+    line-height: 1.7;
+  }
+
+  /* چگالی خوانا برای محیط فروشگاه؛ کنترل‌ها و ردیف‌ها با یک ریتم ثابت دیده شوند. */
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+
+  /* RTL-friendly numerals stay Latin for clarity in inventory numbers */
+  .nums-fa {
+    font-feature-settings: "ss01";
+  }
+
+  /* Custom scrollbar */
+  .scroll-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  .scroll-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb {
+    background: oklch(0.86 0.008 88);
+    border-radius: 9999px;
+  }
+  .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.78 0.012 88);
+  }
+  .dark .scroll-thin::-webkit-scrollbar-thumb {
+    background: oklch(0.36 0.02 252);
+  }
+  .dark .scroll-thin::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.46 0.02 252);
+  }
+}
+
+/* ==========================================================================
+   خوانایی پشتِ پیشخوان
+   ==========================================================================
+   سه چیز جدا که با هم «دیده‌شدن» را می‌سازند:
+   ۱. اندازه  — var(--ui-scale) روی ریشه (Ctrl+Alt+↑/↓ یا کلیدِ نوار بالا)
+   ۲. کنتراست — [data-contrast="high"] برای نورِ زیادِ مغازه
+   ۳. فوکوس   — وقتی کار کیبوردی است، «الان کجام؟» باید از دو متری معلوم باشد
+   -------------------------------------------------------------------------- */
+
+@layer base {
+  /*
+   * ریشه بزرگ می‌شود، نه body — تا rem و em هر دو با هم بروند بالا.
+   * ۱۶px پایه‌ی مرورگر است؛ ضرب‌کردنش یعنی هیچ اندازه‌ای دستی تنظیم نشده و
+   * صفحه‌ای که امروز درست است، فردا هم در بزرگ‌نمایی درست می‌ماند.
+   */
+  html {
+    font-size: calc(16px * var(--ui-scale));
+  }
+
+  /*
+   * بزرگ‌نمایی فقط برای رابط است، نه برگه‌ی چاپی (قولِ ui-scale.ts). بدونِ
+   * این reset، فاکتورِ چاپ‌شده در حالت مغازه با همان مقیاس بزرگ به کاغذ
+   * می‌رفت و ستون‌های برگه به‌هم می‌ریخت.
+   */
+  @media print {
+    html { font-size: 16px; }
+    body { font-size: 15px; }
+  }
+
+  body {
+    font-weight: var(--ui-weight);
+    /* ارتفاعِ خطِ فارسی باید از لاتین بازتر باشد؛ زیر و زبرها لازمش دارند. */
+    line-height: 1.7;
+    /* عددها هم‌عرض — ستونِ مبلغ نباید با هر رقم بلرزد. */
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* عنوان‌ها یک پله پررنگ‌تر از متن، تا سلسله‌مراتب از دور هم خوانده شود. */
+  h1, h2, h3, th {
+    font-weight: 700;
+  }
+
+  /*
+   * فوکوس دیده‌شدنی — ستونِ فقراتِ کار با کیبورد.
+   *
+   * حلقه‌ی قبلی (outline-ring/50) کم‌رنگ بود و روی ردیف‌های جدول اصلاً پیدا
+   * نمی‌شد. حالا خطِ توپر + هاله‌ی بیرونی: هم روی زمینه‌ی روشن، هم روی
+   * ردیفِ انتخاب‌شده‌ی آبی.
+   */
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /*
+   * ردیفِ فعالِ لیست‌های کیبوردی.
+   *
+   * همه‌ی لیست‌های ناوبری‌پذیر (مشتری، فاکتور، نتیجه‌ی جست‌وجو) همین صفت را
+   * می‌گذارند تا «انتخاب‌شده» همه‌جا یک شکل باشد — نه هر صفحه یک رنگ.
+   * نوارِ کناری لازم است چون در زمینه‌ی روشن، تفاوتِ رنگِ تنها کافی نیست.
+   */
+  [data-active-row="true"] {
+    background: color-mix(in oklab, var(--primary) 14%, transparent);
+    /* آفستِ منفی = نوار به لبه‌ی آغازین می‌نشیند (راست در RTL). آفستِ مثبت
+       سایه‌ی inset را به لبه‌ی چپ می‌فرستد که در رابطِ راست‌چین سمتِ اشتباه است. */
+    box-shadow: inset -3px 0 0 0 var(--primary);
+  }
+  .dark [data-active-row="true"] {
+    background: color-mix(in oklab, var(--primary) 24%, transparent);
+  }
+}
+
+/*
+ * حالت کنتراست بالا.
+ *
+ * زیر نورِ مستقیم، خاکستری‌های ملایم ناپدید می‌شوند. اینجا فقط توکن‌ها عوض
+ * می‌شوند، پس هیچ صفحه‌ای لازم نیست چیزی بداند: متن سیاه‌تر، خط‌ها تیره‌تر،
+ * متنِ کم‌رنگ دیگر آن‌قدرها کم‌رنگ نیست.
+ */
+:root[data-contrast="high"]:not(.dark) {
+  --foreground: oklch(0.12 0.02 256);
+  --card-foreground: oklch(0.12 0.02 256);
+  --popover-foreground: oklch(0.12 0.02 256);
+  --muted-foreground: oklch(0.36 0.02 256);
+  --secondary-foreground: oklch(0.2 0.04 256);
+  --border: oklch(0.76 0.014 88);
+  --input: oklch(0.7 0.016 88);
+  --ring: oklch(0.5 0.2 254);
+  --ui-weight: 500;
+}
+
+:root[data-contrast="high"].dark {
+  --foreground: oklch(0.99 0.003 250);
+  --card-foreground: oklch(0.99 0.003 250);
+  --popover-foreground: oklch(0.99 0.003 250);
+  --muted-foreground: oklch(0.84 0.012 250);
+  --border: oklch(1 0 0 / 26%);
+  --input: oklch(1 0 0 / 32%);
+  --ui-weight: 500;
+}
+
+/*
+ * ستون‌های جدولِ سند.
+ *
+ * فقط جدولِ اقلامِ فاکتور این ته‌رنگ‌ها را می‌گیرد. فهرست‌ها و ریزگردشِ حساب
+ * نمی‌گیرند — آنجا ردیف واحدِ خواندن است نه ستون، و راه‌راهِ ردیفی جواب می‌دهد.
+ */
+@layer components {
+  .col-cream { background-color: var(--grid-cream); }
+  .col-mint  { background-color: var(--grid-mint); }
+  .col-pink  { background-color: var(--grid-pink); }
+
+  /* ردیفِ انتخاب‌شده روی ته‌رنگِ ستون‌ها می‌نشیند، نه زیرشان. */
+  tr[data-row-active="true"] > td {
+    background-color: color-mix(in oklab, var(--primary) 16%, transparent);
+  }
+  .dark tr[data-row-active="true"] > td {
+    background-color: color-mix(in oklab, var(--primary) 26%, transparent);
+  }
+}
