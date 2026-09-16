@@ -1,4 +1,8 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -56,8 +60,17 @@ describe('WorkTasksService', () => {
   // initializer خودش به خودش ارجاع می‌داد؛ TypeScript نمی‌تواند
   // تایپ را حل کند و با TS7022/TS7024 رد می‌کند.
   const models = {
-    workTask: { findUnique: jest.fn(), findMany: jest.fn(), create: jest.fn(), updateMany: jest.fn() },
-    workTaskItem: { findUnique: jest.fn(), updateMany: jest.fn(), groupBy: jest.fn() },
+    workTask: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      updateMany: jest.fn(),
+    },
+    workTaskItem: {
+      findUnique: jest.fn(),
+      updateMany: jest.fn(),
+      groupBy: jest.fn(),
+    },
     location: { findFirst: jest.fn() },
   };
   const prisma = {
@@ -100,14 +113,17 @@ describe('WorkTasksService', () => {
     };
 
     it('rejects empty lines', async () => {
-      await expect(service.create({ warehouseId: 'w1', lines: [] })).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.create({ warehouseId: 'w1', lines: [] }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rejects a zero/negative quantity', async () => {
       await expect(
-        service.create({ warehouseId: 'w1', lines: [{ productId: 'p1', quantity: 0 }] }),
+        service.create({
+          warehouseId: 'w1',
+          lines: [{ productId: 'p1', quantity: 0 }],
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
@@ -151,7 +167,10 @@ describe('WorkTasksService', () => {
       );
       expect(gateway.emitCreated).toHaveBeenCalledWith(['t-new'], 'worker1');
       expect(events.broadcast).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'work-task.progress', taskId: 't-new' }),
+        expect.objectContaining({
+          type: 'work-task.progress',
+          taskId: 't-new',
+        }),
       );
       expect(result.doneItems).toBe(0);
       expect(result.totalItems).toBe(2);
@@ -359,7 +378,9 @@ describe('WorkTasksService', () => {
 
     it('a task assigned to someone else is not visible', async () => {
       prisma.workTaskItem.findUnique.mockResolvedValueOnce(
-        makeItem({ task: makeTask({ id: 't1', assignedToId: 'worker-other' }) }),
+        makeItem({
+          task: makeTask({ id: 't1', assignedToId: 'worker-other' }),
+        }),
       );
 
       const res = await service.syncMutations('worker1', [m()]);
@@ -370,7 +391,9 @@ describe('WorkTasksService', () => {
     it('an unknown item → ITEM_NOT_FOUND', async () => {
       prisma.workTaskItem.findUnique.mockResolvedValueOnce(null);
 
-      const res = await service.syncMutations('worker1', [m({ itemId: 'nope' })]);
+      const res = await service.syncMutations('worker1', [
+        m({ itemId: 'nope' }),
+      ]);
 
       expect(res.results[0].status).toBe('ITEM_NOT_FOUND');
     });
@@ -440,7 +463,11 @@ describe('WorkTasksService', () => {
   describe('cancel', () => {
     it('cancels a pending/in-progress task and notifies the worker', async () => {
       prisma.workTask.updateMany.mockResolvedValueOnce({ count: 1 });
-      const detail = makeTask({ id: 't1', status: 'CANCELLED', assignedToId: 'worker1' });
+      const detail = makeTask({
+        id: 't1',
+        status: 'CANCELLED',
+        assignedToId: 'worker1',
+      });
       prisma.workTask.findUnique.mockResolvedValueOnce(detail); // findOne
 
       const result = await service.cancel('t1', 'اشتباه شد');
@@ -448,7 +475,10 @@ describe('WorkTasksService', () => {
       expect(prisma.workTask.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 't1', status: { in: ['PENDING', 'IN_PROGRESS'] } },
-          data: expect.objectContaining({ status: 'CANCELLED', cancelReason: 'اشتباه شد' }),
+          data: expect.objectContaining({
+            status: 'CANCELLED',
+            cancelReason: 'اشتباه شد',
+          }),
         }),
       );
       expect(result.status).toBe('CANCELLED');
@@ -459,14 +489,18 @@ describe('WorkTasksService', () => {
       prisma.workTask.updateMany.mockResolvedValueOnce({ count: 0 });
       prisma.workTask.findUnique.mockResolvedValueOnce({ status: 'COMPLETED' });
 
-      await expect(service.cancel('t1')).rejects.toBeInstanceOf(ConflictException);
+      await expect(service.cancel('t1')).rejects.toBeInstanceOf(
+        ConflictException,
+      );
     });
 
     it('rejects a missing task', async () => {
       prisma.workTask.updateMany.mockResolvedValueOnce({ count: 0 });
       prisma.workTask.findUnique.mockResolvedValueOnce(null);
 
-      await expect(service.cancel('nope')).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.cancel('nope')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 });

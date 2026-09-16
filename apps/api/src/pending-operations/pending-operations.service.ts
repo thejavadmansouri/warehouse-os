@@ -27,91 +27,94 @@ export class PendingOperationsService {
    * as PENDING — never touching stock. A manager approves later.
    */
   async sync(operations: SyncOperationItemDto[], workerId?: string) {
-    const results: { clientRequestId: string; id: string; status: string }[] = [];
+    const results: { clientRequestId: string; id: string; status: string }[] =
+      [];
 
     for (const op of operations) {
       try {
-      const existing = await this.prisma.pendingOperation.findUnique({
-        where: { clientRequestId: op.clientRequestId },
-      });
-      if (existing) {
+        const existing = await this.prisma.pendingOperation.findUnique({
+          where: { clientRequestId: op.clientRequestId },
+        });
+        if (existing) {
+          results.push({
+            clientRequestId: op.clientRequestId,
+            id: existing.id,
+            status: existing.status,
+          });
+          continue;
+        }
+
+        const location = await this.prisma.location.findUnique({
+          where: { barcode: op.locationBarcode },
+        });
+
+        let parsedPayload: any = null;
+        let productId: string | null = op.productId ?? null;
+        let quantity = op.quantity ?? 1;
+        let unit: string | null = op.unit ?? null;
+
+        if (op.voiceText) {
+          const engineResult = this.parsingEngine.parse(op.voiceText);
+          const parsed = engineResult.data;
+          const unknownTokens = engineResult.explanation.unknownTokens ?? [];
+
+          const [partCatalogId, vehicleModelIds, brandId] = await Promise.all([
+            this.productMatcher.findPartCatalogIdByName(parsed.productName),
+            this.productMatcher.findVehicleModelIdsByName(
+              parsed.vehicleModel ?? parsed.vehicleFamily,
+            ),
+            this.productMatcher.findBrandIdByName(parsed.brand),
+          ]);
+
+          const match = await this.productMatcher.match({
+            partCatalogId,
+            partName: parsed.productName,
+            vehicleModelIds,
+            vehicleName: parsed.vehicleModel ?? parsed.vehicleFamily,
+            brandId,
+            brandName: parsed.brand,
+            keywordTokens: unknownTokens,
+            modelIsExplicit: !!parsed.vehicleModel,
+          });
+
+          const suggestions = (match.suggestions ?? []).map((s: any) => ({
+            id: s.product.id,
+            name: s.product.name,
+            confidence: s.confidence,
+          }));
+
+          // Store a best-guess for the manager to confirm; never final until approved.
+          if (!productId && match.best) productId = match.best.product.id;
+
+          parsedPayload = { parsed, suggestions };
+          if (!op.quantity && parsed.quantity) quantity = parsed.quantity;
+          if (!unit && (parsed as any).unit) unit = (parsed as any).unit;
+        }
+
+        const created = await this.prisma.pendingOperation.create({
+          data: {
+            clientRequestId: op.clientRequestId,
+            type: op.type ?? 'IN',
+            locationBarcode: op.locationBarcode,
+            voiceText: op.voiceText ?? null,
+            parsed: parsedPayload ?? undefined,
+            quantity,
+            unit,
+            warehouseId: location?.warehouseId ?? null,
+            locationId: location?.id ?? null,
+            productId,
+            workerId: workerId ?? null,
+            deviceCreatedAt: op.deviceCreatedAt
+              ? new Date(op.deviceCreatedAt)
+              : null,
+          },
+        });
+
         results.push({
           clientRequestId: op.clientRequestId,
-          id: existing.id,
-          status: existing.status,
+          id: created.id,
+          status: created.status,
         });
-        continue;
-      }
-
-      const location = await this.prisma.location.findUnique({
-        where: { barcode: op.locationBarcode },
-      });
-
-      let parsedPayload: any = null;
-      let productId: string | null = op.productId ?? null;
-      let quantity = op.quantity ?? 1;
-      let unit: string | null = op.unit ?? null;
-
-      if (op.voiceText) {
-        const engineResult = this.parsingEngine.parse(op.voiceText);
-        const parsed = engineResult.data;
-        const unknownTokens = engineResult.explanation.unknownTokens ?? [];
-
-        const [partCatalogId, vehicleModelIds, brandId] = await Promise.all([
-          this.productMatcher.findPartCatalogIdByName(parsed.productName),
-          this.productMatcher.findVehicleModelIdsByName(
-            parsed.vehicleModel ?? parsed.vehicleFamily,
-          ),
-          this.productMatcher.findBrandIdByName(parsed.brand),
-        ]);
-
-        const match = await this.productMatcher.match({
-          partCatalogId,
-          partName: parsed.productName,
-          vehicleModelIds,
-          vehicleName: parsed.vehicleModel ?? parsed.vehicleFamily,
-          brandId,
-          brandName: parsed.brand,
-          keywordTokens: unknownTokens,
-          modelIsExplicit: !!parsed.vehicleModel,
-        });
-
-        const suggestions = (match.suggestions ?? []).map((s: any) => ({
-          id: s.product.id,
-          name: s.product.name,
-          confidence: s.confidence,
-        }));
-
-        // Store a best-guess for the manager to confirm; never final until approved.
-        if (!productId && match.best) productId = match.best.product.id;
-
-        parsedPayload = { parsed, suggestions };
-        if (!op.quantity && parsed.quantity) quantity = parsed.quantity;
-        if (!unit && (parsed as any).unit) unit = (parsed as any).unit;
-      }
-
-      const created = await this.prisma.pendingOperation.create({
-        data: {
-          clientRequestId: op.clientRequestId,
-          type: op.type ?? 'IN',
-          locationBarcode: op.locationBarcode,
-          voiceText: op.voiceText ?? null,
-          parsed: parsedPayload ?? undefined,
-          quantity,
-          unit,
-          warehouseId: location?.warehouseId ?? null,
-          locationId: location?.id ?? null,
-          productId,
-          workerId: workerId ?? null,
-          deviceCreatedAt: op.deviceCreatedAt ? new Date(op.deviceCreatedAt) : null,
-        },
-      });
-
-      results.push({
-        clientRequestId: op.clientRequestId,
-        id: created.id,
-        status: created.status,
-      });
       } catch (err) {
         /*
          * یک قلمِ خراب نباید کلِ دسته را بیندازد.
@@ -136,7 +139,10 @@ export class PendingOperationsService {
       }
     }
 
-    return { synced: results.filter((r) => r.status !== 'ERROR').length, results };
+    return {
+      synced: results.filter((r) => r.status !== 'ERROR').length,
+      results,
+    };
   }
 
   /** Manager review queue for a warehouse (or all). */
@@ -152,7 +158,10 @@ export class PendingOperationsService {
       : new Date(new Date().setHours(0, 0, 0, 0));
 
     const ops = await this.prisma.pendingOperation.findMany({
-      where: { workerId: userId, createdAt: { gte: isNaN(from.getTime()) ? undefined : from } },
+      where: {
+        workerId: userId,
+        createdAt: { gte: isNaN(from.getTime()) ? undefined : from },
+      },
       include: {
         product: { select: { name: true, sku: true } },
         reviewedBy: { select: { fullName: true } },
@@ -183,7 +192,6 @@ export class PendingOperationsService {
       })),
     };
   }
-
 
   async listPending(warehouseId?: string) {
     return this.prisma.pendingOperation.findMany({

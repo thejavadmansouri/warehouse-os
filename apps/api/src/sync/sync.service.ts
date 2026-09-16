@@ -95,7 +95,10 @@ export class SyncService {
 
     for (const name of clean) {
       if (map.has(name)) continue;
-      const row = await model.create({ data: { name }, select: { id: true, name: true } });
+      const row = await model.create({
+        data: { name },
+        select: { id: true, name: true },
+      });
       map.set(name, row.id);
     }
     return map;
@@ -111,8 +114,14 @@ export class SyncService {
   async applyCatalog(dto: SyncCatalogDto) {
     const locationId = await this.siteLocationId();
 
-    const brands = await this.lookup('brand', dto.products.map((p) => p.brand ?? ''));
-    const cats = await this.lookup('category', dto.products.map((p) => p.category ?? ''));
+    const brands = await this.lookup(
+      'brand',
+      dto.products.map((p) => p.brand ?? ''),
+    );
+    const cats = await this.lookup(
+      'category',
+      dto.products.map((p) => p.category ?? ''),
+    );
     const vehicles = await this.lookup(
       'vehicleModel',
       dto.products.flatMap((p) => p.vehicles),
@@ -134,7 +143,9 @@ export class SyncService {
       create: { id: 'singleton', storedUnit: dto.storedUnit },
     });
 
-    this.log.log(`کاتالوگ سینک شد: ${dto.products.length} کالا، ${removed.count} برداشته‌شده`);
+    this.log.log(
+      `کاتالوگ سینک شد: ${dto.products.length} کالا، ${removed.count} برداشته‌شده`,
+    );
     return { received: dto.products.length, removed: removed.count };
   }
 
@@ -154,8 +165,8 @@ export class SyncService {
       description: p.description ?? null,
       unit: p.unit,
       weight: p.weightGrams != null ? p.weightGrams / 1000 : null,
-      brandId: p.brand ? ctx.brands.get(p.brand) ?? null : null,
-      categoryId: p.category ? ctx.cats.get(p.category) ?? null : null,
+      brandId: p.brand ? (ctx.brands.get(p.brand) ?? null) : null,
+      categoryId: p.category ? (ctx.cats.get(p.category) ?? null) : null,
       searchTokens: p.searchTokens,
       showOnline: true,
       isActive: true,
@@ -191,9 +202,15 @@ export class SyncService {
     }
 
     await this.prisma.inventory.upsert({
-      where: { productId_locationId: { productId: p.id, locationId: ctx.locationId } },
+      where: {
+        productId_locationId: { productId: p.id, locationId: ctx.locationId },
+      },
       update: { quantity: p.quantity },
-      create: { productId: p.id, locationId: ctx.locationId, quantity: p.quantity },
+      create: {
+        productId: p.id,
+        locationId: ctx.locationId,
+        quantity: p.quantity,
+      },
     });
 
     // سازگاری خودرو: ساده‌ترین کارِ درست، پاک‌کردن و نوشتنِ دوباره.

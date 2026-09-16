@@ -13,23 +13,19 @@ import {
 import { Type } from 'class-transformer';
 import { PaymentMethod } from '@prisma/client';
 
-
 /**
  * یک قلمِ مرجوعی. به یک ردیفِ SALE از فاکتورِ اصلی قفل می‌شود، پس نه کالا و نه
  * قیمت را کلاینت نمی‌فرستد — هر دو از خودِ فاکتور می‌آیند. فقط «کدام ردیف» و
  * «چند تا» و «سالم یا معیوب».
  */
 export class ReturnLineDto {
-
   /** شناسه‌ی ردیفِ SALE (InventoryLog) در فاکتور اصلی. */
   @IsString()
-  saleLogId:string;
-
+  saleLogId: string;
 
   @IsInt()
   @Min(1)
-  quantity:number;
-
+  quantity: number;
 
   /**
    * کالا به موجودی برگردد؟ پیش‌فرض بله (سالم). معیوب = false: فقط برگشتِ مالی
@@ -37,25 +33,21 @@ export class ReturnLineDto {
    */
   @IsOptional()
   @IsBoolean()
-  restock?:boolean;
+  restock?: boolean;
 }
 
-
 export class CreateReturnDto {
-
   /**
    * کلید یکتای کلاینت. ارسال دوباره سند مرجوعیِ تکراری نمی‌سازد و همان سند قبلی
    * برگردانده می‌شود — برای retry شبکه و صف آفلاین.
    */
   @IsOptional()
   @IsString()
-  idempotencyKey?:string;
-
+  idempotencyKey?: string;
 
   /** فاکتوری که مرجوعی برایش است — اجباری. بدون فاکتور مرجوعی وجود ندارد. */
   @IsString()
-  invoiceId:string;
-
+  invoiceId: string;
 
   /**
    * روش برگشت وجه:
@@ -64,22 +56,19 @@ export class CreateReturnDto {
    * CHEQUE به‌عنوان روشِ برگشتِ وجه بی‌معناست و رد می‌شود.
    */
   @IsEnum(PaymentMethod)
-  refundMethod:PaymentMethod;
-
+  refundMethod: PaymentMethod;
 
   @IsString()
-  reason:string;
-
+  reason: string;
 
   @IsOptional()
   @IsString()
-  note?:string;
-
+  note?: string;
 
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => ReturnLineDto)
-  lines:ReturnLineDto[];
+  lines: ReturnLineDto[];
 }

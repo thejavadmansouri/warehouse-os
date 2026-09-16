@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePhone } from '../common/phone.util';
@@ -16,14 +20,26 @@ export class StorefrontStockNotifyService {
   async subscribe(productId: string, rawPhone: string) {
     const phone = normalizePhone(rawPhone);
     if (!phone) {
-      throw new BadRequestException({ error: 'BAD_PHONE', message: 'شماره معتبر نیست' });
+      throw new BadRequestException({
+        error: 'BAD_PHONE',
+        message: 'شماره معتبر نیست',
+      });
     }
 
     const product = await this.prisma.product.findFirst({
-      where: { id: productId, showOnline: true, isActive: true, deletedAt: null },
+      where: {
+        id: productId,
+        showOnline: true,
+        isActive: true,
+        deletedAt: null,
+      },
       select: { id: true },
     });
-    if (!product) throw new NotFoundException({ error: 'NOT_FOUND', message: 'کالا یافت نشد' });
+    if (!product)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'کالا یافت نشد',
+      });
 
     // اشتراکِ دوباره = ریستِ notifiedAt، تا اگر بار قبل خبر رفته بود، این‌بار هم برود.
     await this.prisma.stockNotify.upsert({

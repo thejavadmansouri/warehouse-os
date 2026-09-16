@@ -19,7 +19,9 @@ export class OrderLineDto {
   @IsUUID()
   productId!: string;
 
-  @Type(() => Number) @IsInt() @Min(1)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   quantity!: number;
 }
 
@@ -39,33 +41,47 @@ export class CreateOrderDto {
   @Type(() => OrderLineDto)
   lines!: OrderLineDto[];
 
-  @IsString() @MinLength(2) @MaxLength(120)
+  @IsString()
+  @MinLength(2)
+  @MaxLength(120)
   receiverName!: string;
 
-  @IsString() @MinLength(10) @MaxLength(20)
+  @IsString()
+  @MinLength(10)
+  @MaxLength(20)
   receiverPhone!: string;
 
-  @IsString() @MinLength(10) @MaxLength(500)
+  @IsString()
+  @MinLength(10)
+  @MaxLength(500)
   address!: string;
 
-  @IsOptional() @IsEnum(OnlinePayMethod)
+  @IsOptional()
+  @IsEnum(OnlinePayMethod)
   payMethod?: OnlinePayMethod;
 
-  @IsOptional() @IsString() @MaxLength(500)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
   note?: string;
 
   /** کدِ تخفیف (اختیاری). اعتبار و مبلغ سمت سرور دوباره حساب می‌شود. */
-  @IsOptional() @IsString() @MaxLength(40)
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
   couponCode?: string;
 
   /** منطقه‌ی ارسالِ انتخاب‌شده (اگر منطقه‌بندی فعال باشد). */
-  @IsOptional() @IsUUID()
+  @IsOptional()
+  @IsUUID()
   shippingZoneId?: string;
 
   /**
    * کلید یکتای کلاینت — دکمه‌ی دوبار خورده یا retryِ شبکه نباید دو سفارش بسازد.
    * اختیاری است تا کلاینتِ ساده هم کار کند، ولی سایت باید بفرستد.
    */
-  @IsOptional() @IsString() @MaxLength(64)
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
   idempotencyKey?: string;
 }

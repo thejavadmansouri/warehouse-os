@@ -46,7 +46,10 @@ export class SyncAgentService {
   private async call<T>(path: string, body?: unknown): Promise<T> {
     const res = await fetch(this.siteUrl + path, {
       method: body === undefined ? 'GET' : 'POST',
-      headers: { 'content-type': 'application/json', 'x-sync-key': this.secret },
+      headers: {
+        'content-type': 'application/json',
+        'x-sync-key': this.secret,
+      },
       body: body === undefined ? undefined : JSON.stringify(body),
       // قطعیِ نیمه‌باز نباید چرخه‌ی بعدی را هم بگیرد.
       signal: AbortSignal.timeout(30_000),
@@ -96,12 +99,22 @@ export class SyncAgentService {
       where: { showOnline: true, isActive: true, deletedAt: null },
       take: 5_000,
       select: {
-        id: true, name: true, sku: true, partNumber: true, description: true,
-        unit: true, weight: true, searchTokens: true,
+        id: true,
+        name: true,
+        sku: true,
+        partNumber: true,
+        description: true,
+        unit: true,
+        weight: true,
+        searchTokens: true,
         brand: { select: { name: true } },
         category: { select: { name: true } },
         vehicles: { select: { vehicleModel: { select: { name: true } } } },
-        prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } },
+        prices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { salePrice: true },
+        },
         inventories: { select: { quantity: true } },
         assets: {
           where: { type: 'PRODUCT_IMAGE' },
@@ -126,7 +139,7 @@ export class SyncAgentService {
         brand: p.brand?.name ?? null,
         category: p.category?.name ?? null,
         vehicles: p.vehicles.map((v) => v.vehicleModel.name),
-        salePrice: p.prices[0]!.salePrice!,
+        salePrice: p.prices[0].salePrice!,
         quantity: p.inventories.reduce((s, i) => s + i.quantity, 0),
         images: p.assets.map((a) => a.path),
         searchTokens: p.searchTokens,
@@ -157,12 +170,31 @@ export class SyncAgentService {
 
   async pullOrders() {
     type RemoteOrder = {
-      id: string; number: number; subtotal: number; shippingFee: number;
-      total: number; payMethod: string; receiverName: string; receiverPhone: string;
-      address: string; note: string | null; createdAt: string;
-      siteCustomer: { id: string; firstName: string; lastName: string | null; phone: string };
-      lines: { productId: string; productName: string; unit: string;
-               quantity: number; unitPrice: number; lineTotal: number }[];
+      id: string;
+      number: number;
+      subtotal: number;
+      shippingFee: number;
+      total: number;
+      payMethod: string;
+      receiverName: string;
+      receiverPhone: string;
+      address: string;
+      note: string | null;
+      createdAt: string;
+      siteCustomer: {
+        id: string;
+        firstName: string;
+        lastName: string | null;
+        phone: string;
+      };
+      lines: {
+        productId: string;
+        productName: string;
+        unit: string;
+        quantity: number;
+        unitPrice: number;
+        lineTotal: number;
+      }[];
     };
 
     const remote = await this.call<RemoteOrder[]>('/sync/orders');
@@ -196,7 +228,10 @@ export class SyncAgentService {
      */
     if (landed.length) {
       await this.call('/sync/orders/ack', { ids: landed });
-      this.events.broadcast({ type: 'online-order.created', warehouseId: warehouse.id });
+      this.events.broadcast({
+        type: 'online-order.created',
+        warehouseId: warehouse.id,
+      });
       this.log.log(`${landed.length} سفارش از سایت پایین آمد`);
     }
   }
@@ -211,12 +246,31 @@ export class SyncAgentService {
    */
   private async landOrder(
     o: {
-      id: string; number: number; subtotal: number; shippingFee: number; total: number;
-      payMethod: string; receiverName: string; receiverPhone: string; address: string;
-      note: string | null; createdAt: string;
-      siteCustomer: { id: string; firstName: string; lastName: string | null; phone: string };
-      lines: { productId: string; productName: string; unit: string;
-               quantity: number; unitPrice: number; lineTotal: number }[];
+      id: string;
+      number: number;
+      subtotal: number;
+      shippingFee: number;
+      total: number;
+      payMethod: string;
+      receiverName: string;
+      receiverPhone: string;
+      address: string;
+      note: string | null;
+      createdAt: string;
+      siteCustomer: {
+        id: string;
+        firstName: string;
+        lastName: string | null;
+        phone: string;
+      };
+      lines: {
+        productId: string;
+        productName: string;
+        unit: string;
+        quantity: number;
+        unitPrice: number;
+        lineTotal: number;
+      }[];
     },
     warehouseId: string,
   ) {
@@ -303,8 +357,14 @@ export class SyncAgentService {
     const order = await this.prisma.onlineOrder.findUnique({
       where: { id: orderId },
       select: {
-        id: true, number: true, note: true, receiverName: true, receiverPhone: true,
-        siteCustomer: { select: { firstName: true, lastName: true, phone: true } },
+        id: true,
+        number: true,
+        note: true,
+        receiverName: true,
+        receiverPhone: true,
+        siteCustomer: {
+          select: { firstName: true, lastName: true, phone: true },
+        },
         lines: { select: { productId: true, quantity: true, unitPrice: true } },
       },
     });
@@ -335,11 +395,18 @@ export class SyncAgentService {
             data: {
               firstName: order.siteCustomer.firstName || 'مشتری سایت',
               lastName: order.siteCustomer.lastName,
-              searchName: [order.siteCustomer.firstName, order.siteCustomer.lastName]
+              searchName: [
+                order.siteCustomer.firstName,
+                order.siteCustomer.lastName,
+              ]
                 .filter(Boolean)
                 .join(' '),
               phones: {
-                create: { phone: order.siteCustomer.phone, isPrimary: true, label: 'موبایل' },
+                create: {
+                  phone: order.siteCustomer.phone,
+                  isPrimary: true,
+                  label: 'موبایل',
+                },
               },
             },
             select: { id: true },
@@ -396,7 +463,12 @@ export class SyncAgentService {
       // خودش آن را ساخته و می‌داند.
       where: { syncedAt: null, status: { not: OnlineOrderStatus.PLACED } },
       take: 200,
-      select: { id: true, status: true, rejectReason: true, stockAppliedAt: true },
+      select: {
+        id: true,
+        status: true,
+        rejectReason: true,
+        stockAppliedAt: true,
+      },
     });
     if (!rows.length) return;
 

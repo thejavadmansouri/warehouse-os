@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { CouponType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -15,7 +20,10 @@ export class CouponsAdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   list() {
-    return this.prisma.coupon.findMany({ orderBy: { createdAt: 'desc' }, take: 500 });
+    return this.prisma.coupon.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
   }
 
   async create(dto: CreateCouponDto) {
@@ -45,8 +53,14 @@ export class CouponsAdminService {
         },
       });
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002') {
-        throw new ConflictException({ error: 'CODE_TAKEN', message: 'این کد قبلاً ساخته شده است' });
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === 'P2002'
+      ) {
+        throw new ConflictException({
+          error: 'CODE_TAKEN',
+          message: 'این کد قبلاً ساخته شده است',
+        });
       }
       throw e;
     }
@@ -54,17 +68,34 @@ export class CouponsAdminService {
 
   async update(id: string, dto: UpdateCouponDto) {
     const existing = await this.prisma.coupon.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException({ error: 'NOT_FOUND', message: 'کوپن یافت نشد' });
+    if (!existing)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'کوپن یافت نشد',
+      });
 
     if (
       dto.value != null &&
       existing.type === CouponType.PERCENT &&
       (dto.value < 1 || dto.value > 100)
     ) {
-      throw new BadRequestException({ error: 'BAD_PERCENT', message: 'درصد تخفیف باید بین ۱ تا ۱۰۰ باشد' });
+      throw new BadRequestException({
+        error: 'BAD_PERCENT',
+        message: 'درصد تخفیف باید بین ۱ تا ۱۰۰ باشد',
+      });
     }
-    const startsAt = dto.startsAt !== undefined ? (dto.startsAt ? new Date(dto.startsAt) : null) : existing.startsAt;
-    const expiresAt = dto.expiresAt !== undefined ? (dto.expiresAt ? new Date(dto.expiresAt) : null) : existing.expiresAt;
+    const startsAt =
+      dto.startsAt !== undefined
+        ? dto.startsAt
+          ? new Date(dto.startsAt)
+          : null
+        : existing.startsAt;
+    const expiresAt =
+      dto.expiresAt !== undefined
+        ? dto.expiresAt
+          ? new Date(dto.expiresAt)
+          : null
+        : existing.expiresAt;
     this.assertDateOrder(startsAt, expiresAt);
 
     return this.prisma.coupon.update({
@@ -72,9 +103,11 @@ export class CouponsAdminService {
       data: {
         value: dto.value ?? undefined,
         minSubtotal: dto.minSubtotal ?? undefined,
-        maxDiscount: dto.maxDiscount !== undefined ? dto.maxDiscount : undefined,
+        maxDiscount:
+          dto.maxDiscount !== undefined ? dto.maxDiscount : undefined,
         usageLimit: dto.usageLimit !== undefined ? dto.usageLimit : undefined,
-        perCustomer: dto.perCustomer !== undefined ? dto.perCustomer : undefined,
+        perCustomer:
+          dto.perCustomer !== undefined ? dto.perCustomer : undefined,
         startsAt,
         expiresAt,
         isActive: dto.isActive ?? undefined,
@@ -83,14 +116,24 @@ export class CouponsAdminService {
   }
 
   async remove(id: string) {
-    const found = await this.prisma.coupon.findUnique({ where: { id }, select: { id: true } });
-    if (!found) throw new NotFoundException({ error: 'NOT_FOUND', message: 'کوپن یافت نشد' });
+    const found = await this.prisma.coupon.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!found)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'کوپن یافت نشد',
+      });
     // سفارش‌های قبلی couponCode را snapshot دارند؛ FK با ON DELETE SET NULL می‌ماند.
     await this.prisma.coupon.delete({ where: { id } });
     return { ok: true };
   }
 
-  private assertDateOrder(startsAt?: Date | string | null, expiresAt?: Date | string | null) {
+  private assertDateOrder(
+    startsAt?: Date | string | null,
+    expiresAt?: Date | string | null,
+  ) {
     if (startsAt && expiresAt && new Date(startsAt) > new Date(expiresAt)) {
       throw new BadRequestException({
         error: 'BAD_DATES',

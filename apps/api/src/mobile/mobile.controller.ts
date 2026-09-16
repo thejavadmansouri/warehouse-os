@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Body,
+  Query,
   Req,
   UseGuards,
   NotFoundException,
@@ -14,6 +15,8 @@ import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
+import { BlankQuotationsService } from '../sales/blank-quotations.service';
+import { CreateBlankQuotationDto } from '../sales/dto/blank-quotation.dto';
 import { MobileCountService } from './mobile-count.service';
 
 @Controller('mobile')
@@ -21,6 +24,7 @@ export class MobileController {
   constructor(
     private prisma: PrismaService,
     private countService: MobileCountService,
+    private blankQuotations: BlankQuotationsService,
   ) {}
 
   @Get('products/scan/:barcode')
@@ -110,10 +114,7 @@ export class MobileController {
   // شروع شمارش یک قفسه توسط انباردار
   @Post('count/start')
   @UseGuards(JwtAuthGuard)
-  async startCount(
-    @Body() body: { locationBarcode: string },
-    @Req() req: any,
-  ) {
+  async startCount(@Body() body: { locationBarcode: string }, @Req() req: any) {
     return this.countService.start(body.locationBarcode, req.user.userId);
   }
 
@@ -144,5 +145,55 @@ export class MobileController {
     @Body() body: { productId?: string },
   ) {
     return this.countService.confirmItem(itemId, body.productId);
+  }
+
+  // ---------- پیش‌فاکتور سفید (از گوشی) ----------
+
+  /*
+   * چرا این روت در `mobile` است و نه در `sales`:
+   *
+   * سازندهٔ برگه می‌تواند کارگر باشد (STAFF) و کل سطح `sales/*` برای کارگر
+   * بسته است. باز کردنِ `sales/quotations` به روی STAFF یعنی باز کردن فاکتور،
+   * پرداخت و دفتر مشتریان هم. پس فقط همین یک توانایی، از همین یک روت داده
+   * می‌شود و انبار را هم سرور خودش انتخاب می‌کند (گوشی `warehouseId` ندارد).
+   */
+  @Post('blank-quotations')
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
+  async createBlankQuotation(@Body() dto: CreateBlankQuotationDto, @Req() req: any) {
+    const created = await this.blankQuotations.create(dto, req.user?.userId);
+    return { id: created.id, number: created.number, status: created.status };
+  }
+
+  // سفیدهای همین کاربر — گوشی بعد از سینک می‌بیند چه فرستاده و در چه وضعی است.
+  @Get('blank-quotations/mine')
+  @UseGuards(JwtAuthGuard)
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
+  async myBlankQuotations(@Req() req: any, @Query('limit') limit?: string) {
+    const take = Math.min(50, Math.max(1, Number(limit) || 20));
+    const rows = await this.prisma.blankQuotation.findMany({
+      where: { userId: req.user?.userId ?? null },
+      orderBy: { createdAt: 'desc' },
+      take,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        createdAt: true,
+        customerName: true,
+        lines: { select: { pricedAt: true } },
+      },
+    });
+
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        createdAt: r.createdAt,
+        customerName: r.customerName,
+        unpricedCount: r.lines.filter((l) => l.pricedAt === null).length,
+      })),
+    };
   }
 }

@@ -7,45 +7,25 @@ import { Public } from './decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
+  constructor(private authService: AuthService) {}
 
-  constructor(
-    private authService: AuthService
-  ) {}
-
-@Public()
-/*
- * ضد brute-force: حداکثر ۵ تلاش ورود در دقیقه به ازای هر IP. فقط همین مسیر —
- * بقیه‌ی API (به‌خصوص POS پرتردد) throttled نمی‌شود.
- */
-@UseGuards(ThrottlerGuard)
-@Throttle({ default: { limit: 5, ttl: 60_000 } })
-@Post('login')
-  async login(
-    @Body() body:{
-      username:string;
-      password:string;
-    }
-  ){
-
-    return this.authService.login(
-      body.username,
-      body.password
-    );
-
+  @Public()
+  /*
+   * ضد brute-force: حداکثر ۵ تلاش ورود در دقیقه به ازای هر IP. فقط همین مسیر —
+   * بقیه‌ی API (به‌خصوص POS پرتردد) throttled نمی‌شود.
+   */
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('login')
+  async login(@Body() body: { username: string; password: string }) {
+    return this.authService.login(body.username, body.password);
   }
-
-
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  me(
-    @CurrentUser() user:any
-  ){
-
+  me(@CurrentUser() user: any) {
     return user;
-
   }
-
 
   /**
    * خروج — نشست فعال را آزاد می‌کند.
@@ -55,12 +35,7 @@ export class AuthController {
    */
   @Post('logout')
   @UseGuards(JwtAuthGuard)
-  logout(
-    @CurrentUser() user:any
-  ){
-
+  logout(@CurrentUser() user: any) {
     return this.authService.logout(user.userId);
-
   }
-
 }

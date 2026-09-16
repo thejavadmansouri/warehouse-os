@@ -48,7 +48,12 @@ export class ImagePipeline {
     try {
       mainBuffer = await sharp(file.buffer)
         .rotate()
-        .resize({ width: MAX_EDGE, height: MAX_EDGE, fit: 'inside', withoutEnlargement: true })
+        .resize({
+          width: MAX_EDGE,
+          height: MAX_EDGE,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
         .jpeg({ quality: 80 })
         .toBuffer();
       // Dimensions of the STORED file, not the source.
@@ -57,7 +62,12 @@ export class ImagePipeline {
       height = outMeta.height;
       thumbBuffer = await sharp(file.buffer)
         .rotate()
-        .resize({ width: THUMB_EDGE, height: THUMB_EDGE, fit: 'inside', withoutEnlargement: true })
+        .resize({
+          width: THUMB_EDGE,
+          height: THUMB_EDGE,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
         .jpeg({ quality: 70 })
         .toBuffer();
     } catch {

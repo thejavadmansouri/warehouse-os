@@ -51,7 +51,11 @@ export class StockNotifyAdminService {
       where: { id: productId },
       select: { id: true, name: true },
     });
-    if (!product) throw new NotFoundException({ error: 'NOT_FOUND', message: 'کالا یافت نشد' });
+    if (!product)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'کالا یافت نشد',
+      });
 
     const subs = await this.prisma.stockNotify.findMany({
       where: { productId, notifiedAt: null },

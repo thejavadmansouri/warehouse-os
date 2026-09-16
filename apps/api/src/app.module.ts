@@ -47,6 +47,7 @@ import { OnlineOrdersModule } from './storefront/online-orders.module';
 import { SiteAdminModule } from './site-admin/site-admin.module';
 import { SyncModule } from './sync/sync.module';
 import { RealtimeModule } from './realtime/realtime.module';
+import { VouchersModule } from './vouchers/vouchers.module';
 import { ShortagesModule } from './shortages/shortages.module';
 import { SmsModule } from './sms/sms.module';
 import { ProductImagesModule } from './product-images/product-images.module';
@@ -92,6 +93,7 @@ const WAREHOUSE_ONLY = [
   WorkTasksModule,
   ReportsModule,
   BackupsModule,
+  VouchersModule,
   ShortagesModule,
   SmsModule,
   ShopModule,
@@ -137,7 +139,11 @@ function rolePart() {
      * دست‌نخورده بمانند.
      */
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'storage', 'products'),
+      // با مسیرِ نوشتن در uploads.service هم‌راستا: هر دو به process.cwd()
+      // وابسته‌اند تا فایلی که نوشته می‌شود همان‌جایی سرو شود که خوانده می‌شود.
+      // (join(__dirname, ...) نمی‌تواند جواب دهد — خروجی nest build زیر dist/src
+      // است و __dirname به dist می‌رسد، نه ریشه‌ی storage.)
+      rootPath: join(process.cwd(), 'storage', 'products'),
       serveRoot: '/storage/products',
     }),
     /*
@@ -145,13 +151,11 @@ function rolePart() {
      * زیرپوشه سرو می‌شود — نه کلِ storage — تا عکس‌های انبار پشتِ توکن بمانند.
      */
     ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', 'storage', 'banners'),
+      rootPath: join(process.cwd(), 'storage', 'banners'),
       serveRoot: '/storage/banners',
     }),
   ],
-  controllers: [
-    AppController,
-  ],
+  controllers: [AppController],
   providers: [
     AppService,
     {

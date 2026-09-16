@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateShippingZoneDto, UpdateShippingZoneDto } from './dto/shipping-zone-admin.dto';
+import {
+  CreateShippingZoneDto,
+  UpdateShippingZoneDto,
+} from './dto/shipping-zone-admin.dto';
 
 /** مدیریتِ مناطقِ ارسال — **فقط سرور سایت** (`APP_ROLE=site`). مبالغ به ریال. */
 @Injectable()
@@ -48,8 +51,15 @@ export class ShippingZonesAdminService {
   }
 
   private async mustExist(id: string) {
-    const z = await this.prisma.shippingZone.findUnique({ where: { id }, select: { id: true } });
-    if (!z) throw new NotFoundException({ error: 'NOT_FOUND', message: 'منطقه یافت نشد' });
+    const z = await this.prisma.shippingZone.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+    if (!z)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'منطقه یافت نشد',
+      });
     return z;
   }
 }

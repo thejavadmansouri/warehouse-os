@@ -15,37 +15,35 @@ import { Type } from 'class-transformer';
 import { InlineCustomerDto, PaymentDto } from './create-invoice.dto';
 import { INT4_MAX } from '../../common/money';
 
-
 /** یک ردیف پیش‌فاکتور. مکان اختیاری است — هنگام قیمت دادن هنوز قفسه لازم نیست. */
 export class QuotationLineDto {
-
   @IsString()
-  productId:string;
-
+  productId: string;
 
   @IsOptional()
   @IsString()
-  locationId?:string;
+  locationId?: string;
 
+  /** نامِ نمایشیِ قابل‌ویرایش — خالی یعنی نامِ خودِ کالا چاپ شود. */
+  @IsOptional()
+  @IsString()
+  label?: string;
 
   @IsInt()
   @Min(1)
-  quantity:number;
-
+  quantity: number;
 
   /** ریال. صفر مجاز است (کالای هدیه)، منفی نه. */
   @IsInt()
   @Min(0)
   @Max(INT4_MAX)
-  unitPrice:number;
-
+  unitPrice: number;
 
   @IsOptional()
   @IsInt()
   @Min(0)
-  discount?:number;
+  discount?: number;
 }
-
 
 /**
  * ساخت پیش‌فاکتور.
@@ -54,10 +52,8 @@ export class QuotationLineDto {
  * هزاران ردیف در یک تراکنش بسازد.
  */
 export class CreateQuotationDto {
-
   @IsString()
-  warehouseId:string;
-
+  warehouseId: string;
 
   /**
    * کلاینت برای «مشتری نقدیِ گذری» صراحتاً `null` می‌فرستد، نه undefined.
@@ -65,92 +61,87 @@ export class CreateQuotationDto {
    */
   @IsOptional()
   @IsString()
-  customerId?:string | null;
+  customerId?: string | null;
 
+  /** نامِ آزادِ مشتری (تایپ مستقیم) — وقتی خالی است، نام مشتریِ پیوندی می‌آید. */
+  @IsOptional()
+  @IsString()
+  customerName?: string;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => InlineCustomerDto)
-  customer?:InlineCustomerDto;
-
+  customer?: InlineCustomerDto;
 
   @IsOptional()
   @IsInt()
   @Min(0)
-  discount?:number;
-
+  discount?: number;
 
   @IsOptional()
   @IsString()
-  note?:string;
-
+  note?: string;
 
   /** مدت اعتبار به دقیقه — ۶۰ یعنی یک ساعت، ۱۴۴۰ یعنی یک شبانه‌روز. */
   @IsOptional()
   @IsInt()
   @Min(1)
-  validForMinutes?:number;
-
+  validForMinutes?: number;
 
   /** یا مستقیم تاریخ انقضا (ISO). اگر هر دو بیاید، این اولویت دارد. */
   @IsOptional()
   @IsDateString()
-  validUntil?:string;
-
+  validUntil?: string;
 
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => QuotationLineDto)
-  lines:QuotationLineDto[];
+  lines: QuotationLineDto[];
 }
-
 
 /** ویرایش پیش‌فاکتور فعال — همان شکل، بدون انبار (انبار عوض نمی‌شود). */
 export class UpdateQuotationDto {
-
   @IsOptional()
   @IsString()
-  customerId?:string | null;
+  customerId?: string | null;
 
+  /** نامِ آزادِ مشتری — undefined یعنی دست نخورده بماند. */
+  @IsOptional()
+  @IsString()
+  customerName?: string;
 
   @IsOptional()
   @ValidateNested()
   @Type(() => InlineCustomerDto)
-  customer?:InlineCustomerDto;
-
+  customer?: InlineCustomerDto;
 
   @IsOptional()
   @IsInt()
   @Min(0)
-  discount?:number;
-
+  discount?: number;
 
   @IsOptional()
   @IsString()
-  note?:string;
-
+  note?: string;
 
   @IsOptional()
   @IsInt()
   @Min(1)
-  validForMinutes?:number;
-
+  validForMinutes?: number;
 
   @IsOptional()
   @IsDateString()
-  validUntil?:string;
-
+  validUntil?: string;
 
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => QuotationLineDto)
-  lines:QuotationLineDto[];
+  lines: QuotationLineDto[];
 }
-
 
 /**
  * تبدیل پیش‌فاکتور به فاکتور واقعی.
@@ -165,25 +156,21 @@ export class UpdateQuotationDto {
  * فاکتور می‌شد.
  */
 export class ConvertQuotationDto {
-
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => PaymentDto)
-  payments?:PaymentDto[];
-
+  payments?: PaymentDto[];
 
   @IsOptional()
   @IsDateString()
-  dueDate?:string;
+  dueDate?: string;
 }
-
 
 /** تمدید اعتبار — فقط مدیر. */
 export class ExtendQuotationDto {
-
   @IsInt()
   @Min(1)
-  validForMinutes:number;
+  validForMinutes: number;
 }

@@ -18,7 +18,6 @@ import {
   UpdateQuotationDto,
 } from './dto/quotation.dto';
 
-
 /*
  * شکلِ ورودی‌ها از خودِ DTOها می‌آید، نه از interfaceهای موازی.
  *
@@ -39,17 +38,14 @@ type CustomerRef = {
 type ValidRef = { validUntil?: string; validForMinutes?: number };
 
 const DEFAULT_VALID_MINUTES = 24 * 60;
-const INT4_MAX = 2_147_483_647;
-
+const INT4_MAX = 1_000_000_000_000; // 1e12 rial = 100 billion toman — هم‌سقف با common/money.ts
 
 @Injectable()
 export class QuotationsService {
-
   constructor(
     private prisma: PrismaService,
     private sales: SalesService,
   ) {}
-
 
   /**
    * ساخت پیش‌فاکتور.
@@ -59,7 +55,6 @@ export class QuotationsService {
    * موجودی فقط در لحظه‌ی تبدیل به فاکتور بررسی و کم می‌شود.
    */
   async create(input: CreateQuotationInput, userId?: string) {
-
     this.assertLinesValid(input.lines);
 
     const subtotal = input.lines.reduce(
@@ -87,12 +82,22 @@ export class QuotationsService {
     const validUntil = this.resolveValidUntil(input);
 
     const id = await this.prisma.$transaction(async (tx) => {
-      const customerId = await this.resolveCustomer(tx, input);
+      /*
+       * نامِ آزادِ مشتری یا پیوند به مشتریِ موجود — نه هر دو.
+       * وقتی فروشنده اسم را مستقیم تایپ می‌کند (مثل محسن‌فاکتور)، پیوندی
+       * ساخته نمی‌شود تا لیستِ مشتریان با «مشتریِ بی‌شماره» آلوده نشود.
+       */
+      const freeName = input.customerName?.trim();
+      const customerId =
+        freeName && !input.customerId && !input.customer
+          ? null
+          : await this.resolveCustomer(tx, input);
 
       const q = await tx.quotation.create({
         data: {
           warehouseId: input.warehouseId,
           customerId,
+          customerName: freeName || null,
           userId: userId ?? null,
           subtotal,
           discount,
@@ -103,6 +108,7 @@ export class QuotationsService {
             create: input.lines.map((l) => ({
               productId: l.productId,
               locationId: l.locationId ?? null,
+              label: l.label?.trim() || null,
               quantity: l.quantity,
               unitPrice: l.unitPrice,
               discount: l.discount ?? 0,
@@ -117,7 +123,6 @@ export class QuotationsService {
     return this.findOne(id);
   }
 
-
   /**
    * تبدیل پیش‌فاکتور به فاکتور واقعی.
    *
@@ -127,11 +132,7 @@ export class QuotationsService {
    * پیش‌فاکتور منقضی تبدیل نمی‌شود: کل معنای «اعتبار» همین است که بعد از آن
    * قیمت دیگر تضمین‌شده نیست. مدیر می‌تواند اعتبار را تمدید کند.
    */
-  async convert(
-    id: string,
-    body: ConvertQuotationDto,
-    userId?: string,
-  ) {
+  async convert(id: string, body: ConvertQuotationDto, userId?: string) {
     const q = await this.prisma.quotation.findUnique({
       where: { id },
       include: { lines: true },
@@ -203,6 +204,8 @@ export class QuotationsService {
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           discount: l.discount || undefined,
+          // نامِ ویرایش‌شده‌ی قلم روی فاکتورِ واقعی هم می‌ماند (توضیحِ ردیف).
+          lineNote: l.label?.trim() || undefined,
         })),
         // مهلت/سررسید نسیه — مثل مسیر مستقیم F2؛ وقتی انتخاب شده باشد می‌رسد
         // وگرنه خودِ createInvoice از مهلتِ مشتری می‌سازد.
@@ -222,7 +225,6 @@ export class QuotationsService {
 
     return invoice;
   }
-
 
   /**
    * ویرایش پیش‌فاکتور فعال — اقلام، قیمت‌ها، مشتری و یادداشت.
@@ -284,17 +286,39 @@ export class QuotationsService {
        * فیلدِ نفرستاده را صفر کند. `note` هم همین‌طور بود.
        */
       const touchesCustomer =
-        input.customerId !== undefined || input.customer !== undefined;
+        input.customerId !== undefined ||
+        input.customer !== undefined ||
+        input.customerName !== undefined;
+      /*
+       * نامِ آزادِ تایپ‌شده (مثل محسن‌فاکتور) پیوندی نمی‌سازد و پیوندِ قبلی را
+       * هم خالی می‌کند: مشتریِ بی‌شماره در لیستِ مشتریان ساخته نمی‌شود.
+       */
+      const freeName = input.customerName?.trim();
       const customerId = touchesCustomer
-        ? await this.resolveCustomer(tx, input)
+        ? freeName && !input.customerId && !input.customer
+          ? null
+          : await this.resolveCustomer(tx, input)
         : undefined;
 
       await tx.quotationLine.deleteMany({ where: { quotationId: id } });
+
+      /*
+       * وقتی مشتری دست می‌خورد: یا پیوندِ واقعی (نامِ آزاد پاک می‌شود تا
+       * نامِ مشتریِ پیوندی نمایش داده شود)، یا نامِ آزاد (پیوند خالی می‌شود).
+       */
+      const resolvedCustomerName = touchesCustomer
+        ? customerId
+          ? null
+          : freeName || null
+        : undefined;
 
       await tx.quotation.update({
         where: { id },
         data: {
           ...(touchesCustomer ? { customerId } : {}),
+          ...(resolvedCustomerName !== undefined
+            ? { customerName: resolvedCustomerName }
+            : {}),
           subtotal,
           discount,
           total,
@@ -306,6 +330,7 @@ export class QuotationsService {
             create: input.lines.map((l) => ({
               productId: l.productId,
               locationId: l.locationId ?? null,
+              label: l.label?.trim() || null,
               quantity: l.quantity,
               unitPrice: l.unitPrice,
               discount: l.discount ?? 0,
@@ -317,7 +342,6 @@ export class QuotationsService {
 
     return this.findOne(id);
   }
-
 
   /** تمدید اعتبار — فقط مدیر. */
   async extend(id: string, validForMinutes: number) {
@@ -338,7 +362,10 @@ export class QuotationsService {
       });
     }
 
-    const minutes = Math.max(1, Number(validForMinutes) || DEFAULT_VALID_MINUTES);
+    const minutes = Math.max(
+      1,
+      Number(validForMinutes) || DEFAULT_VALID_MINUTES,
+    );
 
     await this.prisma.quotation.update({
       where: { id },
@@ -347,7 +374,6 @@ export class QuotationsService {
 
     return this.findOne(id);
   }
-
 
   async cancel(id: string) {
     const claimed = await this.prisma.quotation.updateMany({
@@ -373,7 +399,6 @@ export class QuotationsService {
     return this.findOne(id);
   }
 
-
   async findOne(id: string) {
     const q = await this.prisma.quotation.findUnique({
       where: { id },
@@ -383,7 +408,9 @@ export class QuotationsService {
         user: { select: { id: true, fullName: true } },
         lines: {
           include: {
-            product: { select: { id: true, name: true, sku: true, unit: true } },
+            product: {
+              select: { id: true, name: true, sku: true, unit: true },
+            },
           },
         },
       },
@@ -398,7 +425,6 @@ export class QuotationsService {
 
     return this.decorate(q);
   }
-
 
   async findAll(query: {
     status?: string;
@@ -443,10 +469,14 @@ export class QuotationsService {
 
     return {
       data: data.map((q) => this.decorate(q)),
-      meta: { total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) },
+      meta: {
+        total,
+        page,
+        limit,
+        lastPage: Math.max(1, Math.ceil(total / limit)),
+      },
     };
   }
-
 
   // ---------- کمکی‌ها ----------
 
@@ -477,16 +507,21 @@ export class QuotationsService {
     });
   }
 
-
   private decorate<
     T extends {
       status: QuotationStatus;
       validUntil: Date;
-      customer?: { id: string; firstName: string; lastName: string | null } | null;
+      customerName?: string | null;
+      customer?: {
+        id: string;
+        firstName: string;
+        lastName: string | null;
+      } | null;
     },
   >(q: T) {
     const isExpired =
-      q.status === QuotationStatus.ACTIVE && q.validUntil.getTime() < Date.now();
+      q.status === QuotationStatus.ACTIVE &&
+      q.validUntil.getTime() < Date.now();
 
     return {
       ...q,
@@ -495,14 +530,22 @@ export class QuotationsService {
       displayStatus: isExpired ? 'EXPIRED' : q.status,
       remainingMinutes: isExpired
         ? 0
-        : Math.max(0, Math.round((q.validUntil.getTime() - Date.now()) / 60_000)),
-      customerName: q.customer
-        ? [q.customer.firstName, q.customer.lastName].filter(Boolean).join(' ')
-        : null,
+        : Math.max(
+            0,
+            Math.round((q.validUntil.getTime() - Date.now()) / 60_000),
+          ),
+      /*
+       * نامِ نمایشی مشتری: اول نامِ آزادِ تایپ‌شده؛ اگر نبود، نامِ مشتریِ
+       * پیوندی. طوری که هم فهرست هم برگه‌ی چاپی درست بخوانند.
+       */
+      customerName:
+        q.customerName?.trim() ||
+        (q.customer
+          ? [q.customer.firstName, q.customer.lastName].filter(Boolean).join(' ')
+          : null),
       customerId: q.customer?.id ?? null,
     };
   }
-
 
   private resolveValidUntil(input: ValidRef): Date {
     if (input.validUntil) {
@@ -529,13 +572,14 @@ export class QuotationsService {
     return new Date(Date.now() + minutes * 60_000);
   }
 
-
   private async resolveCustomer(
     tx: Prisma.TransactionClient,
     input: CustomerRef,
   ): Promise<string | null> {
     if (input.customerId) {
-      const found = await tx.customer.findUnique({ where: { id: input.customerId } });
+      const found = await tx.customer.findUnique({
+        where: { id: input.customerId },
+      });
       if (!found) {
         throw new NotFoundException({
           error: 'CUSTOMER_NOT_FOUND',

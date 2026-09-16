@@ -1,9 +1,5 @@
 import { ValidationPipe } from '@nestjs/common';
-import {
-  ChangePasswordDto,
-  ChangeRoleDto,
-  CreateUserDto,
-} from './user.dto';
+import { ChangePasswordDto, ChangeRoleDto, CreateUserDto } from './user.dto';
 
 /**
  * همان پیکربندیِ ValidationPipe سراسری که در main.ts است — تا مطمئن شویم DTO
@@ -38,13 +34,19 @@ describe('user DTOs', () => {
 
   it('نام کاربری خالی رد می‌شود', async () => {
     await expect(
-      pipe.transform({ ...validUser, username: '' }, { type: 'body', metatype: CreateUserDto }),
+      pipe.transform(
+        { ...validUser, username: '' },
+        { type: 'body', metatype: CreateUserDto },
+      ),
     ).rejects.toThrow();
   });
 
   it('رمز کوتاه‌تر از ۶ کاراکتر رد می‌شود', async () => {
     await expect(
-      pipe.transform({ ...validUser, password: '12345' }, { type: 'body', metatype: CreateUserDto }),
+      pipe.transform(
+        { ...validUser, password: '12345' },
+        { type: 'body', metatype: CreateUserDto },
+      ),
     ).rejects.toThrow();
   });
 
@@ -67,20 +69,29 @@ describe('user DTOs', () => {
   });
 
   it('ChangeRoleDto: نقش معتبر پذیرفته و نامعتبر رد می‌شود', async () => {
-    const dto = await pipe.transform({ role: 'MANAGER' }, {
-      type: 'body',
-      metatype: ChangeRoleDto,
-    });
+    const dto = await pipe.transform(
+      { role: 'MANAGER' },
+      {
+        type: 'body',
+        metatype: ChangeRoleDto,
+      },
+    );
     expect(dto.role).toBe('MANAGER');
 
     await expect(
-      pipe.transform({ role: 'SUPERUSER' }, { type: 'body', metatype: ChangeRoleDto }),
+      pipe.transform(
+        { role: 'SUPERUSER' },
+        { type: 'body', metatype: ChangeRoleDto },
+      ),
     ).rejects.toThrow();
   });
 
   it('ChangePasswordDto: رمز کوتاه رد می‌شود', async () => {
     await expect(
-      pipe.transform({ password: '123' }, { type: 'body', metatype: ChangePasswordDto }),
+      pipe.transform(
+        { password: '123' },
+        { type: 'body', metatype: ChangePasswordDto },
+      ),
     ).rejects.toThrow();
   });
 });

@@ -60,7 +60,10 @@ export class StorefrontReviewsService {
         body: r.body,
         verified: r.verified,
         createdAt: r.createdAt,
-        author: this.maskName(r.siteCustomer.firstName, r.siteCustomer.lastName),
+        author: this.maskName(
+          r.siteCustomer.firstName,
+          r.siteCustomer.lastName,
+        ),
       })),
     };
   }
@@ -69,12 +72,25 @@ export class StorefrontReviewsService {
    * ثبت یا ویرایشِ نظرِ همین مشتری روی همین کالا (یکی بیشتر مجاز نیست).
    * ویرایش دوباره به PENDING برمی‌گردد مگر خریدار تأییدشده باشد.
    */
-  async create(siteCustomerId: string, productId: string, dto: CreateReviewDto) {
+  async create(
+    siteCustomerId: string,
+    productId: string,
+    dto: CreateReviewDto,
+  ) {
     const product = await this.prisma.product.findFirst({
-      where: { id: productId, showOnline: true, isActive: true, deletedAt: null },
+      where: {
+        id: productId,
+        showOnline: true,
+        isActive: true,
+        deletedAt: null,
+      },
       select: { id: true },
     });
-    if (!product) throw new NotFoundException({ error: 'NOT_FOUND', message: 'کالا یافت نشد' });
+    if (!product)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'کالا یافت نشد',
+      });
 
     const bought = await this.prisma.onlineOrderLine.count({
       where: { productId, order: { siteCustomerId } },
@@ -84,7 +100,13 @@ export class StorefrontReviewsService {
 
     const review = await this.prisma.productReview.upsert({
       where: { productId_siteCustomerId: { productId, siteCustomerId } },
-      update: { rating: dto.rating, title: dto.title ?? null, body: dto.body, status, verified },
+      update: {
+        rating: dto.rating,
+        title: dto.title ?? null,
+        body: dto.body,
+        status,
+        verified,
+      },
       create: {
         productId,
         siteCustomerId,

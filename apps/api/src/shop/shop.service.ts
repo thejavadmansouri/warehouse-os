@@ -3,9 +3,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CurrencyUnit } from '../common/money';
 
-
 const SINGLETON = 'singleton';
-
 
 /** مشخصات مغازه — روی سربرگ همه‌ی برگه‌های چاپی. */
 export interface ShopSettingsInput {
@@ -23,12 +21,9 @@ export interface ShopSettingsInput {
   showUnpriced?: boolean;
 }
 
-
 @Injectable()
 export class ShopService {
-
   constructor(private readonly prisma: PrismaService) {}
-
 
   /**
    * خواندن تنظیمات.
@@ -44,7 +39,6 @@ export class ShopService {
     });
   }
 
-
   async update(input: ShopSettingsInput) {
     const data = {
       ...(input.name !== undefined ? { name: input.name.trim() } : {}),
@@ -58,12 +52,20 @@ export class ShopService {
         ? { cardHolder: input.cardHolder.trim() }
         : {}),
       ...(input.footer !== undefined ? { footer: input.footer.trim() } : {}),
-      ...(input.chequeRateBp !== undefined ? { chequeRateBp: input.chequeRateBp } : {}),
-      ...(input.chequeRateMode !== undefined ? { chequeRateMode: input.chequeRateMode } : {}),
-      ...(input.storedUnit !== undefined ? { storedUnit: input.storedUnit } : {}),
+      ...(input.chequeRateBp !== undefined
+        ? { chequeRateBp: input.chequeRateBp }
+        : {}),
+      ...(input.chequeRateMode !== undefined
+        ? { chequeRateMode: input.chequeRateMode }
+        : {}),
+      ...(input.storedUnit !== undefined
+        ? { storedUnit: input.storedUnit }
+        : {}),
       ...(input.panelUnit !== undefined ? { panelUnit: input.panelUnit } : {}),
       ...(input.siteUnit !== undefined ? { siteUnit: input.siteUnit } : {}),
-      ...(input.showUnpriced !== undefined ? { showUnpriced: input.showUnpriced } : {}),
+      ...(input.showUnpriced !== undefined
+        ? { showUnpriced: input.showUnpriced }
+        : {}),
     };
 
     return this.prisma.shopSettings.upsert({

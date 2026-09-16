@@ -35,7 +35,9 @@ function expected() {
 }
 
 async function main() {
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['error'],
+  });
   const prisma = app.get(PrismaService);
   const sales = app.get(SalesService);
 
@@ -62,7 +64,11 @@ async function main() {
       data: { name, sku, searchTokens: [name], unit: 'عدد' },
     });
     await prisma.productPrice.create({
-      data: { productId: p.id, salePrice: price, purchasePrice: Math.round(price / 2) },
+      data: {
+        productId: p.id,
+        salePrice: price,
+        purchasePrice: Math.round(price / 2),
+      },
     });
     await prisma.inventory.create({
       data: { productId: p.id, locationId: location.id, quantity: 10 },
@@ -79,10 +85,21 @@ async function main() {
       warehouseId: warehouse.id,
       discount: INVOICE_DISCOUNT,
       lines: [
-        { productId: a.id, locationId: location.id, quantity: QTY_A, unitPrice: UNIT_A, discount: LINE_DISCOUNT_A },
-        { productId: b.id, locationId: location.id, quantity: QTY_B, unitPrice: UNIT_B },
+        {
+          productId: a.id,
+          locationId: location.id,
+          quantity: QTY_A,
+          unitPrice: UNIT_A,
+          discount: LINE_DISCOUNT_A,
+        },
+        {
+          productId: b.id,
+          locationId: location.id,
+          quantity: QTY_B,
+          unitPrice: UNIT_B,
+        },
       ],
-    } as never,
+    },
     undefined,
   );
 
@@ -100,7 +117,9 @@ async function main() {
     where: { productId: a.id, locationId: location.id },
     select: { quantity: true },
   });
-  console.log(`stock after selling ${QTY_A}: ${left?.quantity} (expected ${10 - QTY_A})`);
+  console.log(
+    `stock after selling ${QTY_A}: ${left?.quantity} (expected ${10 - QTY_A})`,
+  );
 
   await app.close();
   process.exit(ok && left?.quantity === 10 - QTY_A ? 0 : 1);

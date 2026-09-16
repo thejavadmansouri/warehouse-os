@@ -68,7 +68,9 @@ export async function lineBalances(
       (c._sum.newQuantity ?? 0) - (c._sum.oldQuantity ?? 0),
     ]),
   );
-  const returnedById = new Map(returns.map((r) => [r.saleLogId, r._sum.quantity ?? 0]));
+  const returnedById = new Map(
+    returns.map((r) => [r.saleLogId, r._sum.quantity ?? 0]),
+  );
 
   const out = new Map<string, LineBalance>();
   for (const id of saleLogIds) {

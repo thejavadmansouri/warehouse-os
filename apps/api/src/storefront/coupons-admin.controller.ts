@@ -7,17 +7,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 
-import { Roles } from '../auth/roles.decorator';
+import { SiteAccessGuard } from '../auth/site-access.guard';
 import { CouponsAdminService } from './coupons-admin.service';
 import { CreateCouponDto, UpdateCouponDto } from './dto/coupon-admin.dto';
 
 /**
- * مدیریتِ کوپن در پنلِ سایت — عمومی نیست: `JwtAuthGuard` سراسری + `@Roles`.
+ * مدیریتِ کوپن در پنلِ سایت — عمومی نیست: `JwtAuthGuard` سراسری +
+ * `SiteAccessGuard`.
  */
-@Roles(Role.ADMIN, Role.MANAGER)
+@UseGuards(SiteAccessGuard)
 @Controller('coupons')
 export class CouponsAdminController {
   constructor(private readonly coupons: CouponsAdminService) {}

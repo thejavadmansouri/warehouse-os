@@ -2,33 +2,26 @@ import { TrieDictionary } from '../utils/trie.util';
 import { DomainDictionaryConfig } from '../types/engine.types';
 import { normalizePersian } from '../utils/persian-normalize';
 
-
 export interface MatchingResult {
+  product: any | null;
 
-  product:any|null;
-
-  vehicle:any|null;
+  vehicle: any | null;
 
   // متن دقیقی که به‌عنوان خودرو تطبیق خورد («پراید» یا «پژو 206») — نه نام کامل payload
-  vehicleText:string|null;
+  vehicleText: string | null;
 
-  brand:string|null;
+  brand: string | null;
 
-  engine:string|null;
+  engine: string | null;
 
-  gearbox:string|null;
+  gearbox: string | null;
 
-  condition:string|null;
+  condition: string | null;
 
-  unknownTokens:string[];
-
+  unknownTokens: string[];
 }
 
-
-
 export class MatchingStage {
-
-
   private productTrie = new TrieDictionary();
 
   private vehicleTrie = new TrieDictionary();
@@ -41,364 +34,162 @@ export class MatchingStage {
 
   private conditionTrie = new TrieDictionary();
 
-
-
-  constructor(
-    private config:DomainDictionaryConfig
-  ){
-
+  constructor(private config: DomainDictionaryConfig) {
     this.load();
-
   }
 
-
-
-
-  private load(){
-
-
+  private load() {
     // Keys are normalized so they match the normalized token stream; payloads
     // keep their original (raw) values for downstream display/lookup.
-    for(const item of this.config.products){
-
-      for(const alias of item.aliases){
-
-        this.productTrie.insert(
-          normalizePersian(alias),
-          item
-        );
-
+    for (const item of this.config.products) {
+      for (const alias of item.aliases) {
+        this.productTrie.insert(normalizePersian(alias), item);
       }
-
     }
 
-
-
-    for(const item of this.config.vehicles){
-
-      for(const alias of item.aliases){
-
-        this.vehicleTrie.insert(
-          normalizePersian(alias),
-          item
-        );
-
+    for (const item of this.config.vehicles) {
+      for (const alias of item.aliases) {
+        this.vehicleTrie.insert(normalizePersian(alias), item);
       }
-
     }
 
-
-
-    for(const [key,value] of Object.entries(this.config.brands)){
-
-      this.brandTrie.insert(
-        normalizePersian(key),
-        value
-      );
-
+    for (const [key, value] of Object.entries(this.config.brands)) {
+      this.brandTrie.insert(normalizePersian(key), value);
     }
 
-
-
-    for(const [key,value] of Object.entries(this.config.engines)){
-
-      this.engineTrie.insert(
-        normalizePersian(key),
-        value
-      );
-
+    for (const [key, value] of Object.entries(this.config.engines)) {
+      this.engineTrie.insert(normalizePersian(key), value);
     }
 
-
-
-    for(const [key,value] of Object.entries(this.config.gearboxes)){
-
-      this.gearboxTrie.insert(
-        normalizePersian(key),
-        value
-      );
-
+    for (const [key, value] of Object.entries(this.config.gearboxes)) {
+      this.gearboxTrie.insert(normalizePersian(key), value);
     }
 
-
-
-    for(const [key,value] of Object.entries(this.config.conditions)){
-
-      this.conditionTrie.insert(
-        normalizePersian(key),
-        value
-      );
-
+    for (const [key, value] of Object.entries(this.config.conditions)) {
+      this.conditionTrie.insert(normalizePersian(key), value);
     }
-
-
   }
 
+  execute(tokens: any[]): MatchingResult {
+    tokens = tokens.map((t: any) =>
+      typeof t === 'string' ? t : (t.text ?? t.value ?? String(t)),
+    );
 
+    let product: any = null;
 
+    let vehicle: any = null;
 
+    let vehicleText: string | null = null;
 
-execute(tokens:any[]):MatchingResult {
+    let brand: string | null = null;
 
+    let engine: string | null = null;
 
-  tokens = tokens.map((t:any) =>
-    typeof t === 'string'
-      ? t
-      : t.text ?? t.value ?? String(t)
-  );
+    let gearbox: string | null = null;
 
+    let condition: string | null = null;
 
-  let product:any=null;
+    const unknown: string[] = [];
 
-  let vehicle:any=null;
+    for (let i = 0; i < tokens.length; i++) {
+      const checks: any[] = [
+        [this.vehicleTrie, 'vehicle'],
 
-  let vehicleText:string|null=null;
+        [this.productTrie, 'product'],
 
-  let brand:string|null=null;
+        [this.brandTrie, 'brand'],
 
-  let engine:string|null=null;
+        [this.engineTrie, 'engine'],
 
-  let gearbox:string|null=null;
+        [this.gearboxTrie, 'gearbox'],
 
-  let condition:string|null=null;
+        [this.conditionTrie, 'condition'],
+      ];
 
+      let found = false;
 
+      for (const [trie, type] of checks) {
+        const result = trie.findLongestMatch(tokens, i);
 
-  const unknown:string[]=[];
+        if (result) {
+          const payloads = result.payloads ?? [];
 
+          if (type === 'vehicle') {
+            vehicle = this.resolveBestVehicle(payloads, tokens);
 
+            // متن واقعی خودرو که ماچ شد (طول ماچ از trie)
+            vehicleText = tokens.slice(i, i + result.length).join(' ');
+          }
 
-  for(let i=0;i<tokens.length;i++){
+          if (type === 'product') {
+            product = payloads[0] ?? null;
+          }
 
+          if (type === 'brand') {
+            brand = payloads[0] ?? null;
+          }
 
-    const checks:any[]=[
+          if (type === 'engine') {
+            engine = payloads[0] ?? null;
+          }
 
-      [
-        this.vehicleTrie,
-        'vehicle'
-      ],
+          if (type === 'gearbox') {
+            gearbox = payloads[0] ?? null;
+          }
 
-      [
-        this.productTrie,
-        'product'
-      ],
+          if (type === 'condition') {
+            condition = payloads[0] ?? null;
+          }
 
-      [
-        this.brandTrie,
-        'brand'
-      ],
+          i += result.length - 1;
 
-      [
-        this.engineTrie,
-        'engine'
-      ],
+          found = true;
 
-      [
-        this.gearboxTrie,
-        'gearbox'
-      ],
-
-      [
-        this.conditionTrie,
-        'condition'
-      ]
-
-    ];
-
-
-
-    let found=false;
-
-
-
-    for(const [trie,type] of checks){
-
-
-      const result =
-        trie.findLongestMatch(
-          tokens,
-          i
-        );
-
-
-
-      if(result){
-
-
-        const payloads =
-          result.payloads ?? [];
-
-
-
-        if(type==='vehicle'){
-
-          vehicle =
-            this.resolveBestVehicle(
-              payloads,
-              tokens
-            );
-
-          // متن واقعی خودرو که ماچ شد (طول ماچ از trie)
-          vehicleText =
-            tokens
-              .slice(i, i + result.length)
-              .join(' ');
-
+          break;
         }
-
-
-
-        if(type==='product'){
-
-          product =
-            payloads[0] ?? null;
-
-        }
-
-
-
-        if(type==='brand'){
-
-          brand =
-            payloads[0] ?? null;
-
-        }
-
-
-
-        if(type==='engine'){
-
-          engine =
-            payloads[0] ?? null;
-
-        }
-
-
-
-        if(type==='gearbox'){
-
-          gearbox =
-            payloads[0] ?? null;
-
-        }
-
-
-
-        if(type==='condition'){
-
-          condition =
-            payloads[0] ?? null;
-
-        }
-
-
-
-        i += result.length - 1;
-
-
-        found=true;
-
-
-        break;
-
-
       }
 
-
+      if (!found) {
+        unknown.push(tokens[i]);
+      }
     }
 
+    return {
+      product,
 
+      vehicle,
 
-    if(!found){
+      vehicleText,
 
-      unknown.push(tokens[i]);
+      brand,
 
-    }
+      engine,
 
+      gearbox,
 
+      condition,
+
+      unknownTokens: unknown,
+    };
   }
 
+  private resolveBestVehicle(vehicles: any[], tokens: string[]) {
+    if (!vehicles.length) return null;
 
+    if (vehicles.length === 1) return vehicles[0];
 
+    const joined = tokens.join(' ');
 
-  return {
+    const exact = vehicles.find((v) => {
+      if (!v) return false;
 
-    product,
+      const name = String(v.variant ?? v.family ?? '').toLowerCase();
 
-    vehicle,
-
-    vehicleText,
-
-    brand,
-
-    engine,
-
-    gearbox,
-
-    condition,
-
-    unknownTokens:unknown
-
-  };
-
-
-}
-
-
-
-
-
-private resolveBestVehicle(
-  vehicles:any[],
-  tokens:string[]
-){
-
-
-  if(!vehicles.length)
-    return null;
-
-
-
-  if(vehicles.length===1)
-    return vehicles[0];
-
-
-
-  const joined =
-    tokens.join(' ');
-
-
-
-  const exact =
-    vehicles.find(v=>{
-
-
-      if(!v)
-        return false;
-
-
-      const name =
-        String(v.variant ?? v.family ?? '')
-        .toLowerCase();
-
-
-
-      return joined
-        .toLowerCase()
-        .includes(name);
-
-
+      return joined.toLowerCase().includes(name);
     });
 
-
-
-  // اگر تطبیق کامل نام پیدا نشد، اولین کاندید را برگردان (نه null) —
-  // فامیلی خروجی از vehicleText می‌آید، این فقط برای engine/gearbox است.
-  return exact ?? vehicles[0] ?? null;
-
-
-}
-
-
-
+    // اگر تطبیق کامل نام پیدا نشد، اولین کاندید را برگردان (نه null) —
+    // فامیلی خروجی از vehicleText می‌آید، این فقط برای engine/gearbox است.
+    return exact ?? vehicles[0] ?? null;
+  }
 }

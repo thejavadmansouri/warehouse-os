@@ -19,39 +19,59 @@ import {
  * کوئری را عوض کند.
  */
 export class CatalogQueryDto {
-  @IsOptional() @IsString() @MaxLength(80)
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
   q?: string;
 
-  @IsOptional() @IsUUID()
+  @IsOptional()
+  @IsUUID()
   categoryId?: string;
 
-  @IsOptional() @IsUUID()
+  @IsOptional()
+  @IsUUID()
   brandId?: string;
 
-  @IsOptional() @IsUUID()
+  @IsOptional()
+  @IsUUID()
   vehicleModelId?: string;
 
   /**
    * به واحدِ **سایت** است، نه واحدِ دیتابیس — همان عددی که کاربر روی صفحه
    * می‌بیند و در فیلتر تایپ می‌کند. تبدیلش در سرویس انجام می‌شود.
    */
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   minPrice?: number;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   maxPrice?: number;
 
   // از query string می‌آید، پس رشته است نه boolean: `?inStock=true`
-  @IsOptional() @IsBooleanString()
+  @IsOptional()
+  @IsBooleanString()
   inStock?: string;
 
-  @IsOptional() @IsIn(['newest', 'cheapest', 'expensive', 'name'])
+  @IsOptional()
+  @IsIn(['newest', 'cheapest', 'expensive', 'name'])
   sort?: 'newest' | 'cheapest' | 'expensive' | 'name';
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
   page?: number;
 
   // سقف در سرویس هم دوباره اعمال می‌شود؛ این فقط پیامِ خطای زودتر است.
-  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(48)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(48)
   pageSize?: number;
 }

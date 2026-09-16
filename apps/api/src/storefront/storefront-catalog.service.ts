@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -132,7 +136,10 @@ export class StorefrontCatalogService {
       id: z.id,
       name: z.name,
       fee: convertMoney(z.fee, shop.storedUnit, shop.unit),
-      freeOver: z.freeOver != null ? convertMoney(z.freeOver, shop.storedUnit, shop.unit) : null,
+      freeOver:
+        z.freeOver != null
+          ? convertMoney(z.freeOver, shop.storedUnit, shop.unit)
+          : null,
     }));
   }
 
@@ -494,8 +501,15 @@ export class StorefrontCatalogService {
           ...(base.brandId ? [{ brandId: base.brandId }] : []),
         ],
       },
-      select: { id: true, inventories: { select: { quantity: true } },
-        prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } } },
+      select: {
+        id: true,
+        inventories: { select: { quantity: true } },
+        prices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { salePrice: true },
+        },
+      },
       take: limit * 3,
     });
 
@@ -533,7 +547,10 @@ export class StorefrontCatalogService {
     });
 
     const cats = new Map<string, { id: string; name: string; count: number }>();
-    const brands = new Map<string, { id: string; name: string; count: number }>();
+    const brands = new Map<
+      string,
+      { id: string; name: string; count: number }
+    >();
 
     for (const r of rows) {
       if (r.category) {
@@ -548,7 +565,8 @@ export class StorefrontCatalogService {
       }
     }
 
-    const byCount = (a: { count: number }, b: { count: number }) => b.count - a.count;
+    const byCount = (a: { count: number }, b: { count: number }) =>
+      b.count - a.count;
 
     return {
       categories: [...cats.values()].sort(byCount),

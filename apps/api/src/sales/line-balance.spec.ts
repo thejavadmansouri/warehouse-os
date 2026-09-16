@@ -9,7 +9,14 @@ import { lineBalances } from './line-balance';
  * همین دو خطا را می‌ساخت: انبارِ اضافه‌آمده، و مرجوعیِ بیشتر از خریده‌شده.
  */
 
-type Row = { saleLogId: string; _sum: { newQuantity?: number | null; oldQuantity?: number | null; quantity?: number | null } };
+type Row = {
+  saleLogId: string;
+  _sum: {
+    newQuantity?: number | null;
+    oldQuantity?: number | null;
+    quantity?: number | null;
+  };
+};
 
 /** یک Prisma قلابی که فقط دو groupBy را جواب می‌دهد. */
 function db(corrections: Row[], returns: Row[]) {
@@ -23,11 +30,13 @@ const LINE = 'log-1';
 const sold = new Map([[LINE, 50]]);
 
 describe('lineBalances', () => {
-
   it('بدونِ اصلاحیه و مرجوعی، مانده همان فروش است', async () => {
     const b = await lineBalances(db([], []), [LINE], sold);
     expect(b.get(LINE)).toEqual({
-      sold: 50, correctionDelta: 0, returned: 0, outstanding: 50,
+      sold: 50,
+      correctionDelta: 0,
+      returned: 0,
+      outstanding: 50,
     });
   });
 
@@ -75,7 +84,10 @@ describe('lineBalances', () => {
   it('ردیفِ بدونِ سابقه هم کلید دارد — نبودنش یعنی undefined در صداکننده', async () => {
     const b = await lineBalances(db([], []), [LINE, 'log-2'], sold);
     expect(b.get('log-2')).toEqual({
-      sold: 0, correctionDelta: 0, returned: 0, outstanding: 0,
+      sold: 0,
+      correctionDelta: 0,
+      returned: 0,
+      outstanding: 0,
     });
   });
 });

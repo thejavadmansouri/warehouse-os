@@ -6,11 +6,18 @@ import * as path from 'path';
 const FILE = path.resolve(__dirname, 'evidence-results.json');
 export function note(id: string, data: any) {
   let all: any = {};
-  try { all = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
+  try {
+    all = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+  } catch {}
   all[id] = data;
   fs.writeFileSync(FILE, JSON.stringify(all, null, 2));
 }
 export function errBody(e: any) {
   if (!e) return null;
-  return { name: e.name, status: e.status ?? null, body: e.response ?? e.getResponse?.() ?? e.message, code: e.code ?? null };
+  return {
+    name: e.name,
+    status: e.status ?? null,
+    body: e.response ?? e.getResponse?.() ?? e.message,
+    code: e.code ?? null,
+  };
 }

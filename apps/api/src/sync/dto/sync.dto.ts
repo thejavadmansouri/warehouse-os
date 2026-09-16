@@ -20,35 +20,51 @@ export class SyncProductDto {
   @IsUUID()
   id!: string;
 
-  @IsString() @MaxLength(300)
+  @IsString()
+  @MaxLength(300)
   name!: string;
 
-  @IsString() @MaxLength(120)
+  @IsString()
+  @MaxLength(120)
   sku!: string;
 
-  @IsOptional() @IsString() @MaxLength(120)
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   partNumber?: string | null;
 
-  @IsOptional() @IsString() @MaxLength(2000)
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
   description?: string | null;
 
-  @IsString() @MaxLength(40)
+  @IsString()
+  @MaxLength(40)
   unit!: string;
 
-  @IsOptional() @IsInt() @Min(0)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
   weightGrams?: number | null;
 
-  @IsOptional() @IsString() @MaxLength(120)
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   brand?: string | null;
 
-  @IsOptional() @IsString() @MaxLength(120)
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   category?: string | null;
 
-  @IsArray() @IsString({ each: true }) @ArrayMaxSize(40)
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(40)
   vehicles!: string[];
 
   /** قیمت فروش به واحدِ **دیتابیس** (همان چیزی که در انبار ذخیره است). */
-  @IsInt() @Min(0)
+  @IsInt()
+  @Min(0)
   salePrice!: number;
 
   /**
@@ -58,7 +74,9 @@ export class SyncProductDto {
   @IsInt()
   quantity!: number;
 
-  @IsArray() @IsString({ each: true }) @ArrayMaxSize(10)
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(10)
   images!: string[];
 
   /**
@@ -67,7 +85,9 @@ export class SyncProductDto {
    * دوباره‌سازی‌شان روی سایت یعنی دو پیاده‌سازیِ نرمال‌سازی فارسی که با هم
    * درمی‌روند؛ فرستادنشان مجانی است و جست‌وجوی سایت را با صندوق یکسان می‌کند.
    */
-  @IsArray() @IsString({ each: true }) @ArrayMaxSize(120)
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(120)
   searchTokens!: string[];
 }
 
@@ -91,7 +111,9 @@ export class SyncCatalogDto {
 }
 
 export class AckOrdersDto {
-  @IsArray() @IsUUID('4', { each: true }) @ArrayMaxSize(500)
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMaxSize(500)
   ids!: string[];
 }
 
@@ -102,43 +124,62 @@ export class OrderStatusDto {
   @IsEnum(OnlineOrderStatus)
   status!: OnlineOrderStatus;
 
-  @IsOptional() @IsString() @MaxLength(300)
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
   rejectReason?: string | null;
 
   /** مغازه فاکتور زده و موجودیِ خودش کم شده — رزروِ سایت باید برداشته شود. */
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   stockApplied?: boolean;
 }
 
 export class PushStatusDto {
-  @IsArray() @ArrayMaxSize(500)
+  @IsArray()
+  @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => OrderStatusDto)
   orders!: OrderStatusDto[];
 }
 
 export class SyncSettingsDto {
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   onlineEnabled?: boolean;
 
-  @IsOptional() @IsInt() @Min(0)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
   shippingFee?: number;
 
-  @IsOptional() @IsInt() @Min(0)
+  @IsOptional()
+  @IsInt()
+  @Min(0)
   freeShipOver?: number;
 
-  @IsOptional() @IsString() @MaxLength(120)
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   name?: string;
 
-  @IsOptional() @IsString() @MaxLength(60)
+  @IsOptional()
+  @IsString()
+  @MaxLength(60)
   phone?: string;
 
-  @IsOptional() @IsString() @MaxLength(300)
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
   address?: string;
 
-  @IsOptional() @IsString() @MaxLength(40)
+  @IsOptional()
+  @IsString()
+  @MaxLength(40)
   cardNumber?: string;
 
-  @IsOptional() @IsString() @MaxLength(120)
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
   cardHolder?: string;
 }

@@ -4,7 +4,14 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
-import { Prisma, WorkTaskStatus, WorkTaskItemStatus, WorkTaskKind, WorkTaskPriority, Role } from '@prisma/client';
+import {
+  Prisma,
+  WorkTaskStatus,
+  WorkTaskItemStatus,
+  WorkTaskKind,
+  WorkTaskPriority,
+  Role,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
@@ -35,7 +42,10 @@ const SUMMARY_INCLUDE = {
   _count: { select: { items: true } },
   // فقط برای شمارشِ done — ردیف کامل لازم نیست، ولی `status` حتماً باید بیاید:
   // toTaskDto با `filter(i => i.status === DONE)` می‌شمارد و بدون status همیشه صفر می‌شود.
-  items: { where: { status: WorkTaskItemStatus.DONE }, select: { id: true, status: true } },
+  items: {
+    where: { status: WorkTaskItemStatus.DONE },
+    select: { id: true, status: true },
+  },
   invoice: { select: { number: true } },
   quotation: { select: { number: true } },
   requestedBy: { select: { id: true, fullName: true } },
@@ -45,8 +55,18 @@ const SUMMARY_INCLUDE = {
 const DETAIL_INCLUDE = {
   items: {
     include: {
-      product: { select: { id: true, name: true, sku: true, unit: true, internalBarcode: true } },
-      location: { select: { id: true, name: true, code: true, barcode: true, path: true } },
+      product: {
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          unit: true,
+          internalBarcode: true,
+        },
+      },
+      location: {
+        select: { id: true, name: true, code: true, barcode: true, path: true },
+      },
       doneBy: { select: { id: true, fullName: true } },
     },
   },
@@ -85,7 +105,6 @@ export class WorkTasksService {
       orderBy: { fullName: 'asc' },
     });
   }
-
 
   /** فروشنده/مدیر یک Task با چند قلم می‌سازد — موجودی دست نمی‌خورد. */
   async create(
@@ -284,7 +303,10 @@ export class WorkTasksService {
       if (item.status === WorkTaskItemStatus.DONE) {
         results.push({
           ...m,
-          status: item.clientMutationId === m.clientMutationId ? 'OK' : 'ALREADY_DONE',
+          status:
+            item.clientMutationId === m.clientMutationId
+              ? 'OK'
+              : 'ALREADY_DONE',
         });
         continue;
       }
@@ -372,12 +394,18 @@ export class WorkTasksService {
         results.push({ ...m, status: 'OK' });
         affectedTaskIds.add(m.taskId);
       } else {
-        const now = await this.prisma.workTaskItem.findUnique({ where: { id: m.itemId } });
+        const now = await this.prisma.workTaskItem.findUnique({
+          where: { id: m.itemId },
+        });
         results.push({
           ...m,
-          status: now?.clientMutationId === m.clientMutationId ? 'OK' : 'ALREADY_DONE',
+          status:
+            now?.clientMutationId === m.clientMutationId
+              ? 'OK'
+              : 'ALREADY_DONE',
         });
-        if (now?.clientMutationId === m.clientMutationId) affectedTaskIds.add(m.taskId);
+        if (now?.clientMutationId === m.clientMutationId)
+          affectedTaskIds.add(m.taskId);
       }
     }
 
@@ -391,7 +419,10 @@ export class WorkTasksService {
 
   async cancel(id: string, reason?: string) {
     const claimed = await this.prisma.workTask.updateMany({
-      where: { id, status: { in: [WorkTaskStatus.PENDING, WorkTaskStatus.IN_PROGRESS] } },
+      where: {
+        id,
+        status: { in: [WorkTaskStatus.PENDING, WorkTaskStatus.IN_PROGRESS] },
+      },
       data: {
         status: WorkTaskStatus.CANCELLED,
         cancelReason: reason ?? null,
@@ -432,7 +463,9 @@ export class WorkTasksService {
       _count: { _all: true },
     });
     const total = grouped.reduce((s, g) => s + g._count._all, 0);
-    const done = grouped.find((g) => g.status === WorkTaskItemStatus.DONE)?._count._all ?? 0;
+    const done =
+      grouped.find((g) => g.status === WorkTaskItemStatus.DONE)?._count._all ??
+      0;
 
     let next: WorkTaskStatus;
     if (done >= total && total > 0) next = WorkTaskStatus.COMPLETED;
@@ -444,7 +477,11 @@ export class WorkTasksService {
       where: {
         id: taskId,
         ...(next === WorkTaskStatus.COMPLETED
-          ? { status: { in: [WorkTaskStatus.PENDING, WorkTaskStatus.IN_PROGRESS] } }
+          ? {
+              status: {
+                in: [WorkTaskStatus.PENDING, WorkTaskStatus.IN_PROGRESS],
+              },
+            }
           : { status: { not: next } }),
       },
       data: { status: next },

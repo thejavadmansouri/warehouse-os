@@ -15,13 +15,19 @@ import { CustomerCategoriesService } from '../../src/sales/customer-categories.s
 import { InvoiceEffectsService } from '../../src/sales/invoice-effects.service';
 import { buildSearchTokens } from '../../src/products/search-tokens';
 
-if (!process.env.DATABASE_URL?.endsWith('_qa?schema=public') &&
-    !process.env.DATABASE_URL?.includes('warehouse_os_qa')) {
+if (
+  !process.env.DATABASE_URL?.endsWith('_qa?schema=public') &&
+  !process.env.DATABASE_URL?.includes('warehouse_os_qa')
+) {
   throw new Error('REFUSING: not the QA database');
 }
 
 export const broadcasts: any[] = [];
-export const fakeGateway: any = { broadcast: (e: any) => { broadcasts.push(e); } };
+export const fakeGateway: any = {
+  broadcast: (e: any) => {
+    broadcasts.push(e);
+  },
+};
 
 /*
  * عمداً `PrismaService` و نه `new PrismaClient()` خام: تنظیماتِ تراکنش
@@ -34,15 +40,33 @@ export const prisma = new PrismaService();
 export const operation = new InventoryOperationService(prisma, fakeGateway);
 export const systemLocations = new SystemLocationsService();
 export const ledger = new LedgerService(prisma);
-export const sales = new SalesService(prisma, operation, ledger, systemLocations, fakeGateway);
-export const returns = new ReturnsService(prisma, operation, ledger, fakeGateway);
-export const corrections = new CorrectionsService(prisma, operation, systemLocations, ledger, fakeGateway);
+export const sales = new SalesService(
+  prisma,
+  operation,
+  ledger,
+  systemLocations,
+  fakeGateway,
+);
+export const returns = new ReturnsService(
+  prisma,
+  operation,
+  ledger,
+  fakeGateway,
+);
+export const corrections = new CorrectionsService(
+  prisma,
+  operation,
+  systemLocations,
+  ledger,
+  fakeGateway,
+);
 export const categories = new CustomerCategoriesService(prisma);
 export const customers = new CustomersService(prisma, ledger, categories);
 export const effects = new InvoiceEffectsService(prisma);
 
 let counter = 0;
-export const uniq = (p = 'x') => `${p}-${Date.now().toString(36)}-${(counter++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+export const uniq = (p = 'x') =>
+  `${p}-${Date.now().toString(36)}-${(counter++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export interface Fixture {
   warehouseId: string;
@@ -60,14 +84,25 @@ export async function baseFixture(): Promise<Fixture> {
   if (fixture) return fixture;
 
   const user = await prisma.user.create({
-    data: { username: uniq('qa-user'), password: 'x', fullName: 'QA', role: 'ADMIN' },
+    data: {
+      username: uniq('qa-user'),
+      password: 'x',
+      fullName: 'QA',
+      role: 'ADMIN',
+    },
   });
 
-  const wh = await prisma.warehouse.create({ data: { name: 'QA انبار', code: uniq('QAW').toUpperCase() } });
-  const wh2 = await prisma.warehouse.create({ data: { name: 'QA انبار ۲', code: uniq('QAW2').toUpperCase() } });
+  const wh = await prisma.warehouse.create({
+    data: { name: 'QA انبار', code: uniq('QAW').toUpperCase() },
+  });
+  const wh2 = await prisma.warehouse.create({
+    data: { name: 'QA انبار ۲', code: uniq('QAW2').toUpperCase() },
+  });
 
   const mkType = async (warehouseId: string, depth: number) =>
-    prisma.locationType.create({ data: { name: `نوع${depth}`, depth, warehouseId } });
+    prisma.locationType.create({
+      data: { name: `نوع${depth}`, depth, warehouseId },
+    });
 
   const t1 = await mkType(wh.id, 1);
   const t2 = await mkType(wh2.id, 1);
@@ -75,8 +110,13 @@ export async function baseFixture(): Promise<Fixture> {
   const mkLoc = async (warehouseId: string, typeId: string, name: string) =>
     prisma.location.create({
       data: {
-        name, code: uniq('L').toUpperCase(), barcode: uniq('B').toUpperCase(),
-        warehouseId, typeId, depth: 1, path: name,
+        name,
+        code: uniq('L').toUpperCase(),
+        barcode: uniq('B').toUpperCase(),
+        warehouseId,
+        typeId,
+        depth: 1,
+        path: name,
       },
     });
 
@@ -85,18 +125,28 @@ export async function baseFixture(): Promise<Fixture> {
   const lf = await mkLoc(wh2.id, t2.id, 'قفسه بیگانه');
 
   fixture = {
-    warehouseId: wh.id, warehouse2Id: wh2.id,
-    locationId: l1.id, location2Id: l2.id, foreignLocationId: lf.id,
+    warehouseId: wh.id,
+    warehouse2Id: wh2.id,
+    locationId: l1.id,
+    location2Id: l2.id,
+    foreignLocationId: lf.id,
     userId: user.id,
   };
   return fixture;
 }
 
 /** کالای تازه با موجودیِ اولیه روی قفسه‌ی داده‌شده. */
-export async function makeProduct(opts: {
-  stock?: number; locationId?: string; salePrice?: number; purchasePrice?: number;
-  isActive?: boolean; deleted?: boolean; name?: string;
-} = {}) {
+export async function makeProduct(
+  opts: {
+    stock?: number;
+    locationId?: string;
+    salePrice?: number;
+    purchasePrice?: number;
+    isActive?: boolean;
+    deleted?: boolean;
+    name?: string;
+  } = {},
+) {
   const f = await baseFixture();
   const name = opts.name ?? `کالای ${uniq('p')}`;
   const sku = uniq('SKU').toUpperCase();
@@ -113,12 +163,20 @@ export async function makeProduct(opts: {
   });
   if (opts.salePrice != null || opts.purchasePrice != null) {
     await prisma.productPrice.create({
-      data: { productId: p.id, salePrice: opts.salePrice ?? null, purchasePrice: opts.purchasePrice ?? null },
+      data: {
+        productId: p.id,
+        salePrice: opts.salePrice ?? null,
+        purchasePrice: opts.purchasePrice ?? null,
+      },
     });
   }
   if (opts.stock != null) {
     await prisma.inventory.create({
-      data: { productId: p.id, locationId: opts.locationId ?? f.locationId, quantity: opts.stock },
+      data: {
+        productId: p.id,
+        locationId: opts.locationId ?? f.locationId,
+        quantity: opts.stock,
+      },
     });
   }
   return p;
@@ -143,7 +201,10 @@ export async function makeCustomer(over: any = {}) {
   });
 }
 
-export async function stockAt(productId: string, locationId: string): Promise<number> {
+export async function stockAt(
+  productId: string,
+  locationId: string,
+): Promise<number> {
   const row = await prisma.inventory.findUnique({
     where: { productId_locationId: { productId, locationId } },
   });
@@ -152,28 +213,45 @@ export async function stockAt(productId: string, locationId: string): Promise<nu
 
 /** جمعِ موجودیِ کالا در همه‌ی قفسه‌ها. */
 export async function totalStock(productId: string): Promise<number> {
-  const agg = await prisma.inventory.aggregate({ where: { productId }, _sum: { quantity: true } });
+  const agg = await prisma.inventory.aggregate({
+    where: { productId },
+    _sum: { quantity: true },
+  });
   return agg._sum.quantity ?? 0;
 }
 
 /** عکسِ فوریِ همه‌ی جدول‌هایی که یک فروش لمس می‌کند. */
 export async function snapshot(productId?: string, customerId?: string) {
-  const [inv, logs, invoices, payments, ledgerRows, rets, corrs] = await Promise.all([
-    productId ? prisma.inventory.findMany({ where: { productId }, orderBy: { locationId: 'asc' } }) : ([] as any[]),
-    productId ? prisma.inventoryLog.count({ where: { productId } }) : 0,
-    prisma.saleInvoice.count(),
-    prisma.payment.count(),
-    customerId ? prisma.customerLedger.findMany({ where: { customerId } }) : ([] as any[]),
-    prisma.saleReturn.count(),
-    prisma.saleCorrection.count(),
-  ]);
+  const [inv, logs, invoices, payments, ledgerRows, rets, corrs] =
+    await Promise.all([
+      productId
+        ? prisma.inventory.findMany({
+            where: { productId },
+            orderBy: { locationId: 'asc' },
+          })
+        : ([] as any[]),
+      productId ? prisma.inventoryLog.count({ where: { productId } }) : 0,
+      prisma.saleInvoice.count(),
+      prisma.payment.count(),
+      customerId
+        ? prisma.customerLedger.findMany({ where: { customerId } })
+        : ([] as any[]),
+      prisma.saleReturn.count(),
+      prisma.saleCorrection.count(),
+    ]);
   return {
     stock: (inv as any[]).reduce((s: number, r: any) => s + r.quantity, 0),
     invRows: (inv as any[]).length,
-    logs, invoices, payments,
-    ledgerSum: (ledgerRows as any[]).reduce((s: number, r: any) => s + r.amount, 0),
+    logs,
+    invoices,
+    payments,
+    ledgerSum: (ledgerRows as any[]).reduce(
+      (s: number, r: any) => s + r.amount,
+      0,
+    ),
     ledgerRows: (ledgerRows as any[]).length,
-    returns: rets, corrections: corrs,
+    returns: rets,
+    corrections: corrs,
   };
 }
 

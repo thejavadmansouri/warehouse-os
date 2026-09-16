@@ -21,7 +21,10 @@ const TX_MAX_WAIT = 15_000;
 const TX_TIMEOUT = 20_000;
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   constructor() {
     super({
       transactionOptions: {

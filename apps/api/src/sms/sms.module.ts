@@ -6,7 +6,6 @@ import { SmsService } from './sms.service';
 import { SmsSender } from './sms-sender';
 import { SalesModule } from '../sales/sales.module';
 
-
 @Module({
   // فقط برای `LedgerService` — مانده‌ی مشتری در «یادآوری بدهی» لازم است.
   imports: [SalesModule],
@@ -16,7 +15,6 @@ import { SalesModule } from '../sales/sales.module';
   exports: [SmsService, SmsSender],
 })
 export class SmsModule implements OnModuleInit {
-
   constructor(private readonly service: SmsService) {}
 
   /** قالب‌های پیش‌فرض یک بار کاشته می‌شوند؛ متنِ ویرایش‌شده دست‌نخورده می‌ماند. */

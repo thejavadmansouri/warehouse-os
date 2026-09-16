@@ -41,7 +41,6 @@ export class WorkTasksController {
     return this.service.listWorkers();
   }
 
-
   @Get('mine')
   mine(@Req() req: any, @Query('warehouseId') warehouseId?: string) {
     return this.service.findForWorker(req.user.userId, warehouseId);
@@ -84,7 +83,9 @@ export class WorkTasksController {
   private isWorkTaskStatus(v: unknown): v is WorkTaskStatus {
     return (
       typeof v === 'string' &&
-      (['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as string[]).includes(v)
+      (
+        ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as string[]
+      ).includes(v)
     );
   }
 }

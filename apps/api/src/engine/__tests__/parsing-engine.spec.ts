@@ -6,13 +6,41 @@ import { normalizePersian } from '../utils/persian-normalize';
 function buildDict(): any {
   return {
     products: [
-      { id: 'p1', name: 'لنت ترمز جلو', category: 'قطعه', aliases: ['لنت ترمز جلو', 'لنت جلو', 'لنت'] },
-      { id: 'p2', name: 'فیلتر روغن', category: 'قطعه', aliases: ['فیلتر روغن'] },
+      {
+        id: 'p1',
+        name: 'لنت ترمز جلو',
+        category: 'قطعه',
+        aliases: ['لنت ترمز جلو', 'لنت جلو', 'لنت'],
+      },
+      {
+        id: 'p2',
+        name: 'فیلتر روغن',
+        category: 'قطعه',
+        aliases: ['فیلتر روغن'],
+      },
     ],
     vehicles: [
-      { family: 'پراید 111', variant: 'پراید 111', engine: '', gearbox: '', aliases: ['پراید 111', 'پراید'] },
-      { family: 'پراید 131', variant: 'پراید 131', engine: '', gearbox: '', aliases: ['پراید 131', 'پراید'] },
-      { family: 'پژو 206 تیپ 5', variant: 'پژو 206 تیپ 5', engine: '', gearbox: '', aliases: ['پژو 206 تیپ 5', 'پژو', 'پژو 206'] },
+      {
+        family: 'پراید 111',
+        variant: 'پراید 111',
+        engine: '',
+        gearbox: '',
+        aliases: ['پراید 111', 'پراید'],
+      },
+      {
+        family: 'پراید 131',
+        variant: 'پراید 131',
+        engine: '',
+        gearbox: '',
+        aliases: ['پراید 131', 'پراید'],
+      },
+      {
+        family: 'پژو 206 تیپ 5',
+        variant: 'پژو 206 تیپ 5',
+        engine: '',
+        gearbox: '',
+        aliases: ['پژو 206 تیپ 5', 'پژو', 'پژو 206'],
+      },
     ],
     brands: { تکستار: 'تکستار', textar: 'تکستار', سرکان: 'سرکان' },
     engines: {},

@@ -62,7 +62,9 @@ async function bootstrap() {
       const strict = allowedOrigins.length > 0;
       const ok = strict
         ? allowedOrigins.includes(origin)
-        : loopback.test(origin) || privateLan.test(origin) || tauri.test(origin);
+        : loopback.test(origin) ||
+          privateLan.test(origin) ||
+          tauri.test(origin);
       return cb(null, ok);
     },
     credentials: true,

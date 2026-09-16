@@ -43,7 +43,10 @@ describe('ProductRequestsService — scanned barcode hand-off', () => {
       productBarcode: {
         findUnique: jest.fn().mockResolvedValue(over.existingBarcode ?? null),
       },
-      brand: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn() },
+      brand: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        create: jest.fn(),
+      },
       vehicleModel: { findFirst: jest.fn().mockResolvedValue(null) },
       product: {
         create: jest.fn().mockImplementation((args: any) => {
@@ -61,7 +64,10 @@ describe('ProductRequestsService — scanned barcode hand-off', () => {
       providers: [
         ProductRequestsService,
         { provide: PrismaService, useValue: prisma },
-        { provide: InventoryOperationService, useValue: { execute: jest.fn() } },
+        {
+          provide: InventoryOperationService,
+          useValue: { execute: jest.fn() },
+        },
       ],
     }).compile();
     return module.get(ProductRequestsService);
@@ -89,7 +95,10 @@ describe('ProductRequestsService — scanned barcode hand-off', () => {
   });
 
   it('still generates the internal barcode when nothing was scanned', async () => {
-    const prisma = makePrisma({ request: { productBarcode: null }, existingBarcode: null });
+    const prisma = makePrisma({
+      request: { productBarcode: null },
+      existingBarcode: null,
+    });
     service = await build(prisma);
 
     await service.approve('req-1', 'mgr-1');

@@ -19,7 +19,7 @@ export function jwtSecret(): string {
     throw new Error(
       'JWT_SECRET تنظیم نشده است. سرور بدون کلید امضا بالا نمی‌آید.\n' +
         'یک کلید تصادفی بسازید و در .env بگذارید:\n' +
-        '  node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64url\'))"',
+        "  node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"",
     );
   }
 

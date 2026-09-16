@@ -5,17 +5,27 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, InvoiceStatus, PaymentMethod, LedgerEntryType, Role } from '@prisma/client';
+import {
+  Prisma,
+  InvoiceStatus,
+  PaymentMethod,
+  LedgerEntryType,
+  Role,
+  FixedAccount,
+  VoucherSourceType,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { PostingService, VoucherLineInput } from '../vouchers/posting.service';
 import { LedgerService } from './ledger.service';
 import { inLockOrder } from '../common/lock-order';
 
 import { CreateReturnDto } from './dto/create-return.dto';
 import { lineBalances } from './line-balance';
+import { lockInvoice } from './line-lock';
+import { effectiveTotal, refundFor } from './return-pricing';
 import { EventsGateway } from '../realtime/events.gateway';
-
 
 /**
  * برگشت از فروش (مرجوعی).
@@ -35,42 +45,13 @@ import { EventsGateway } from '../realtime/events.gateway';
  */
 @Injectable()
 export class ReturnsService {
-
   constructor(
     private prisma: PrismaService,
     private operation: InventoryOperationService,
     private ledger: LedgerService,
     private realtime: EventsGateway,
+    private posting: PostingService,
   ) {}
-
-
-  /**
-   * ردیف مؤثرِ یک لاگِ فروش: قیمت واحد، تخفیف ردیف، و «کلِ مؤثر» که سهمِ تخفیفِ
-   * فاکتور از آن کم شده. همین یک تابع هم در پیش‌نمایش (returnable) و هم در ثبت
-   * استفاده می‌شود تا عددِ پیش‌نمایش با عددِ نهایی هیچ‌وقت فرق نکند.
-   */
-  private effectiveTotal(
-    unitPrice: number,
-    lineDiscount: number,
-    sold: number,
-    invoiceSubtotal: number,
-    invoiceDiscount: number,
-  ): number {
-    const lineNet = unitPrice * sold - lineDiscount; // همان چیزی که در subtotal جمع شده
-    if (invoiceSubtotal <= 0 || invoiceDiscount <= 0) return lineNet;
-    // سهمِ تخفیفِ فاکتور، به نسبتِ خالصِ همین ردیف.
-    const share = Math.round((invoiceDiscount * lineNet) / invoiceSubtotal);
-    return lineNet - share;
-  }
-
-
-  /** مبلغِ برگشتیِ برگرداندنِ q واحد از یک ردیف، با گردکردنِ سازگار. */
-  private refundFor(effTotal: number, sold: number, qty: number) {
-    const lineRefund = sold > 0 ? Math.round((effTotal * qty) / sold) : 0;
-    const unitRefund = qty > 0 ? Math.round(lineRefund / qty) : 0;
-    return { lineRefund, unitRefund };
-  }
-
 
   /**
    * ردیف‌های قابل‌برگشتِ یک فاکتور — خوراکِ صفحه‌ی مرجوعی.
@@ -130,14 +111,14 @@ export class ReturnsService {
       const sold = b.sold;
       const alreadyReturned = b.returned;
       const returnable = b.outstanding;
-      const effTotal = this.effectiveTotal(
+      const effTotal = effectiveTotal(
         l.unitPrice ?? 0,
         l.lineDiscount ?? 0,
         sold,
         invoice.subtotal,
         invoice.discount,
       );
-      const { unitRefund } = this.refundFor(effTotal, sold, sold);
+      const { unitRefund } = refundFor(effTotal, sold, sold);
       return {
         saleLogId: l.id,
         product: l.product,
@@ -187,13 +168,11 @@ export class ReturnsService {
     };
   }
 
-
   /**
    * ثبت یک مرجوعی. همه‌چیز در یک تراکنش: یا کلِ سند با حرکت‌های انبار و دفتر
    * ثبت می‌شود، یا هیچ‌کدام.
    */
   async createReturn(dto: CreateReturnDto, userId?: string, role?: Role) {
-
     // ---- بررسی‌های ارزان، پیش از تراکنش ----
 
     if (dto.refundMethod === PaymentMethod.CHEQUE) {
@@ -203,12 +182,9 @@ export class ReturnsService {
       });
     }
 
-    if (!dto.reason?.trim()) {
-      throw new BadRequestException({
-        error: 'REASON_REQUIRED',
-        message: 'برای مرجوعی، ذکر دلیل الزامی است',
-      });
-    }
+    /* دلیلِ مرجوعی اختیاری است — برگشت نباید به تایپِ دلیل گره بخورد. */
+    const reason = dto.reason?.trim() ?? '';
+    void reason;
 
     if (dto.idempotencyKey) {
       const existing = await this.prisma.saleReturn.findUnique({
@@ -232,243 +208,19 @@ export class ReturnsService {
     }
 
     try {
-
-      const returnId = await this.prisma.$transaction(async (tx) => {
-
-        const invoice = await tx.saleInvoice.findUnique({
-          where: { id: dto.invoiceId },
-          select: {
-            id: true,
-            number: true,
-            status: true,
-            subtotal: true,
-            discount: true,
-            customerId: true,
-            warehouseId: true,
-            dueAmount: true,
-            accountId: true,
-          },
-        });
-
-        if (!invoice) {
-          throw new NotFoundException({
-            error: 'INVOICE_NOT_FOUND',
-            message: 'فاکتور پیدا نشد',
-          });
-        }
-
-        const isOpenAccount = invoice.status === InvoiceStatus.OPEN;
-
-        // فاکتور باطل‌شده موجودی‌اش قبلاً کامل برگشته و بدهی‌اش صفر شده — مرجوعی
-        // رویش یعنی دوباره‌کاری و عددِ غلط. فاکتورِ جاریِ حساب باز اما مرجوعی
-        // می‌خورد (پایین، فقط به‌صورت کسر از حساب).
-        if (!isOpenAccount && invoice.status !== InvoiceStatus.CONFIRMED) {
-          throw new ConflictException({
-            error: 'INVOICE_NOT_RETURNABLE',
-            message: 'فاکتور باطل‌شده قابلِ مرجوعی نیست',
-          });
-        }
-
-        /*
-         * روی حساب باز مشتری هنوز یک ریال هم نداده و کلِ مبلغ بدهیِ اوست. پس
-         * «برگشتِ وجه از صندوق» یعنی پول دادن بابت جنسی که پولش گرفته نشده —
-         * تنها برگشتِ درست، کم‌کردن از همان بدهی است.
-         */
-        if (isOpenAccount && dto.refundMethod !== PaymentMethod.CREDIT) {
-          throw new BadRequestException({
-            error: 'OPEN_ACCOUNT_REFUND_MUST_BE_CREDIT',
-            message:
-              'روی حساب باز هنوز پولی پرداخت نشده — برگشت فقط به‌صورت کسر از حساب ثبت می‌شود',
-          });
-        }
-
-        /*
-         * صندوق‌دار (SALES) فقط روی حساب باز مرجوعی می‌زند.
-         *
-         * آنجا هیچ پولی از صندوق بیرون نمی‌رود — فقط بدهیِ خودِ مشتری کم می‌شود،
-         * و این همان کاری است که پشتِ پیشخوان لازم است و نباید منتظرِ مدیر بماند.
-         * روی فاکتورِ نهایی اما برگشت می‌تواند نقد باشد؛ آن یکی دستِ مدیر می‌ماند.
-         */
-        if (role === Role.SALES && !isOpenAccount) {
-          throw new ForbiddenException({
-            error: 'RETURN_REQUIRES_MANAGER',
-            message: 'مرجوعیِ فاکتورِ نهایی را فقط مدیر ثبت می‌کند',
-          });
-        }
-
-        // ردیف‌های SALEِ همین فاکتور — منبعِ کالا و قیمت.
-        const saleLines = await tx.inventoryLog.findMany({
-          where: { invoiceId: invoice.id, action: 'SALE' },
-        });
-        const saleById = new Map(saleLines.map((l) => [l.id, l]));
-
-        // سقفِ قابل‌برگشتِ هر ردیف — هم مرجوعی‌های قبلی، هم اصلاحیه‌ها.
-        const balances = await lineBalances(
-          tx,
-          saleLines.map((l) => l.id),
-          new Map(saleLines.map((l) => [l.id, l.quantity])),
-        );
-
-        let refundAmount = 0;
-        const lineData: {
-          saleLogId: string;
-          productId: string;
-          locationId: string;
-          quantity: number;
-          unitRefund: number;
-          lineRefund: number;
-          restock: boolean;
-        }[] = [];
-
-        for (const line of dto.lines) {
-          const sale = saleById.get(line.saleLogId);
-          if (!sale) {
-            throw new BadRequestException({
-              error: 'LINE_NOT_IN_INVOICE',
-              saleLogId: line.saleLogId,
-              message: 'این ردیف متعلق به فاکتورِ انتخاب‌شده نیست',
-            });
-          }
-
-          const bal = balances.get(sale.id)!;
-          const sold = bal.sold;
-          const already = bal.returned;
-          const returnable = bal.outstanding;
-
-          if (line.quantity > returnable) {
-            throw new ConflictException({
-              error: 'EXCESS_RETURN',
-              saleLogId: sale.id,
-              sold,
-              alreadyReturned: already,
-              returnable,
-              requested: line.quantity,
-              message: 'تعدادِ مرجوعی از تعدادِ قابل‌برگشت بیشتر است',
-            });
-          }
-
-          const effTotal = this.effectiveTotal(
-            sale.unitPrice ?? 0,
-            sale.lineDiscount ?? 0,
-            sold,
-            invoice.subtotal,
-            invoice.discount,
-          );
-          const { lineRefund, unitRefund } = this.refundFor(
-            effTotal,
-            sold,
-            line.quantity,
-          );
-
-          refundAmount += lineRefund;
-
-          lineData.push({
-            saleLogId: sale.id,
-            productId: sale.productId,
-            locationId: sale.locationId,
-            quantity: line.quantity,
-            unitRefund,
-            lineRefund,
-            // پیش‌فرض سالم؛ فقط اگر صراحتاً false بیاید معیوب حساب می‌شود.
-            restock: line.restock !== false,
-          });
-        }
-
-        // برگشتِ اعتباری بدونِ مشتری قابل‌ثبت نیست — بستانکاری روی هیچ‌کس نمی‌نشیند.
-        if (dto.refundMethod === PaymentMethod.CREDIT && !invoice.customerId) {
-          throw new BadRequestException({
-            error: 'CUSTOMER_REQUIRED_FOR_CREDIT',
-            message: 'برگشت به حساب برای فروش نقدیِ بدون مشتری ممکن نیست',
-          });
-        }
-
-        const saleReturn = await tx.saleReturn.create({
-          data: {
-            idempotencyKey: dto.idempotencyKey ?? null,
-            invoiceId: invoice.id,
-            customerId: invoice.customerId,
-            warehouseId: invoice.warehouseId,
-            userId: userId ?? null,
-            refundMethod: dto.refundMethod,
-            refundAmount,
-            reason: dto.reason.trim(),
-            note: dto.note ?? null,
-          },
-        });
-
-        await tx.saleReturnLine.createMany({
-          data: lineData.map((l) => ({ ...l, returnId: saleReturn.id })),
-        });
-
-        // حرکتِ انبار فقط برای اقلامِ سالم — از تک‌نقطه‌ی تغییرِ موجودی (قانون ۱).
-        // پیمایش به ترتیبِ ثابتِ قفل‌گیری تا مرجوعی‌های هم‌زمان deadlock نسازند.
-        for (const l of inLockOrder(lineData)) {
-          if (!l.restock) continue;
-          await this.operation.execute(
-            {
-              type: 'RETURN',
-              productId: l.productId,
-              locationId: l.locationId,
-              quantity: l.quantity,
-              invoiceId: invoice.id,
-              saleReturnId: saleReturn.id,
-              userId: userId ?? null,
-              source: 'SALE_RETURN',
-              note: `مرجوعی ${saleReturn.number} — فاکتور ${invoice.number}`,
-            },
-            tx,
-          );
-        }
-
-        // ---- سمتِ مالی ----
-        if (dto.refundMethod === PaymentMethod.CREDIT && invoice.customerId) {
-          /*
-           * برگشت به حساب: بدهیِ همین فاکتور تا سقفِ مانده‌اش کم می‌شود تا
-           * تفکیکِ سنیِ بدهکاران (که از dueAmount می‌خواند) درست بماند؛ و کلِ
-           * مبلغِ برگشت به‌عنوان بستانکاری در دفتر ثبت می‌شود. اگر مبلغِ برگشت
-           * از ماندهٔ فاکتور بیشتر باشد (مثلاً فاکتورِ نقداً پرداخت‌شده)، مازاد
-           * در دفتر منفی می‌ماند = اعتبارِ مشتری نزدِ ما — قرینه‌ی پیش‌دریافتِ رسید.
-           */
-          /*
-           * کسرِ شرطی و نسبی، نه نوشتنِ مقدار مطلق: اگر رسیدی هم‌زمان همین فاکتور
-           * را تسویه کرده باشد، `invoice.dueAmount`ِ خوانده‌شده کهنه است و نوشتنِ
-           * مقدار مطلق کاهشِ آن رسید را پاک می‌کرد.
-           *
-           * اگر شرط نگیرد (فاکتور همین حالا تسویه شده) مانده دست نمی‌خورد ولی
-           * ردیفِ بستانکاریِ دفتر همچنان کامل ثبت می‌شود — مشتری پولش را طلبکار
-           * است چه این فاکتور باز باشد چه بسته. دفتر مرجع مانده است، نه dueAmount.
-           */
-          const applied = Math.min(refundAmount, invoice.dueAmount);
-          if (applied > 0) {
-            await tx.saleInvoice.updateMany({
-              where: { id: invoice.id, dueAmount: { gte: applied } },
-              data: { dueAmount: { decrement: applied } },
-            });
-          }
-
-          await this.ledger.record(tx, {
-            customerId: invoice.customerId,
-            type: LedgerEntryType.RETURN,
-            amount: -refundAmount,
-            invoiceId: invoice.id,
-            returnId: saleReturn.id,
-            userId: userId ?? null,
-            note: `مرجوعی ${saleReturn.number} — فاکتور ${invoice.number}`,
-          });
-        }
-        // CASH/CARD: وجه از صندوق برگشت داده شده و روی خودِ سندِ مرجوعی ثبت است؛
-        // دفتر دست نمی‌خورد چون بدهیِ مشتری تغییری نکرده.
-
-        return saleReturn.id;
-      });
+      const { returnId } = await this.prisma.$transaction(async (tx) =>
+        this.createReturnInTx(tx, dto, { userId, role }),
+      );
 
       // مرجوعی ثبت شد → فاکتور/لیست‌ها، موجودی (restock)، و احتمالاً مانده‌ی
       // حساب مشتری عوض شد؛ همان لحظه اعلان کن.
-      this.realtime.broadcast({ type: 'return.created', invoiceId: dto.invoiceId });
+      this.realtime.broadcast({
+        type: 'return.created',
+        invoiceId: dto.invoiceId,
+      });
       this.realtime.broadcast({ type: 'stock.changed' });
 
       return this.findOne(returnId);
-
     } catch (err: any) {
       // برخوردِ همزمان روی همان idempotencyKey: سندِ موجود برگردانده شود.
       if (err?.code === 'P2002') {
@@ -483,6 +235,311 @@ export class ReturnsService {
     }
   }
 
+  /**
+   * بدنه‌ی تراکنشیِ ثبت مرجوعی.
+   *
+   * جدا از `createReturn` تا عملیاتِ یکپارچه (adjust) بتواند همین منطق را داخل
+   * **تراکنشِ خودش** صدا بزند — بدون تراکنشِ تودرتو و بدون دوباره‌ثبت‌شدنِ سند.
+   * هیچ اعلانِ realtime و هیچ تراکنشی باز نمی‌کند؛ مالکِ تراکنش بعد از commit
+   * خودش اعلان می‌دهد.
+   *
+   * @param operationKey وقتی این مرجوعی بخشی از یک عملیاتِ یکپارچه است، کلیدِ
+   *   گروه‌بندیِ همان عملیات روی سند می‌نشیند تا با اصلاحیه‌ی همراه‌اش قابل
+   *   پیگیری باشد. برای مرجوعیِ مستقل null می‌ماند.
+   * @param allowCashOnOpen در عملیاتِ یکپارچه، فروشنده/مدیر خودش تصمیم می‌گیرد
+   *   روی فاکتورِ جاریِ حساب باز هم وجه نقد ردوبدل شود؛ پس این بررسیِ سیاستی
+   *   فقط در مسیرِ مستقل (`createReturn`) برقرار است و این‌جا با پرچم باز می‌شود.
+   */
+  async createReturnInTx(
+    tx: Prisma.TransactionClient,
+    dto: CreateReturnDto,
+    opts: {
+      userId?: string;
+      role?: Role;
+      operationKey?: string | null;
+      allowCashOnOpen?: boolean;
+    } = {},
+  ): Promise<{ returnId: string; refundAmount: number; number: number }> {
+    const { userId, role, operationKey = null, allowCashOnOpen = false } = opts;
+
+    const invoice = await lockInvoice(tx, dto.invoiceId);
+
+    if (!invoice) {
+      throw new NotFoundException({
+        error: 'INVOICE_NOT_FOUND',
+        message: 'فاکتور پیدا نشد',
+      });
+    }
+
+    const isOpenAccount = invoice.status === InvoiceStatus.OPEN;
+
+    // فاکتور باطل‌شده موجودی‌اش قبلاً کامل برگشته و بدهی‌اش صفر شده — مرجوعی
+    // رویش یعنی دوباره‌کاری و عددِ غلط. فاکتورِ جاریِ حساب باز اما مرجوعی
+    // می‌خورد (پایین، فقط به‌صورت کسر از حساب).
+    if (!isOpenAccount && invoice.status !== InvoiceStatus.CONFIRMED) {
+      throw new ConflictException({
+        error: 'INVOICE_NOT_RETURNABLE',
+        message: 'فاکتور باطل‌شده قابلِ مرجوعی نیست',
+      });
+    }
+
+    /*
+     * روی حساب باز مشتری هنوز یک ریال هم نداده و کلِ مبلغ بدهیِ اوست. پس
+     * «برگشتِ وجه از صندوق» یعنی پول دادن بابت جنسی که پولش گرفته نشده —
+     * تنها برگشتِ درست، کم‌کردن از همان بدهی است. (مسیرِ یکپارچه با
+     * `allowCashOnOpen` خودش این سیاست را مدیریت می‌کند.)
+     */
+    if (
+      isOpenAccount &&
+      dto.refundMethod !== PaymentMethod.CREDIT &&
+      !allowCashOnOpen
+    ) {
+      throw new BadRequestException({
+        error: 'OPEN_ACCOUNT_REFUND_MUST_BE_CREDIT',
+        message:
+          'روی حساب باز هنوز پولی پرداخت نشده — برگشت فقط به‌صورت کسر از حساب ثبت می‌شود',
+      });
+    }
+
+    /*
+     * صندوق‌دار (SALES) فقط روی حساب باز مرجوعی می‌زند.
+     *
+     * آنجا هیچ پولی از صندوق بیرون نمی‌رود — فقط بدهیِ خودِ مشتری کم می‌شود،
+     * و این همان کاری است که پشتِ پیشخوان لازم است و نباید منتظرِ مدیر بماند.
+     * روی فاکتورِ نهایی اما برگشت می‌تواند نقد باشد؛ آن یکی دستِ مدیر می‌ماند.
+     */
+    if (role === Role.SALES && !isOpenAccount) {
+      throw new ForbiddenException({
+        error: 'RETURN_REQUIRES_MANAGER',
+        message: 'مرجوعیِ فاکتورِ نهایی را فقط مدیر ثبت می‌کند',
+      });
+    }
+
+    // ردیف‌های SALEِ همین فاکتور — منبعِ کالا و قیمت.
+    const saleLines = await tx.inventoryLog.findMany({
+      where: { invoiceId: invoice.id, action: 'SALE' },
+    });
+    const saleById = new Map(saleLines.map((l) => [l.id, l]));
+
+    // سقفِ قابل‌برگشتِ هر ردیف — هم مرجوعی‌های قبلی، هم اصلاحیه‌ها.
+    const balances = await lineBalances(
+      tx,
+      saleLines.map((l) => l.id),
+      new Map(saleLines.map((l) => [l.id, l.quantity])),
+    );
+
+    let refundAmount = 0;
+    const lineData: {
+      saleLogId: string;
+      productId: string;
+      locationId: string;
+      quantity: number;
+      unitRefund: number;
+      lineRefund: number;
+      restock: boolean;
+    }[] = [];
+
+    for (const line of dto.lines) {
+      const sale = saleById.get(line.saleLogId);
+      if (!sale) {
+        throw new BadRequestException({
+          error: 'LINE_NOT_IN_INVOICE',
+          saleLogId: line.saleLogId,
+          message: 'این ردیف متعلق به فاکتورِ انتخاب‌شده نیست',
+        });
+      }
+
+      const bal = balances.get(sale.id)!;
+      const sold = bal.sold;
+      const already = bal.returned;
+      const returnable = bal.outstanding;
+
+      if (line.quantity > returnable) {
+        throw new ConflictException({
+          error: 'EXCESS_RETURN',
+          saleLogId: sale.id,
+          sold,
+          alreadyReturned: already,
+          returnable,
+          requested: line.quantity,
+          message: 'تعدادِ مرجوعی از تعدادِ قابل‌برگشت بیشتر است',
+        });
+      }
+
+      const effTotal = effectiveTotal(
+        sale.unitPrice ?? 0,
+        sale.lineDiscount ?? 0,
+        sold,
+        invoice.subtotal,
+        invoice.discount,
+      );
+      const { lineRefund, unitRefund } = refundFor(
+        effTotal,
+        sold,
+        line.quantity,
+      );
+
+      refundAmount += lineRefund;
+
+      lineData.push({
+        saleLogId: sale.id,
+        productId: sale.productId,
+        locationId: sale.locationId,
+        quantity: line.quantity,
+        unitRefund,
+        lineRefund,
+        // پیش‌فرض سالم؛ فقط اگر صراحتاً false بیاید معیوب حساب می‌شود.
+        restock: line.restock !== false,
+      });
+    }
+
+    // برگشتِ اعتباری بدونِ مشتری قابل‌ثبت نیست — بستانکاری روی هیچ‌کس نمی‌نشیند.
+    if (dto.refundMethod === PaymentMethod.CREDIT && !invoice.customerId) {
+      throw new BadRequestException({
+        error: 'CUSTOMER_REQUIRED_FOR_CREDIT',
+        message: 'برگشت به حساب برای فروش نقدیِ بدون مشتری ممکن نیست',
+      });
+    }
+
+    const saleReturn = await tx.saleReturn.create({
+      data: {
+        idempotencyKey: dto.idempotencyKey ?? null,
+        invoiceId: invoice.id,
+        customerId: invoice.customerId,
+        warehouseId: invoice.warehouseId,
+        userId: userId ?? null,
+        refundMethod: dto.refundMethod,
+        refundAmount,
+        reason: dto.reason.trim(),
+        note: dto.note ?? null,
+        operationKey,
+      },
+    });
+
+    await tx.saleReturnLine.createMany({
+      data: lineData.map((l) => ({ ...l, returnId: saleReturn.id })),
+    });
+
+    // حرکتِ انبار فقط برای اقلامِ سالم — از تک‌نقطه‌ی تغییرِ موجودی (قانون ۱).
+    // پیمایش به ترتیبِ ثابتِ قفل‌گیری تا مرجوعی‌های هم‌زمان deadlock نسازند.
+    for (const l of inLockOrder(lineData)) {
+      if (!l.restock) continue;
+      await this.operation.execute(
+        {
+          type: 'RETURN',
+          productId: l.productId,
+          locationId: l.locationId,
+          quantity: l.quantity,
+          invoiceId: invoice.id,
+          saleReturnId: saleReturn.id,
+          userId: userId ?? null,
+          source: 'SALE_RETURN',
+          note: `مرجوعی ${saleReturn.number} — فاکتور ${invoice.number}`,
+        },
+        tx,
+      );
+    }
+
+    // ---- سمتِ مالی ----
+    if (dto.refundMethod === PaymentMethod.CREDIT && invoice.customerId) {
+      /*
+       * برگشت به حساب: بدهیِ همین فاکتور تا سقفِ مانده‌اش کم می‌شود تا
+       * تفکیکِ سنیِ بدهکاران (که از dueAmount می‌خواند) درست بماند؛ و کلِ
+       * مبلغِ برگشت به‌عنوان بستانکاری در دفتر ثبت می‌شود. اگر مبلغِ برگشت
+       * از ماندهٔ فاکتور بیشتر باشد (مثلاً فاکتورِ نقداً پرداخت‌شده)، مازاد
+       * در دفتر منفی می‌ماند = اعتبارِ مشتری نزدِ ما — قرینه‌ی پیش‌دریافتِ رسید.
+       */
+      /*
+       * کسرِ شرطی و نسبی، نه نوشتنِ مقدار مطلق: اگر رسیدی هم‌زمان همین فاکتور
+       * را تسویه کرده باشد، `invoice.dueAmount`ِ خوانده‌شده کهنه است و نوشتنِ
+       * مقدار مطلق کاهشِ آن رسید را پاک می‌کرد.
+       *
+       * اگر شرط نگیرد (فاکتور همین حالا تسویه شده) مانده دست نمی‌خورد ولی
+       * ردیفِ بستانکاریِ دفتر همچنان کامل ثبت می‌شود — مشتری پولش را طلبکار
+       * است چه این فاکتور باز باشد چه بسته. دفتر مرجع مانده است، نه dueAmount.
+       */
+      const applied = Math.min(refundAmount, invoice.dueAmount);
+      if (applied > 0) {
+        await tx.saleInvoice.updateMany({
+          where: { id: invoice.id, dueAmount: { gte: applied } },
+          data: { dueAmount: { decrement: applied } },
+        });
+      }
+
+      await this.ledger.record(tx, {
+        customerId: invoice.customerId,
+        type: LedgerEntryType.RETURN,
+        amount: -refundAmount,
+        invoiceId: invoice.id,
+        returnId: saleReturn.id,
+        userId: userId ?? null,
+        note: `مرجوعی ${saleReturn.number} — فاکتور ${invoice.number}`,
+      });
+    }
+    // CASH/CARD: وجه از صندوق برگشت داده شده و روی خودِ سندِ مرجوعی ثبت است؛
+    // دفتر دست نمی‌خورد چون بدهیِ مشتری تغییری نکرده.
+
+    /*
+     * ---- سند خودکارِ این مرجوعی (پشت صحنه) ----
+     *
+     * بدهکار: برگشت از فروش (مبلغِ بازگشتی) + موجودی انبار (اقلامِ سالم به
+     * بهای خرید). بستانکار: صندوق (برگشتِ نقدی) یا مشتری (کسر از حساب) +
+     * بهای تمام‌شده.
+     *
+     * بهای تمام‌شده فقط برای اقلامِ سالمِ دوباره‌انبارشونده است؛ اقلامِ معیوب
+     * (restock=false) هیچ حرکتی در انبار ندارند پس هیچ پایِ COGS هم ندارند.
+     * کالای بدونِ قیمتِ خرید در این سند COGS نمی‌آید — سند همچنان موازنه است.
+     */
+    const voucherLines: VoucherLineInput[] = [
+      {
+        account: FixedAccount.SALES_RETURN,
+        amount: refundAmount,
+        note: `مرجوعی ${saleReturn.number}`,
+      },
+    ];
+
+    if (dto.refundMethod === PaymentMethod.CREDIT && invoice.customerId) {
+      voucherLines.push({
+        account: FixedAccount.CUSTOMERS,
+        amount: -refundAmount,
+        customerId: invoice.customerId,
+        note: 'کسر از حساب مشتری',
+      });
+    } else {
+      voucherLines.push({
+        account: FixedAccount.CASH,
+        amount: -refundAmount,
+        note: 'بازگشت وجه از صندوق',
+      });
+    }
+
+    const restockedLines = lineData.filter((l) => l.restock);
+    if (restockedLines.length) {
+      const prices = await this.posting.latestPurchasePrices(
+        tx,
+        restockedLines.map((l) => l.productId),
+      );
+      const cogs = restockedLines.reduce(
+        (sum, l) => sum + (prices.get(l.productId) ?? 0) * l.quantity,
+        0,
+      );
+      if (cogs > 0) {
+        voucherLines.push({ account: FixedAccount.INVENTORY, amount: cogs });
+        voucherLines.push({ account: FixedAccount.COGS, amount: -cogs });
+      }
+    }
+
+    await this.posting.post(tx, {
+      sourceType: VoucherSourceType.SALE_RETURN,
+      sourceId: saleReturn.id,
+      idempotencyKey: `return:${saleReturn.id}`,
+      lines: voucherLines,
+      note: `مرجوعی ${saleReturn.number} — فاکتور ${invoice.number}`,
+      userId: userId ?? null,
+    });
+
+    return { returnId: saleReturn.id, refundAmount, number: saleReturn.number };
+  }
 
   async findOne(id: string) {
     const ret = await this.prisma.saleReturn.findUnique({
@@ -495,8 +552,12 @@ export class ReturnsService {
         lines: {
           orderBy: { createdAt: 'asc' },
           include: {
-            product: { select: { id: true, name: true, sku: true, unit: true } },
-            location: { select: { id: true, name: true, code: true, path: true } },
+            product: {
+              select: { id: true, name: true, sku: true, unit: true },
+            },
+            location: {
+              select: { id: true, name: true, code: true, path: true },
+            },
           },
         },
       },
@@ -521,7 +582,6 @@ export class ReturnsService {
         : null,
     };
   }
-
 
   async findAll(q: {
     warehouseId?: string;

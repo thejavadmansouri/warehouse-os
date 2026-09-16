@@ -9,10 +9,7 @@ describe('UsersService', () => {
     // UsersService به PrismaService وابسته است و بدون آن ماژول تست اصلاً
     // compile نمی‌شد. اینجا هیچ کوئری‌ای زده نمی‌شود، پس یک بدلِ خالی کافی است.
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        UsersService,
-        { provide: PrismaService, useValue: {} },
-      ],
+      providers: [UsersService, { provide: PrismaService, useValue: {} }],
     }).compile();
 
     service = module.get<UsersService>(UsersService);

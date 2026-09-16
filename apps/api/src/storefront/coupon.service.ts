@@ -50,17 +50,22 @@ export class CouponService {
     const now = new Date();
 
     if (!c || !c.isActive) return this.fail('کد تخفیف نامعتبر است');
-    if (c.startsAt && c.startsAt > now) return this.fail('این کد تخفیف هنوز فعال نشده است');
-    if (c.expiresAt && c.expiresAt < now) return this.fail('این کد تخفیف منقضی شده است');
+    if (c.startsAt && c.startsAt > now)
+      return this.fail('این کد تخفیف هنوز فعال نشده است');
+    if (c.expiresAt && c.expiresAt < now)
+      return this.fail('این کد تخفیف منقضی شده است');
     if (c.usageLimit != null && c.usedCount >= c.usageLimit) {
       return this.fail('ظرفیت این کد تخفیف تمام شده است');
     }
 
-    const toSite = (rial: number) => convertMoney(rial, shop.storedUnit, shop.unit);
+    const toSite = (rial: number) =>
+      convertMoney(rial, shop.storedUnit, shop.unit);
 
     const minSite = toSite(c.minSubtotal);
     if (subtotalSite < minSite) {
-      return this.fail(`حداقل مبلغ سبد برای این کد ${minSite.toLocaleString('fa-IR')} است`);
+      return this.fail(
+        `حداقل مبلغ سبد برای این کد ${minSite.toLocaleString('fa-IR')} است`,
+      );
     }
 
     if (c.perCustomer != null && siteCustomerId) {
@@ -75,7 +80,8 @@ export class CouponService {
     let discount: number;
     if (c.type === 'PERCENT') {
       discount = Math.floor((subtotalSite * c.value) / 100);
-      if (c.maxDiscount != null) discount = Math.min(discount, toSite(c.maxDiscount));
+      if (c.maxDiscount != null)
+        discount = Math.min(discount, toSite(c.maxDiscount));
     } else {
       discount = toSite(c.value);
     }

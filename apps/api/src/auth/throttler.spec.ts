@@ -47,8 +47,12 @@ describe('Throttler — محدودیت نرخ لاگین (D1)', () => {
   });
 
   it('مسیر محافظت‌شده بعد از سقف، درخواست بعدی را 429 می‌کند', async () => {
-    expect((await request(app.getHttpServer()).get('/login-probe')).status).toBe(200);
-    expect((await request(app.getHttpServer()).get('/login-probe')).status).toBe(200);
+    expect(
+      (await request(app.getHttpServer()).get('/login-probe')).status,
+    ).toBe(200);
+    expect(
+      (await request(app.getHttpServer()).get('/login-probe')).status,
+    ).toBe(200);
     const blocked = await request(app.getHttpServer()).get('/login-probe');
     expect(blocked.status).toBe(429);
   });

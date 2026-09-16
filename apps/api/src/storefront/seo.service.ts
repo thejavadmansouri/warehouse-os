@@ -16,8 +16,16 @@ export class SeoService {
   }
 
   private esc(v: string): string {
-    return v.replace(/[<>&'"]/g, (c) =>
-      ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', "'": '&apos;', '"': '&quot;' })[c]!,
+    return v.replace(
+      /[<>&'"]/g,
+      (c) =>
+        ({
+          '<': '&lt;',
+          '>': '&gt;',
+          '&': '&amp;',
+          "'": '&apos;',
+          '"': '&quot;',
+        })[c]!,
     );
   }
 
@@ -47,12 +55,16 @@ export class SeoService {
 
     const url = (loc: string, lastmod?: Date, priority = '0.6') =>
       `  <url>\n    <loc>${this.esc(loc)}</loc>\n` +
-      (lastmod ? `    <lastmod>${lastmod.toISOString().slice(0, 10)}</lastmod>\n` : '') +
+      (lastmod
+        ? `    <lastmod>${lastmod.toISOString().slice(0, 10)}</lastmod>\n`
+        : '') +
       `    <priority>${priority}</priority>\n  </url>`;
 
     const entries = [
       url(`${origin}/`, undefined, '1.0'),
-      ...rows.map((p: { id: string; updatedAt: Date }) => url(`${origin}/?product=${p.id}`, p.updatedAt)),
+      ...rows.map((p: { id: string; updatedAt: Date }) =>
+        url(`${origin}/?product=${p.id}`, p.updatedAt),
+      ),
     ];
 
     return (

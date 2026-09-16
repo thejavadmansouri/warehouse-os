@@ -7,7 +7,6 @@ import { Roles } from '../auth/roles.decorator';
 import { ReportsService } from './reports.service';
 import type { RangeQuery } from './reports.service';
 
-
 /**
  * برچسب ستون‌ها. فایل اکسل دست حسابدار می‌رود، پس سرستون باید فارسی باشد
  * نه نام فیلد انگلیسی.
@@ -52,7 +51,13 @@ const COLUMN_LABELS: Record<string, string> = {
 };
 
 /** ستون‌هایی که برای کاربر نهایی معنا ندارند. */
-const HIDDEN_COLUMNS = new Set(['id', 'productId', 'customerId', 'sellerId', 'color']);
+const HIDDEN_COLUMNS = new Set([
+  'id',
+  'productId',
+  'customerId',
+  'sellerId',
+  'color',
+]);
 
 const STATUS_LABELS: Record<string, string> = {
   IN_HAND: 'نزد ما',
@@ -79,7 +84,8 @@ function prepareRows(rows: unknown[]): Record<string, unknown>[] {
       if (HIDDEN_COLUMNS.has(key)) continue;
       const label = COLUMN_LABELS[key] ?? key;
       if (value instanceof Date) out[label] = faDate(value);
-      else if (typeof value === 'string' && STATUS_LABELS[value]) out[label] = STATUS_LABELS[value];
+      else if (typeof value === 'string' && STATUS_LABELS[value])
+        out[label] = STATUS_LABELS[value];
       else out[label] = value;
     }
     return out;
@@ -108,91 +114,133 @@ function toExcel(res: Response, rows: unknown[], sheet: string) {
 
 const EXPORT_LIMIT = 10_000;
 
-
 /** گزارش‌ها فقط برای مدیر — فروشنده به سود و عملکرد بقیه دسترسی ندارد. */
 @Controller('reports')
 export class ReportsController {
-
   constructor(private readonly service: ReportsService) {}
-
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('periodic-sales')
-  async periodicSales(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.periodicSales({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async periodicSales(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.periodicSales({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.invoices.data, 'sales');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('periodic-profit')
-  async periodicProfit(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.periodicProfit({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async periodicProfit(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.periodicProfit({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.items.data, 'profit');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('debtors')
-  async debtors(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.debtors({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async debtors(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.debtors({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.debtors.data, 'debtors');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('cheques')
-  async cheques(@Query() q: RangeQuery & { status?: string; format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.cheques({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async cheques(
+    @Query() q: RangeQuery & { status?: string; format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.cheques({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.cheques.data, 'cheques');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('product-performance')
-  async productPerformance(@Query() q: RangeQuery & { type?: string; format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.productPerformance({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async productPerformance(
+    @Query() q: RangeQuery & { type?: string; format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.productPerformance({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.products.data, 'products');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('low-stock')
-  async lowStock(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.lowStock({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async lowStock(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.lowStock({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.items.data, 'low-stock');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('suspicious-prices')
-  async suspiciousPrices(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.suspiciousPrices({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
-    if (q.format === 'excel') return toExcel(res, r.items.data, 'suspicious-prices');
+  async suspiciousPrices(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.suspiciousPrices({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
+    if (q.format === 'excel')
+      return toExcel(res, r.items.data, 'suspicious-prices');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('seller-performance')
-  async sellerPerformance(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
-    const r = await this.service.sellerPerformance({ ...q, limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit });
+  async sellerPerformance(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const r = await this.service.sellerPerformance({
+      ...q,
+      limit: q.format === 'excel' ? EXPORT_LIMIT : q.limit,
+    });
     if (q.format === 'excel') return toExcel(res, r.sellers.data, 'sellers');
     return r;
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('sales-by-category')
-  async salesByCategory(@Query() q: RangeQuery & { format?: string }, @Res({ passthrough: true }) res: Response) {
+  async salesByCategory(
+    @Query() q: RangeQuery & { format?: string },
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const r = await this.service.salesByCategory({ ...q });
-    if (q.format === 'excel') return toExcel(res, r.categories, 'sales-by-category');
+    if (q.format === 'excel')
+      return toExcel(res, r.categories, 'sales-by-category');
     return r;
   }
 }

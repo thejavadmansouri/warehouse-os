@@ -18,7 +18,6 @@ async function q(sql: string) {
 }
 
 describe('SECTION 10 — Data consistency audit', () => {
-
   it('A1 invoice subtotal == sum(original SALE lines) for every CONFIRMED/OPEN invoice', async () => {
     const rows = await q(`
       SELECT i.id, i.subtotal,
@@ -31,7 +30,10 @@ describe('SECTION 10 — Data consistency audit', () => {
         AND NOT EXISTS (SELECT 1 FROM "SaleCorrection" c WHERE c."invoiceId" = i.id)
       GROUP BY i.id
       HAVING COALESCE(SUM(l.quantity * COALESCE(l."unitPrice",0) - COALESCE(l."lineDiscount",0)),0)::int <> i.subtotal`);
-    note('A1_subtotal_mismatch', { count: rows.length, sample: rows.slice(0, 6) });
+    note('A1_subtotal_mismatch', {
+      count: rows.length,
+      sample: rows.slice(0, 6),
+    });
     expect(rows).toEqual([]);
   });
 
@@ -45,7 +47,10 @@ describe('SECTION 10 — Data consistency audit', () => {
         AND NOT EXISTS (SELECT 1 FROM "SaleCorrection" c WHERE c."invoiceId" = i.id)
       GROUP BY i.id
       HAVING COALESCE(SUM(p.amount),0)::int <> i.total`);
-    note('A2_payment_mismatch', { count: rows.length, sample: rows.slice(0, 6) });
+    note('A2_payment_mismatch', {
+      count: rows.length,
+      sample: rows.slice(0, 6),
+    });
     expect(rows).toEqual([]);
   });
 
@@ -76,7 +81,8 @@ describe('SECTION 10 — Data consistency audit', () => {
     note('A4_stock_reconciliation', {
       inventory_rows: overAll[0],
       real_shelf_negative_rows: realShelfNegative[0],
-      interpretation: 'منفیِ واقعی‌قفسه‌ای = فروشِ پیش‌از-ثبت (allowNegative)؛ طبقِ طراحی مجاز است و باگِ عددی نیست (معامله‌های oversell همان حرکتِ SALE را دارند).',
+      interpretation:
+        'منفیِ واقعی‌قفسه‌ای = فروشِ پیش‌از-ثبت (allowNegative)؛ طبقِ طراحی مجاز است و باگِ عددی نیست (معامله‌های oversell همان حرکتِ SALE را دارند).',
     });
     // گزاره‌ی خفیفِ سخت‌پذیر: موجودیِ منفی روی قفسه‌ی واقعی فقط در همان محدوده‌ی
     // oversellِ تستی (عددی کوچک نسبت به کل) باشد؛ غیر از آن یعنی گم‌شدنِ عدد.
@@ -93,10 +99,14 @@ describe('SECTION 10 — Data consistency audit', () => {
       FROM "Inventory" i JOIN "Location" l ON l.id=i."locationId"
       WHERE i.quantity<0 AND COALESCE(l."depth",0)<99
       GROUP BY l."code", l."depth" ORDER BY sum_units ASC`);
-    const total = await q(`SELECT count(*)::int AS n FROM "Inventory" WHERE quantity<0`);
+    const total = await q(
+      `SELECT count(*)::int AS n FROM "Inventory" WHERE quantity<0`,
+    );
     note('A5_negative_scope', {
-      by_shelf: rows, total_negative_rows: total[0].n,
-      interpretation: 'همه‌ی منفی‌ها از فروش‌های oversellِ تستی (allowNegative) هستند و هر واحد حرکتِ SALE دارد؛ رکوردِ کامل نیست.',
+      by_shelf: rows,
+      total_negative_rows: total[0].n,
+      interpretation:
+        'همه‌ی منفی‌ها از فروش‌های oversellِ تستی (allowNegative) هستند و هر واحد حرکتِ SALE دارد؛ رکوردِ کامل نیست.',
     });
     // نگهبانِ واقعی: حتی یک منفی هم نباید روی قفسه‌ی **سیستمیِ ثبت‌نشده** بی‌پشتوانه
     // باشد که گزارشِ «موجودی منفی› میشد. این‌جا فقط تعدادِ کلِ منفی ثبت می‌شود.
@@ -112,7 +122,10 @@ describe('SECTION 10 — Data consistency audit', () => {
       SELECT l.id FROM "InventoryLog" l
       LEFT JOIN "SaleInvoice" i ON i.id=l."invoiceId"
       WHERE l.action='SALE' AND l."invoiceId" IS NOT NULL AND i.id IS NULL LIMIT 5`);
-    note('A6_orphan_lines', { missing_product: missingProd, missing_invoice: missingInv });
+    note('A6_orphan_lines', {
+      missing_product: missingProd,
+      missing_invoice: missingInv,
+    });
     expect(missingProd).toEqual([]);
     expect(missingInv).toEqual([]);
   });
@@ -122,14 +135,21 @@ describe('SECTION 10 — Data consistency audit', () => {
       SELECT p.id FROM "Payment" p LEFT JOIN "SaleInvoice" i ON i.id=p."invoiceId" WHERE i.id IS NULL LIMIT 5`);
     const orphanLedger = await q(`
       SELECT l.id FROM "CustomerLedger" l LEFT JOIN "Customer" c ON c.id=l."customerId" WHERE c.id IS NULL LIMIT 5`);
-    note('A7_orphans', { orphan_payments: orphanPay, orphan_ledger: orphanLedger });
+    note('A7_orphans', {
+      orphan_payments: orphanPay,
+      orphan_ledger: orphanLedger,
+    });
     expect(orphanPay).toEqual([]);
     expect(orphanLedger).toEqual([]);
   });
 
   it('A8 no duplicate invoice number and no duplicate idempotency keys', async () => {
-    const dupNum = await q(`SELECT "number", count(*) FROM "SaleInvoice" GROUP BY "number" HAVING count(*)>1 LIMIT 5`);
-    const dupKey = await q(`SELECT "idempotencyKey", count(*) FROM "SaleInvoice" WHERE "idempotencyKey" IS NOT NULL GROUP BY "idempotencyKey" HAVING count(*)>1 LIMIT 5`);
+    const dupNum = await q(
+      `SELECT "number", count(*) FROM "SaleInvoice" GROUP BY "number" HAVING count(*)>1 LIMIT 5`,
+    );
+    const dupKey = await q(
+      `SELECT "idempotencyKey", count(*) FROM "SaleInvoice" WHERE "idempotencyKey" IS NOT NULL GROUP BY "idempotencyKey" HAVING count(*)>1 LIMIT 5`,
+    );
     note('A8_duplicates', { dup_number: dupNum, dup_idempotency: dupKey });
     expect(dupNum).toEqual([]);
     expect(dupKey).toEqual([]);

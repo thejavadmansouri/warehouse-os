@@ -4,7 +4,14 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { ProductsService } from '../../src/products/products.service';
-import { prisma, sales, baseFixture, makeProduct, uniq, close } from './harness';
+import {
+  prisma,
+  sales,
+  baseFixture,
+  makeProduct,
+  uniq,
+  close,
+} from './harness';
 import { note } from './evlog';
 
 let f: any;
@@ -13,7 +20,7 @@ let products: ProductsService;
 beforeAll(async () => {
   f = await baseFixture();
   // سازنده در f3bd9c0 تک‌آرگومانی شد (تولیدکننده‌ی بارکد حذف شد).
-  products = new ProductsService(prisma as any);
+  products = new ProductsService(prisma);
 });
 afterAll(close);
 
@@ -22,13 +29,24 @@ const refresh = () =>
     'REFRESH MATERIALIZED VIEW CONCURRENTLY "ProductPopularity"',
   );
 
-const sell = (p: any, qty: number) => sales.createInvoice({
-  idempotencyKey: uniq('sr'), warehouseId: f.warehouseId,
-  lines: [{ productId: p.id, locationId: f.locationId, quantity: qty, unitPrice: 1000 }],
-} as any, f.userId);
+const sell = (p: any, qty: number) =>
+  sales.createInvoice(
+    {
+      idempotencyKey: uniq('sr'),
+      warehouseId: f.warehouseId,
+      lines: [
+        {
+          productId: p.id,
+          locationId: f.locationId,
+          quantity: qty,
+          unitPrice: 1000,
+        },
+      ],
+    },
+    f.userId,
+  );
 
 describe('SEARCH RANKING — popularity signal', () => {
-
   it('S1 the view exists and is refreshable concurrently', async () => {
     await expect(refresh()).resolves.toBeDefined();
   });
@@ -39,7 +57,7 @@ describe('SEARCH RANKING — popularity signal', () => {
     const cold = await makeProduct({ stock: 100, name: `${tag} سرد` });
     const hot = await makeProduct({ stock: 100, name: `${tag} داغ` });
 
-    let before = await products.search(tag);
+    const before = await products.search(tag);
     const beforeOrder = before.map((p: any) => p.id);
 
     for (let i = 0; i < 5; i++) await sell(hot, 1);
@@ -52,7 +70,9 @@ describe('SEARCH RANKING — popularity signal', () => {
       query: tag,
       beforeFirst: beforeOrder[0] === hot.id ? 'hot' : 'cold',
       afterFirst: afterOrder[0] === hot.id ? 'hot' : 'cold',
-      afterOrder: afterOrder.map((id: string) => (id === hot.id ? 'hot' : 'cold')),
+      afterOrder: afterOrder.map((id: string) =>
+        id === hot.id ? 'hot' : 'cold',
+      ),
     });
 
     expect(afterOrder[0]).toBe(hot.id);
@@ -74,7 +94,10 @@ describe('SEARCH RANKING — popularity signal', () => {
   it('S4 popularity does not override a clearly better text match', async () => {
     const tag = uniq('خخخ').replace(/-/g, '');
     // پرفروش ولی با نامِ شلوغ‌تر و تطبیقِ ضعیف‌تر
-    const hot = await makeProduct({ stock: 100, name: `چیز دیگر ${tag} با کلی کلمه اضافه` });
+    const hot = await makeProduct({
+      stock: 100,
+      name: `چیز دیگر ${tag} با کلی کلمه اضافه`,
+    });
     const exactName = await makeProduct({ stock: 100, name: tag });
 
     for (let i = 0; i < 40; i++) await sell(hot, 1);

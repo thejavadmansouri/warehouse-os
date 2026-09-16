@@ -4,11 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ChequeStatus, LedgerEntryType, Prisma } from '@prisma/client';
+import {
+  ChequeStatus,
+  FixedAccount,
+  LedgerEntryType,
+  Prisma,
+  VoucherSourceType,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from './ledger.service';
 import { EventsGateway } from '../realtime/events.gateway';
+import { PostingService, VoucherLineInput } from '../vouchers/posting.service';
 
 /** وضعیت‌هایی که هنوز پول نشده‌اند — از این‌ها می‌شود به وصول یا برگشت رفت. */
 const PENDING: ChequeStatus[] = [ChequeStatus.IN_HAND, ChequeStatus.DEPOSITED];
@@ -19,10 +26,15 @@ const PENDING: ChequeStatus[] = [ChequeStatus.IN_HAND, ChequeStatus.DEPOSITED];
  * قاعده‌ی مالیِ کل این کلاس یک جمله است: **بدهی در لحظه‌ی گرفتنِ چک کم شده**
  * (تصمیمِ اولِ حساب‌باز). پس:
  *
- *   - سپردن به بانک و وصولِ عادی هیچ اثر مالی ندارند؛ فقط وضعیت عوض می‌شود.
- *     پولی که قرار بود بیاید، از همان روزِ گرفتنِ چک در حساب لحاظ شده.
- *   - برگشت اثر مالی دارد: بدهی باید برگردد.
- *   - وصولِ چکی که قبلاً برگشت خورده، اثرِ آن برگشت را خنثی می‌کند.
+ *   - سپردن به بانک: چک از حسابِ «چک‌های دریافتی» به «بانک» می‌رود — سندِ
+ *     `CHEQUE_DEPOSIT`. بدهیِ مشتری دست نمی‌خورد (از روزِ گرفتنِ چک کم شده).
+ *   - وصولِ عادیِ چکِ سپرده‌شده: هیچ اثر مالی ندارد؛ فقط وضعیت عوض می‌شود —
+ *     پول از روزِ سپردن در بانک بود. وصولِ مستقیمِ چکِ نزدِ ما (بدون سپردن)
+ *     چک را از «چک‌های دریافتی» به «صندوق» می‌برد — سندِ `CHEQUE_CASHED`.
+ *   - برگشت اثر مالی دارد: بدهی باید برگردد — سندِ `CHEQUE_BOUNCED`
+ *     (بدهکارِ مشتری / بستانکارِ بانک یا چک‌های دریافتی، بسته به جایی که چک بود).
+ *   - وصولِ چکی که قبلاً برگشت خورده، اثرِ آن برگشت را خنثی می‌کند — سندِ
+ *     قرینه‌ی همان برگشت با لینکِ «معکوسِ» (`reversesVoucherId`).
  *
  * دفتر append-only است، پس هیچ ردیفی پاک یا ویرایش نمی‌شود؛ خنثی‌کردن یعنی
  * ردیفِ قرینه. مانده‌ی خودِ فاکتورها (`dueAmount`) هم کنارش هماهنگ می‌شود، چون
@@ -34,6 +46,7 @@ export class ChequesService {
     private prisma: PrismaService,
     private ledger: LedgerService,
     private realtime: EventsGateway,
+    private posting: PostingService,
   ) {}
 
   /**
@@ -172,10 +185,10 @@ export class ChequesService {
     }
   }
 
-  /** به بانک سپرده شد — فقط وضعیت، بدون اثر مالی. */
+  /** به بانک سپرده شد — چک از «چک‌های دریافتی» به «بانک» می‌رود. */
   async deposit(id: string) {
-    const cheque = await this.prisma.$transaction(async (tx) => {
-      const { cheque } = await this.load(tx, id);
+    const result = await this.prisma.$transaction(async (tx) => {
+      const { cheque, amount } = await this.load(tx, id);
 
       if (cheque.status !== ChequeStatus.IN_HAND) {
         throw new ConflictException({
@@ -184,6 +197,22 @@ export class ChequesService {
         });
       }
 
+      // همان حرکتِ فیزیکیِ سپردن: چکِ دریافتی → بانک. بدهیِ مشتری دست نمی‌خورد.
+      await this.posting.post(tx, {
+        sourceType: VoucherSourceType.CHEQUE_DEPOSIT,
+        sourceId: id,
+        idempotencyKey: `cheque-deposit:${id}`,
+        lines: [
+          { account: FixedAccount.BANK, amount, note: 'سپردن چک به بانک' },
+          {
+            account: FixedAccount.CHEQUES,
+            amount: -amount,
+            note: 'چک از نزد ما خارج شد',
+          },
+        ],
+        note: `سپردن چک ${cheque.number} به بانک`,
+      });
+
       return tx.cheque.update({
         where: { id },
         data: { status: ChequeStatus.DEPOSITED },
@@ -191,14 +220,16 @@ export class ChequesService {
     });
 
     this.realtime.broadcast({ type: 'cheque.updated' });
-    return cheque;
+    return result;
   }
 
   /**
    * وصول شد.
    *
-   * حالتِ عادی هیچ اثر مالی ندارد — بدهی از روزِ گرفتنِ چک کم شده بود. فقط اگر
-   * چک قبلاً برگشت خورده باشد، اثرِ آن برگشت با یک ردیفِ قرینه خنثی می‌شود.
+   * حالتِ عادی هیچ اثر مالی روی بدهی ندارد — بدهی از روزِ گرفتنِ چک کم شده بود.
+   * فقط دو حرکتِ دفتریِ سند ممکن است:
+   *   • چکِ نزدِ ما مستقیم نقد شد → از «چک‌های دریافتی» به «صندوق».
+   *   • چک قبلاً برگشت خورده بود → اثرِ آن برگشت با سندِ قرینه خنثی می‌شود.
    */
   async cash(id: string, userId?: string) {
     const result = await this.prisma.$transaction(async (tx) => {
@@ -223,6 +254,66 @@ export class ChequesService {
           note: `چک ${cheque.number} پس از برگشت وصول شد`,
         });
         await this.shiftInvoiceDue(tx, ctx, 'apply');
+      }
+
+      // سندِ وصول — فقط حرکت‌هایی که اثر دارند.
+      let lines: VoucherLineInput[] = [];
+      let reversesVoucherId: string | null = null;
+
+      if (wasBounced) {
+        // قرینه‌ی سندِ برگشت — همان حساب‌ها با علامتِ برعکس، وصل به سندِ برگشت.
+        const bouncedVoucher = await tx.voucher.findFirst({
+          where: {
+            sourceType: VoucherSourceType.CHEQUE_BOUNCED,
+            sourceId: id,
+          },
+          include: {
+            lines: {
+              select: { account: true, amount: true, customerId: true },
+            },
+          },
+        });
+        if (bouncedVoucher) {
+          reversesVoucherId = bouncedVoucher.id;
+          lines = bouncedVoucher.lines.map((l) => ({
+            account: l.account,
+            amount: -l.amount,
+            customerId: l.customerId,
+            note: 'قرینه‌ی برگشت چک',
+          }));
+        } else {
+          // برگشتِ پیش از دورانِ سند — بدهی با قرینه‌ی ساده برمی‌گردد.
+          lines = [
+            { account: FixedAccount.CASH, amount, note: 'وصول چک برگشتی' },
+            {
+              account: FixedAccount.CUSTOMERS,
+              amount: -amount,
+              customerId,
+              note: 'وصول چک برگشتی',
+            },
+          ];
+        }
+      } else if (cheque.status === ChequeStatus.IN_HAND) {
+        // وصولِ مستقیمِ چکِ نزدِ ما: «چک‌های دریافتی» → «صندوق».
+        lines = [
+          { account: FixedAccount.CASH, amount, note: 'وصول چک' },
+          { account: FixedAccount.CHEQUES, amount: -amount, note: 'چک نقد شد' },
+        ];
+      }
+      // DEPOSITED → CASHED: پول از روزِ سپردن در بانک بود؛ فقط وضعیت عوض می‌شود.
+
+      if (lines.length) {
+        await this.posting.post(tx, {
+          sourceType: VoucherSourceType.CHEQUE_CASHED,
+          sourceId: id,
+          idempotencyKey: `cheque-cash:${id}`,
+          lines,
+          note: wasBounced
+            ? `وصول چک ${cheque.number} پس از برگشت`
+            : `وصول چک ${cheque.number}`,
+          userId: userId ?? null,
+          reversesVoucherId,
+        });
       }
 
       return tx.cheque.update({
@@ -268,6 +359,30 @@ export class ChequesService {
 
       await this.shiftInvoiceDue(tx, ctx, 'restore');
 
+      // سندِ برگشت: بدهی برمی‌گردد؛ چک از جایی که بود (بانک یا نزدِ ما) خارج می‌شود.
+      const counter =
+        cheque.status === ChequeStatus.DEPOSITED
+          ? FixedAccount.BANK
+          : FixedAccount.CHEQUES;
+      await this.posting.post(tx, {
+        sourceType: VoucherSourceType.CHEQUE_BOUNCED,
+        sourceId: id,
+        idempotencyKey: `cheque-bounce:${id}`,
+        lines: [
+          {
+            account: FixedAccount.CUSTOMERS,
+            amount,
+            customerId,
+            note: 'بدهیِ چکِ برگشتی',
+          },
+          { account: counter, amount: -amount, note: 'چک برگشتی' },
+        ],
+        note: reason?.trim()
+          ? `برگشت چک ${cheque.number} — ${reason.trim()}`
+          : `برگشت چک ${cheque.number}`,
+        userId: userId ?? null,
+      });
+
       return tx.cheque.update({
         where: { id },
         data: {
@@ -280,5 +395,56 @@ export class ChequesService {
     this.realtime.broadcast({ type: 'cheque.updated' });
     this.realtime.broadcast({ type: 'sale.created' }); // مانده‌ی مشتری عوض شد
     return result;
+  }
+
+  /**
+   * چک‌های یک مشتری — برای تبِ «چک‌ها» در پرونده‌ی مشتری.
+   *
+   * چک دو مسیر به مشتری می‌رسد: یا بابتِ فاکتور (`payment`) یا بابتِ رسیدِ
+   * تسویه (`receiptPayment`). هر دو را می‌گیریم و مسیر را روی هر ردیف
+   * می‌گذاریم تا مدیر بداند چک بابتِ کدام سند بوده — همان «گردش چک» پارسیان.
+   */
+  async listForCustomer(customerId: string) {
+    const rows = await this.prisma.cheque.findMany({
+      where: {
+        OR: [
+          { payment: { invoice: { customerId } } },
+          { receiptPayment: { receipt: { customerId } } },
+        ],
+      },
+      include: {
+        payment: {
+          select: { amount: true, invoice: { select: { number: true } } },
+        },
+        receiptPayment: {
+          select: { amount: true, receipt: { select: { number: true } } },
+        },
+      },
+      orderBy: [{ status: 'asc' }, { dueDate: 'desc' }],
+      take: 200,
+    });
+
+    return rows.map((ch) => {
+      // مبلغِ چک از مسیرِ مالیش می‌آید — خودِ Cheque مبلغ ندارد.
+      const amount = ch.payment?.amount ?? ch.receiptPayment?.amount ?? 0;
+      const viaPayment = ch.payment?.invoice
+        ? { docNumber: ch.payment.invoice.number ?? null }
+        : null;
+      const viaReceipt = ch.receiptPayment?.receipt
+        ? { docNumber: ch.receiptPayment.receipt.number ?? null }
+        : null;
+      return {
+        id: ch.id,
+        number: ch.number,
+        bankName: ch.bankName,
+        dueDate: ch.dueDate,
+        status: ch.status,
+        settledAt: ch.settledAt,
+        amount,
+        /** SALE = چکی که با فاکتور گرفته شد · RECEIPT = چکی که بابت بدهی آمد. */
+        source: ch.paymentId ? ('SALE' as const) : ('RECEIPT' as const),
+        docNumber: (viaPayment ?? viaReceipt)?.docNumber ?? null,
+      };
+    });
   }
 }

@@ -27,7 +27,10 @@ let failures = 0;
 
 function check(name: string, ok: boolean, detail: string) {
   if (ok) console.log(`  ✓ ${name}`);
-  else { failures++; console.log(`  ✗ ${name} — ${detail}`); }
+  else {
+    failures++;
+    console.log(`  ✗ ${name} — ${detail}`);
+  }
 }
 
 async function boot() {
@@ -39,7 +42,11 @@ async function boot() {
   const app = await NestFactory.create(AppModule, { logger: ['error'] });
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
   );
   await app.init();
   return app;
@@ -53,24 +60,48 @@ async function main() {
     const http = app.getHttpServer();
 
     const noKey = await request(http).get('/sync/ping');
-    check('site: /sync/ping بدون کلید → 401', noKey.status === 401, `status=${noKey.status}`);
+    check(
+      'site: /sync/ping بدون کلید → 401',
+      noKey.status === 401,
+      `status=${noKey.status}`,
+    );
 
-    const wrong = await request(http).get('/sync/ping').set('x-sync-key', 'x'.repeat(48));
-    check('site: کلید غلط → 401', wrong.status === 401, `status=${wrong.status}`);
+    const wrong = await request(http)
+      .get('/sync/ping')
+      .set('x-sync-key', 'x'.repeat(48));
+    check(
+      'site: کلید غلط → 401',
+      wrong.status === 401,
+      `status=${wrong.status}`,
+    );
 
     // کلیدِ هم‌طول ولی متفاوت — مسیرِ timingSafeEqual
     const right = await request(http).get('/sync/ping').set('x-sync-key', KEY);
-    check('site: کلید درست → 200', right.status === 200, `status=${right.status}`);
+    check(
+      'site: کلید درست → 200',
+      right.status === 200,
+      `status=${right.status}`,
+    );
 
     // بدنه‌ی نامعتبر باید ۴۰۰ بگیرد نه ۵۰۰ — یعنی DTO واقعاً اعتبارسنجی می‌کند.
     const bad = await request(http)
       .post('/sync/catalog')
       .set('x-sync-key', KEY)
       .send({ products: [{ id: 'not-a-uuid' }], storedUnit: 'DOLLAR' });
-    check('site: بدنه‌ی نامعتبر → 400', bad.status === 400, `status=${bad.status}`);
+    check(
+      'site: بدنه‌ی نامعتبر → 400',
+      bad.status === 400,
+      `status=${bad.status}`,
+    );
 
-    const orders = await request(http).get('/sync/orders').set('x-sync-key', KEY);
-    check('site: /sync/orders با کلید → 200', orders.status === 200, `status=${orders.status}`);
+    const orders = await request(http)
+      .get('/sync/orders')
+      .set('x-sync-key', KEY);
+    check(
+      'site: /sync/orders با کلید → 200',
+      orders.status === 200,
+      `status=${orders.status}`,
+    );
 
     await app.close();
   }
@@ -101,15 +132,26 @@ async function main() {
   delete process.env.SYNC_ROLE;
   {
     const app = await boot();
-    const res = await request(app.getHttpServer()).get('/sync/ping').set('x-sync-key', KEY);
-    check('بدون SYNC_ROLE: /sync/ping → 404', res.status === 404, `status=${res.status}`);
+    const res = await request(app.getHttpServer())
+      .get('/sync/ping')
+      .set('x-sync-key', KEY);
+    check(
+      'بدون SYNC_ROLE: /sync/ping → 404',
+      res.status === 404,
+      `status=${res.status}`,
+    );
     await app.close();
   }
 
   console.log(
-    failures === 0 ? '\nهمه‌ی ادعاها برقرارند.\n' : `\n${failures} ادعا شکست خورد.\n`,
+    failures === 0
+      ? '\nهمه‌ی ادعاها برقرارند.\n'
+      : `\n${failures} ادعا شکست خورد.\n`,
   );
   process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

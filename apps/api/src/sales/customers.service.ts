@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { Prisma, PhoneKind } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,7 +11,6 @@ import { normalizePhone, phoneKind } from '../common/phone.util';
 import { LedgerService } from './ledger.service';
 import { CustomerCategoriesService } from './customer-categories.service';
 import { CreateCustomerDto, CustomerPhoneDto } from './dto/customer.dto';
-
 
 /*
  * شکلِ ورودی از خودِ DTOها می‌آید. تعریفِ موازی یعنی چیزی که ValidationPipe
@@ -19,24 +22,25 @@ export type CustomerInput = CreateCustomerDto;
 /** مرتب‌سازی فهرست مشتریان. `due*` روی مانده‌ی دفتر کار می‌کند. */
 export type CustomerSort = 'name' | 'newest' | 'dueDesc' | 'dueAsc';
 
-const CUSTOMER_SORTS: readonly CustomerSort[] = ['name', 'newest', 'dueDesc', 'dueAsc'];
-
+const CUSTOMER_SORTS: readonly CustomerSort[] = [
+  'name',
+  'newest',
+  'dueDesc',
+  'dueAsc',
+];
 
 @Injectable()
 export class CustomersService {
-
   constructor(
     private prisma: PrismaService,
     private ledger: LedgerService,
     private categories: CustomerCategoriesService,
   ) {}
 
-
   /** نام کاملِ نرمال‌شده برای جست‌وجو — «محمّد رضایی» و «محمد رضائی» یکی شوند. */
   private buildSearchName(firstName: string, lastName?: string | null): string {
     return normalizePersian(`${firstName} ${lastName ?? ''}`).trim();
   }
-
 
   /**
    * جست‌وجوی مشتری برای صفحه‌ی فروش.
@@ -64,7 +68,6 @@ export class CustomersService {
      */
     onlyDebtors = false,
   ) {
-
     const sort = (CUSTOMER_SORTS as readonly string[]).includes(sortBy)
       ? sortBy
       : 'name';
@@ -83,11 +86,11 @@ export class CustomersService {
       const digits = normalizePersian(q).replace(/\D/g, '');
 
       where.OR = [
-        { searchName:{ contains: normalizedName } },
-        { firstName:{ contains: q, mode:'insensitive' } },
-        { lastName:{ contains: q, mode:'insensitive' } },
+        { searchName: { contains: normalizedName } },
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { lastName: { contains: q, mode: 'insensitive' } },
         ...(digits
-          ? [{ phones:{ some:{ phone:{ contains: digits } } } }]
+          ? [{ phones: { some: { phone: { contains: digits } } } }]
           : []),
       ];
     }
@@ -103,27 +106,27 @@ export class CustomersService {
     if (sort === 'dueDesc' || sort === 'dueAsc' || onlyDebtors) {
       const matched = await this.prisma.customer.findMany({
         where,
-        select:{ id:true, firstName:true, lastName:true },
+        select: { id: true, firstName: true, lastName: true },
       });
 
       const groups = matched.length
         ? await this.prisma.customerLedger.groupBy({
-            by:['customerId'],
-            where:{ customerId:{ in: matched.map(m => m.id) } },
-            _sum:{ amount:true },
+            by: ['customerId'],
+            where: { customerId: { in: matched.map((m) => m.id) } },
+            _sum: { amount: true },
           })
         : [];
       const balances = new Map(
-        groups.map(g => [g.customerId, g._sum.amount ?? 0]),
+        groups.map((g) => [g.customerId, g._sum.amount ?? 0]),
       );
 
       const ordered = matched
-        .map(m => ({
+        .map((m) => ({
           id: m.id,
           due: balances.get(m.id) ?? 0,
           fullName: [m.firstName, m.lastName].filter(Boolean).join(' '),
         }))
-        .filter(o => (onlyDebtors ? o.due > 0 : true))
+        .filter((o) => (onlyDebtors ? o.due > 0 : true))
         .sort((a, b) => {
           // وقتی فقط فیلترِ بدهکار روشن است و ترتیبِ خواسته‌شده بدهی نیست،
           // همان ترتیبِ الفبایی حفظ می‌شود.
@@ -143,19 +146,19 @@ export class CustomersService {
       const slice = ordered.slice((page - 1) * pageSize, page * pageSize);
       const customers = slice.length
         ? await this.prisma.customer.findMany({
-            where:{ id:{ in: slice.map(s => s.id) } },
-            include:{ phones:true, category:true },
+            where: { id: { in: slice.map((s) => s.id) } },
+            include: { phones: true, category: true },
           })
         : [];
-      const byId = new Map(customers.map(c => [c.id, c]));
+      const byId = new Map(customers.map((c) => [c.id, c]));
 
       return {
         data: slice
-          .map(s => byId.get(s.id))
+          .map((s) => byId.get(s.id))
           .filter((c): c is NonNullable<typeof c> => !!c)
-          .map(c => ({
+          .map((c) => ({
             ...this.withFullName(c),
-            summary:{ totalDue: balances.get(c.id) ?? 0 },
+            summary: { totalDue: balances.get(c.id) ?? 0 },
           })),
         meta: this.meta(matchedTotal, page, pageSize),
       };
@@ -163,15 +166,15 @@ export class CustomersService {
 
     const orderBy =
       sort === 'newest'
-        ? { createdAt:'desc' as const }
-        : [{ lastName:'asc' as const }, { firstName:'asc' as const }];
+        ? { createdAt: 'desc' as const }
+        : [{ lastName: 'asc' as const }, { firstName: 'asc' as const }];
 
     const data = await this.prisma.customer.findMany({
       where,
-      include:{ phones:true, category:true },
+      include: { phones: true, category: true },
       orderBy,
-      skip:(page - 1) * pageSize,
-      take:pageSize,
+      skip: (page - 1) * pageSize,
+      take: pageSize,
     });
 
     /*
@@ -179,40 +182,46 @@ export class CustomersService {
      * ایندکس `[customerId, createdAt]` استفاده می‌کند، نه یک کوئری به‌ازای هر
      * مشتری. عددِ ستون «بدهی» از همین‌جا می‌آید.
      */
-    const pageIds = data.map(c => c.id);
+    const pageIds = data.map((c) => c.id);
     const groups = pageIds.length
       ? await this.prisma.customerLedger.groupBy({
-          by:['customerId'],
-          where:{ customerId:{ in: pageIds } },
-          _sum:{ amount:true },
+          by: ['customerId'],
+          where: { customerId: { in: pageIds } },
+          _sum: { amount: true },
         })
       : [];
-    const balances = new Map(groups.map(g => [g.customerId, g._sum.amount ?? 0]));
+    const balances = new Map(
+      groups.map((g) => [g.customerId, g._sum.amount ?? 0]),
+    );
 
     return {
-      data: data.map(c => ({
+      data: data.map((c) => ({
         ...this.withFullName(c),
-        summary:{ totalDue: balances.get(c.id) ?? 0 },
+        summary: { totalDue: balances.get(c.id) ?? 0 },
       })),
       meta: this.meta(total, page, pageSize),
     };
   }
 
-
   /** پروفایل مشتری + خلاصه‌ی حساب. مبنای فاز ۶. */
   async findOne(id: string) {
-
     const customer = await this.prisma.customer.findUnique({
-      where:{ id },
-      include:{
-        category:true,
-        phones:{ orderBy:[{ isPrimary:'desc' }, { createdAt:'asc' }] },
-        invoices:{
-          orderBy:{ createdAt:'desc' },
-          take:50,
-          select:{
-            id:true, number:true, total:true, paidAmount:true,
-            dueAmount:true, dueDate:true, status:true, createdAt:true,
+      where: { id },
+      include: {
+        category: true,
+        phones: { orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }] },
+        invoices: {
+          orderBy: { createdAt: 'desc' },
+          take: 50,
+          select: {
+            id: true,
+            number: true,
+            total: true,
+            paidAmount: true,
+            dueAmount: true,
+            dueDate: true,
+            status: true,
+            createdAt: true,
           },
         },
       },
@@ -220,8 +229,8 @@ export class CustomersService {
 
     if (!customer) {
       throw new NotFoundException({
-        error:'CUSTOMER_NOT_FOUND',
-        message:'مشتری پیدا نشد',
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'مشتری پیدا نشد',
       });
     }
 
@@ -235,38 +244,36 @@ export class CustomersService {
     const [summary, purchased] = await Promise.all([
       this.ledger.summary(id),
       this.prisma.saleInvoice.aggregate({
-        where:{ customerId:id, status:{ not:'CANCELLED' } },
-        _sum:{ total:true },
+        where: { customerId: id, status: { not: 'CANCELLED' } },
+        _sum: { total: true },
       }),
     ]);
 
     return {
       ...this.withFullName(customer),
-      summary:{
+      summary: {
         totalPurchased: purchased._sum.total ?? 0,
         ...summary,
       },
     };
   }
 
-
   /**
    * ساخت مشتری. فقط نام لازم است — شماره کاملاً اختیاری است، چون باید بشود
    * مشتری را با اسم و فامیل ثبت کرد.
    */
   async create(input: CustomerInput) {
-
     const firstName = input.firstName?.trim();
 
     if (!firstName) {
       throw new BadRequestException({
-        error:'NAME_REQUIRED',
-        message:'نام مشتری الزامی است',
+        error: 'NAME_REQUIRED',
+        message: 'نام مشتری الزامی است',
       });
     }
 
     const phones = this.normalizePhones(input.phones);
-    await this.assertPhonesFree(phones.map(p => p.phone));
+    await this.assertPhonesFree(phones.map((p) => p.phone));
 
     // دسته باید موجود و فعال باشد — رشته‌ی آزاد دیگر پذیرفته نمی‌شود.
     const categoryId = input.categoryId
@@ -274,7 +281,7 @@ export class CustomersService {
       : null;
 
     const customer = await this.prisma.customer.create({
-      data:{
+      data: {
         firstName,
         lastName: input.lastName?.trim() || null,
         searchName: this.buildSearchName(firstName, input.lastName),
@@ -285,32 +292,32 @@ export class CustomersService {
         smsOptOut: input.smsOptOut ?? false,
         creditLimit: input.creditLimit ?? 0,
         chequeRateBp: input.chequeRateBp ?? 0,
-        ...(input.chequeRateMode ? { chequeRateMode: input.chequeRateMode } : {}),
+        ...(input.chequeRateMode
+          ? { chequeRateMode: input.chequeRateMode }
+          : {}),
         creditDays: input.creditDays ?? 0,
-        phones:{ create: phones },
+        phones: { create: phones },
       },
-      include:{ phones:true },
+      include: { phones: true },
     });
 
     return this.withFullName(customer);
   }
 
-
   async update(id: string, input: Partial<CustomerInput>) {
-
-    const current = await this.prisma.customer.findUnique({ where:{ id } });
+    const current = await this.prisma.customer.findUnique({ where: { id } });
 
     if (!current) {
       throw new NotFoundException({
-        error:'CUSTOMER_NOT_FOUND',
-        message:'مشتری پیدا نشد',
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'مشتری پیدا نشد',
       });
     }
 
     const firstName = input.firstName?.trim() ?? current.firstName;
     const lastName =
       input.lastName !== undefined
-        ? (input.lastName?.trim() || null)
+        ? input.lastName?.trim() || null
         : current.lastName;
 
     // null یعنی «بدون دسته» — رشته‌ی خالی هم به null تبدیل می‌شود.
@@ -322,51 +329,61 @@ export class CustomersService {
     }
 
     const updated = await this.prisma.customer.update({
-      where:{ id },
-      data:{
+      where: { id },
+      data: {
         firstName,
         lastName,
         searchName: this.buildSearchName(firstName, lastName),
-        ...(input.address !== undefined ? { address: input.address?.trim() || null } : {}),
-        ...(input.nationalId !== undefined ? { nationalId: input.nationalId?.trim() || null } : {}),
+        ...(input.address !== undefined
+          ? { address: input.address?.trim() || null }
+          : {}),
+        ...(input.nationalId !== undefined
+          ? { nationalId: input.nationalId?.trim() || null }
+          : {}),
         ...(categoryId !== undefined ? { categoryId } : {}),
         ...(input.note !== undefined ? { note: input.note } : {}),
-        ...(input.smsOptOut !== undefined ? { smsOptOut: input.smsOptOut } : {}),
-        ...(input.creditLimit !== undefined ? { creditLimit: input.creditLimit } : {}),
-        ...(input.chequeRateBp !== undefined ? { chequeRateBp: input.chequeRateBp } : {}),
-        ...(input.chequeRateMode !== undefined ? { chequeRateMode: input.chequeRateMode } : {}),
-        ...(input.creditDays !== undefined ? { creditDays: input.creditDays } : {}),
+        ...(input.smsOptOut !== undefined
+          ? { smsOptOut: input.smsOptOut }
+          : {}),
+        ...(input.creditLimit !== undefined
+          ? { creditLimit: input.creditLimit }
+          : {}),
+        ...(input.chequeRateBp !== undefined
+          ? { chequeRateBp: input.chequeRateBp }
+          : {}),
+        ...(input.chequeRateMode !== undefined
+          ? { chequeRateMode: input.chequeRateMode }
+          : {}),
+        ...(input.creditDays !== undefined
+          ? { creditDays: input.creditDays }
+          : {}),
       },
-      include:{ phones:true },
+      include: { phones: true },
     });
 
     return this.withFullName(updated);
   }
 
-
   /** افزودن شماره به بانک شماره‌ی یک مشتری. */
   async addPhone(customerId: string, input: CustomerPhoneInput) {
-
     await this.findOne(customerId);
 
     const [normalized] = this.normalizePhones([input]);
     await this.assertPhonesFree([normalized.phone], customerId);
 
     await this.prisma.customerPhone.create({
-      data:{ ...normalized, customerId },
+      data: { ...normalized, customerId },
     });
 
     return this.findOne(customerId);
   }
-
 
   async removePhone(customerId: string, phoneId: string) {
     await this.prisma.customerPhone.deleteMany({
-      where:{ id: phoneId, customerId },
+      where: { id: phoneId, customerId },
     });
     return this.findOne(customerId);
   }
-
 
   /**
    * تعیین شماره‌ی اصلی. در یک تراکنش: شماره‌ی انتخاب‌شده اصلی می‌شود و بقیه‌ی
@@ -377,30 +394,29 @@ export class CustomersService {
     await this.findOne(customerId);
 
     const target = await this.prisma.customerPhone.findFirst({
-      where:{ id: phoneId, customerId },
+      where: { id: phoneId, customerId },
     });
 
     if (!target) {
       throw new NotFoundException({
-        error:'PHONE_NOT_FOUND',
-        message:'این شماره برای این مشتری یافت نشد',
+        error: 'PHONE_NOT_FOUND',
+        message: 'این شماره برای این مشتری یافت نشد',
       });
     }
 
     await this.prisma.$transaction([
       this.prisma.customerPhone.updateMany({
-        where:{ customerId },
-        data:{ isPrimary:false },
+        where: { customerId },
+        data: { isPrimary: false },
       }),
       this.prisma.customerPhone.update({
-        where:{ id: phoneId },
-        data:{ isPrimary:true },
+        where: { id: phoneId },
+        data: { isPrimary: true },
       }),
     ]);
 
     return this.findOne(customerId);
   }
-
 
   /**
    * Soft Delete (قانون ۵) — رکورد حذف نمی‌شود، غیرفعال می‌شود.
@@ -417,7 +433,7 @@ export class CustomersService {
 
     if (balance !== 0) {
       throw new BadRequestException({
-        error:'CUSTOMER_HAS_BALANCE',
+        error: 'CUSTOMER_HAS_BALANCE',
         balance,
         message:
           balance > 0
@@ -427,16 +443,20 @@ export class CustomersService {
     }
 
     return this.prisma.customer.update({
-      where:{ id },
-      data:{ isActive:false },
+      where: { id },
+      data: { isActive: false },
     });
   }
-
 
   // ---------- کمکی‌ها ----------
 
   private meta(total: number, page: number, pageSize: number) {
-    return { total, page, pageSize, pageCount: Math.max(1, Math.ceil(total / pageSize)) };
+    return {
+      total,
+      page,
+      pageSize,
+      pageCount: Math.max(1, Math.ceil(total / pageSize)),
+    };
   }
 
   /**
@@ -462,61 +482,67 @@ export class CustomersService {
 
     const [thisMonth, lastMonth, allTime] = await Promise.all([
       this.prisma.saleInvoice.aggregate({
-        where:{ ...confirmed, createdAt:{ gte: startThisMonth, lt: startNextMonth } },
-        _sum:{ total:true },
-        _count:true,
+        where: {
+          ...confirmed,
+          createdAt: { gte: startThisMonth, lt: startNextMonth },
+        },
+        _sum: { total: true },
+        _count: true,
       }),
       this.prisma.saleInvoice.aggregate({
-        where:{ ...confirmed, createdAt:{ gte: startLastMonth, lt: startThisMonth } },
-        _sum:{ total:true },
-        _count:true,
+        where: {
+          ...confirmed,
+          createdAt: { gte: startLastMonth, lt: startThisMonth },
+        },
+        _sum: { total: true },
+        _count: true,
       }),
       this.prisma.saleInvoice.aggregate({
         where: confirmed,
-        _sum:{ total:true },
-        _count:true,
+        _sum: { total: true },
+        _count: true,
       }),
     ]);
 
     const allCount = allTime._count;
 
     return {
-      thisMonth:{
+      thisMonth: {
         total: thisMonth._sum.total ?? 0,
         count: thisMonth._count,
       },
-      lastMonth:{
+      lastMonth: {
         total: lastMonth._sum.total ?? 0,
         count: lastMonth._count,
       },
-      allTime:{
+      allTime: {
         total: allTime._sum.total ?? 0,
         count: allCount,
       },
       /** میانگین مبلغ هر فاکتور تأییدشده — صفر وقتی هنوز فاکتوری نیست. */
-      averageInvoice: allCount > 0 ? Math.round((allTime._sum.total ?? 0) / allCount) : 0,
+      averageInvoice:
+        allCount > 0 ? Math.round((allTime._sum.total ?? 0) / allCount) : 0,
     };
   }
 
-
-  private withFullName<T extends { firstName:string; lastName:string | null }>(c: T) {
+  private withFullName<
+    T extends { firstName: string; lastName: string | null },
+  >(c: T) {
     return {
       ...c,
       fullName: [c.firstName, c.lastName].filter(Boolean).join(' '),
     };
   }
 
-
   /** شماره‌ها نرمال می‌شوند و ورودی نامعتبر رد می‌شود — شماره‌ی خراب ذخیره نشود. */
   private normalizePhones(phones?: CustomerPhoneInput[]) {
-
     if (!phones?.length) return [];
 
     const seen = new Set<string>();
     const out: {
-      phone:string;
-      label:string | null;
-      isPrimary:boolean;
+      phone: string;
+      label: string | null;
+      isPrimary: boolean;
       kind: PhoneKind;
     }[] = [];
 
@@ -525,9 +551,9 @@ export class CustomersService {
 
       if (!normalized) {
         throw new BadRequestException({
-          error:'INVALID_PHONE',
+          error: 'INVALID_PHONE',
           phone: p.phone,
-          message:'شماره تلفن معتبر نیست',
+          message: 'شماره تلفن معتبر نیست',
         });
       }
 
@@ -540,35 +566,34 @@ export class CustomersService {
         isPrimary: p.isPrimary ?? out.length === 0,
         // از روی خودِ شماره، نه از روی برچسبی که کاربر زده — وگرنه کسی که
         // برچسب «موبایل» را روی تلفن مغازه گذاشته باعث می‌شود پیامک به آن برود.
-        kind: phoneKind(normalized) as PhoneKind,
+        kind: phoneKind(normalized),
       });
     }
 
     return out;
   }
 
-
   /** شماره در سطح دیتابیس یکتاست؛ خطای واضح بهتر از خطای Prisma است. */
   private async assertPhonesFree(phones: string[], exceptCustomerId?: string) {
-
     if (!phones.length) return;
 
     const taken = await this.prisma.customerPhone.findFirst({
-      where:{
-        phone:{ in: phones },
-        ...(exceptCustomerId ? { customerId:{ not: exceptCustomerId } } : {}),
+      where: {
+        phone: { in: phones },
+        ...(exceptCustomerId ? { customerId: { not: exceptCustomerId } } : {}),
       },
-      include:{ customer:true },
+      include: { customer: true },
     });
 
     if (taken) {
       throw new BadRequestException({
-        error:'PHONE_ALREADY_USED',
+        error: 'PHONE_ALREADY_USED',
         phone: taken.phone,
         customerId: taken.customerId,
         customerName: [taken.customer.firstName, taken.customer.lastName]
-          .filter(Boolean).join(' '),
-        message:'این شماره قبلاً برای مشتری دیگری ثبت شده است',
+          .filter(Boolean)
+          .join(' '),
+        message: 'این شماره قبلاً برای مشتری دیگری ثبت شده است',
       });
     }
   }

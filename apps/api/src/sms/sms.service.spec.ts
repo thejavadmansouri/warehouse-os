@@ -19,8 +19,18 @@ describe('SmsService', () => {
   const prisma: any = {
     customer: { findUnique: jest.fn() },
     customerPhone: { findMany: jest.fn() },
-    smsTemplate: { findUnique: jest.fn(), findMany: jest.fn(), upsert: jest.fn() },
-    smsMessage: { create: jest.fn(), count: jest.fn(), findMany: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
+    smsTemplate: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+      upsert: jest.fn(),
+    },
+    smsMessage: {
+      create: jest.fn(),
+      count: jest.fn(),
+      findMany: jest.fn(),
+      update: jest.fn(),
+      findUnique: jest.fn(),
+    },
     shopSettings: { findFirst: jest.fn() },
   };
   const sender = { sendText: jest.fn() };
@@ -31,12 +41,22 @@ describe('SmsService', () => {
     delete process.env.SMS_DAILY_CAP;
 
     prisma.customer.findUnique.mockResolvedValue({
-      id: 'c1', firstName: 'رضا', lastName: 'محمدی', smsOptOut: false,
+      id: 'c1',
+      firstName: 'رضا',
+      lastName: 'محمدی',
+      smsOptOut: false,
     });
     prisma.customerPhone.findMany.mockResolvedValue([{ phone: '09121112233' }]);
-    prisma.smsTemplate.findUnique.mockResolvedValue({ id: 't1', isActive: true, body: 'سلام {customer}', title: 'x' });
+    prisma.smsTemplate.findUnique.mockResolvedValue({
+      id: 't1',
+      isActive: true,
+      body: 'سلام {customer}',
+      title: 'x',
+    });
     prisma.smsMessage.count.mockResolvedValue(0);
-    prisma.smsMessage.create.mockImplementation(({ data }: any) => Promise.resolve({ id: 'm1', ...data }));
+    prisma.smsMessage.create.mockImplementation(({ data }: any) =>
+      Promise.resolve({ id: 'm1', ...data }),
+    );
     prisma.shopSettings.findFirst.mockResolvedValue({ name: 'یدکی رضا' });
     // ۵٬۰۰۰٬۰۰۰ ریال = ۵۰۰٬۰۰۰ تومان
     ledger.balance.mockResolvedValue(5_000_000);
@@ -54,7 +74,11 @@ describe('SmsService', () => {
   });
 
   const queue = () =>
-    service.queue({ customerId: 'c1', templateKey: 'debt_reminder', body: 'متن پیام تست' });
+    service.queue({
+      customerId: 'c1',
+      templateKey: 'debt_reminder',
+      body: 'متن پیام تست',
+    });
 
   it('پیام معتبر در صف می‌نشیند، نه اینکه درجا فرستاده شود', async () => {
     const m = await queue();
@@ -66,9 +90,13 @@ describe('SmsService', () => {
   });
 
   it('مشتری‌ای که انصراف داده پیامک نمی‌گیرد', async () => {
-    prisma.customer.findUnique.mockResolvedValue({ id: 'c1', firstName: 'رضا', smsOptOut: true });
+    prisma.customer.findUnique.mockResolvedValue({
+      id: 'c1',
+      firstName: 'رضا',
+      smsOptOut: true,
+    });
 
-    const e = await queue().catch(x => x);
+    const e = await queue().catch((x) => x);
 
     expect(e).toBeInstanceOf(BadRequestException);
     expect(e.getResponse().error).toBe('CUSTOMER_OPTED_OUT');
@@ -82,7 +110,7 @@ describe('SmsService', () => {
       { phone: '1234' },
     ]);
 
-    const e = await queue().catch(x => x);
+    const e = await queue().catch((x) => x);
 
     expect(e.getResponse().error).toBe('NO_MOBILE');
     expect(prisma.smsMessage.create).not.toHaveBeenCalled();
@@ -101,8 +129,11 @@ describe('SmsService', () => {
   });
 
   it('قالب غیرفعال ارسال نمی‌شود', async () => {
-    prisma.smsTemplate.findUnique.mockResolvedValue({ id: 't1', isActive: false });
-    const e = await queue().catch(x => x);
+    prisma.smsTemplate.findUnique.mockResolvedValue({
+      id: 't1',
+      isActive: false,
+    });
+    const e = await queue().catch((x) => x);
     expect(e.getResponse().error).toBe('TEMPLATE_INACTIVE');
   });
 
@@ -110,7 +141,7 @@ describe('SmsService', () => {
     process.env.SMS_DAILY_CAP = '5';
     prisma.smsMessage.count.mockResolvedValue(5);
 
-    const e = await queue().catch(x => x);
+    const e = await queue().catch((x) => x);
 
     expect(e.getResponse().error).toBe('DAILY_CAP_REACHED');
     expect(prisma.smsMessage.create).not.toHaveBeenCalled();
@@ -122,22 +153,36 @@ describe('SmsService', () => {
       { id: 'm2', phone: '09121112244', body: 'b' },
     ]);
     sender.sendText
-      .mockResolvedValueOnce({ ok: true, provider: 'kavenegar', providerId: '999' })
-      .mockResolvedValueOnce({ ok: false, provider: 'kavenegar', detail: 'NETWORK' });
+      .mockResolvedValueOnce({
+        ok: true,
+        provider: 'kavenegar',
+        providerId: '999',
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        provider: 'kavenegar',
+        detail: 'NETWORK',
+      });
 
     const r = await service.drain();
 
     expect(r).toEqual({ sent: 1, failed: 1 });
     expect(prisma.smsMessage.update.mock.calls[0][0].data.status).toBe('SENT');
-    expect(prisma.smsMessage.update.mock.calls[0][0].data.providerId).toBe('999');
-    expect(prisma.smsMessage.update.mock.calls[1][0].data.status).toBe('FAILED');
+    expect(prisma.smsMessage.update.mock.calls[0][0].data.providerId).toBe(
+      '999',
+    );
+    expect(prisma.smsMessage.update.mock.calls[1][0].data.status).toBe(
+      'FAILED',
+    );
   });
 
   it('مانده‌ی مشتری خودکار و به تومان جای‌گذاری می‌شود', async () => {
     // «یادآوری بدهی» پرکاربردترین پیامک است؛ تا دیروز {balance} خام می‌ماند و
     // آن قالب عملاً بلااستفاده بود.
     prisma.smsTemplate.findUnique.mockResolvedValue({
-      id: 't1', isActive: true, title: 'یادآوری بدهی',
+      id: 't1',
+      isActive: true,
+      title: 'یادآوری بدهی',
       body: '{customer} عزیز، مانده {balance} تومان. {shop}',
     });
 
@@ -153,7 +198,10 @@ describe('SmsService', () => {
   it('مانده‌ی بستانکار قدرمطلق می‌شود — «مانده −۵۰٬۰۰۰» در پیامک بی‌معنی است', async () => {
     ledger.balance.mockResolvedValue(-500_000);
     prisma.smsTemplate.findUnique.mockResolvedValue({
-      id: 't1', isActive: true, title: 'x', body: 'مانده {balance} تومان',
+      id: 't1',
+      isActive: true,
+      title: 'x',
+      body: 'مانده {balance} تومان',
     });
 
     const p = await service.preview('c1', 'debt_reminder');
@@ -164,17 +212,24 @@ describe('SmsService', () => {
   it('مقدارِ سند بر مانده‌ی خودکار می‌چربد', async () => {
     // رسیدِ دریافت مانده‌ی **بعد از** پرداخت را می‌گوید، نه مانده‌ی جاری را.
     prisma.smsTemplate.findUnique.mockResolvedValue({
-      id: 't1', isActive: true, title: 'x', body: 'مانده {balance}',
+      id: 't1',
+      isActive: true,
+      title: 'x',
+      body: 'مانده {balance}',
     });
 
-    const p = await service.preview('c1', 'receipt_confirmation', { balance: '0' });
+    const p = await service.preview('c1', 'receipt_confirmation', {
+      balance: '0',
+    });
 
     expect(p.body).toBe('مانده 0');
   });
 
   it('متغیرِ بی‌منبع همچنان نام برده می‌شود', async () => {
     prisma.smsTemplate.findUnique.mockResolvedValue({
-      id: 't1', isActive: true, title: 'x',
+      id: 't1',
+      isActive: true,
+      title: 'x',
       body: 'چک {chequeNumber} سررسید {dueDate}',
     });
 
@@ -187,8 +242,9 @@ describe('SmsService', () => {
 
 describe('renderTemplate', () => {
   it('متغیرِ ناشناخته دست‌نخورده می‌ماند تا در پیش‌نمایش دیده شود', () => {
-    expect(renderTemplate('سلام {name}، {unknown}', { name: 'رضا' }))
-      .toBe('سلام رضا، {unknown}');
+    expect(renderTemplate('سلام {name}، {unknown}', { name: 'رضا' })).toBe(
+      'سلام رضا، {unknown}',
+    );
   });
 
   it('صفر جای‌گذاری می‌شود، حذف نمی‌شود', () => {

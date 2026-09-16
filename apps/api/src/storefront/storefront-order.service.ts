@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { OnlineOrderStatus, OnlinePayMethod } from '@prisma/client';
@@ -9,9 +10,10 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { StorefrontCatalogService } from './storefront-catalog.service';
 import { CouponService } from './coupon.service';
+import { SmsSender } from '../sms/sms-sender';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { convertMoney } from '../common/money';
-import { normalizePhone } from '../common/phone.util';
+import { normalizePhone, canReceiveSms } from '../common/phone.util';
 
 /**
  * سفارش‌های سایت.
@@ -27,11 +29,14 @@ import { normalizePhone } from '../common/phone.util';
  */
 @Injectable()
 export class StorefrontOrderService {
+  private readonly log = new Logger('StorefrontOrder');
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: StorefrontCatalogService,
     private readonly events: EventsGateway,
     private readonly coupons: CouponService,
+    private readonly sms: SmsSender,
   ) {}
 
   /**
@@ -219,7 +224,9 @@ export class StorefrontOrderService {
       shippingZoneId = zone.id;
       const zoneFee = convertMoney(zone.fee, shop.storedUnit, shop.unit);
       const zoneFreeOver =
-        zone.freeOver != null ? convertMoney(zone.freeOver, shop.storedUnit, shop.unit) : null;
+        zone.freeOver != null
+          ? convertMoney(zone.freeOver, shop.storedUnit, shop.unit)
+          : null;
       const freeByZone = zoneFreeOver != null && subtotal >= zoneFreeOver;
       shippingFee = freeByZone || freeByShop ? 0 : zoneFee;
     } else {
@@ -235,12 +242,20 @@ export class StorefrontOrderService {
     let couponId: string | null = null;
     let couponCode: string | null = null;
     if (dto.couponCode) {
-      const r = await this.coupons.compute(dto.couponCode, subtotal, siteCustomerId, {
-        storedUnit: shop.storedUnit,
-        unit: shop.unit,
-      });
+      const r = await this.coupons.compute(
+        dto.couponCode,
+        subtotal,
+        siteCustomerId,
+        {
+          storedUnit: shop.storedUnit,
+          unit: shop.unit,
+        },
+      );
       if (!r.ok) {
-        throw new BadRequestException({ error: 'COUPON_INVALID', message: r.message });
+        throw new BadRequestException({
+          error: 'COUPON_INVALID',
+          message: r.message,
+        });
       }
       discount = r.discount!;
       couponId = r.couponId!;
@@ -291,7 +306,49 @@ export class StorefrontOrderService {
       warehouseId,
     });
 
+    // اطلاعِ پیامکیِ درجا نه — بگذار این روی پاسخِ سفارش اثر نگذارد.
+    void this.notifyOwnerSms(
+      order.number,
+      subtotal + shippingFee - discount,
+      shop.unit,
+    ).catch(() => undefined);
+
     return this.myOrder(siteCustomerId, order.id);
+  }
+
+  /**
+   * اطلاعِ پیامکیِ لحظه‌ای به موبایلِ مغازه وقتی سفارشِ آنلاین ثبت می‌شود.
+   *
+   * آگاهانه **fire-and-forget و تحمل‌پذیر** است: پاسخِ سفارش هرگز منتظرِ پنل
+   * پیامک نمی‌ماند و یک شماره‌ی مغازه‌ایِ درست‌نرفته هم نباید ثبتِ سفارش را بشکند.
+   *
+   * هدف فقط موبایلِ واقعی است (`canReceiveSms`)؛ تلفنِ ثابت یا شماره‌ی خالی
+   * بی‌صدا رد می‌شود. مبلغ به تومان درآمده تا روی گوشی سریع خوانده شود.
+   *
+   * ⚠️ این یک اعلان است، نه پیامکِ صف‌محورِ مشتری (`SmsService.queue`)؛ برای
+   * همین در `SmsMessage` ثبت نمی‌شود و از سقفِ روزانه رد نمی‌شود. اگر روزی
+   * «اعلان سفارش» قرار شد مثل بقیه مدیریت شود، باید به آن مسیر مهاجرت کند.
+   */
+  private async notifyOwnerSms(
+    number: number,
+    totalInSiteUnit: number,
+    siteUnit: 'RIAL' | 'TOMAN',
+  ) {
+    const shop = await this.prisma.shopSettings.findUnique({
+      where: { id: 'singleton' },
+      select: { phone: true },
+    });
+    const phone = normalizePhone(shop?.phone ?? '');
+    if (!phone || !canReceiveSms(phone)) return;
+
+    const toman = convertMoney(totalInSiteUnit, siteUnit, 'TOMAN');
+    const text = `سفارش آنلاین #${number} ثبت شد — ${toman.toLocaleString('en-US')} تومان`;
+    const result = await this.sms.sendText(phone, text);
+    if (!result.ok) {
+      this.log.warn(
+        `اطلاع به مغازه درباره سفارش ${number} ناموفق: ${result.detail ?? '?'}`,
+      );
+    }
   }
 
   /**
@@ -320,7 +377,11 @@ export class StorefrontOrderService {
       },
       select: {
         id: true,
-        prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } },
+        prices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { salePrice: true },
+        },
       },
     });
 
@@ -328,7 +389,9 @@ export class StorefrontOrderService {
     for (const p of products) {
       const raw = p.prices[0]?.salePrice;
       if (raw && raw > 0) {
-        subtotal += convertMoney(raw, shop.storedUnit, shop.unit) * (wanted.get(p.id) ?? 0);
+        subtotal +=
+          convertMoney(raw, shop.storedUnit, shop.unit) *
+          (wanted.get(p.id) ?? 0);
       }
     }
 

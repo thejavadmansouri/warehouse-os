@@ -12,7 +12,8 @@ import { OrderLineDto } from './create-order.dto';
 
 /** پیش‌نمایشِ تخفیف: کد + همان سبد، تا سرور جمع را خودش حساب کند نه کلاینت. */
 export class PreviewCouponDto {
-  @IsString() @MaxLength(40)
+  @IsString()
+  @MaxLength(40)
   code!: string;
 
   @IsArray()

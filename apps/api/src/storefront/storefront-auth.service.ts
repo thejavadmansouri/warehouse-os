@@ -61,7 +61,9 @@ export class StorefrontAuthService {
      * بدون سرویس پیامک نباید ورود بدهد.
      */
     if (!this.sms.isReal && process.env.NODE_ENV === 'production') {
-      this.log.error('ورود مشتری در حالت production بدون سرویس پیامک غیرفعال است');
+      this.log.error(
+        'ورود مشتری در حالت production بدون سرویس پیامک غیرفعال است',
+      );
       throw new BadRequestException({
         error: 'SMS_NOT_CONFIGURED',
         message: 'ورود موقتاً در دسترس نیست — با فروشگاه تماس بگیرید',
@@ -69,7 +71,10 @@ export class StorefrontAuthService {
     }
 
     const recent = await this.prisma.customerOtp.findFirst({
-      where: { phone, createdAt: { gt: new Date(Date.now() - RESEND_COOLDOWN_MS) } },
+      where: {
+        phone,
+        createdAt: { gt: new Date(Date.now() - RESEND_COOLDOWN_MS) },
+      },
       orderBy: { createdAt: 'desc' },
       select: { createdAt: true },
     });
@@ -91,7 +96,10 @@ export class StorefrontAuthService {
       data: { consumedAt: new Date() },
     });
 
-    const code = String(randomInt(0, 10 ** CODE_DIGITS)).padStart(CODE_DIGITS, '0');
+    const code = String(randomInt(0, 10 ** CODE_DIGITS)).padStart(
+      CODE_DIGITS,
+      '0',
+    );
 
     await this.prisma.customerOtp.create({
       data: {
@@ -141,7 +149,10 @@ export class StorefrontAuthService {
       });
     }
 
-    if (otp.attempts + 1 >= MAX_ATTEMPTS && otp.codeHash !== this.hash(phone, code)) {
+    if (
+      otp.attempts + 1 >= MAX_ATTEMPTS &&
+      otp.codeHash !== this.hash(phone, code)
+    ) {
       await this.prisma.customerOtp.update({
         where: { id: otp.id },
         data: { attempts: { increment: 1 }, consumedAt: new Date() },

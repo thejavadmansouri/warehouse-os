@@ -1,6 +1,5 @@
 import { normalizePersian } from '../engine/utils/persian-normalize';
 
-
 /**
  * نرمال‌سازی شماره تلفن ایرانی به یک فرم قطعی.
  *
@@ -15,7 +14,6 @@ import { normalizePersian } from '../engine/utils/persian-normalize';
  * idempotent است: normalizePhone(normalizePhone(x)) === normalizePhone(x)
  */
 export function normalizePhone(input?: string | null): string | null {
-
   if (!input) return null;
 
   // ارقام فارسی/عربی → انگلیسی (از همان نرمال‌سازی مرجع پروژه)
@@ -47,7 +45,6 @@ export function normalizePhone(input?: string | null): string | null {
   return null;
 }
 
-
 /**
  * نوعِ یک شماره‌ی **نرمال‌شده**.
  *
@@ -56,19 +53,19 @@ export function normalizePhone(input?: string | null): string | null {
  *
  * ورودی باید از `normalizePhone` آمده باشد؛ روی متنِ خام جواب درست نمی‌دهد.
  */
-export function phoneKind(phone?: string | null): 'MOBILE' | 'LANDLINE' | 'OTHER' {
+export function phoneKind(
+  phone?: string | null,
+): 'MOBILE' | 'LANDLINE' | 'OTHER' {
   if (!phone) return 'OTHER';
   if (/^09\d{9}$/.test(phone)) return 'MOBILE';
   if (/^0\d{2,10}$/.test(phone)) return 'LANDLINE';
   return 'OTHER';
 }
 
-
 /** آیا این شماره پیامک می‌گیرد. تنها معیارِ مجاز برای صفِ ارسال. */
 export function canReceiveSms(phone?: string | null): boolean {
   return phoneKind(phone) === 'MOBILE';
 }
-
 
 /** فقط برای نمایش: 09121112233 → 0912 111 2233 */
 export function formatPhone(phone?: string | null): string {
@@ -78,7 +75,6 @@ export function formatPhone(phone?: string | null): string {
   }
   return phone;
 }
-
 
 /** آیا این شماره موبایل است؟ فقط به موبایل می‌شود پیامک زد. */
 export function isMobile(phone?: string | null): boolean {

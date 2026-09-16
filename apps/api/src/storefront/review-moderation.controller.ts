@@ -1,14 +1,20 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
-import { Roles } from '../auth/roles.decorator';
+import { SiteAccessGuard } from '../auth/site-access.guard';
 import { ReviewModerationService } from './review-moderation.service';
 
 /**
- * صفِ تأیید نظرات در پنلِ سایت — عمومی نیست: `JwtAuthGuard` سراسری + `@Roles`.
- * هیچ‌وقت `@Public()` نگیرد.
+ * صفِ تأیید نظرات در پنلِ سایت — عمومی نیست: `JwtAuthGuard` سراسری +
+ * `SiteAccessGuard`. هیچ‌وقت `@Public()` نگیرد.
  */
-@Roles(Role.ADMIN, Role.MANAGER)
+@UseGuards(SiteAccessGuard)
 @Controller('review-moderation')
 export class ReviewModerationController {
   constructor(private readonly reviews: ReviewModerationService) {}

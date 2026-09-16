@@ -77,7 +77,9 @@ export function checkPurchasePrice({
 
   // خریدِ قبلیِ صفر پایه‌ی مقایسه نیست — نسبت به صفر بی‌معنا است.
   const last =
-    lastPurchasePrice != null && lastPurchasePrice > 0 ? lastPurchasePrice : null;
+    lastPurchasePrice != null && lastPurchasePrice > 0
+      ? lastPurchasePrice
+      : null;
 
   if (last !== null) {
     const ratio = unitPrice / last;

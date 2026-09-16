@@ -48,7 +48,13 @@ describe('OpenAccountsService', () => {
   const prisma = {
     $transaction: jest.fn(),
     saleInvoice: { findMany: jest.fn(), updateMany: jest.fn() },
-    openAccount: { findUnique: jest.fn(), findFirst: jest.fn(), findMany: jest.fn(), create: jest.fn(), update: jest.fn() },
+    openAccount: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
     saleReturn: { groupBy: jest.fn(), findMany: jest.fn() },
     saleCorrection: { groupBy: jest.fn(), findMany: jest.fn() },
     saleReturnLine: { groupBy: jest.fn() },
@@ -111,7 +117,13 @@ describe('OpenAccountsService', () => {
       prisma.openAccount.findUnique.mockResolvedValue(
         account([
           invoice(),
-          invoice({ id: 'inv2', number: 1002, total: 500_000, dueAmount: 500_000, lines: [line({ id: 'L2', quantity: 5 })] }),
+          invoice({
+            id: 'inv2',
+            number: 1002,
+            total: 500_000,
+            dueAmount: 500_000,
+            lines: [line({ id: 'L2', quantity: 5 })],
+          }),
         ]),
       );
       // ۲ قلم از ردیفِ اول برگشت؛ مبلغِ برگشت ۲۰۰٬۰۰۰.
@@ -147,7 +159,12 @@ describe('OpenAccountsService', () => {
         account([invoice({ total: 900_000, dueAmount: 900_000 })]),
       );
       prisma.saleCorrectionLine.findMany.mockResolvedValue([
-        { saleLogId: 'L1', oldQuantity: 10, newQuantity: 10, newUnitPrice: 90_000 },
+        {
+          saleLogId: 'L1',
+          oldQuantity: 10,
+          newQuantity: 10,
+          newUnitPrice: 90_000,
+        },
       ]);
 
       const res = await service.get('acc1');
@@ -203,7 +220,13 @@ describe('OpenAccountsService', () => {
     it('سررسیدِ نوبت‌هایی که سررسید دارند را دست نمی‌زند', async () => {
       prisma.openAccount.findUnique.mockResolvedValue({
         ...account([invoice()]),
-        customer: { id: 'c1', firstName: 'رضا', lastName: 'کریمی', phones: [], creditDays: 30 },
+        customer: {
+          id: 'c1',
+          firstName: 'رضا',
+          lastName: 'کریمی',
+          phones: [],
+          creditDays: 30,
+        },
       });
       prisma.saleInvoice.findMany.mockResolvedValue([{ id: 'inv1' }]);
 
@@ -212,12 +235,16 @@ describe('OpenAccountsService', () => {
       const calls = prisma.saleInvoice.updateMany.mock.calls;
 
       // تنها جایی که سررسید نوشته می‌شود، مشروط به null بودنِ آن است.
-      const dateWrites = calls.filter((c: any[]) => 'dueDate' in (c[0].data ?? {}));
+      const dateWrites = calls.filter(
+        (c: any[]) => 'dueDate' in (c[0].data ?? {}),
+      );
       expect(dateWrites).toHaveLength(1);
       expect(dateWrites[0][0].where.dueDate).toBeNull();
 
       // و تغییرِ وضعیت جداگانه است و سررسید را همراه خودش نمی‌برد.
-      const statusWrite = calls.find((c: any[]) => c[0].data?.status === 'CONFIRMED');
+      const statusWrite = calls.find(
+        (c: any[]) => c[0].data?.status === 'CONFIRMED',
+      );
       expect(statusWrite).toBeDefined();
       expect(statusWrite![0].data).not.toHaveProperty('dueDate');
     });
@@ -225,7 +252,13 @@ describe('OpenAccountsService', () => {
     it('حسابِ بدونِ خرید تسویه نمی‌شود', async () => {
       prisma.openAccount.findUnique.mockResolvedValue({
         ...account([]),
-        customer: { id: 'c1', firstName: 'رضا', lastName: 'کریمی', phones: [], creditDays: 0 },
+        customer: {
+          id: 'c1',
+          firstName: 'رضا',
+          lastName: 'کریمی',
+          phones: [],
+          creditDays: 0,
+        },
       });
       prisma.saleInvoice.findMany.mockResolvedValue([]);
 
@@ -240,7 +273,13 @@ describe('OpenAccountsService', () => {
       prisma.openAccount.findUnique.mockResolvedValue(
         account([
           invoice(),
-          invoice({ id: 'inv2', number: 1002, total: 500_000, dueAmount: 500_000, lines: [line({ id: 'L2', quantity: 5 })] }),
+          invoice({
+            id: 'inv2',
+            number: 1002,
+            total: 500_000,
+            dueAmount: 500_000,
+            lines: [line({ id: 'L2', quantity: 5 })],
+          }),
         ]),
       );
       prisma.saleReturn.groupBy.mockResolvedValue([
@@ -265,7 +304,9 @@ describe('OpenAccountsService', () => {
     it('با تخفیفِ فاکتور، اختلافِ ردیف‌ها و مبلغِ نهایی دقیقاً همان تخفیف است', async () => {
       // فروش ۱٬۰۰۰٬۰۰۰ با ۵۰٬۰۰۰ تخفیفِ فاکتور → total = ۹۵۰٬۰۰۰
       prisma.openAccount.findUnique.mockResolvedValue(
-        account([invoice({ total: 950_000, dueAmount: 950_000, discount: 50_000 })]),
+        account([
+          invoice({ total: 950_000, dueAmount: 950_000, discount: 50_000 }),
+        ]),
       );
 
       const res = await service.sheet('acc1');
@@ -284,7 +325,13 @@ describe('OpenAccountsService', () => {
       prisma.openAccount.findUnique.mockResolvedValue(
         account([
           invoice(),
-          invoice({ id: 'inv2', number: 1002, total: 500_000, dueAmount: 0, lines: [line({ id: 'L2', quantity: 5 })] }),
+          invoice({
+            id: 'inv2',
+            number: 1002,
+            total: 500_000,
+            dueAmount: 0,
+            lines: [line({ id: 'L2', quantity: 5 })],
+          }),
         ]),
       );
 

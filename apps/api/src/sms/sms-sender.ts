@@ -49,7 +49,6 @@ export class SmsSender {
     return { ok: false, provider: this.provider, detail: 'UNKNOWN_PROVIDER' };
   }
 
-
   /**
    * پیامکِ متنِ آزاد — برای اطلاع‌رسانی به مشتری.
    *
@@ -105,7 +104,8 @@ export class SmsSender {
       return {
         ok: false,
         provider: 'kavenegar',
-        detail: `${status ?? res.status}: ${body?.return?.message ?? ''}`.trim(),
+        detail:
+          `${status ?? res.status}: ${body?.return?.message ?? ''}`.trim(),
       };
     } catch (e: any) {
       this.log.error(`ارسال پیامک شکست خورد: ${e?.message ?? e}`);

@@ -29,7 +29,9 @@ export class AppExceptionFilter implements ExceptionFilter {
     // در لاگِ سرور می‌نشیند. قبلاً این‌ها ۴۰۰ با message خام برمی‌گشتند و هم کدِ
     // وضعیت غلط بود، هم داخلِ سیستم درز می‌کرد.
     this.logger.error(
-      exception instanceof Error ? exception.stack ?? exception.message : String(exception),
+      exception instanceof Error
+        ? (exception.stack ?? exception.message)
+        : String(exception),
     );
 
     response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

@@ -53,7 +53,10 @@ export interface LockKey {
  *   wrapper با اندیسِ اصلی نشسته) با این تابع کلیدش استخراج می‌شود.
  */
 export function inLockOrder<T extends LockKey>(items: readonly T[]): T[];
-export function inLockOrder<T>(items: readonly T[], key: (item: T) => LockKey): T[];
+export function inLockOrder<T>(
+  items: readonly T[],
+  key: (item: T) => LockKey,
+): T[];
 export function inLockOrder<T>(
   items: readonly T[],
   key: (item: T) => LockKey = (item) => item as unknown as LockKey,

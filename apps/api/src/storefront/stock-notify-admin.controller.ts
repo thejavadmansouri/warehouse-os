@@ -1,11 +1,17 @@
-import { Controller, Get, Param, ParseUUIDPipe, Post } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import {
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  UseGuards,
+} from '@nestjs/common';
 
-import { Roles } from '../auth/roles.decorator';
+import { SiteAccessGuard } from '../auth/site-access.guard';
 import { StockNotifyAdminService } from './stock-notify-admin.service';
 
-/** صفِ «موجود شد خبرم کن» در پنلِ سایت — `JwtAuthGuard` سراسری + `@Roles`. */
-@Roles(Role.ADMIN, Role.MANAGER)
+/** صفِ «موجود شد خبرم کن» در پنلِ سایت — `JwtAuthGuard` سراسری + `SiteAccessGuard`. */
+@UseGuards(SiteAccessGuard)
 @Controller('stock-notify')
 export class StockNotifyAdminController {
   constructor(private readonly stockNotify: StockNotifyAdminService) {}

@@ -68,6 +68,24 @@ export class StorefrontController {
     });
   }
 
+  /**
+   * فهرستِ ایمنِ چند کالا با id — برای سبد و علاقه‌مندی، در یک درخواست.
+   *
+   * باید **قبل** از `products/:id` ثبت شود، وگرنه مسیرِ `by-ids` را `:id` می‌گیرد
+   * و ValidationPipe آن را UUID نمی‌یابد. پارامترِ `ids` ویرگول‌جداکن حداکثرِ
+   * ۱۰۰ شناسه است؛ پاسخ فقط کالاهای قابل‌نمایش/قیمت‌دار را برمی‌گرداند (همان
+   * `listByIds`) و شناسه‌ی ناشناخته/آفلاین خودبه‌خود می‌افتد.
+   */
+  @Get('products/by-ids')
+  byIds(@Query('ids') ids?: string) {
+    const parsed = (ids ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 100);
+    return this.catalog.listByIds(parsed);
+  }
+
   @Get('products/:id')
   detail(@Param('id', ParseUUIDPipe) id: string) {
     return this.catalog.detail(id);

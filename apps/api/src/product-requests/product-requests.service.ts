@@ -185,9 +185,10 @@ export class ProductRequestsService {
           })) === null
         : false;
 
-      const barcodesToCreate: { barcode: string; type: 'INTERNAL' | 'FACTORY' }[] = [
-        { barcode: internalBarcode, type: 'INTERNAL' },
-      ];
+      const barcodesToCreate: {
+        barcode: string;
+        type: 'INTERNAL' | 'FACTORY';
+      }[] = [{ barcode: internalBarcode, type: 'INTERNAL' }];
       if (scanned && barcodeIsFree) {
         barcodesToCreate.push({ barcode: scanned, type: 'FACTORY' });
       }

@@ -8,23 +8,23 @@ import {
   Patch,
   Post,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { Role } from '@prisma/client';
 import type { Express } from 'express';
 
-import { Roles } from '../auth/roles.decorator';
+import { SiteAccessGuard } from '../auth/site-access.guard';
 import { BannersAdminService } from './banners-admin.service';
 import { BannerMetaDto } from './dto/banner-admin.dto';
 
 const IMAGE = { limits: { fileSize: 5 * 1024 * 1024 } };
 
 /**
- * مدیریتِ بنر در پنل — عمومی نیست: `JwtAuthGuard` سراسری + `@Roles`.
+ * مدیریتِ بنر در پنل — عمومی نیست: `JwtAuthGuard` سراسری + `SiteAccessGuard`.
  * خواندنِ عمومیِ بنرها مسیرِ جداست: `GET /shop/banners`.
  */
-@Roles(Role.ADMIN, Role.MANAGER)
+@UseGuards(SiteAccessGuard)
 @Controller('banners')
 export class BannersAdminController {
   constructor(private readonly banners: BannersAdminService) {}
@@ -36,7 +36,10 @@ export class BannersAdminController {
 
   @Post()
   @UseInterceptors(FileInterceptor('image', IMAGE))
-  create(@UploadedFile() file: Express.Multer.File, @Body() dto: BannerMetaDto) {
+  create(
+    @UploadedFile() file: Express.Multer.File,
+    @Body() dto: BannerMetaDto,
+  ) {
     return this.banners.create(file, dto);
   }
 
@@ -47,7 +50,10 @@ export class BannersAdminController {
 
   @Post(':id/image')
   @UseInterceptors(FileInterceptor('image', IMAGE))
-  replaceImage(@Param('id', ParseUUIDPipe) id: string, @UploadedFile() file: Express.Multer.File) {
+  replaceImage(
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     return this.banners.replaceImage(id, file);
   }
 

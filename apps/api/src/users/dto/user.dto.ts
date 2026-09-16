@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsEnum,
   IsOptional,
   IsString,
@@ -26,12 +27,24 @@ export class CreateUserDto {
   @IsOptional()
   @IsEnum(Role)
   role?: Role;
+
+  /** دسترسی به فروشگاه اینترنتی — مستقل از نقش.
+   *  اگر نفرستاده شود، برای ADMIN/MANAGER خودکار true می‌شود. */
+  @IsOptional()
+  @IsBoolean()
+  canManageSite?: boolean;
 }
 
 /** تغییر نقش کاربر — فقط مدیر. */
 export class ChangeRoleDto {
   @IsEnum(Role)
   role: Role;
+}
+
+/** تغییر پرچمِ «مدیر سایت» — فقط مدیر. */
+export class ChangeSiteAccessDto {
+  @IsBoolean()
+  canManageSite: boolean;
 }
 
 /** بازنشانی رمز کاربر — فقط مدیر. */

@@ -75,13 +75,21 @@ async function main() {
     ['post', '/shop/orders'],
   ] as const) {
     const res = await request(http)[method](path);
-    check(`${method.toUpperCase()} ${path} → 401`, res.status === 401, `status=${res.status}`);
+    check(
+      `${method.toUpperCase()} ${path} → 401`,
+      res.status === 401,
+      `status=${res.status}`,
+    );
   }
 
   console.log('\nصفِ سفارش‌های پنل عمومی نیست:');
   {
     const res = await request(http).get('/online-orders');
-    check('GET /online-orders بدون توکن → 401', res.status === 401, `status=${res.status}`);
+    check(
+      'GET /online-orders بدون توکن → 401',
+      res.status === 401,
+      `status=${res.status}`,
+    );
 
     const withCustomer = await request(http)
       .get('/online-orders')
@@ -96,12 +104,18 @@ async function main() {
   console.log('\nتوکنِ مشتری به مسیرهای داخلی نمی‌رسد:');
   for (const path of ['/products', '/locations', '/sales/invoices', '/users']) {
     const res = await request(http).get(path).set(bearer(customerToken));
-    check(`GET ${path} با توکنِ مشتری → 401`, res.status === 401, `status=${res.status}`);
+    check(
+      `GET ${path} با توکنِ مشتری → 401`,
+      res.status === 401,
+      `status=${res.status}`,
+    );
   }
 
   console.log('\nتوکنِ مشتری روی مسیرِ خودش کار می‌کند:');
   {
-    const res = await request(http).get('/shop/orders').set(bearer(customerToken));
+    const res = await request(http)
+      .get('/shop/orders')
+      .set(bearer(customerToken));
     // مشتریِ ناموجود یعنی فهرستِ خالی، نه خطا — گارد رد شده و این همان ادعاست.
     check(
       'GET /shop/orders با توکنِ مشتری → 200',

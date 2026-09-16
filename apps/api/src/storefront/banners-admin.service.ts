@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Express } from 'express';
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
@@ -24,7 +28,8 @@ export class BannersAdminService {
     private readonly prisma: PrismaService,
     private readonly images: ImagePipeline,
   ) {
-    if (!existsSync(this.bannerPath)) mkdirSync(this.bannerPath, { recursive: true });
+    if (!existsSync(this.bannerPath))
+      mkdirSync(this.bannerPath, { recursive: true });
   }
 
   /** پردازش + نوشتنِ فایلِ بنر روی دیسک. */
@@ -46,7 +51,11 @@ export class BannersAdminService {
   }
 
   async create(file: Express.Multer.File | undefined, dto: BannerMetaDto) {
-    if (!file) throw new BadRequestException({ error: 'IMAGE_REQUIRED', message: 'عکس بنر لازم است' });
+    if (!file)
+      throw new BadRequestException({
+        error: 'IMAGE_REQUIRED',
+        message: 'عکس بنر لازم است',
+      });
     const img = await this.storeImage(file);
     return this.prisma.banner.create({
       data: {
@@ -72,15 +81,29 @@ export class BannersAdminService {
         linkUrl: dto.linkUrl !== undefined ? dto.linkUrl || null : undefined,
         sortOrder: dto.sortOrder ?? undefined,
         isActive: dto.isActive ?? undefined,
-        startsAt: dto.startsAt !== undefined ? (dto.startsAt ? new Date(dto.startsAt) : null) : undefined,
-        endsAt: dto.endsAt !== undefined ? (dto.endsAt ? new Date(dto.endsAt) : null) : undefined,
+        startsAt:
+          dto.startsAt !== undefined
+            ? dto.startsAt
+              ? new Date(dto.startsAt)
+              : null
+            : undefined,
+        endsAt:
+          dto.endsAt !== undefined
+            ? dto.endsAt
+              ? new Date(dto.endsAt)
+              : null
+            : undefined,
       },
     });
   }
 
   async replaceImage(id: string, file: Express.Multer.File | undefined) {
     const existing = await this.mustExist(id);
-    if (!file) throw new BadRequestException({ error: 'IMAGE_REQUIRED', message: 'عکس لازم است' });
+    if (!file)
+      throw new BadRequestException({
+        error: 'IMAGE_REQUIRED',
+        message: 'عکس لازم است',
+      });
     const img = await this.storeImage(file);
     this.unlinkQuiet(existing.imageUrl);
     this.unlinkQuiet(existing.thumbnailUrl);
@@ -100,7 +123,11 @@ export class BannersAdminService {
 
   private async mustExist(id: string) {
     const b = await this.prisma.banner.findUnique({ where: { id } });
-    if (!b) throw new NotFoundException({ error: 'NOT_FOUND', message: 'بنر یافت نشد' });
+    if (!b)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'بنر یافت نشد',
+      });
     return b;
   }
 

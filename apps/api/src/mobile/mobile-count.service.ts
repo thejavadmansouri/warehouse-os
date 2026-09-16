@@ -112,9 +112,7 @@ export class MobileCountService {
     return this.prisma.inventoryItem.findMany({
       where: {
         reviewStatus: { in: ['NEEDS_REVIEW', 'NEEDS_CORRECTION'] },
-        ...(warehouseId
-          ? { count: { session: { warehouseId } } }
-          : {}),
+        ...(warehouseId ? { count: { session: { warehouseId } } } : {}),
       },
       include: {
         product: true,
@@ -153,10 +151,18 @@ export class MobileCountService {
     return this.prisma.product.findFirst({
       where: {
         AND: [
-          productName ? { name: { contains: productName, mode: 'insensitive' } } : {},
-          brand ? { brand: { name: { contains: brand, mode: 'insensitive' } } } : {},
+          productName
+            ? { name: { contains: productName, mode: 'insensitive' } }
+            : {},
+          brand
+            ? { brand: { name: { contains: brand, mode: 'insensitive' } } }
+            : {},
           vehicleFamily
-            ? { vehicleModel: { name: { contains: vehicleFamily, mode: 'insensitive' } } }
+            ? {
+                vehicleModel: {
+                  name: { contains: vehicleFamily, mode: 'insensitive' },
+                },
+              }
             : {},
         ],
       },

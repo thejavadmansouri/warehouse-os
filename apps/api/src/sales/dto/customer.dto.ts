@@ -15,78 +15,64 @@ import { ChequeRateMode } from '@prisma/client';
 
 import { INT4_MAX } from '../../common/money';
 
-
 /** یک شماره در بانک شماره‌ی مشتری. نرمال‌سازی در سرویس انجام می‌شود. */
 export class CustomerPhoneDto {
-
   @IsString()
-  phone:string;
-
+  phone: string;
 
   /** موبایل / ثابت / محل کار */
   @IsOptional()
   @IsString()
-  label?:string;
-
+  label?: string;
 
   @IsOptional()
   @IsBoolean()
-  isPrimary?:boolean;
+  isPrimary?: boolean;
 }
-
 
 /** ساخت مشتری. فقط نام الزامی است — ثبت بدون شماره باید ممکن باشد. */
 export class CreateCustomerDto {
-
   @IsString()
-  firstName:string;
-
+  firstName: string;
 
   @IsOptional()
   @IsString()
-  lastName?:string;
-
-
-  @IsOptional()
-  @IsString()
-  address?:string;
-
+  lastName?: string;
 
   @IsOptional()
   @IsString()
-  nationalId?:string;
+  address?: string;
 
+  @IsOptional()
+  @IsString()
+  nationalId?: string;
 
   /** ارجاع به دسته‌ی مشتری — باید یک دسته‌ی فعال باشد. */
   @IsOptional()
   @IsString()
-  categoryId?:string;
-
+  categoryId?: string;
 
   @IsOptional()
   @IsString()
-  note?:string;
-
+  note?: string;
 
   @IsOptional()
   @IsBoolean()
-  smsOptOut?:boolean;
-
+  smsOptOut?: boolean;
 
   /** سقف اعتبار حساب‌باز (ریال). صفر یعنی «تعیین نشده». */
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(INT4_MAX)
-  creditLimit?:number;
-
+  creditLimit?: number;
 
   /** مهلت پرداخت پیش‌فرض به روز. ده سال سقفِ محترمانه‌ای برای «مهلت» است. */
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(3650)
-  creditDays?:number;
+  creditDays?: number;
 
   /**
    * نرخِ تفاوتِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم (bp).
@@ -96,76 +82,64 @@ export class CreateCustomerDto {
   @IsInt()
   @Min(0)
   @Max(10_000)
-  chequeRateBp?:number;
-
+  chequeRateBp?: number;
 
   @IsOptional()
   @IsEnum(ChequeRateMode)
-  chequeRateMode?:ChequeRateMode;
-
+  chequeRateMode?: ChequeRateMode;
 
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(10)
   @ValidateNested({ each: true })
   @Type(() => CustomerPhoneDto)
-  phones?:CustomerPhoneDto[];
+  phones?: CustomerPhoneDto[];
 }
-
 
 /**
  * ویرایش مشتری. همه‌چیز اختیاری است و سرویس فقط فیلدهای فرستاده‌شده را دست
  * می‌زند — یعنی نفرستادنِ یک فیلد آن را پاک نمی‌کند.
  */
 export class UpdateCustomerDto {
+  @IsOptional()
+  @IsString()
+  firstName?: string;
 
   @IsOptional()
   @IsString()
-  firstName?:string;
-
-
-  @IsOptional()
-  @IsString()
-  lastName?:string;
-
+  lastName?: string;
 
   @IsOptional()
   @IsString()
-  address?:string;
-
-
-  @IsOptional()
-  @IsString()
-  nationalId?:string;
-
+  address?: string;
 
   @IsOptional()
   @IsString()
-  categoryId?:string;
-
+  nationalId?: string;
 
   @IsOptional()
   @IsString()
-  note?:string;
+  categoryId?: string;
 
+  @IsOptional()
+  @IsString()
+  note?: string;
 
   @IsOptional()
   @IsBoolean()
-  smsOptOut?:boolean;
-
+  smsOptOut?: boolean;
 
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(INT4_MAX)
-  creditLimit?:number;
-
+  creditLimit?: number;
 
   @IsOptional()
   @IsInt()
   @Min(0)
   @Max(3650)
-  creditDays?:number;
+  creditDays?: number;
 
   /**
    * نرخِ تفاوتِ فروشِ مدت‌دار برای چکِ این مشتری، به پایه‌ی هزارم (bp).
@@ -175,10 +149,9 @@ export class UpdateCustomerDto {
   @IsInt()
   @Min(0)
   @Max(10_000)
-  chequeRateBp?:number;
-
+  chequeRateBp?: number;
 
   @IsOptional()
   @IsEnum(ChequeRateMode)
-  chequeRateMode?:ChequeRateMode;
+  chequeRateMode?: ChequeRateMode;
 }

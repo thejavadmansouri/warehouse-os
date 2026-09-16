@@ -8,11 +8,20 @@ import { InventoryOperationService } from '../../src/inventory-operation/invento
 import { SystemLocationsService } from '../../src/inventory/system-locations.service';
 import { LedgerService } from '../../src/sales/ledger.service';
 import { SalesService } from '../../src/sales/sales.service';
-import { baseFixture, prisma as basePrisma, makeProduct, uniq, close } from './harness';
+import {
+  baseFixture,
+  prisma as basePrisma,
+  makeProduct,
+  uniq,
+  close,
+} from './harness';
 import { note } from './evlog';
 
 const gw: any = { broadcast: () => {} };
-const pct = (a: number[], p: number) => a.slice().sort((x, y) => x - y)[Math.min(a.length - 1, Math.floor(a.length * p))];
+const pct = (a: number[], p: number) =>
+  a.slice().sort((x, y) => x - y)[
+    Math.min(a.length - 1, Math.floor(a.length * p))
+  ];
 
 async function run(limit: number, maxWait: number, n = 100) {
   const url = new URL(process.env.DATABASE_URL!);
@@ -24,30 +33,56 @@ async function run(limit: number, maxWait: number, n = 100) {
   }) as unknown as PrismaService;
 
   const op = new InventoryOperationService(client, gw);
-  const svc = new SalesService(client, op, new LedgerService(client), new SystemLocationsService(), gw);
+  const svc = new SalesService(
+    client,
+    op,
+    new LedgerService(client),
+    new SystemLocationsService(),
+    gw,
+  );
 
   const f = await baseFixture();
   const p = await makeProduct({ stock: n });
 
   const lat: number[] = [];
   const t0 = Date.now();
-  const res = await Promise.allSettled(Array.from({ length: n }, async () => {
-    const s = Date.now();
-    try {
-      return await svc.createInvoice({
-        idempotencyKey: uniq('pt'), warehouseId: f.warehouseId,
-        lines: [{ productId: p.id, locationId: f.locationId, quantity: 1, unitPrice: 1000 }],
-      } as any, f.userId);
-    } finally { lat.push(Date.now() - s); }
-  }));
+  const res = await Promise.allSettled(
+    Array.from({ length: n }, async () => {
+      const s = Date.now();
+      try {
+        return await svc.createInvoice(
+          {
+            idempotencyKey: uniq('pt'),
+            warehouseId: f.warehouseId,
+            lines: [
+              {
+                productId: p.id,
+                locationId: f.locationId,
+                quantity: 1,
+                unitPrice: 1000,
+              },
+            ],
+          },
+          f.userId,
+        );
+      } finally {
+        lat.push(Date.now() - s);
+      }
+    }),
+  );
   const wall = Date.now() - t0;
-  const failed = res.filter(r => r.status === 'rejected').length;
+  const failed = res.filter((r) => r.status === 'rejected').length;
   await (client as unknown as PrismaClient).$disconnect();
 
   return {
-    pool: limit, maxWaitMs: maxWait, failed,
-    wallMs: wall, throughputPerSec: +(n / (wall / 1000)).toFixed(1),
-    p50: pct(lat, 0.5), p95: pct(lat, 0.95), max: Math.max(...lat),
+    pool: limit,
+    maxWaitMs: maxWait,
+    failed,
+    wallMs: wall,
+    throughputPerSec: +(n / (wall / 1000)).toFixed(1),
+    p50: pct(lat, 0.5),
+    p95: pct(lat, 0.95),
+    max: Math.max(...lat),
   };
 }
 

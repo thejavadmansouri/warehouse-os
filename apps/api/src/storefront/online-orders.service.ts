@@ -119,11 +119,12 @@ export class OnlineOrdersService {
    * مجاز نیست چون هر مرحله یک کارِ فیزیکیِ انجام‌شده است؛ «برگرداندن» یعنی
    * لغو، که مسیر خودش را دارد.
    */
-  private static readonly NEXT: Record<string, OnlineOrderStatus | undefined> = {
-    [OnlineOrderStatus.PLACED]: OnlineOrderStatus.PREPARING,
-    [OnlineOrderStatus.PREPARING]: OnlineOrderStatus.SHIPPED,
-    [OnlineOrderStatus.SHIPPED]: OnlineOrderStatus.DELIVERED,
-  };
+  private static readonly NEXT: Record<string, OnlineOrderStatus | undefined> =
+    {
+      [OnlineOrderStatus.PLACED]: OnlineOrderStatus.PREPARING,
+      [OnlineOrderStatus.PREPARING]: OnlineOrderStatus.SHIPPED,
+      [OnlineOrderStatus.SHIPPED]: OnlineOrderStatus.DELIVERED,
+    };
 
   async advance(id: string, userId: string) {
     const order = await this.prisma.onlineOrder.findUnique({

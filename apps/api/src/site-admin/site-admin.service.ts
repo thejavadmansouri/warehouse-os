@@ -26,15 +26,24 @@ export class SiteAdminService {
 
     const [today, open, customers, online] = await Promise.all([
       this.prisma.onlineOrder.aggregate({
-        where: { createdAt: { gte: since }, status: { not: OnlineOrderStatus.CANCELLED } },
+        where: {
+          createdAt: { gte: since },
+          status: { not: OnlineOrderStatus.CANCELLED },
+        },
         _count: true,
         _sum: { total: true },
       }),
       this.prisma.onlineOrder.count({
-        where: { status: { in: [OnlineOrderStatus.PLACED, OnlineOrderStatus.PREPARING] } },
+        where: {
+          status: {
+            in: [OnlineOrderStatus.PLACED, OnlineOrderStatus.PREPARING],
+          },
+        },
       }),
       this.prisma.siteCustomer.count(),
-      this.prisma.product.count({ where: { showOnline: true, isActive: true } }),
+      this.prisma.product.count({
+        where: { showOnline: true, isActive: true },
+      }),
     ]);
 
     return {
@@ -47,7 +56,11 @@ export class SiteAdminService {
     };
   }
 
-  async orders(params: { status?: OnlineOrderStatus; q?: string; page?: number }) {
+  async orders(params: {
+    status?: OnlineOrderStatus;
+    q?: string;
+    page?: number;
+  }) {
     const pageSize = 30;
     const page = Math.max(params.page ?? 1, 1);
 
@@ -60,7 +73,9 @@ export class SiteAdminService {
       where.OR = [
         { receiverName: { contains: q, mode: 'insensitive' } },
         { receiverPhone: { contains: q } },
-        ...(Number.isFinite(asNumber) && asNumber > 0 ? [{ number: asNumber }] : []),
+        ...(Number.isFinite(asNumber) && asNumber > 0
+          ? [{ number: asNumber }]
+          : []),
       ];
     }
 
@@ -71,8 +86,14 @@ export class SiteAdminService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
-          id: true, number: true, status: true, total: true, payMethod: true,
-          receiverName: true, receiverPhone: true, createdAt: true,
+          id: true,
+          number: true,
+          status: true,
+          total: true,
+          payMethod: true,
+          receiverName: true,
+          receiverPhone: true,
+          createdAt: true,
           // آیا مغازه گرفته‌اش؟ برای مدیرِ سایت مهم‌ترین ستون است.
           pulledAt: true,
           _count: { select: { lines: true } },
@@ -83,9 +104,14 @@ export class SiteAdminService {
 
     return {
       items: rows.map((r) => ({
-        id: r.id, number: r.number, status: r.status, total: r.total,
-        payMethod: r.payMethod, receiverName: r.receiverName,
-        receiverPhone: r.receiverPhone, createdAt: r.createdAt,
+        id: r.id,
+        number: r.number,
+        status: r.status,
+        total: r.total,
+        payMethod: r.payMethod,
+        receiverName: r.receiverName,
+        receiverPhone: r.receiverPhone,
+        createdAt: r.createdAt,
         deliveredToShop: r.pulledAt != null,
         lineCount: r._count.lines,
       })),
@@ -100,22 +126,41 @@ export class SiteAdminService {
     const o = await this.prisma.onlineOrder.findUnique({
       where: { id },
       select: {
-        id: true, number: true, status: true, subtotal: true, shippingFee: true,
-        total: true, payMethod: true, receiverName: true, receiverPhone: true,
-        address: true, note: true, rejectReason: true, createdAt: true,
-        decidedAt: true, pulledAt: true,
-        siteCustomer: { select: { id: true, firstName: true, lastName: true, phone: true } },
+        id: true,
+        number: true,
+        status: true,
+        subtotal: true,
+        shippingFee: true,
+        total: true,
+        payMethod: true,
+        receiverName: true,
+        receiverPhone: true,
+        address: true,
+        note: true,
+        rejectReason: true,
+        createdAt: true,
+        decidedAt: true,
+        pulledAt: true,
+        siteCustomer: {
+          select: { id: true, firstName: true, lastName: true, phone: true },
+        },
         lines: {
           select: {
-            productName: true, unit: true, quantity: true,
-            unitPrice: true, lineTotal: true,
+            productName: true,
+            unit: true,
+            quantity: true,
+            unitPrice: true,
+            lineTotal: true,
           },
         },
       },
     });
 
     if (!o) {
-      throw new NotFoundException({ error: 'ORDER_NOT_FOUND', message: 'سفارش پیدا نشد' });
+      throw new NotFoundException({
+        error: 'ORDER_NOT_FOUND',
+        message: 'سفارش پیدا نشد',
+      });
     }
     return o;
   }
@@ -142,7 +187,11 @@ export class SiteAdminService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
-          id: true, firstName: true, lastName: true, phone: true, createdAt: true,
+          id: true,
+          firstName: true,
+          lastName: true,
+          phone: true,
+          createdAt: true,
           orders: {
             where: { status: { not: OnlineOrderStatus.CANCELLED } },
             select: { total: true },
@@ -179,7 +228,10 @@ export class SiteAdminService {
     const pageSize = 30;
     const page = Math.max(params.page ?? 1, 1);
 
-    const where: Prisma.ProductWhereInput = { showOnline: true, isActive: true };
+    const where: Prisma.ProductWhereInput = {
+      showOnline: true,
+      isActive: true,
+    };
     if (params.q?.trim()) {
       where.name = { contains: params.q.trim(), mode: 'insensitive' };
     }
@@ -191,9 +243,16 @@ export class SiteAdminService {
         skip: (page - 1) * pageSize,
         take: pageSize,
         select: {
-          id: true, name: true, sku: true, unit: true,
+          id: true,
+          name: true,
+          sku: true,
+          unit: true,
           brand: { select: { name: true } },
-          prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } },
+          prices: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: { salePrice: true },
+          },
           inventories: { select: { quantity: true } },
         },
       }),

@@ -68,10 +68,7 @@ export class FuzzyMatcher {
           distance,
           similarity,
         };
-      } else if (
-        distance === best.distance &&
-        similarity > best.similarity
-      ) {
+      } else if (distance === best.distance && similarity > best.similarity) {
         best = {
           match: candidate,
           distance,
@@ -83,11 +80,7 @@ export class FuzzyMatcher {
     return best;
   }
 
-  static isAlmostEqual(
-    a: string,
-    b: string,
-    maxDistance = 1,
-  ): boolean {
+  static isAlmostEqual(a: string, b: string, maxDistance = 1): boolean {
     return this.levenshteinDistance(a, b) <= maxDistance;
   }
 }

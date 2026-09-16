@@ -32,22 +32,29 @@ const PICK_LINE_COUNT = 2;
 const WORKER_USERNAME = 'anbar';
 const SELLER_USERNAME = 'sales';
 
-const rnd = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+const rnd = (min: number, max: number) =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
 const pick = <T>(arr: T[]): T => arr[rnd(0, arr.length - 1)];
 /** قیمت‌ها به تومان و رند شده به هزار — مثل قیمت‌گذاری واقعی. */
 const price = () => rnd(20, 5_000) * 1_000;
 
 async function main() {
   const t0 = Date.now();
-  const app = await NestFactory.createApplicationContext(AppModule, { logger: ['error'] });
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ['error'],
+  });
   const prisma = app.get(PrismaService);
   const sales = app.get(SalesService);
   const workTasks = app.get(WorkTasksService);
   const ops = app.get(InventoryOperationService);
 
   const warehouse = await prisma.warehouse.findFirstOrThrow();
-  const seller = await prisma.user.findUnique({ where: { username: SELLER_USERNAME } });
-  const worker = await prisma.user.findUnique({ where: { username: WORKER_USERNAME } });
+  const seller = await prisma.user.findUnique({
+    where: { username: SELLER_USERNAME },
+  });
+  const worker = await prisma.user.findUnique({
+    where: { username: WORKER_USERNAME },
+  });
   if (!seller) throw new Error(`کاربر فروشنده «${SELLER_USERNAME}» پیدا نشد`);
   if (!worker) throw new Error(`کاربر کارگر «${WORKER_USERNAME}» پیدا نشد`);
 
@@ -55,7 +62,9 @@ async function main() {
     where: { warehouseId: warehouse.id, depth: 3, isActive: true },
     select: { id: true, path: true },
   });
-  console.log(`انبار: ${warehouse.code} · ${shelves.length} قفسه · فروشنده: ${seller.username} · کارگر: ${worker.username}\n`);
+  console.log(
+    `انبار: ${warehouse.code} · ${shelves.length} قفسه · فروشنده: ${seller.username} · کارگر: ${worker.username}\n`,
+  );
 
   // ---------- ۱) قیمت و موجودی و موقعیت ----------
   const products = await prisma.product.findMany({
@@ -65,7 +74,12 @@ async function main() {
     orderBy: { createdAt: 'asc' },
   });
 
-  const stocked: { id: string; locationId: string; qty: number; price: number }[] = [];
+  const stocked: {
+    id: string;
+    locationId: string;
+    qty: number;
+    price: number;
+  }[] = [];
   const tStock = Date.now();
 
   for (const p of products) {
@@ -88,7 +102,9 @@ async function main() {
 
     stocked.push({ id: p.id, locationId: shelf.id, qty, price: salePrice });
   }
-  console.log(`۱) ${stocked.length} کالا قیمت و موجودی و قفسه گرفتند — ${((Date.now() - tStock) / 1000).toFixed(1)} ثانیه`);
+  console.log(
+    `۱) ${stocked.length} کالا قیمت و موجودی و قفسه گرفتند — ${((Date.now() - tStock) / 1000).toFixed(1)} ثانیه`,
+  );
 
   // ---------- ۲) کار برداشت برای کارگر ----------
   const forWorker = stocked.slice(0, PICK_LINE_COUNT);
@@ -106,7 +122,9 @@ async function main() {
     },
     seller.id,
   );
-  console.log(`۲) یک کار برداشت با ${created.totalItems} قلم برای «${worker.username}» فرستاده شد (گوشی باید زنگ بزند)`);
+  console.log(
+    `۲) یک کار برداشت با ${created.totalItems} قلم برای «${worker.username}» فرستاده شد (گوشی باید زنگ بزند)`,
+  );
 
   // ---------- ۳) ۴۰ فاکتور ----------
   // اقلامی که به کارگر رفته‌اند فروخته نمی‌شوند تا صف کارگر دست‌نخورده بماند.
@@ -131,7 +149,12 @@ async function main() {
 
     const lines = chosen.map((c) => {
       const q = Math.min(rnd(1, 3), remaining.get(c.id)!);
-      return { productId: c.id, locationId: c.locationId, quantity: q, unitPrice: c.price };
+      return {
+        productId: c.id,
+        locationId: c.locationId,
+        quantity: q,
+        unitPrice: c.price,
+      };
     });
 
     const t = Date.now();
@@ -143,18 +166,26 @@ async function main() {
           lines,
           // یک فاکتور از هر پنج تا، تخفیف فاکتوری می‌گیرد.
           discount: i % 5 === 0 ? 50_000 : undefined,
-        } as never,
+        },
         seller.id,
       );
       durations.push(Date.now() - t);
       soldValue += inv.total;
       for (const l of lines) {
-        remaining.set(l.productId, (remaining.get(l.productId) ?? 0) - l.quantity);
-        soldPerProduct.set(l.productId, (soldPerProduct.get(l.productId) ?? 0) + l.quantity);
+        remaining.set(
+          l.productId,
+          (remaining.get(l.productId) ?? 0) - l.quantity,
+        );
+        soldPerProduct.set(
+          l.productId,
+          (soldPerProduct.get(l.productId) ?? 0) + l.quantity,
+        );
       }
     } catch (e: any) {
       failures++;
-      console.log(`   فاکتور ${i + 1} خطا: ${e?.response?.error ?? e?.message}`);
+      console.log(
+        `   فاکتور ${i + 1} خطا: ${e?.response?.error ?? e?.message}`,
+      );
     }
   }
 
@@ -179,7 +210,9 @@ async function main() {
     });
     if ((row?.quantity ?? 0) !== s.qty - sold) mismatched++;
   }
-  console.log(`   موجودی هر کالا با فروشش می‌خواند: ${mismatched === 0 ? 'بله ✅' : `نه ❌ (${mismatched} مورد)`}`);
+  console.log(
+    `   موجودی هر کالا با فروشش می‌خواند: ${mismatched === 0 ? 'بله ✅' : `نه ❌ (${mismatched} مورد)`}`,
+  );
 
   const invoices = await prisma.saleInvoice.findMany({
     where: { status: 'CONFIRMED' },
@@ -191,9 +224,12 @@ async function main() {
       (s, l) => s + l.quantity * (l.unitPrice ?? 0) - (l.lineDiscount ?? 0),
       0,
     );
-    if (sub !== inv.subtotal || inv.total !== inv.subtotal - inv.discount) badTotals++;
+    if (sub !== inv.subtotal || inv.total !== inv.subtotal - inv.discount)
+      badTotals++;
   }
-  console.log(`   مبلغ فاکتورها با ردیف‌هایشان می‌خواند: ${badTotals === 0 ? 'بله ✅' : `نه ❌ (${badTotals} فاکتور)`}`);
+  console.log(
+    `   مبلغ فاکتورها با ردیف‌هایشان می‌خواند: ${badTotals === 0 ? 'بله ✅' : `نه ❌ (${badTotals} فاکتور)`}`,
+  );
 
   // مکان سیستمیِ «موجودی ثبت‌نشده» (عمق ۹۹) عمداً منفی می‌شود و ایراد نیست —
   // یعنی جنسی پیش از ثبت شدن فروخته شده. فقط قفسه‌های واقعی باید سالم بمانند.
@@ -203,9 +239,13 @@ async function main() {
   const unregistered = await prisma.inventory.count({
     where: { quantity: { lt: 0 }, location: { depth: 99 } },
   });
-  console.log(`   موجودی منفی روی قفسه‌های واقعی: ${negatives === 0 ? 'ندارد ✅' : `${negatives} مورد ❌`}`);
+  console.log(
+    `   موجودی منفی روی قفسه‌های واقعی: ${negatives === 0 ? 'ندارد ✅' : `${negatives} مورد ❌`}`,
+  );
   if (unregistered) {
-    console.log(`   (${unregistered} قلم روی «موجودی ثبت‌نشده» منفی است — صف ثبتِ عقب‌افتاده، نه خطا)`);
+    console.log(
+      `   (${unregistered} قلم روی «موجودی ثبت‌نشده» منفی است — صف ثبتِ عقب‌افتاده، نه خطا)`,
+    );
   }
 
   const pending = await prisma.workTask.count({ where: { status: 'PENDING' } });

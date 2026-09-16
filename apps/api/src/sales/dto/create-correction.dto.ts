@@ -5,35 +5,34 @@ import {
   IsArray,
   IsIn,
   ValidateNested,
-
   ArrayMaxSize,
   Min,
   Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+import { INT4_MAX } from '../../common/money';
 
 /**
  * یک قلمِ اصلاحیه. به همان ردیفِ SALEِ فاکتور قفل می‌شود؛ تعداد و قیمتِ جدید را
  * فروشنده می‌دهد، بقیه از فاکتور می‌آیند.
  */
 export class CorrectionLineDto {
-
   /** شناسه‌ی ردیفِ SALE (InventoryLog) در فاکتور اصلی. */
   @IsString()
-  saleLogId:string;
+  saleLogId: string;
 
   @IsInt()
   @Min(0)
   @Max(1_000_000)
-  newQuantity:number;
+  newQuantity: number;
 
+  /** سقف = بردِ ستون Int (۲.۱ میلیارد ریال) — هم‌سقف با بقیهٔ سندها، نه یک عددِ دلخواهِ پایین‌تر. */
   @IsInt()
   @Min(0)
-  @Max(1_000_000_000)
-  newUnitPrice:number;
+  @Max(INT4_MAX)
+  newUnitPrice: number;
 }
-
 
 /**
  * قلمی که در فاکتور نبود و با همین اصلاحیه اضافه می‌شود.
@@ -43,44 +42,41 @@ export class CorrectionLineDto {
  * ردیفش از این به بعد جزو خودِ فاکتور است.
  */
 export class CorrectionAddLineDto {
-
   @IsString()
-  productId:string;
+  productId: string;
 
   /** قفسه‌ای که از آن برداشته می‌شود. خالی = مکانِ سیستمی، مثل خودِ فروش. */
   @IsOptional()
   @IsString()
-  locationId?:string;
+  locationId?: string;
 
   @IsInt()
   @Min(1)
   @Max(1_000_000)
-  quantity:number;
+  quantity: number;
 
   @IsInt()
   @Min(0)
-  @Max(1_000_000_000)
-  unitPrice:number;
+  @Max(INT4_MAX)
+  unitPrice: number;
 }
 
-
 export class CreateCorrectionDto {
-
   /** کلید یکتای کلاینت؛ ارسال دوباره اصلاحیه‌ی تکراری نمی‌سازد. */
   @IsOptional()
   @IsString()
-  idempotencyKey?:string;
+  idempotencyKey?: string;
 
   /** فاکتوری که اصلاحیه برایش است — اجباری. فقط فاکتورِ نهایی (CONFIRMED). */
   @IsString()
-  invoiceId:string;
+  invoiceId: string;
 
   @IsString()
-  reason:string;
+  reason: string;
 
   @IsOptional()
   @IsString()
-  note?:string;
+  note?: string;
 
   /**
    * ردیف‌های موجود که تصحیح می‌شوند. می‌تواند خالی باشد وقتی اصلاحیه فقط
@@ -90,7 +86,7 @@ export class CreateCorrectionDto {
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => CorrectionLineDto)
-  lines:CorrectionLineDto[];
+  lines: CorrectionLineDto[];
 
   /**
    * روشِ ردوبدلِ همان لحظه‌ی پول — فقط برای فاکتورِ **بدونِ مشتری**.
@@ -109,5 +105,16 @@ export class CreateCorrectionDto {
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => CorrectionAddLineDto)
-  addedLines?:CorrectionAddLineDto[];
+  addedLines?: CorrectionAddLineDto[];
+
+  /**
+   * تعدیلِ دستی (ریال) — مدیر سرِ پیشخوان اختلافِ نهایی را چانه می‌زند یا
+   * گرد می‌کند. مثبت = مبلغِ فاکتور بیشتر می‌شود، منفی کمتر. به amountAdjust
+   * اضافه می‌شود، پس فاکتور و دفتر با همان یک عدد سند می‌خوانند.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(-INT4_MAX)
+  @Max(INT4_MAX)
+  manualAdjust?: number;
 }

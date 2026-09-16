@@ -7,15 +7,18 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UseGuards,
 } from '@nestjs/common';
-import { Role } from '@prisma/client';
 
-import { Roles } from '../auth/roles.decorator';
+import { SiteAccessGuard } from '../auth/site-access.guard';
 import { ShippingZonesAdminService } from './shipping-zones-admin.service';
-import { CreateShippingZoneDto, UpdateShippingZoneDto } from './dto/shipping-zone-admin.dto';
+import {
+  CreateShippingZoneDto,
+  UpdateShippingZoneDto,
+} from './dto/shipping-zone-admin.dto';
 
-/** مدیریتِ مناطقِ ارسال در پنلِ سایت — `JwtAuthGuard` سراسری + `@Roles`. */
-@Roles(Role.ADMIN, Role.MANAGER)
+/** مدیریتِ مناطقِ ارسال در پنلِ سایت — `JwtAuthGuard` سراسری + `SiteAccessGuard`. */
+@UseGuards(SiteAccessGuard)
 @Controller('shipping-zones')
 export class ShippingZonesAdminController {
   constructor(private readonly zones: ShippingZonesAdminService) {}
@@ -31,7 +34,10 @@ export class ShippingZonesAdminController {
   }
 
   @Patch(':id')
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateShippingZoneDto) {
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateShippingZoneDto,
+  ) {
     return this.zones.update(id, dto);
   }
 

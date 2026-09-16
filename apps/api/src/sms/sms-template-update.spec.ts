@@ -79,7 +79,9 @@ describe('SmsService.updateTemplate', () => {
   });
 
   it('متنِ کوتاه با EMPTY_BODY رد می‌شود و چیزی در دیتابیس عوض نمی‌شود', async () => {
-    const e = await service.updateTemplate('t1', { body: 'abc' }).catch((x) => x);
+    const e = await service
+      .updateTemplate('t1', { body: 'abc' })
+      .catch((x) => x);
 
     expect(e).toBeInstanceOf(BadRequestException);
     expect(e.getResponse().error).toBe('EMPTY_BODY');
@@ -88,7 +90,9 @@ describe('SmsService.updateTemplate', () => {
   });
 
   it('متنِ فقط-فاصله هم مثل متنِ کوتاه رد می‌شود', async () => {
-    const e = await service.updateTemplate('t1', { body: '   ' }).catch((x) => x);
+    const e = await service
+      .updateTemplate('t1', { body: '   ' })
+      .catch((x) => x);
 
     expect(e).toBeInstanceOf(BadRequestException);
     expect(e.getResponse().error).toBe('EMPTY_BODY');
@@ -96,7 +100,9 @@ describe('SmsService.updateTemplate', () => {
   });
 
   it('متنِ معتبر با حذفِ فاصله‌های دورِ آن ذخیره می‌شود', async () => {
-    const r = await service.updateTemplate('t1', { body: '  سلام {customer} عزیز  ' });
+    const r = await service.updateTemplate('t1', {
+      body: '  سلام {customer} عزیز  ',
+    });
 
     expect(r.body).toBe('سلام {customer} عزیز');
   });

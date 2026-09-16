@@ -1,17 +1,18 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { LedgerEntryType, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 
-
 /** چکی که تا این تعداد روز دیگر سررسید می‌شود، در اعلان‌ها می‌آید. */
 const CHEQUE_ALERT_DAYS = 7;
 
-
 /** کلاینت تراکنشی یا خودِ prisma — تا نوشتن در دفتر همیشه داخل تراکنشِ صدازننده بماند. */
 type Db = Prisma.TransactionClient | PrismaService;
-
 
 export interface LedgerEntryInput {
   customerId: string;
@@ -22,10 +23,11 @@ export interface LedgerEntryInput {
   receiptId?: string | null;
   returnId?: string | null;
   correctionId?: string | null;
+  payoutId?: string | null;
+  reversalId?: string | null;
   note?: string | null;
   userId?: string | null;
 }
-
 
 /**
  * دفتر حساب مشتری — تنها جایی که «مانده» محاسبه می‌شود.
@@ -40,9 +42,7 @@ export interface LedgerEntryInput {
  */
 @Injectable()
 export class LedgerService {
-
   constructor(private readonly prisma: PrismaService) {}
-
 
   /**
    * ثبت یک رویداد در دفتر.
@@ -62,12 +62,13 @@ export class LedgerService {
         receiptId: entry.receiptId ?? null,
         returnId: entry.returnId ?? null,
         correctionId: entry.correctionId ?? null,
+        payoutId: entry.payoutId ?? null,
+        reversalId: entry.reversalId ?? null,
         note: entry.note ?? null,
         userId: entry.userId ?? null,
       },
     });
   }
-
 
   /** مانده‌ی مشتری به ریال. مثبت یعنی بدهکار است. */
   async balance(customerId: string, db: Db = this.prisma): Promise<number> {
@@ -77,7 +78,6 @@ export class LedgerService {
     });
     return agg._sum.amount ?? 0;
   }
-
 
   /**
    * همان چهار عددی که مدیر باید در پنج ثانیه ببیند، به‌علاوه‌ی چک‌های وصول‌نشده.
@@ -130,7 +130,8 @@ export class LedgerService {
     for (const inv of openInvoices) {
       // فاکتور بدون سررسید هنوز مهلت‌دار حساب می‌شود، نه معوق — عددِ معوق
       // نباید به‌خاطر داده‌ی ناقص متورم شود.
-      if (!inv.dueDate || inv.dueDate >= startOfTomorrow) current += inv.dueAmount;
+      if (!inv.dueDate || inv.dueDate >= startOfTomorrow)
+        current += inv.dueAmount;
       else if (inv.dueDate >= startOfToday) dueToday += inv.dueAmount;
       else overdue += inv.dueAmount;
     }
@@ -143,7 +144,6 @@ export class LedgerService {
       chequesInHandCount: chequesInHand.length,
     };
   }
-
 
   /**
    * صورتحساب مشتری — گردشِ حساب با مانده‌ی متحرک، همترازِ الگوی کاردکس.
@@ -161,7 +161,12 @@ export class LedgerService {
    */
   async statement(
     customerId: string,
-    q: { startDate?: string; endDate?: string; page?: number; limit?: number } = {},
+    q: {
+      startDate?: string;
+      endDate?: string;
+      page?: number;
+      limit?: number;
+    } = {},
   ) {
     const take = Math.min(Math.max(q.limit ?? 50, 1), 10_000);
     const page = Math.max(q.page ?? 1, 1);
@@ -179,23 +184,27 @@ export class LedgerService {
         invoiceId: string | null;
         receiptId: string | null;
         returnId: string | null;
+        payoutId: string | null;
         userId: string | null;
         invoiceNumber: number | null;
         receiptNumber: number | null;
+        payoutNumber: number | null;
         userName: string | null;
         balance: bigint;
       }[]
     >`
       WITH all_entries AS (
         SELECT l."id", l."createdAt", l."type", l."amount", l."note",
-               l."invoiceId", l."receiptId", l."returnId", l."userId",
+               l."invoiceId", l."receiptId", l."returnId", l."payoutId", l."userId",
                si."number"  AS "invoiceNumber",
                rc."number"  AS "receiptNumber",
+               po."number"  AS "payoutNumber",
                u."fullName" AS "userName",
                SUM(l."amount") OVER (ORDER BY l."createdAt", l."id") AS "balance"
         FROM "CustomerLedger" l
         LEFT JOIN "SaleInvoice" si ON si."id"  = l."invoiceId"
         LEFT JOIN "Receipt"     rc ON rc."id"  = l."receiptId"
+        LEFT JOIN "CustomerPayout" po ON po."id" = l."payoutId"
         LEFT JOIN "User"        u  ON u."id"   = l."userId"
         WHERE l."customerId" = ${customerId}
       )
@@ -245,8 +254,13 @@ export class LedgerService {
         amount,
         note: r.note,
         createdAt: r.createdAt,
-        invoice: r.invoiceId ? { id: r.invoiceId, number: r.invoiceNumber } : null,
-        receipt: r.receiptId ? { id: r.receiptId, number: r.receiptNumber } : null,
+        invoice: r.invoiceId
+          ? { id: r.invoiceId, number: r.invoiceNumber }
+          : null,
+        receipt: r.receiptId
+          ? { id: r.receiptId, number: r.receiptNumber }
+          : null,
+        payout: r.payoutId ? { id: r.payoutId, number: r.payoutNumber } : null,
         user: r.userId ? { id: r.userId, fullName: r.userName } : null,
         debit: amount > 0 ? amount : 0,
         credit: amount < 0 ? -amount : 0,
@@ -285,7 +299,6 @@ export class LedgerService {
     };
   }
 
-
   /**
    * همه‌ی مشتریانی که حساب باز دارند.
    *
@@ -296,12 +309,14 @@ export class LedgerService {
    * مانده از دفتر می‌آید (پس مانده‌ی اول دوره و برگشتی را می‌بیند) ولی تفکیک
    * سنی از سررسیدِ فاکتورهاست.
    */
-  async debtors(params: {
-    q?: string;
-    onlyOverdue?: boolean;
-    page?: number;
-    limit?: number;
-  } = {}) {
+  async debtors(
+    params: {
+      q?: string;
+      onlyOverdue?: boolean;
+      page?: number;
+      limit?: number;
+    } = {},
+  ) {
     const take = Math.min(Math.max(params.limit ?? 50, 1), 200);
     const skip = (Math.max(params.page ?? 1, 1) - 1) * take;
 
@@ -309,10 +324,13 @@ export class LedgerService {
 
     return {
       data: rows.slice(skip, skip + take),
-      meta: { total: rows.length, page: Math.max(params.page ?? 1, 1), limit: take },
+      meta: {
+        total: rows.length,
+        page: Math.max(params.page ?? 1, 1),
+        limit: take,
+      },
     };
   }
-
 
   /**
    * ردیف‌های کاملِ بدهکاران — بدون صفحه‌بندی.
@@ -323,11 +341,12 @@ export class LedgerService {
    * عددِ سرصفحه بی‌سروصدا کمتر از واقعیت بود. جمع باید کلِ مجموعه را ببیند،
    * صفحه‌بندی فقط برای نمایش است.
    */
-  private async debtorRows(params: {
-    q?: string;
-    onlyOverdue?: boolean;
-  } = {}) {
-
+  private async debtorRows(
+    params: {
+      q?: string;
+      onlyOverdue?: boolean;
+    } = {},
+  ) {
     // بدهکار = مانده‌ی مثبت در دفتر. جمع در خود پستگرس زده می‌شود.
     const groups = await this.prisma.customerLedger.groupBy({
       by: ['customerId'],
@@ -340,15 +359,36 @@ export class LedgerService {
     );
     if (balances.size === 0) return [];
 
-    const ids = [...balances.keys()];
+    let rows = await this.balanceRows([...balances.keys()], balances, params.q);
 
+    if (params.onlyOverdue) rows = rows.filter((r) => r.overdue > 0);
+
+    // بدترین وضعیت اول: معوق، بعد سررسید امروز، بعد بزرگ‌ترین بدهی.
+    rows.sort(
+      (x, y) =>
+        y.overdue - x.overdue ||
+        y.dueToday - x.dueToday ||
+        y.totalDue - x.totalDue,
+    );
+
+    return rows;
+  }
+
+  /**
+   * ساختِ ردیف‌های فهرستِ حساب‌بازها از روی مانده‌های دفتر — مشترک میان
+   * «بدهکاران» (گزارش مطالبات) و «حساب باز» صندوق که بدهکار و طلبکار را با هم
+   * می‌خواهد. یک فرمول، تا دو صفحه دو عدد نشان ندهند.
+   */
+  private async balanceRows(
+    ids: string[],
+    balances: Map<string, number>,
+    q?: string,
+  ) {
     const customers = await this.prisma.customer.findMany({
       where: {
         id: { in: ids },
         isActive: true,
-        ...(params.q?.trim()
-          ? { searchName: { contains: normalizePersian(params.q) } }
-          : {}),
+        ...(q?.trim() ? { searchName: { contains: normalizePersian(q) } } : {}),
       },
       include: { phones: { where: { isPrimary: true }, take: 1 } },
     });
@@ -377,11 +417,15 @@ export class LedgerService {
 
     for (const inv of openInvoices) {
       if (!inv.customerId) continue;
-      const a =
-        aging.get(inv.customerId) ??
-        { current: 0, dueToday: 0, overdue: 0, nextDueDate: null };
+      const a = aging.get(inv.customerId) ?? {
+        current: 0,
+        dueToday: 0,
+        overdue: 0,
+        nextDueDate: null,
+      };
 
-      if (!inv.dueDate || inv.dueDate >= startOfTomorrow) a.current += inv.dueAmount;
+      if (!inv.dueDate || inv.dueDate >= startOfTomorrow)
+        a.current += inv.dueAmount;
       else if (inv.dueDate >= startOfToday) a.dueToday += inv.dueAmount;
       else a.overdue += inv.dueAmount;
 
@@ -393,9 +437,22 @@ export class LedgerService {
       aging.set(inv.customerId, a);
     }
 
-    let rows = customers.map((c) => {
+    // چند فاکتورِ مانده‌دار هر مشتری دارد — همان «۲ نوبت» که صندوق نشان می‌دهد.
+    const invoiceCounts = new Map<string, number>();
+    for (const inv of openInvoices) {
+      if (!inv.customerId) continue;
+      invoiceCounts.set(
+        inv.customerId,
+        (invoiceCounts.get(inv.customerId) ?? 0) + 1,
+      );
+    }
+
+    const rows = customers.map((c) => {
       const a = aging.get(c.id) ?? {
-        current: 0, dueToday: 0, overdue: 0, nextDueDate: null,
+        current: 0,
+        dueToday: 0,
+        overdue: 0,
+        nextDueDate: null,
       };
       const totalDue = balances.get(c.id) ?? 0;
       return {
@@ -406,21 +463,80 @@ export class LedgerService {
         creditDays: c.creditDays,
         totalDue,
         available: c.creditLimit > 0 ? c.creditLimit - totalDue : null,
+        invoiceCount: invoiceCounts.get(c.id) ?? 0,
         ...a,
       };
     });
 
-    if (params.onlyOverdue) rows = rows.filter((r) => r.overdue > 0);
-
-    // بدترین وضعیت اول: معوق، بعد سررسید امروز، بعد بزرگ‌ترین بدهی.
-    rows.sort(
-      (x, y) =>
-        y.overdue - x.overdue || y.dueToday - x.dueToday || y.totalDue - x.totalDue,
-    );
-
     return rows;
   }
 
+  /**
+   * همه‌ی مشتریانی که حسابِ غیرصفر دارند — بدهکار و طلبکار با هم.
+   *
+   * این همان فهرستی است که «حساب باز» صندوق باید ببیند: مشتریِ نسیه‌ای که
+   * فاکتورش از مسیرِ معمول ثبت شده و به هیچ «حسابِ کلی» وصل نیست هم اینجا
+   * می‌آید، و طلبکار (مانده‌ی منفی از مرجوعی/پرداخت) هم. مانده از خودِ دفتر
+   * می‌آید — همان منبعِ حقیقتِ گزارش مطالبات.
+   *
+   * ترتیب: بدهکارها به بدیِ وضعیت (معوق → امروز → بزرگ‌ترین بدهی)، بعد
+   * طلبکارها به بزرگیِ اعتبار.
+   */
+  async accountBalances(params: { q?: string } = {}) {
+    const [debtGroups, creditGroups] = await Promise.all([
+      this.prisma.customerLedger.groupBy({
+        by: ['customerId'],
+        _sum: { amount: true },
+        having: { amount: { _sum: { gt: 0 } } },
+      }),
+      this.prisma.customerLedger.groupBy({
+        by: ['customerId'],
+        _sum: { amount: true },
+        having: { amount: { _sum: { lt: 0 } } },
+      }),
+    ]);
+
+    const balances = new Map<string, number>();
+    for (const g of [...debtGroups, ...creditGroups]) {
+      balances.set(g.customerId, g._sum.amount ?? 0);
+    }
+    if (balances.size === 0) return [];
+
+    const rows = await this.balanceRows(
+      [...balances.keys()],
+      balances,
+      params.q,
+    );
+
+    /*
+     * اینجا فیلدِ مانده «balance» نامیده می‌شود، نه totalDue: در این فهرست
+     * علامتِ عدد معنا دارد (مثبت بدهکار، منفی طلبکار) و «بدهی» فقط یک سمتِ
+     * آن است.
+     */
+    const toRow = (r: (typeof rows)[number], kind: 'debtor' | 'creditor') => {
+      const { totalDue, ...rest } = r;
+      return { ...rest, balance: totalDue, kind };
+    };
+
+    // بدترین وضعیت اول: معوق، بعد سررسید امروز، بعد بزرگ‌ترین بدهی.
+    const debtors = rows
+      .filter((r) => r.totalDue > 0)
+      .sort(
+        (x, y) =>
+          y.overdue - x.overdue ||
+          y.dueToday - x.dueToday ||
+          y.totalDue - x.totalDue,
+      )
+      .map((r) => toRow(r, 'debtor'));
+
+    // طلبکارها: بزرگ‌ترین اعتبار اول.
+    const creditors = rows
+      .filter((r) => r.totalDue < 0)
+      .sort((x, y) => Math.abs(y.totalDue) - Math.abs(x.totalDue))
+      .map((r) => toRow(r, 'creditor'));
+
+    return [...debtors, ...creditors];
+  }
 
   /**
    * خلاصه‌ی مطالبات برای گزارش — همان چهار عددِ بالای صفحه.
@@ -440,7 +556,6 @@ export class LedgerService {
       { customerCount: 0, totalDue: 0, current: 0, dueToday: 0, overdue: 0 },
     );
   }
-
 
   /**
    * اعلان‌ها — چیزهایی که مدیر باید بداند بدون اینکه دنبالشان بگردد.
@@ -480,7 +595,6 @@ export class LedgerService {
       },
     };
   }
-
 
   /**
    * ثبت مانده‌ی اول دوره — بدهیِ مشتری از پیش از نرم‌افزار.
@@ -527,7 +641,6 @@ export class LedgerService {
     });
   }
 
-
   /**
    * اصلاح دستیِ حساب. دلیل اجباری است — ردیفی که دلیل ندارد، بعداً قابل دفاع نیست.
    */
@@ -558,7 +671,6 @@ export class LedgerService {
       userId,
     });
   }
-
 
   /**
    * بررسی سقف اعتبار — **هشدار می‌دهد، جلوی فروش را نمی‌گیرد.**

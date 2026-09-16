@@ -19,10 +19,19 @@ export class StorefrontFavoritesService {
 
   async add(siteCustomerId: string, productId: string) {
     const product = await this.prisma.product.findFirst({
-      where: { id: productId, showOnline: true, isActive: true, deletedAt: null },
+      where: {
+        id: productId,
+        showOnline: true,
+        isActive: true,
+        deletedAt: null,
+      },
       select: { id: true },
     });
-    if (!product) throw new NotFoundException({ error: 'NOT_FOUND', message: 'کالا یافت نشد' });
+    if (!product)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'کالا یافت نشد',
+      });
 
     // upsert: افزودنِ دوباره بی‌اثر است، نه خطا.
     await this.prisma.favorite.upsert({
@@ -34,7 +43,9 @@ export class StorefrontFavoritesService {
   }
 
   async remove(siteCustomerId: string, productId: string) {
-    await this.prisma.favorite.deleteMany({ where: { siteCustomerId, productId } });
+    await this.prisma.favorite.deleteMany({
+      where: { siteCustomerId, productId },
+    });
     return { ok: true, favorited: false };
   }
 

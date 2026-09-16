@@ -20,25 +20,39 @@ import { SalesService } from './sales.service';
 import { CustomersService, type CustomerSort } from './customers.service';
 import { CustomerCategoriesService } from './customer-categories.service';
 import { ReceiptsService } from './receipts.service';
+import { PayoutsService } from './payouts.service';
 import { QuotationsService } from './quotations.service';
+import { BlankQuotationsService } from './blank-quotations.service';
 import { ReturnsService } from './returns.service';
 import { CorrectionsService } from './corrections.service';
+import { AdjustmentsService } from './adjustments.service';
+import { PaymentReversalsService } from './payment-reversals.service';
+import { PaymentsRecomposeService } from './payments-recompose.service';
 import { LedgerService } from './ledger.service';
 import { OpenAccountsService } from './open-accounts.service';
 import { StatementsService } from './statements.service';
 import { ChequesService } from './cheques.service';
 
 import { CreateInvoiceDto } from './dto/create-invoice.dto';
+import { CreateNetSaleDto } from './dto/create-net-sale.dto';
 import { CreateReturnDto } from './dto/create-return.dto';
 import { CreateCorrectionDto } from './dto/create-correction.dto';
+import { CreateAdjustDto } from './dto/create-adjust.dto';
+import { ReversePaymentDto } from './dto/reverse-payment.dto';
+import { RecomposePaymentsDto } from './dto/recompose-payments.dto';
 import { UpdateLineNotesDto } from './dto/update-line-notes.dto';
 import { CreateReceiptDto } from './dto/create-receipt.dto';
+import { CreatePayoutDto } from './dto/create-payout.dto';
 import {
   ConvertQuotationDto,
   CreateQuotationDto,
   ExtendQuotationDto,
   UpdateQuotationDto,
 } from './dto/quotation.dto';
+import {
+  ConvertBlankQuotationDto,
+  SaveBlankPricesDto,
+} from './dto/blank-quotation.dto';
 import {
   CreateCustomerDto,
   CustomerPhoneDto,
@@ -51,12 +65,12 @@ import {
 import { QueryInvoicesDto, CancelInvoiceDto } from './dto/query-invoices.dto';
 import { OpeningBalanceDto, AdjustBalanceDto } from './dto/ledger.dto';
 
-
 /** برچسب فارسیِ نوعِ حرکت — برای ستونِ «شرح» در خروجی اکسلِ صورتحساب. */
 const STATEMENT_LABELS: Record<string, string> = {
   OPENING: 'مانده‌ی اول دوره',
   INVOICE: 'فاکتور',
   RECEIPT: 'دریافت',
+  PAYOUT: 'پرداخت به مشتری',
   INVOICE_CANCELLED: 'ابطال فاکتور',
   RETURN: 'برگشت کالا',
   CHEQUE_BOUNCED: 'چک برگشتی',
@@ -64,6 +78,8 @@ const STATEMENT_LABELS: Record<string, string> = {
   FINANCE_CHARGE: 'تفاوت فروش مدت‌دار',
   ADJUSTMENT: 'اصلاح حساب',
   CORRECTION: 'اصلاحیه‌ی فاکتور',
+  PAYMENT_REVERSED: 'برگشت پرداخت',
+  RECOMPOSE: 'اصلاح نحوهٔ پرداخت',
 };
 
 interface StatementOutRow {
@@ -87,16 +103,18 @@ function statementToExcel(res: Response, rows: StatementOutRow[]) {
     }).format(new Date(d));
 
   const sheetRows = rows.map((r) => ({
-    'تاریخ': faDate(r.createdAt),
-    'شرح': [
+    تاریخ: faDate(r.createdAt),
+    شرح: [
       STATEMENT_LABELS[r.type] ?? r.type,
       r.invoice && r.invoice.number != null ? `#${r.invoice.number}` : null,
       r.receipt && r.receipt.number != null ? `#${r.receipt.number}` : null,
       r.note ?? null,
-    ].filter(Boolean).join(' '),
-    'بدهکار': r.debit || '',
-    'بستانکار': r.credit || '',
-    'مانده': r.balance,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    بدهکار: r.debit || '',
+    بستانکار: r.credit || '',
+    مانده: r.balance,
   }));
 
   const ws = XLSX.utils.json_to_sheet(sheetRows);
@@ -113,37 +131,35 @@ function statementToExcel(res: Response, rows: StatementOutRow[]) {
   return res.send(buf);
 }
 
-
 @Controller('sales')
 export class SalesController {
-
   constructor(
     private readonly sales: SalesService,
     private readonly customers: CustomersService,
     private readonly categories: CustomerCategoriesService,
     private readonly receipts: ReceiptsService,
+    private readonly payouts: PayoutsService,
     private readonly quotations: QuotationsService,
+    private readonly blankQuotations: BlankQuotationsService,
     private readonly returns: ReturnsService,
     private readonly corrections: CorrectionsService,
+    private readonly adjustments: AdjustmentsService,
+    private readonly reversals: PaymentReversalsService,
+    private readonly recompose: PaymentsRecomposeService,
     private readonly ledger: LedgerService,
     private readonly openAccounts: OpenAccountsService,
     private readonly statements: StatementsService,
     private readonly cheques: ChequesService,
   ) {}
 
-
   // ---------- دریافت وجه از بدهکار ----------
 
   // پول به قدیمی‌ترین فاکتور بدهکار اول تخصیص داده می‌شود.
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('receipts')
-  createReceipt(
-    @Body() dto: CreateReceiptDto,
-    @Req() req: any,
-  ){
+  createReceipt(@Body() dto: CreateReceiptDto, @Req() req: any) {
     return this.receipts.create(dto, req.user?.userId);
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('receipts')
@@ -151,7 +167,7 @@ export class SalesController {
     @Query('customerId') customerId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ){
+  ) {
     return this.receipts.findAll({
       customerId,
       page: page ? Number(page) : 1,
@@ -159,39 +175,63 @@ export class SalesController {
     });
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('receipts/:id')
-  getReceipt(
-    @Param('id') id: string,
-  ){
+  getReceipt(@Param('id') id: string) {
     return this.receipts.findOne(id);
   }
 
+  // ---------- پرداخت به مشتری بستانکار ----------
+
+  /*
+   * تسویه‌ی اعتبارِ مشتری — پول از صندوق به مشتری می‌رود.
+   *
+   * عمداً فقط دستِ مدیر است (نه فروشنده): پولِ بیرون‌رفتنی از صندوق، برخلاف
+   * «برگشتِ وجهِ همان لحظه‌ی مرجوعی»، سندِ مستقلِ حسابِ مشتری است و باید با
+   * دلیل و شماره ثبت شود. فروشنده برای بازپرداختِ سرِ پیشخوان همان مسیرِ
+   * مرجوعی/عملیاتِ یکپارچه را دارد که خودش روش را می‌پرسد.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('payouts')
+  createPayout(@Body() dto: CreatePayoutDto, @Req() req: any) {
+    return this.payouts.create(dto, req.user?.userId);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('payouts')
+  listPayouts(
+    @Query('customerId') customerId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.payouts.findAll({
+      customerId,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('payouts/:id')
+  getPayout(@Param('id') id: string) {
+    return this.payouts.findOne(id);
+  }
 
   // ---------- پیش‌فاکتور ----------
 
   // هیچ موجودی‌ای کم نمی‌کند؛ فقط قیمت را برای مدت مشخصی نگه می‌دارد.
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('quotations')
-  createQuotation(
-    @Body() dto: CreateQuotationDto,
-    @Req() req: any,
-  ){
+  createQuotation(@Body() dto: CreateQuotationDto, @Req() req: any) {
     return this.quotations.create(dto, req.user?.userId);
   }
-
 
   // ویرایش پیش‌فاکتور فعال — اقلام، قیمت‌ها و مشتری.
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Patch('quotations/:id')
-  updateQuotation(
-    @Param('id') id: string,
-    @Body() dto: UpdateQuotationDto,
-  ){
+  updateQuotation(@Param('id') id: string, @Body() dto: UpdateQuotationDto) {
     return this.quotations.update(id, dto);
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('quotations')
@@ -201,7 +241,7 @@ export class SalesController {
     @Query('warehouseId') warehouseId?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ){
+  ) {
     return this.quotations.findAll({
       status,
       customerId,
@@ -211,15 +251,11 @@ export class SalesController {
     });
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('quotations/:id')
-  getQuotation(
-    @Param('id') id: string,
-  ){
+  getQuotation(@Param('id') id: string) {
     return this.quotations.findOne(id);
   }
-
 
   // تبدیل به فاکتور — اینجا برای اولین بار موجودی بررسی و کم می‌شود.
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
@@ -228,61 +264,109 @@ export class SalesController {
     @Param('id') id: string,
     @Body() body: ConvertQuotationDto,
     @Req() req: any,
-  ){
+  ) {
     return this.quotations.convert(id, body ?? {}, req.user?.userId);
   }
-
 
   // تمدید اعتبار — فقط مدیر.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('quotations/:id/extend')
-  extendQuotation(
-    @Param('id') id: string,
-    @Body() body: ExtendQuotationDto,
-  ){
+  extendQuotation(@Param('id') id: string, @Body() body: ExtendQuotationDto) {
     return this.quotations.extend(id, body.validForMinutes);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('quotations/:id/cancel')
-  cancelQuotation(
-    @Param('id') id: string,
-  ){
+  cancelQuotation(@Param('id') id: string) {
     return this.quotations.cancel(id);
   }
 
+  // ---------- پیش‌فاکتور سفید ----------
+  //
+  // برگهٔ قیمتِ متنی که از گوشی می‌آید (کارگر یا فروشنده). قیمت نهایی و وصل
+  // کردن به کالای واقعی کار مدیر است، پس همه‌ی روت‌های زیر فقط ADMIN/MANAGER
+  // هستند — ساختش از سطح موبایل انجام می‌شود (mobile/blank-quotations).
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('blank-quotations')
+  listBlankQuotations(
+    @Query('status') status?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.blankQuotations.findAll({
+      status,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+    });
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('blank-quotations/:id')
+  getBlankQuotation(@Param('id') id: string) {
+    return this.blankQuotations.findOne(id);
+  }
+
+  // پیشنهاد کالا برای ردیف‌های متنی — نیمه‌خودکار: سیستم پیشنهاد می‌دهد،
+  // تصمیم نهایی با مدیر است.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('blank-quotations/:id/suggestions')
+  blankQuotationSuggestions(@Param('id') id: string) {
+    return this.blankQuotations.suggestions(id);
+  }
+
+  // قیمت نهایی و/یا وصل کردن قلم به کالای واقعی.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('blank-quotations/:id/prices')
+  saveBlankPrices(@Param('id') id: string, @Body() dto: SaveBlankPricesDto) {
+    return this.blankQuotations.savePrices(id, dto);
+  }
+
+  // تبدیل به فاکتور واقعی — تنها جایی که موجودی کم می‌شود.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('blank-quotations/:id/convert')
+  convertBlankQuotation(
+    @Param('id') id: string,
+    @Body() dto: ConvertBlankQuotationDto,
+    @Req() req: any,
+  ) {
+    return this.blankQuotations.convert(id, dto, req.user?.userId);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('blank-quotations/:id/cancel')
+  cancelBlankQuotation(@Param('id') id: string) {
+    return this.blankQuotations.cancel(id);
+  }
 
   // ---------- فاکتور ----------
 
   // ثبت فاکتور فروش (چندردیفی، اتمیک)
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('invoices')
-  createInvoice(
-    @Body() dto: CreateInvoiceDto,
-    @Req() req: any,
-  ){
+  createInvoice(@Body() dto: CreateInvoiceDto, @Req() req: any) {
     return this.sales.createInvoice(dto, req.user?.userId);
   }
 
+  // سبدِ خالص — فروشِ نو + برگشت از چند فاکتورِ قبلیِ همین مشتری، در یک درخواستِ اتمیک.
+  // وجهِ برگشتی از صندوق خارج می‌شود، پس مثل مرجوعیِ فاکتورِ نهایی دستِ مدیر است.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('net')
+  createNetSale(@Body() dto: CreateNetSaleDto, @Req() req: any) {
+    return this.sales.createNetSale(dto, req.user?.userId, req.user?.role);
+  }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('invoices')
-  listInvoices(
-    @Query() q: QueryInvoicesDto,
-  ){
+  listInvoices(@Query() q: QueryInvoicesDto) {
     return this.sales.findAll(q);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('invoices/:id')
-  getInvoice(
-    @Param('id') id: string,
-  ){
+  getInvoice(@Param('id') id: string) {
     return this.sales.findOne(id);
   }
-
 
   // ابطال فاکتور — فروشنده اجازه ندارد، فقط مدیر.
   @Roles(Role.ADMIN, Role.MANAGER)
@@ -291,20 +375,96 @@ export class SalesController {
     @Param('id') id: string,
     @Body() dto: CancelInvoiceDto,
     @Req() req: any,
-  ){
+  ) {
     return this.sales.cancelInvoice(id, dto.reason, req.user?.userId);
   }
-
 
   // ردیف‌های قابل‌برگشتِ یک فاکتور — خوراکِ صفحه‌ی مرجوعی.
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('invoices/:id/returnable')
-  returnable(
-    @Param('id') id: string,
-  ){
+  returnable(@Param('id') id: string) {
     return this.returns.returnableLines(id);
   }
 
+  // ---------- عملیاتِ یکپارچه (adjust) ----------
+
+  /**
+   * ردیف‌های قابلِ ویرایش برای حالتِ یکپارچه — تلفیقِ returnable و correctable:
+   * سقفِ برگشت، قیمت مؤثرِ برگشت، تعداد و قیمتِ فعلیِ هر قلم.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('invoices/:id/adjustable')
+  adjustable(@Param('id') id: string) {
+    return this.adjustments.adjustableLines(id);
+  }
+
+  /**
+   * ثبتِ عملیاتِ یکپارچه — مرجوعی + قلمِ تازه + تصحیح تعداد/قیمت + تسویه‌ی
+   * اختلاف، همه در یک تراکنشِ اتمیک. سندهای حاصل همان SaleReturn و
+   * SaleCorrection‌اند که با operationKey مشترک به هم وصل شده‌اند.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('invoices/:id/adjust')
+  adjustInvoice(
+    @Param('id') id: string,
+    @Body() dto: CreateAdjustDto,
+    @Req() req: any,
+  ) {
+    return this.adjustments.adjust(id, dto, req.user?.userId, req.user?.role);
+  }
+
+  // ---------- برگشتِ پرداخت ----------
+
+  /*
+   * خنثی‌سازیِ پرداختِ ثبت‌شده: کارتخوان برگشت زد، بانک رد کرد. فاکتور سرِ
+   * جای می‌ماند، مانده‌اش به بدهی برمی‌گردد و دفترِ مشتری بدهکار می‌شود.
+   * مثل برگشتِ وجه، فقط مدیر/نماینده — فروشنده‌ی عادی پول را برنمی‌گرداند.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('invoices/:id/reverse-payment')
+  reversePayment(
+    @Param('id') id: string,
+    @Body() dto: ReversePaymentDto,
+    @Req() req: any,
+  ) {
+    return this.reversals.reverse(id, dto, req.user?.userId);
+  }
+
+  /** سندهای برگشتِ یک فاکتور — برای نمایش تاریخچه در صفحه‌ی فاکتور. */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('invoices/:id/payment-reversals')
+  listPaymentReversals(@Param('id') id: string) {
+    return this.reversals.listByInvoice(id);
+  }
+
+  /*
+   * وضعیتِ تسویه‌ی فاکتور — خوراکِ پنلِ «اصلاح نحوهٔ پرداخت».
+   *
+   * برای فروشنده هم باز است: خودش باید ببیند چرا دکمه‌ی اصلاح خاموش است
+   * (`blockedReason`) — پنهان‌کردنش فقط زنگِ «چرا کار نمی‌کند» می‌شود.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('invoices/:id/settlement')
+  invoiceSettlement(@Param('id') id: string, @Req() req: any) {
+    return this.recompose.settlement(id, req.user?.role);
+  }
+
+  /*
+   * بازنویسیِ تقسیمِ پرداخت‌های یک فاکتورِ ثبت‌شده.
+   *
+   * «کارت ۱۰۰م ← نقد ۳۰م + نسیه ۷۰م»: تقسیمِ قبلی خنثی و تقسیمِ تازه ثبت
+   * می‌شود، با یک ردیفِ دفتر و یک سندِ خودکار — همه در یک تراکنش. فروشنده هم
+   * می‌تواند، ولی فقط روی فاکتورهای همین روز (یا حسابِ باز)؛ گذشته دستِ مدیر است.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('invoices/:id/recompose-payments')
+  recomposePayments(
+    @Param('id') id: string,
+    @Body() dto: RecomposePaymentsDto,
+    @Req() req: any,
+  ) {
+    return this.recompose.recompose(id, dto, req.user?.userId, req.user?.role);
+  }
 
   // ---------- برگشت از فروش (مرجوعی) ----------
 
@@ -316,13 +476,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('returns')
-  createReturn(
-    @Body() dto: CreateReturnDto,
-    @Req() req: any,
-  ){
+  createReturn(@Body() dto: CreateReturnDto, @Req() req: any) {
     return this.returns.createReturn(dto, req.user?.userId, req.user?.role);
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('returns')
@@ -334,7 +490,7 @@ export class SalesController {
     @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ){
+  ) {
     return this.returns.findAll({
       warehouseId,
       customerId,
@@ -346,15 +502,11 @@ export class SalesController {
     });
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('returns/:id')
-  getReturn(
-    @Param('id') id: string,
-  ){
+  getReturn(@Param('id') id: string) {
     return this.returns.findOne(id);
   }
-
 
   // ---------- اصلاحیه‌ی فاکتور ----------
 
@@ -364,12 +516,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('invoices/:id/correctable')
-  correctable(
-    @Param('id') id: string,
-  ){
+  correctable(@Param('id') id: string) {
     return this.corrections.correctableLines(id);
   }
-
 
   /**
    * ثبت اصلاحیه — سندِ جدا با شماره و دلیلِ اجباری؛ فاکتور اصلی دست نمی‌خورد.
@@ -377,13 +526,13 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('corrections')
-  createCorrection(
-    @Body() dto: CreateCorrectionDto,
-    @Req() req: any,
-  ){
-    return this.corrections.createCorrection(dto, req.user?.userId, req.user?.role);
+  createCorrection(@Body() dto: CreateCorrectionDto, @Req() req: any) {
+    return this.corrections.createCorrection(
+      dto,
+      req.user?.userId,
+      req.user?.role,
+    );
   }
-
 
   /**
    * تغییرِ توضیحِ ردیف‌های یک فاکتور — بدون ساختنِ سند.
@@ -395,14 +544,16 @@ export class SalesController {
     @Param('id') id: string,
     @Body() dto: UpdateLineNotesDto,
     @Req() req: any,
-  ){
+  ) {
     return this.corrections.updateLineNotes(
       id,
-      dto.notes.map((n) => ({ saleLogId: n.saleLogId, lineNote: n.lineNote ?? null })),
+      dto.notes.map((n) => ({
+        saleLogId: n.saleLogId,
+        lineNote: n.lineNote ?? null,
+      })),
       req.user?.role,
     );
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('corrections')
@@ -414,7 +565,7 @@ export class SalesController {
     @Query('to') to?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ){
+  ) {
     return this.corrections.findAll({
       warehouseId,
       customerId,
@@ -426,15 +577,11 @@ export class SalesController {
     });
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('corrections/:id')
-  getCorrection(
-    @Param('id') id: string,
-  ){
+  getCorrection(@Param('id') id: string) {
     return this.corrections.findOne(id);
   }
-
 
   // ---------- مشتری ----------
 
@@ -447,7 +594,7 @@ export class SalesController {
     @Query('sortBy') sortBy?: string,
     @Query('categoryId') categoryId?: string,
     @Query('onlyDebtors') onlyDebtors?: string,
-  ){
+  ) {
     return this.customers.search(
       q,
       page ? Number(page) : 1,
@@ -458,15 +605,11 @@ export class SalesController {
     );
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('customers/:id')
-  getCustomer(
-    @Param('id') id: string,
-  ){
+  getCustomer(@Param('id') id: string) {
     return this.customers.findOne(id);
   }
-
 
   /**
    * آمار خرید دوره‌ای مشتری — این ماه، ماه قبل، کل و میانگین فاکتور.
@@ -474,42 +617,38 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('customers/:id/stats')
-  customerStats(
-    @Param('id') id: string,
-  ){
+  customerStats(@Param('id') id: string) {
     return this.customers.purchaseStats(id);
   }
 
+  /**
+   * چک‌های یک مشتری — تبِ «چک‌ها» در پرونده‌ی مشتری؛ چرخه‌ی کامل هر چک با
+   * وضعیتش (نزد ما / سپرده‌شده / وصول / برگشتی) و سندِ مبدا.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('customers/:id/cheques')
+  customerCheques(@Param('id') id: string) {
+    return this.cheques.listForCustomer(id);
+  }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   // فقط نام لازم است — ثبت مشتری بدون شماره باید ممکن باشد.
   @Post('customers')
-  createCustomer(
-    @Body() body: CreateCustomerDto,
-  ){
+  createCustomer(@Body() body: CreateCustomerDto) {
     return this.customers.create(body);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('customers/:id/phones')
-  addPhone(
-    @Param('id') id: string,
-    @Body() body: CustomerPhoneDto,
-  ){
+  addPhone(@Param('id') id: string, @Body() body: CustomerPhoneDto) {
     return this.customers.addPhone(id, body);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Delete('customers/:id/phones/:phoneId')
-  removePhone(
-    @Param('id') id: string,
-    @Param('phoneId') phoneId: string,
-  ){
+  removePhone(@Param('id') id: string, @Param('phoneId') phoneId: string) {
     return this.customers.removePhone(id, phoneId);
   }
-
 
   /**
    * تعیین شماره‌ی اصلی مشتری — بقیه‌ی شماره‌های همین مشتری غیراصلی می‌شوند.
@@ -517,80 +656,60 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('customers/:id/phones/:phoneId/primary')
-  setPrimaryPhone(
-    @Param('id') id: string,
-    @Param('phoneId') phoneId: string,
-  ){
+  setPrimaryPhone(@Param('id') id: string, @Param('phoneId') phoneId: string) {
     return this.customers.setPrimaryPhone(id, phoneId);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Patch('customers/:id')
-  updateCustomer(
-    @Param('id') id: string,
-    @Body() body: UpdateCustomerDto,
-  ){
+  updateCustomer(@Param('id') id: string, @Body() body: UpdateCustomerDto) {
     return this.customers.update(id, body);
   }
-
 
   // غیرفعال‌سازی مشتری — فقط مدیر.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Delete('customers/:id')
-  deactivateCustomer(
-    @Param('id') id: string,
-  ){
+  deactivateCustomer(@Param('id') id: string) {
     return this.customers.deactivate(id);
   }
-
 
   // ---------- دسته‌های مشتری ----------
 
   /** همه‌ی دسته‌ها با شمارش مشتری — صفحه‌ی مدیریت. */
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('customer-categories')
-  customerCategories(){
+  customerCategories() {
     return this.categories.list();
   }
-
 
   /** فقط دسته‌های فعال — برای dropdown فرم‌ها و فیلتر. فروشنده هم می‌بیند. */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('customer-categories/active')
-  activeCustomerCategories(){
+  activeCustomerCategories() {
     return this.categories.active();
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('customer-categories')
-  createCustomerCategory(
-    @Body() dto: CreateCustomerCategoryDto,
-  ){
+  createCustomerCategory(@Body() dto: CreateCustomerCategoryDto) {
     return this.categories.create(dto);
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Patch('customer-categories/:id')
   updateCustomerCategory(
     @Param('id') id: string,
     @Body() dto: UpdateCustomerCategoryDto,
-  ){
+  ) {
     return this.categories.update(id, dto);
   }
-
 
   /** غیرفعال‌سازی — مشتری‌ها دست نمی‌خورند، فقط از انتخاب‌های جدید می‌افتد. */
   @Roles(Role.ADMIN, Role.MANAGER)
   @Delete('customer-categories/:id')
-  deactivateCustomerCategory(
-    @Param('id') id: string,
-  ){
+  deactivateCustomerCategory(@Param('id') id: string) {
     return this.categories.deactivate(id);
   }
-
 
   // ---------- چرخه‌ی چک ----------
 
@@ -601,22 +720,15 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('cheques/:id/deposit')
-  depositCheque(
-    @Param('id') id: string,
-  ){
+  depositCheque(@Param('id') id: string) {
     return this.cheques.deposit(id);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('cheques/:id/cash')
-  cashCheque(
-    @Param('id') id: string,
-    @Req() req: any,
-  ){
+  cashCheque(@Param('id') id: string, @Req() req: any) {
     return this.cheques.cash(id, req.user?.userId);
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('cheques/:id/bounce')
@@ -624,10 +736,9 @@ export class SalesController {
     @Param('id') id: string,
     @Body() body: { reason?: string },
     @Req() req: any,
-  ){
+  ) {
     return this.cheques.bounce(id, body?.reason, req.user?.userId);
   }
-
 
   // ---------- حساب باز (فاکتور کلیِ جاری) ----------
 
@@ -637,10 +748,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('open-accounts')
-  listOpenAccounts(){
+  listOpenAccounts() {
     return this.openAccounts.list();
   }
-
 
   /**
    * پرونده‌ی یک حساب باز — همه‌ی فاکتورهای بازِ مشتری با ردیف‌هایشان.
@@ -648,12 +758,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('open-accounts/:id')
-  getOpenAccount(
-    @Param('id') id: string,
-  ){
+  getOpenAccount(@Param('id') id: string) {
     return this.openAccounts.get(id);
   }
-
 
   /**
    * برگه‌ی تجمیعیِ کلِ حساب — خوراکِ چاپِ «فاکتور کلی».
@@ -663,12 +770,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('open-accounts/:id/sheet')
-  openAccountSheet(
-    @Param('id') id: string,
-  ){
+  openAccountSheet(@Param('id') id: string) {
     return this.openAccounts.sheet(id);
   }
-
 
   /**
    * بازکردن حساب برای مشتری (یا ادامه‌ی حسابِ موجود).
@@ -676,12 +780,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('customers/:id/open-account')
-  ensureOpenAccount(
-    @Param('id') id: string,
-  ){
+  ensureOpenAccount(@Param('id') id: string) {
     return this.openAccounts.ensureOpen(id);
   }
-
 
   /**
    * تسویه‌ی حساب باز — همه‌ی فاکتورهای بازِ حساب CONFIRMED می‌شوند و حساب
@@ -694,13 +795,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Post('open-accounts/:id/settle')
-  settleOpenAccount(
-    @Param('id') id: string,
-    @Req() req: any,
-  ){
+  settleOpenAccount(@Param('id') id: string, @Req() req: any) {
     return this.openAccounts.settle(id, req.user?.userId);
   }
-
 
   // ---------- حساب باز و مطالبات ----------
 
@@ -717,7 +814,7 @@ export class SalesController {
     @Query('onlyOverdue') onlyOverdue?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ){
+  ) {
     return this.ledger.debtors({
       q,
       onlyOverdue: onlyOverdue === 'true',
@@ -726,29 +823,34 @@ export class SalesController {
     });
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('receivables/summary')
-  receivablesSummary(){
+  receivablesSummary() {
     return this.ledger.receivablesSummary();
   }
 
+  /**
+   * همه‌ی مشتریانِ با مانده‌ی غیرصفر — بدهکار و طلبکار با هم.
+   *
+   * فهرستِ «حساب باز» صندوق از این می‌خورد: مشتریِ نسیه‌ای که فاکتورش از مسیر
+   * معمول ثبت شده و به هیچ «حسابِ کلی» وصل نیست هم اینجا دیده می‌شود، و
+   * طلبکارها (مانده‌ی منفی از مرجوعی/پرداخت) هم. مانده از خودِ دفتر می‌آید.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('customer-balances')
+  customerBalances(@Query('q') q?: string) {
+    return this.ledger.accountBalances({ q });
+  }
 
   /** اعلان‌ها — بدهی معوق و چکِ نزدیکِ سررسید. */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('alerts')
-  alerts(){
+  alerts() {
     return this.ledger.alerts();
   }
 
-
   // ---------- حساب مشتری ----------
 
-  /**
-   * صورتحساب مشتری — گردش با مانده‌ی متحرک + خلاصه‌ی بازه (اول/جمع‌ها/پایان دوره).
-   * format=excel فایل xlsx با سرستون‌های فارسی می‌دهد.
-   */
-  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   /**
    * صورت‌حسابِ کاملِ مشتری — همه‌ی کالاهایی که برده و همه‌ی مبالغی که پرداخته،
    * با جزئیاتِ هر قلم و هر پرداخت (شاملِ چک).
@@ -761,17 +863,28 @@ export class SalesController {
     @Param('id') id: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-  ){
+  ) {
     return this.statements.fullStatement(id, { startDate, endDate });
   }
 
-
+  /**
+   * صورتحساب مشتری — گردش با مانده‌ی متحرک + خلاصه‌ی بازه (اول/جمع‌ها/پایان دوره).
+   * format=excel فایل xlsx با سرستون‌های فارسی می‌دهد.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('customers/:id/statement')
   async statement(
     @Param('id') id: string,
-    @Query() q: { startDate?: string; endDate?: string; page?: number; limit?: number; format?: string },
+    @Query()
+    q: {
+      startDate?: string;
+      endDate?: string;
+      page?: number;
+      limit?: number;
+      format?: string;
+    },
     @Res({ passthrough: true }) res: Response,
-  ){
+  ) {
     const r = await this.ledger.statement(id, {
       startDate: q.startDate,
       endDate: q.endDate,
@@ -782,7 +895,6 @@ export class SalesController {
     return r;
   }
 
-
   /**
    * بررسی اعتبار پیش از ثبت فروش حساب‌باز.
    *
@@ -791,13 +903,9 @@ export class SalesController {
    */
   @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
   @Get('customers/:id/credit-check')
-  creditCheck(
-    @Param('id') id: string,
-    @Query('amount') amount?: string,
-  ){
+  creditCheck(@Param('id') id: string, @Query('amount') amount?: string) {
     return this.ledger.creditCheck(id, amount ? Number(amount) : 0);
   }
-
 
   /**
    * مانده‌ی اول دوره — بدهیِ مشتری از پیش از نرم‌افزار.
@@ -809,7 +917,7 @@ export class SalesController {
     @Param('id') id: string,
     @Body() dto: OpeningBalanceDto,
     @Req() req: any,
-  ){
+  ) {
     return this.ledger.setOpeningBalance(
       id,
       dto.amount,
@@ -817,7 +925,6 @@ export class SalesController {
       dto.note,
     );
   }
-
 
   /**
    * اصلاح دستی حساب — با دلیل اجباری.
@@ -829,7 +936,7 @@ export class SalesController {
     @Param('id') id: string,
     @Body() dto: AdjustBalanceDto,
     @Req() req: any,
-  ){
+  ) {
     return this.ledger.adjust(id, dto.amount, dto.reason, req.user?.userId);
   }
 }

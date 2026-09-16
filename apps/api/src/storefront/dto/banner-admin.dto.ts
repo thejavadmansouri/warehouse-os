@@ -14,14 +14,21 @@ import {
  * `@Type`/`@Transform` به عدد/بولین تبدیل می‌شوند.
  */
 export class BannerMetaDto {
-  @IsOptional() @IsString() @MaxLength(160)
+  @IsOptional()
+  @IsString()
+  @MaxLength(160)
   title?: string;
 
   // می‌تواند مسیرِ داخلِ سایت باشد نه فقط URL کامل، پس @IsUrl نیست.
-  @IsOptional() @IsString() @MaxLength(500)
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
   linkUrl?: string;
 
-  @IsOptional() @Type(() => Number) @IsInt() @Min(0)
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
   sortOrder?: number;
 
   @IsOptional()
@@ -29,9 +36,11 @@ export class BannerMetaDto {
   @IsBoolean()
   isActive?: boolean;
 
-  @IsOptional() @IsDateString()
+  @IsOptional()
+  @IsDateString()
   startsAt?: string;
 
-  @IsOptional() @IsDateString()
+  @IsOptional()
+  @IsDateString()
   endsAt?: string;
 }

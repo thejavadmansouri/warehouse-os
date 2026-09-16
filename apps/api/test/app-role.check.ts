@@ -24,7 +24,10 @@ process.env.SYNC_SECRET = 'k'.repeat(48);
 let failures = 0;
 const check = (name: string, ok: boolean, detail: string) => {
   if (ok) console.log(`  ✓ ${name}`);
-  else { failures++; console.log(`  ✗ ${name} — ${detail}`); }
+  else {
+    failures++;
+    console.log(`  ✗ ${name} — ${detail}`);
+  }
 };
 
 /** مسیرهایی که هرگز نباید روی ماشینِ اینترنتی وجود داشته باشند. */
@@ -47,7 +50,11 @@ const WAREHOUSE_ROUTES = [
 ];
 
 /** مسیرهایی که روی سایت باید باشند. */
-const SITE_ROUTES = ['/shop/settings', '/shop/products', '/site-admin/overview'];
+const SITE_ROUTES = [
+  '/shop/settings',
+  '/shop/products',
+  '/site-admin/overview',
+];
 
 async function boot() {
   for (const k of Object.keys(require.cache)) {
@@ -57,7 +64,11 @@ async function boot() {
   const app = await NestFactory.create(AppModule, { logger: ['error'] });
   app.useWebSocketAdapter(new WsAdapter(app));
   app.useGlobalPipes(
-    new ValidationPipe({ whitelist: true, transform: true, forbidNonWhitelisted: true }),
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
   );
   await app.init();
   return app;
@@ -89,11 +100,19 @@ async function main() {
 
     console.log('\nپنلِ سایت پشتِ لاگین است:');
     const admin = await request(http).get('/site-admin/overview');
-    check('GET /site-admin/overview بدون توکن → 401', admin.status === 401, `status=${admin.status}`);
+    check(
+      'GET /site-admin/overview بدون توکن → 401',
+      admin.status === 401,
+      `status=${admin.status}`,
+    );
 
     console.log('\nلاگین برای مدیرِ سایت لازم است، پس باید مونت باشد:');
     const login = await request(http).post('/auth/login').send({});
-    check('POST /auth/login مونت شده', login.status !== 404, `status=${login.status}`);
+    check(
+      'POST /auth/login مونت شده',
+      login.status !== 404,
+      `status=${login.status}`,
+    );
 
     await app.close();
   }
@@ -106,22 +125,40 @@ async function main() {
     const http = app.getHttpServer();
 
     console.log('\nروی انبار، همه‌چیز سرِ جایش است:');
-    for (const path of ['/users', '/products', '/sales/invoices', '/online-orders']) {
+    for (const path of [
+      '/users',
+      '/products',
+      '/sales/invoices',
+      '/online-orders',
+    ]) {
       const res = await request(http).get(path);
-      check(`GET ${path} مونت شده (۴۰۱ نه ۴۰۴)`, res.status === 401, `status=${res.status}`);
+      check(
+        `GET ${path} مونت شده (۴۰۱ نه ۴۰۴)`,
+        res.status === 401,
+        `status=${res.status}`,
+      );
     }
 
     console.log('\nو پنلِ سایت آنجا وجود ندارد:');
     const admin = await request(http).get('/site-admin/overview');
-    check('GET /site-admin/overview → 404', admin.status === 404, `status=${admin.status}`);
+    check(
+      'GET /site-admin/overview → 404',
+      admin.status === 404,
+      `status=${admin.status}`,
+    );
 
     await app.close();
   }
 
   console.log(
-    failures === 0 ? '\nهمه‌ی ادعاها برقرارند.\n' : `\n${failures} ادعا شکست خورد.\n`,
+    failures === 0
+      ? '\nهمه‌ی ادعاها برقرارند.\n'
+      : `\n${failures} ادعا شکست خورد.\n`,
   );
   process.exit(failures === 0 ? 0 : 1);
 }
 
-main().catch((e) => { console.error(e); process.exit(1); });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

@@ -27,7 +27,9 @@ export interface WorkTaskPushPayload {
  */
 @Injectable()
 @WebSocketGateway({ path: '/work-tasks/ws' })
-export class WorkTasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class WorkTasksGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(WorkTasksGateway.name);
 
   @WebSocketServer()

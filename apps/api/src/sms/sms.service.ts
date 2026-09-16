@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { SmsStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -62,16 +67,24 @@ export class SmsService {
     id: string,
     dto: { title?: string; body?: string; isActive?: boolean },
   ) {
-    const template = await this.prisma.smsTemplate.findUnique({ where: { id } });
+    const template = await this.prisma.smsTemplate.findUnique({
+      where: { id },
+    });
     if (!template) {
-      throw new NotFoundException({ error: 'TEMPLATE_NOT_FOUND', message: 'قالب پیدا نشد' });
+      throw new NotFoundException({
+        error: 'TEMPLATE_NOT_FOUND',
+        message: 'قالب پیدا نشد',
+      });
     }
 
     let body = dto.body;
     if (body !== undefined) {
       body = body.trim();
       if (body.length < 5) {
-        throw new BadRequestException({ error: 'EMPTY_BODY', message: 'متن قالب خالی است' });
+        throw new BadRequestException({
+          error: 'EMPTY_BODY',
+          message: 'متن قالب خالی است',
+        });
       }
     }
 
@@ -117,7 +130,7 @@ export class SmsService {
       orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
       select: { phone: true },
     });
-    return phones.map(p => p.phone).find(canReceiveSms) ?? null;
+    return phones.map((p) => p.phone).find(canReceiveSms) ?? null;
   }
 
   /**
@@ -126,7 +139,11 @@ export class SmsService {
    * پیش‌نمایش اختیاری نیست: پیامک برگشت‌ناپذیر است و پول دارد. مدیر باید همان
    * چیزی را ببیند که مشتری می‌بیند، نه قالبِ خام را.
    */
-  async preview(customerId: string, templateKey: string, extra: Record<string, string> = {}) {
+  async preview(
+    customerId: string,
+    templateKey: string,
+    extra: Record<string, string> = {},
+  ) {
     const [customer, template] = await Promise.all([
       this.prisma.customer.findUnique({
         where: { id: customerId },
@@ -136,10 +153,16 @@ export class SmsService {
     ]);
 
     if (!customer) {
-      throw new NotFoundException({ error: 'CUSTOMER_NOT_FOUND', message: 'مشتری پیدا نشد' });
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'مشتری پیدا نشد',
+      });
     }
     if (!template) {
-      throw new NotFoundException({ error: 'TEMPLATE_NOT_FOUND', message: 'قالب پیدا نشد' });
+      throw new NotFoundException({
+        error: 'TEMPLATE_NOT_FOUND',
+        message: 'قالب پیدا نشد',
+      });
     }
 
     const phone = await this.smsPhoneFor(customerId);
@@ -161,7 +184,7 @@ export class SmsService {
       isActive: template.isActive,
       optedOut: customer.smsOptOut,
       /** پرشدنی نبودنِ متغیرها در متن دیده می‌شود؛ این فقط خلاصه‌اش می‌کند. */
-      missingVars: [...body.matchAll(/\{(\w+)\}/g)].map(m => m[1]),
+      missingVars: [...body.matchAll(/\{(\w+)\}/g)].map((m) => m[1]),
     };
   }
 
@@ -183,7 +206,10 @@ export class SmsService {
       select: { id: true, smsOptOut: true },
     });
     if (!customer) {
-      throw new NotFoundException({ error: 'CUSTOMER_NOT_FOUND', message: 'مشتری پیدا نشد' });
+      throw new NotFoundException({
+        error: 'CUSTOMER_NOT_FOUND',
+        message: 'مشتری پیدا نشد',
+      });
     }
 
     if (customer.smsOptOut) {
@@ -214,7 +240,10 @@ export class SmsService {
 
     const body = input.body.trim();
     if (body.length < 5) {
-      throw new BadRequestException({ error: 'EMPTY_BODY', message: 'متن پیامک خالی است' });
+      throw new BadRequestException({
+        error: 'EMPTY_BODY',
+        message: 'متن پیامک خالی است',
+      });
     }
 
     await this.assertUnderDailyCap();
@@ -317,7 +346,10 @@ export class SmsService {
   async retry(id: string) {
     const msg = await this.prisma.smsMessage.findUnique({ where: { id } });
     if (!msg) {
-      throw new NotFoundException({ error: 'SMS_NOT_FOUND', message: 'پیامک پیدا نشد' });
+      throw new NotFoundException({
+        error: 'SMS_NOT_FOUND',
+        message: 'پیامک پیدا نشد',
+      });
     }
     if (msg.status !== SmsStatus.FAILED) {
       throw new BadRequestException({
@@ -351,7 +383,6 @@ export class SmsService {
     const toman = convertMoney(Math.abs(rial), 'RIAL', 'TOMAN');
     return toman.toLocaleString('en-US');
   }
-
 
   private async shopName(): Promise<string> {
     const shop = await this.prisma.shopSettings

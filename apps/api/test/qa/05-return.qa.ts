@@ -5,19 +5,40 @@
  * نه از قیمتِ امروزِ کالا.
  */
 import {
-  prisma, sales, returns, corrections, baseFixture, makeProduct, makeCustomer, stockAt, uniq, close,
+  prisma,
+  sales,
+  returns,
+  corrections,
+  baseFixture,
+  makeProduct,
+  makeCustomer,
+  stockAt,
+  uniq,
+  close,
 } from './harness';
 import { note, errBody } from './evlog';
 
 let f: any;
-beforeAll(async () => { f = await baseFixture(); });
+beforeAll(async () => {
+  f = await baseFixture();
+});
 afterAll(close);
 
-const sell = (over: any = {}) => sales.createInvoice({
-  idempotencyKey: uniq('idem'), warehouseId: f.warehouseId, ...over,
-} as any, f.userId);
-const L = (p: any, qty: number, price: number) =>
-  ({ productId: p.id, locationId: f.locationId, quantity: qty, unitPrice: price });
+const sell = (over: any = {}) =>
+  sales.createInvoice(
+    {
+      idempotencyKey: uniq('idem'),
+      warehouseId: f.warehouseId,
+      ...over,
+    },
+    f.userId,
+  );
+const L = (p: any, qty: number, price: number) => ({
+  productId: p.id,
+  locationId: f.locationId,
+  quantity: qty,
+  unitPrice: price,
+});
 
 async function lastSaleLine(invoiceId: string, productId?: string) {
   return await prisma.inventoryLog.findFirstOrThrow({
@@ -25,18 +46,28 @@ async function lastSaleLine(invoiceId: string, productId?: string) {
     orderBy: { createdAt: 'asc' },
   });
 }
-const ret = (over: any) => returns.createReturn({
-  idempotencyKey: uniq('ret'), refundMethod: 'CASH', reason: 'تست', ...over,
-} as any, f.userId, 'ADMIN' as any);
+const ret = (over: any) =>
+  returns.createReturn(
+    {
+      idempotencyKey: uniq('ret'),
+      refundMethod: 'CASH',
+      reason: 'تست',
+      ...over,
+    },
+    f.userId,
+    'ADMIN',
+  );
 
 describe('SECTION 5 — Returns', () => {
-
   it('T082 full return restocks the exact quantity', async () => {
     const p = await makeProduct({ stock: 10 });
     const inv: any = await sell({ lines: [L(p, 4, 1000)] });
     expect(await stockAt(p.id, f.locationId)).toBe(6);
     const line = await lastSaleLine(inv.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 4 }] });
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: line.id, quantity: 4 }],
+    });
     expect(await stockAt(p.id, f.locationId)).toBe(10);
   });
 
@@ -44,7 +75,10 @@ describe('SECTION 5 — Returns', () => {
     const p = await makeProduct({ stock: 10 });
     const inv: any = await sell({ lines: [L(p, 8, 1000)] });
     const line = await lastSaleLine(inv.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 3 }] });
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: line.id, quantity: 3 }],
+    });
     expect(await stockAt(p.id, f.locationId)).toBe(5);
   });
 
@@ -52,8 +86,9 @@ describe('SECTION 5 — Returns', () => {
     const p = await makeProduct({ stock: 10 });
     const inv: any = await sell({ lines: [L(p, 1, 1000)] });
     const line = await lastSaleLine(inv.id);
-    await expect(ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 2 }] }))
-      .rejects.toMatchObject({ response: { error: 'EXCESS_RETURN' } });
+    await expect(
+      ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 2 }] }),
+    ).rejects.toMatchObject({ response: { error: 'EXCESS_RETURN' } });
     expect(await stockAt(p.id, f.locationId)).toBe(9);
   });
 
@@ -62,7 +97,10 @@ describe('SECTION 5 — Returns', () => {
     const b = await makeProduct({ stock: 10 });
     const inv: any = await sell({ lines: [L(a, 3, 1000), L(b, 5, 1000)] });
     const lineA = await lastSaleLine(inv.id, a.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: lineA.id, quantity: 2 }] });
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: lineA.id, quantity: 2 }],
+    });
     expect(await stockAt(a.id, f.locationId)).toBe(9); // 10-3+2
     expect(await stockAt(b.id, f.locationId)).toBe(5); // untouched
   });
@@ -71,11 +109,15 @@ describe('SECTION 5 — Returns', () => {
     const p = await makeProduct({ stock: 10 });
     const inv: any = await sell({ lines: [L(p, 5, 1000)] });
     const line = await lastSaleLine(inv.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 3 }] });
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: line.id, quantity: 3 }],
+    });
     expect(await stockAt(p.id, f.locationId)).toBe(8);
     // مرجوعیِ دومِ غیرقانونی (مازاد) رد می‌شود و موجودی دست نمی‌خورد.
-    await expect(ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 3 }] }))
-      .rejects.toMatchObject({ response: { error: 'EXCESS_RETURN' } });
+    await expect(
+      ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 3 }] }),
+    ).rejects.toMatchObject({ response: { error: 'EXCESS_RETURN' } });
     expect(await stockAt(p.id, f.locationId)).toBe(8);
   });
 
@@ -83,15 +125,22 @@ describe('SECTION 5 — Returns', () => {
     const p = await makeProduct({ stock: 10 });
     const inv: any = await sell({ lines: [L(p, 4, 1000)] });
     const line = await lastSaleLine(inv.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 2, restock: false }] });
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: line.id, quantity: 2, restock: false }],
+    });
     expect(await stockAt(p.id, f.locationId)).toBe(6); // بدون برگشتِ انبار
     const r = await prisma.saleReturn.count({ where: { invoiceId: inv.id } });
     expect(r).toBe(1);
   });
 
   it('T088 return on a non-existent invoice is rejected cleanly, nothing written', async () => {
-    await expect(ret({ invoiceId: '00000000-0000-0000-0000-000000000000', lines: [{ saleLogId: 'x', quantity: 1 }] }))
-      .rejects.toMatchObject({ response: { error: 'INVOICE_NOT_FOUND' } });
+    await expect(
+      ret({
+        invoiceId: '00000000-0000-0000-0000-000000000000',
+        lines: [{ saleLogId: 'x', quantity: 1 }],
+      }),
+    ).rejects.toMatchObject({ response: { error: 'INVOICE_NOT_FOUND' } });
   });
 
   it('T089 refund amount respects the proportional discount share', async () => {
@@ -100,8 +149,17 @@ describe('SECTION 5 — Returns', () => {
     const inv: any = await sell({ lines: [L(p, 5, 1000)], discount: 1000 });
     expect(inv.total).toBe(4000);
     const line = await lastSaleLine(inv.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 2 }] });
-    const r: any = await returns.findOne((await prisma.saleReturn.findFirstOrThrow({ where: { invoiceId: inv.id } })).id);
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: line.id, quantity: 2 }],
+    });
+    const r: any = await returns.findOne(
+      (
+        await prisma.saleReturn.findFirstOrThrow({
+          where: { invoiceId: inv.id },
+        })
+      ).id,
+    );
     // 2 واحد × قیمتِ واحدِ مؤثر (800) = 1600
     expect(r.refundAmount).toBe(1600);
     expect(await stockAt(p.id, f.locationId)).toBe(7);
@@ -118,11 +176,20 @@ describe('SECTION 5 — Returns', () => {
     // مجموعِ خواسته‌شده = 3 = تعدادِ فروخته‌شده؛ هر دو باید سریالی موفق شوند
     // (بعد از اولی، باقی‌مانده کافی است) — هیچ Lost Update و هیچ Returnِ اضافه‌ای
     // نباید رخ دهد، و موجودیِ نهایی دقیقاً 10 شود.
-    const ok = res.filter(r => r.status === 'fulfilled').length;
+    const ok = res.filter((r) => r.status === 'fulfilled').length;
     expect(ok).toBe(2);
     const stock = await stockAt(p.id, f.locationId);
     expect(stock).toBe(10); // 7 + 3 برگشت
-    const totalReturned = await prisma.saleReturnLine.aggregate({ where: { returnId: { in: (await prisma.saleReturn.findMany({ where: { invoiceId: inv.id } })).map(r => r.id) } }, _sum: { quantity: true } });
+    const totalReturned = await prisma.saleReturnLine.aggregate({
+      where: {
+        returnId: {
+          in: (
+            await prisma.saleReturn.findMany({ where: { invoiceId: inv.id } })
+          ).map((r) => r.id),
+        },
+      },
+      _sum: { quantity: true },
+    });
     expect(totalReturned._sum.quantity).toBe(3); // دقیقاً به اندازه‌ی خرید، نه بیشتر
   });
 
@@ -130,10 +197,21 @@ describe('SECTION 5 — Returns', () => {
     const p = await makeProduct({ stock: 10, salePrice: 1000 });
     const inv: any = await sell({ lines: [L(p, 2, 1000)] });
     // قیمت کالا عوض شد ولی فاکتورِ قبلی دست نمی‌خورد.
-    await prisma.productPrice.create({ data: { productId: p.id, salePrice: 999_999 } });
+    await prisma.productPrice.create({
+      data: { productId: p.id, salePrice: 999_999 },
+    });
     const line = await lastSaleLine(inv.id);
-    await ret({ invoiceId: inv.id, lines: [{ saleLogId: line.id, quantity: 1 }] });
-    const r: any = await returns.findOne((await prisma.saleReturn.findFirstOrThrow({ where: { invoiceId: inv.id } })).id);
+    await ret({
+      invoiceId: inv.id,
+      lines: [{ saleLogId: line.id, quantity: 1 }],
+    });
+    const r: any = await returns.findOne(
+      (
+        await prisma.saleReturn.findFirstOrThrow({
+          where: { invoiceId: inv.id },
+        })
+      ).id,
+    );
     expect(r.refundAmount).toBe(1000); // قیمتِ فاکتور، نه قیمتِ امروز
   });
 });

@@ -7,20 +7,24 @@ import {
   Post,
   Query,
   Req,
+  UseGuards,
 } from '@nestjs/common';
-import { OnlineOrderStatus, Role } from '@prisma/client';
+import { OnlineOrderStatus } from '@prisma/client';
 import { IsEnum, IsOptional, IsString, MaxLength } from 'class-validator';
 
-import { Roles } from '../auth/roles.decorator';
+import { SiteAccessGuard } from '../auth/site-access.guard';
 import { OnlineOrdersService } from './online-orders.service';
 
 class ListQueryDto {
-  @IsOptional() @IsEnum(OnlineOrderStatus)
+  @IsOptional()
+  @IsEnum(OnlineOrderStatus)
   status?: OnlineOrderStatus;
 }
 
 class CancelDto {
-  @IsOptional() @IsString() @MaxLength(300)
+  @IsOptional()
+  @IsString()
+  @MaxLength(300)
   reason?: string;
 }
 
@@ -28,10 +32,11 @@ class CancelDto {
  * صفِ سفارش‌های سایت در پنل.
  *
  * برخلاف `StorefrontController` این **عمومی نیست**: `JwtAuthGuard` سراسری
- * سرِ جایش است و `@Roles` هم دارد. عمداً یک کنترلر جداست تا هیچ‌وقت کسی
- * `@Public()` را روی صفِ کاری فروشنده نگذارد.
+ * سرِ جایش است و `SiteAccessGuard` هم دارد — فقط کاربرانی که پرچمِ
+ * `canManageSite` دارند (صاحبانِ فروشگاه اینترنتی) صف را می‌بینند؛ فروشنده‌ی
+ * صندوقِ مغازه که بدون پرچم است، به آن هیچ دسترسی‌ای ندارد.
  */
-@Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+@UseGuards(SiteAccessGuard)
 @Controller('online-orders')
 export class OnlineOrdersController {
   constructor(private readonly orders: OnlineOrdersService) {}

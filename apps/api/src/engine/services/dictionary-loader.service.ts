@@ -27,18 +27,12 @@ function vehicleFamilyAliases(name: string): string[] {
 
 @Injectable()
 export class DictionaryLoaderService {
-
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async load(): Promise<DomainDictionaryConfig> {
+    const products = await this.prisma.partCatalog.findMany();
 
-    const products =
-      await this.prisma.partCatalog.findMany();
-
-    const vehicles =
-      await this.prisma.vehicleModel.findMany();
+    const vehicles = await this.prisma.vehicleModel.findMany();
 
     // فقط برندهایی که واقعاً محصولی دارند.
     //
@@ -56,134 +50,104 @@ export class DictionaryLoaderService {
     });
 
     return {
-
-      products: products.map(p => ({
+      products: products.map((p) => ({
         id: p.id,
         name: p.name,
-        category: "قطعه",
-        aliases: [
-          p.name,
-          ...(p.aliases ?? [])
-        ]
+        category: 'قطعه',
+        aliases: [p.name, ...(p.aliases ?? [])],
       })),
 
-
-      vehicles: vehicles.map(v => ({
+      vehicles: vehicles.map((v) => ({
         family: v.name,
         variant: v.name,
-        engine: v.systemType ?? "",
-        gearbox: "",
+        engine: v.systemType ?? '',
+        gearbox: '',
         aliases: [
           ...new Set([
             ...vehicleFamilyAliases(v.name),
             ...(v.aliases ?? []).map((a) => normalizePersian(a)),
           ]),
-        ]
+        ],
       })),
 
-
       brands: Object.fromEntries(
+        brands.flatMap((b) => {
+          const names = [b.name, ...(b.aliases ?? [])];
 
-        brands.flatMap(b => {
-
-          const names = [
-            b.name,
-            ...(b.aliases ?? [])
-          ];
-
-          return names.map(n => [
-            n,
-            b.name
-          ]);
-
-        })
-
+          return names.map((n) => [n, b.name]);
+        }),
       ),
 
-
       engines: {
-        "tu5": "TU5",
-        "تیوفایو": "TU5",
-        "xu7": "XU7",
-        "ef7": "EF7"
+        tu5: 'TU5',
+        تیوفایو: 'TU5',
+        xu7: 'XU7',
+        ef7: 'EF7',
       },
-
 
       gearboxes: {
-        "دستی": "MANUAL",
-        "اتومات": "AUTOMATIC"
+        دستی: 'MANUAL',
+        اتومات: 'AUTOMATIC',
       },
-
 
       units: {
-        "عدد": "عدد",
-        "تا": "عدد",
-        "جفت": "جفت",
-        "دست": "دست",
-        "بسته": "بسته",
-        "کارتن": "کارتن"
+        عدد: 'عدد',
+        تا: 'عدد',
+        جفت: 'جفت',
+        دست: 'دست',
+        بسته: 'بسته',
+        کارتن: 'کارتن',
       },
-
 
       colors: {
-        "سفید": "سفید",
-        "مشکی": "مشکی",
-        "قرمز": "قرمز",
-        "آبی": "آبی",
-        "خاکستری": "خاکستری",
-        "نقره‌ای": "نقره‌ای"
+        سفید: 'سفید',
+        مشکی: 'مشکی',
+        قرمز: 'قرمز',
+        آبی: 'آبی',
+        خاکستری: 'خاکستری',
+        نقره‌ای: 'نقره‌ای',
       },
-
 
       sides: {
-        "چپ": "LEFT",
-        "راست": "RIGHT"
+        چپ: 'LEFT',
+        راست: 'RIGHT',
       },
-
 
       positions: {
-        "جلو": "FRONT",
-        "عقب": "REAR",
-        "داخل": "INNER",
-        "بیرون": "OUTER"
+        جلو: 'FRONT',
+        عقب: 'REAR',
+        داخل: 'INNER',
+        بیرون: 'OUTER',
       },
-
 
       conditions: {
-        "نو": "NEW",
-        "کارکرده": "USED",
-        "خراب": "DAMAGED",
-        "سالم": "GOOD"
+        نو: 'NEW',
+        کارکرده: 'USED',
+        خراب: 'DAMAGED',
+        سالم: 'GOOD',
       },
-
 
       actions: {
-        "ثبت": "CREATE",
-        "اضافه": "IN",
-        "خروج": "OUT",
-        "انتقال": "TRANSFER"
+        ثبت: 'CREATE',
+        اضافه: 'IN',
+        خروج: 'OUT',
+        انتقال: 'TRANSFER',
       },
-
 
       locations: {
-        "قفسه": "SHELF",
-        "انبار": "WAREHOUSE"
+        قفسه: 'SHELF',
+        انبار: 'WAREHOUSE',
       },
-
 
       packaging: {
-        "بسته": "PACK",
-        "کارتن": "BOX"
+        بسته: 'PACK',
+        کارتن: 'BOX',
       },
 
-
       speechErrors: {
-        "تکستر": "تکستار",
-        "ان جی کی": "NGK"
-      }
-
+        تکستر: 'تکستار',
+        'ان جی کی': 'NGK',
+      },
     };
-
   }
-
 }

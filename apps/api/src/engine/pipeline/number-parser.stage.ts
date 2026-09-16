@@ -1,31 +1,15 @@
 import { parseNumberWordSequence } from '../utils/number.util';
 
-
 export interface ParsedNumber {
+  value: number;
 
-  value:number;
+  index: number;
 
-  index:number;
-
-  consumed:number;
-
+  consumed: number;
 }
 
-
-
 // شماره‌هایی که معمولاً مدل خودرو هستند
-const MODEL_NUMBERS = new Set([
-  405,
-  206,
-  207,
-  504,
-  508,
-  301,
-  2008,
-  3008
-]);
-
-
+const MODEL_NUMBERS = new Set([405, 206, 207, 504, 508, 301, 2008, 3008]);
 
 const COUNT_UNITS = new Set([
   'عدد',
@@ -38,158 +22,52 @@ const COUNT_UNITS = new Set([
   'دستگاه',
   'متر',
   'کیلو',
-  'کیلوگرم'
+  'کیلوگرم',
 ]);
 
+function normalizeDigits(input: string): string {
+  const persianDigits = '۰۱۲۳۴۵۶۷۸۹';
 
-
-
-function normalizeDigits(
-  input:string
-):string {
-
-
-  const persianDigits =
-    '۰۱۲۳۴۵۶۷۸۹';
-
-
-  const arabicDigits =
-    '٠١٢٣٤٥٦٧٨٩';
-
-
+  const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
 
   return input
 
-    .replace(
-      /[۰-۹]/g,
-      char =>
-        String(
-          persianDigits.indexOf(char)
-        )
-    )
+    .replace(/[۰-۹]/g, (char) => String(persianDigits.indexOf(char)))
 
-
-    .replace(
-      /[٠-٩]/g,
-      char =>
-        String(
-          arabicDigits.indexOf(char)
-        )
-    );
-
+    .replace(/[٠-٩]/g, (char) => String(arabicDigits.indexOf(char)));
 }
 
-
-
-
-
-function isModelNumber(
-  value:number
-):boolean {
-
-
+function isModelNumber(value: number): boolean {
   return MODEL_NUMBERS.has(value);
-
 }
 
-
-
-
-
-function isVehicleYear(
-  value:number
-):boolean {
-
-
-  return (
-    value >= 1300 &&
-    value <= 1450
-  );
-
+function isVehicleYear(value: number): boolean {
+  return value >= 1300 && value <= 1450;
 }
-
-
-
-
 
 export class NumberParserStage {
+  execute(tokens: string[]): ParsedNumber[] {
+    const results: ParsedNumber[] = [];
 
+    for (let i = 0; i < tokens.length; i++) {
+      const rawToken = tokens[i];
 
+      const token = normalizeDigits(rawToken);
 
-  execute(
-    tokens:string[]
-  ):ParsedNumber[] {
+      const digit = Number(token);
 
-
-    const results:ParsedNumber[] = [];
-
-
-
-
-    for(
-      let i = 0;
-      i < tokens.length;
-      i++
-    ){
-
-
-      const rawToken =
-        tokens[i];
-
-
-
-      const token =
-        normalizeDigits(
-          rawToken
-        );
-
-
-
-      const digit =
-        Number(token);
-
-
-
-
-      if(
-        !isNaN(digit) &&
-        token.trim() !== ''
-      ){
-
-
-
+      if (!isNaN(digit) && token.trim() !== '') {
         // مدل خودرو
-        if(
-          isModelNumber(digit)
-        ){
-
+        if (isModelNumber(digit)) {
           continue;
-
         }
-
-
-
 
         // سال تولید خودرو
-        if(
-          isVehicleYear(digit)
-        ){
-
+        if (isVehicleYear(digit)) {
           continue;
-
         }
 
-
-
-
-
-        const nextToken =
-          tokens[i + 1]
-            ?.trim()
-            .toLowerCase();
-
-
-
+        const nextToken = tokens[i + 1]?.trim().toLowerCase();
 
         /*
           اگر بعد از عدد یک کلمه غیرواحد بیاید:
@@ -200,82 +78,40 @@ export class NumberParserStage {
           عدد مدل است نه موجودی
         */
 
-        if(
+        if (
           nextToken &&
           /^[a-zA-Zآ-ی]+$/.test(nextToken) &&
           !COUNT_UNITS.has(nextToken)
-        ){
-
+        ) {
           continue;
-
         }
 
-
-
-
-
         results.push({
+          value: digit,
 
-          value:digit,
+          index: i,
 
-          index:i,
-
-          consumed:1
-
+          consumed: 1,
         });
-
-
 
         continue;
-
       }
 
+      const wordNumber = parseNumberWordSequence(tokens, i);
 
-
-
-
-      const wordNumber =
-        parseNumberWordSequence(
-          tokens,
-          i
-        );
-
-
-
-
-      if(wordNumber){
-
-
+      if (wordNumber) {
         results.push({
+          value: wordNumber.value,
 
-          value:
-            wordNumber.value,
+          index: i,
 
-          index:i,
-
-          consumed:
-            wordNumber.consumed
-
+          consumed: wordNumber.consumed,
         });
 
-
-
-        i +=
-          wordNumber.consumed - 1;
-
-
+        i += wordNumber.consumed - 1;
       }
-
-
-
     }
 
-
-
     return results;
-
-
   }
-
-
 }

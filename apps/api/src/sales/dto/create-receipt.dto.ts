@@ -15,7 +15,6 @@ import { PaymentMethod } from '@prisma/client';
 import { ChequeDto, PaymentDto } from './create-invoice.dto';
 import { INT4_MAX } from '../../common/money';
 
-
 /**
  * دریافت وجه از مشتری بابت بدهی قبلی.
  *
@@ -25,16 +24,13 @@ import { INT4_MAX } from '../../common/money';
  * می‌رسید. این کلاس همان مرز را برمی‌گرداند.
  */
 export class CreateReceiptDto {
-
   /** کلید یکتای کلاینت؛ ارسال دوباره رسید تکراری نمی‌سازد. */
   @IsOptional()
   @IsString()
-  idempotencyKey?:string;
-
+  idempotencyKey?: string;
 
   @IsString()
-  customerId:string;
-
+  customerId: string;
 
   /**
    * سطرهای پرداخت — تسویه‌ی ترکیبی (نقد + کارت + چک) در یک رسید.
@@ -44,27 +40,23 @@ export class CreateReceiptDto {
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PaymentDto)
-  payments?:PaymentDto[];
-
+  payments?: PaymentDto[];
 
   /** ریال. صفر و منفی بی‌معناست؛ سقف هم برد ستون Int است. */
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(INT4_MAX)
-  amount?:number;
-
+  amount?: number;
 
   /** نسیه روشِ دریافت وجه نیست — سرویس هم جداگانه ردش می‌کند. */
   @IsOptional()
   @IsEnum(PaymentMethod)
-  method?:PaymentMethod;
-
+  method?: PaymentMethod;
 
   @IsOptional()
   @IsString()
-  note?:string;
-
+  note?: string;
 
   /**
    * اجازه‌ی ثبتِ مازاد به‌عنوان پیش‌دریافت. پیش‌فرض خاموش است تا یک صفرِ اضافه
@@ -72,12 +64,11 @@ export class CreateReceiptDto {
    */
   @IsOptional()
   @IsBoolean()
-  allowOverpayment?:boolean;
-
+  allowOverpayment?: boolean;
 
   /** فقط برای شکلِ قدیمیِ تک‌روشه (payments نیامده) — در payments هر سطر چکِ خودش را دارد. */
   @IsOptional()
   @ValidateNested()
   @Type(() => ChequeDto)
-  cheque?:ChequeDto;
+  cheque?: ChequeDto;
 }

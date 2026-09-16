@@ -3,6 +3,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from './ledger.service';
 import { EventsGateway } from '../realtime/events.gateway';
+import { PostingService } from '../vouchers/posting.service';
 import { ChequesService } from './cheques.service';
 
 /**
@@ -20,9 +21,11 @@ describe('ChequesService', () => {
     $transaction: jest.fn(),
     cheque: { findUnique: jest.fn(), update: jest.fn() },
     saleInvoice: { findMany: jest.fn(), update: jest.fn() },
+    voucher: { findFirst: jest.fn() },
   };
   const ledger = { record: jest.fn() };
   const events = { broadcast: jest.fn() };
+  const posting = { post: jest.fn(), findBySource: jest.fn() };
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -41,6 +44,7 @@ describe('ChequesService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: LedgerService, useValue: ledger },
         { provide: EventsGateway, useValue: events },
+        { provide: PostingService, useValue: posting },
       ],
     }).compile();
     service = module.get<ChequesService>(ChequesService);
@@ -85,21 +89,42 @@ describe('ChequesService', () => {
   }
 
   describe('cash', () => {
-    it('وصولِ عادی هیچ ردیفی در دفتر نمی‌زند — بدهی از قبل کم شده', async () => {
+    it('وصولِ چکِ نزدِ ما: چک از «دریافتی‌ها» به «صندوق» می‌رود — سندِ وصول', async () => {
       prisma.cheque.findUnique.mockResolvedValue(onInvoice('IN_HAND'));
 
       await service.cash('ch1');
 
       expect(ledger.record).not.toHaveBeenCalled();
       expect(prisma.saleInvoice.update).not.toHaveBeenCalled();
+      expect(posting.post).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          sourceType: 'CHEQUE_CASHED',
+          lines: expect.arrayContaining([
+            expect.objectContaining({ account: 'CASH', amount: 5_000_000 }),
+            expect.objectContaining({ account: 'CHEQUES', amount: -5_000_000 }),
+          ]),
+        }),
+      );
       const update = prisma.cheque.update.mock.calls as unknown as {
         data: { status: string };
       }[][];
       expect(update[0][0].data.status).toBe('CASHED');
     });
 
+    it('وصولِ چکِ سپرده‌شده هیچ سندی نمی‌زند — پول از روزِ سپردن در بانک بود', async () => {
+      prisma.cheque.findUnique.mockResolvedValue(onInvoice('DEPOSITED'));
+
+      await service.cash('ch1');
+
+      expect(ledger.record).not.toHaveBeenCalled();
+      expect(posting.post).not.toHaveBeenCalled();
+    });
+
     it('وصولِ چکِ برگشتی، اثرِ برگشت را خنثی می‌کند', async () => {
       prisma.cheque.findUnique.mockResolvedValue(onInvoice('BOUNCED'));
+      // سندِ برگشتی در دیتابیسِ این تست نیست → قرینه‌ی ساده.
+      prisma.voucher.findFirst.mockResolvedValue(null);
 
       await service.cash('ch1', 'u1');
 
@@ -119,6 +144,22 @@ describe('ChequesService', () => {
             dueAmount: { increment: -5_000_000 },
             paidAmount: { decrement: -5_000_000 },
           },
+        }),
+      );
+      // سندِ وصول — قرینه‌ی برگشت (سندِ برگشتی پیدا نشد → قرینه‌ی ساده).
+      expect(posting.post).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          sourceType: 'CHEQUE_CASHED',
+          reversesVoucherId: null,
+          lines: expect.arrayContaining([
+            expect.objectContaining({ account: 'CASH', amount: 5_000_000 }),
+            expect.objectContaining({
+              account: 'CUSTOMERS',
+              amount: -5_000_000,
+              customerId: 'c1',
+            }),
+          ]),
         }),
       );
     });
@@ -153,6 +194,22 @@ describe('ChequesService', () => {
             dueAmount: { increment: 5_000_000 },
             paidAmount: { decrement: 5_000_000 },
           },
+        }),
+      );
+      // سندِ برگشت: بدهکارِ مشتری / بستانکارِ چک‌های دریافتی (چک نزدِ ما بود).
+      expect(posting.post).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          sourceType: 'CHEQUE_BOUNCED',
+          idempotencyKey: 'cheque-bounce:ch1',
+          lines: expect.arrayContaining([
+            expect.objectContaining({
+              account: 'CUSTOMERS',
+              amount: 5_000_000,
+              customerId: 'c1',
+            }),
+            expect.objectContaining({ account: 'CHEQUES', amount: -5_000_000 }),
+          ]),
         }),
       );
     });
@@ -233,12 +290,31 @@ describe('ChequesService', () => {
   });
 
   describe('deposit', () => {
+    it('سپردن: چک از «دریافتی‌ها» به «بانک» می‌رود — سندِ CHEQUE_DEPOSIT', async () => {
+      prisma.cheque.findUnique.mockResolvedValue(onInvoice('IN_HAND'));
+
+      await service.deposit('ch1');
+
+      expect(posting.post).toHaveBeenCalledWith(
+        prisma,
+        expect.objectContaining({
+          sourceType: 'CHEQUE_DEPOSIT',
+          idempotencyKey: 'cheque-deposit:ch1',
+          lines: expect.arrayContaining([
+            expect.objectContaining({ account: 'BANK', amount: 5_000_000 }),
+            expect.objectContaining({ account: 'CHEQUES', amount: -5_000_000 }),
+          ]),
+        }),
+      );
+    });
+
     it('فقط چکِ نزد ما به بانک می‌رود', async () => {
       prisma.cheque.findUnique.mockResolvedValue(onInvoice('DEPOSITED'));
 
       await expect(service.deposit('ch1')).rejects.toMatchObject({
         response: { error: 'CHEQUE_NOT_IN_HAND' },
       });
+      expect(posting.post).not.toHaveBeenCalled();
     });
   });
 

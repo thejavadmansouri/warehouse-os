@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateCustomerCategoryDto,
   UpdateCustomerCategoryDto,
 } from './dto/customer-category.dto';
-
 
 /**
  * دسته‌های مشتری — چیزی که مدیر تعریف می‌کند و مشتری‌ها بر اساسش دسته‌بندی
@@ -15,9 +18,7 @@ import {
  */
 @Injectable()
 export class CustomerCategoriesService {
-
   constructor(private prisma: PrismaService) {}
-
 
   /** همه‌ی دسته‌ها (فعال و غیرفعال) با شمارش مشتری — برای صفحه‌ی مدیریت. */
   async list() {
@@ -27,7 +28,6 @@ export class CustomerCategoriesService {
     });
   }
 
-
   /** فقط دسته‌های فعال — برای dropdown فرم‌ها و فیلتر. */
   async active() {
     return this.prisma.customerCategory.findMany({
@@ -35,7 +35,6 @@ export class CustomerCategoriesService {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
   }
-
 
   async create(input: CreateCustomerCategoryDto) {
     const name = input.name.trim();
@@ -47,7 +46,9 @@ export class CustomerCategoriesService {
       });
     }
 
-    const dup = await this.prisma.customerCategory.findUnique({ where: { name } });
+    const dup = await this.prisma.customerCategory.findUnique({
+      where: { name },
+    });
     if (dup) {
       throw new BadRequestException({
         error: 'NAME_TAKEN',
@@ -63,7 +64,6 @@ export class CustomerCategoriesService {
       },
     });
   }
-
 
   async update(id: string, input: UpdateCustomerCategoryDto) {
     await this.ensureExists(id);
@@ -86,12 +86,13 @@ export class CustomerCategoriesService {
       data: {
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.color !== undefined ? { color: input.color.trim() } : {}),
-        ...(input.sortOrder !== undefined ? { sortOrder: input.sortOrder } : {}),
+        ...(input.sortOrder !== undefined
+          ? { sortOrder: input.sortOrder }
+          : {}),
         ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       },
     });
   }
-
 
   /** غیرفعال‌سازی — مشتری‌های دسته دست نمی‌خورند، فقط از انتخاب‌های جدید می‌افتد. */
   async deactivate(id: string) {
@@ -101,7 +102,6 @@ export class CustomerCategoriesService {
       data: { isActive: false },
     });
   }
-
 
   /** برای customers.service — مطمئن می‌شود دسته موجود و فعال است. */
   async assertActive(id: string) {
@@ -117,9 +117,10 @@ export class CustomerCategoriesService {
     return cat;
   }
 
-
   private async ensureExists(id: string) {
-    const existing = await this.prisma.customerCategory.findUnique({ where: { id } });
+    const existing = await this.prisma.customerCategory.findUnique({
+      where: { id },
+    });
     if (!existing) {
       throw new NotFoundException({
         error: 'CATEGORY_NOT_FOUND',

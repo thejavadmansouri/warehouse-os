@@ -31,9 +31,7 @@ export function normalizePersian(input?: string | null): string {
   t = t.replace(/[ً-ْـ]/g, '');
 
   // ZWNJ (نیم‌فاصله, U+200C) → space; other zero-width / bidi marks → removed
-  t = t
-    .replace(/‌/g, ' ')
-    .replace(/[​‍‎‏﻿]/g, '');
+  t = t.replace(/‌/g, ' ').replace(/[​‍‎‏﻿]/g, '');
 
   // Latin fragments arrive both ways (تکستار / Textar)
   t = t.toLowerCase();

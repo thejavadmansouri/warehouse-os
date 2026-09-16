@@ -25,7 +25,9 @@ export class ReviewModerationService {
         body: true,
         createdAt: true,
         product: { select: { id: true, name: true, sku: true } },
-        siteCustomer: { select: { firstName: true, lastName: true, phone: true } },
+        siteCustomer: {
+          select: { firstName: true, lastName: true, phone: true },
+        },
       },
     });
   }
@@ -43,7 +45,11 @@ export class ReviewModerationService {
       where: { id },
       select: { id: true },
     });
-    if (!found) throw new NotFoundException({ error: 'NOT_FOUND', message: 'نظر یافت نشد' });
+    if (!found)
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'نظر یافت نشد',
+      });
     await this.prisma.productReview.update({ where: { id }, data: { status } });
     return { ok: true, status };
   }

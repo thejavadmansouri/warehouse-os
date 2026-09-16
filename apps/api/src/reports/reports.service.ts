@@ -4,7 +4,6 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LedgerService } from '../sales/ledger.service';
 
-
 /**
  * منطقه‌ی زمانی گزارش‌ها.
  *
@@ -23,7 +22,9 @@ export interface RangeQuery {
 function range(q: RangeQuery) {
   // پیش‌فرض «امروز» — کاربر برای گزارش روزانه نباید تاریخ انتخاب کند.
   const end = q.endDate ? new Date(q.endDate) : new Date();
-  const start = q.startDate ? new Date(q.startDate) : new Date(new Date().setHours(0, 0, 0, 0));
+  const start = q.startDate
+    ? new Date(q.startDate)
+    : new Date(new Date().setHours(0, 0, 0, 0));
   return { start, end };
 }
 
@@ -34,18 +35,20 @@ function paging(q: RangeQuery) {
 }
 
 function meta(total: number, page: number, limit: number) {
-  return { total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) };
+  return {
+    total,
+    page,
+    limit,
+    lastPage: Math.max(1, Math.ceil(total / limit)),
+  };
 }
-
 
 @Injectable()
 export class ReportsService {
-
   constructor(
     private prisma: PrismaService,
     private ledger: LedgerService,
   ) {}
-
 
   /** فروش دوره‌ای — خلاصه + نمودار روزانه + فاکتورها. */
   async periodicSales(q: RangeQuery) {
@@ -145,7 +148,9 @@ export class ReportsService {
           number: i.number,
           createdAt: i.createdAt,
           customerName: i.customer
-            ? [i.customer.firstName, i.customer.lastName].filter(Boolean).join(' ')
+            ? [i.customer.firstName, i.customer.lastName]
+                .filter(Boolean)
+                .join(' ')
             : null,
           sellerName: i.user?.fullName ?? null,
           amount: i.total,
@@ -155,7 +160,6 @@ export class ReportsService {
       },
     };
   }
-
 
   /**
    * سود دوره‌ای.
@@ -173,7 +177,10 @@ export class ReportsService {
 
     const agg = await this.prisma.saleInvoice.aggregate({
       // همان قاعده‌ی periodicSales: باطل‌نشده = فروش.
-      where: { status: { not: 'CANCELLED' }, createdAt: { gte: start, lte: end } },
+      where: {
+        status: { not: 'CANCELLED' },
+        createdAt: { gte: start, lte: end },
+      },
       _sum: { total: true, profit: true, financeCharge: true },
     });
 
@@ -259,14 +266,16 @@ export class ReportsService {
             totalRevenue: revenue,
             totalCost: cost,
             profit: revenue - cost,
-            marginPercent: revenue > 0 ? Number((((revenue - cost) / revenue) * 100).toFixed(1)) : 0,
+            marginPercent:
+              revenue > 0
+                ? Number((((revenue - cost) / revenue) * 100).toFixed(1))
+                : 0,
           };
         }),
         meta: meta(Number(count), page, limit),
       },
     };
   }
-
 
   /**
    * بدهکاران.
@@ -313,7 +322,6 @@ export class ReportsService {
       },
     };
   }
-
 
   /** چک‌ها. فیلتر UI به وضعیت‌های واقعی مدل نگاشت می‌شود. */
   async cheques(q: RangeQuery & { status?: string }) {
@@ -370,13 +378,16 @@ export class ReportsService {
       }),
     ]);
 
-    const fullName = (c?: { firstName: string; lastName: string | null } | null) =>
-      c ? [c.firstName, c.lastName].filter(Boolean).join(' ') : null;
+    const fullName = (
+      c?: { firstName: string; lastName: string | null } | null,
+    ) => (c ? [c.firstName, c.lastName].filter(Boolean).join(' ') : null);
 
     return {
       summary: {
         totalCount: total,
-        totalAmount: (fromPayments._sum.amount ?? 0) + (fromReceiptPayments._sum.amount ?? 0),
+        totalAmount:
+          (fromPayments._sum.amount ?? 0) +
+          (fromReceiptPayments._sum.amount ?? 0),
       },
       cheques: {
         data: rows.map((c) => ({
@@ -400,7 +411,6 @@ export class ReportsService {
     };
   }
 
-
   /** پرفروش‌ها و راکدها. */
   async productPerformance(q: RangeQuery & { type?: string }) {
     const { start, end } = range(q);
@@ -409,7 +419,13 @@ export class ReportsService {
     if (q.type === 'STAGNANT') {
       // کالاهایی که موجودی دارند ولی در این بازه هیچ فروشی نداشته‌اند.
       const rows = await this.prisma.$queryRaw<
-        { productId: string; productName: string; sku: string; stock: bigint; lastSoldAt: Date | null }[]
+        {
+          productId: string;
+          productName: string;
+          sku: string;
+          stock: bigint;
+          lastSoldAt: Date | null;
+        }[]
       >`
         SELECT p."id" AS "productId", p."name" AS "productName", p."sku",
                SUM(i."quantity")::bigint AS "stock",
@@ -509,13 +525,18 @@ export class ReportsService {
     };
   }
 
-
   /** موجودی زیر حد — بر اساس Product.minStock (فیلد واقعی مدل). */
   async lowStock(q: RangeQuery) {
     const { page, limit, skip } = paging(q);
 
     const rows = await this.prisma.$queryRaw<
-      { productId: string; productName: string; sku: string; stock: bigint; minStock: number }[]
+      {
+        productId: string;
+        productName: string;
+        sku: string;
+        stock: bigint;
+        minStock: number;
+      }[]
     >`
       SELECT p."id" AS "productId", p."name" AS "productName", p."sku",
              COALESCE(SUM(i."quantity"),0)::bigint AS "stock",
@@ -554,7 +575,6 @@ export class ReportsService {
       },
     };
   }
-
 
   /**
    * قیمت‌های مشکوک — کالاهایی که قیمتِ خریدشان از قیمتِ فروششان بیشتر است.
@@ -632,7 +652,6 @@ export class ReportsService {
     };
   }
 
-
   /**
    * عملکرد فروشنده.
    *
@@ -698,7 +717,8 @@ export class ReportsService {
             totalInvoices: invoices,
             totalSalesAmount: amount,
             totalProfit: Number(r.profit),
-            averageInvoiceAmount: invoices > 0 ? Math.round(amount / invoices) : 0,
+            averageInvoiceAmount:
+              invoices > 0 ? Math.round(amount / invoices) : 0,
             cancelledInvoicesCount: Number(r.cancelled),
             returnsAmount: Number(r.returnsAmount),
             returnsCount: Number(r.returnsCount),
@@ -708,7 +728,6 @@ export class ReportsService {
       },
     };
   }
-
 
   /**
    * سهم هر دسته‌ی مشتری از فروش.
@@ -756,8 +775,10 @@ export class ReportsService {
         totalAmount: amount,
         totalProfit: Number(r.profit),
         invoiceCount,
-        sharePercent: totalSales > 0 ? Number(((amount / totalSales) * 100).toFixed(1)) : 0,
-        averageInvoiceAmount: invoiceCount > 0 ? Math.round(amount / invoiceCount) : 0,
+        sharePercent:
+          totalSales > 0 ? Number(((amount / totalSales) * 100).toFixed(1)) : 0,
+        averageInvoiceAmount:
+          invoiceCount > 0 ? Math.round(amount / invoiceCount) : 0,
       };
     });
 
@@ -771,7 +792,10 @@ export class ReportsService {
         uncategorizedSales: uncategorized?.totalAmount ?? 0,
         categoryCount: categorized.length,
         topCategory: categories[0]
-          ? { name: categories[0].categoryName, amount: categories[0].totalAmount }
+          ? {
+              name: categories[0].categoryName,
+              amount: categories[0].totalAmount,
+            }
           : null,
       },
       categories,

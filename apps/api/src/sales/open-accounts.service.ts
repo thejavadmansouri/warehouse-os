@@ -9,7 +9,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
 import { InvoiceEffectsService } from './invoice-effects.service';
 
-
 /**
  * حساب بازِ مشتری — «فاکتور کلی»ی که تا تسویه نهایی نمی‌شود.
  *
@@ -19,13 +18,11 @@ import { InvoiceEffectsService } from './invoice-effects.service';
  */
 @Injectable()
 export class OpenAccountsService {
-
   constructor(
     private prisma: PrismaService,
     private realtime: EventsGateway,
     private effects: InvoiceEffectsService,
   ) {}
-
 
   /** حسابِ بازِ فعالِ مشتری را برمی‌گرداند؛ اگر نبود می‌سازد (idempotent). */
   async ensureOpen(customerId: string) {
@@ -34,7 +31,9 @@ export class OpenAccountsService {
     });
     if (existing) return this.get(existing.id);
 
-    const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+    });
     if (!customer) {
       throw new NotFoundException({
         error: 'CUSTOMER_NOT_FOUND',
@@ -54,13 +53,14 @@ export class OpenAccountsService {
     return this.get(created.id);
   }
 
-
   /** همه‌ی حساب‌های بازِ فعال، با جمع و بازه‌ی خرید — برای فهرستِ صندوق. */
   async list() {
     const accounts = await this.prisma.openAccount.findMany({
       where: { status: OpenAccountStatus.OPEN },
       include: {
-        customer: { select: { id: true, firstName: true, lastName: true, phones: true } },
+        customer: {
+          select: { id: true, firstName: true, lastName: true, phones: true },
+        },
         invoices: {
           where: { status: InvoiceStatus.OPEN },
           select: { id: true, total: true, createdAt: true },
@@ -86,18 +86,23 @@ export class OpenAccountsService {
         id: a.id,
         number: a.number,
         customerId: a.customerId,
-        customerName: [a.customer.firstName, a.customer.lastName].filter(Boolean).join(' '),
+        customerName: [a.customer.firstName, a.customer.lastName]
+          .filter(Boolean)
+          .join(' '),
         phone: a.customer.phones?.[0]?.phone ?? null,
         status: a.status,
         total,
         invoiceCount: visits.length,
-        firstVisit: dates.length ? new Date(Math.min(...dates)).toISOString() : null,
-        lastVisit: dates.length ? new Date(Math.max(...dates)).toISOString() : null,
+        firstVisit: dates.length
+          ? new Date(Math.min(...dates)).toISOString()
+          : null,
+        lastVisit: dates.length
+          ? new Date(Math.max(...dates)).toISOString()
+          : null,
         createdAt: a.createdAt.toISOString(),
       };
     });
   }
-
 
   /**
    * پرونده‌ی حساب — فاکتورهای باز با ردیف‌هایشان.
@@ -108,7 +113,9 @@ export class OpenAccountsService {
     const account = await this.prisma.openAccount.findUnique({
       where: { id },
       include: {
-        customer: { select: { id: true, firstName: true, lastName: true, phones: true } },
+        customer: {
+          select: { id: true, firstName: true, lastName: true, phones: true },
+        },
         invoices: {
           where: { status: InvoiceStatus.OPEN },
           include: {
@@ -122,7 +129,9 @@ export class OpenAccountsService {
             lines: {
               where: { action: 'SALE' },
               orderBy: { createdAt: 'asc' },
-              include: { product: { select: { id: true, name: true, unit: true } } },
+              include: {
+                product: { select: { id: true, name: true, unit: true } },
+              },
             },
           },
           orderBy: { createdAt: 'asc' },
@@ -144,9 +153,10 @@ export class OpenAccountsService {
      * اثرِ اسناد روی تک‌تکِ ردیف‌ها — تا فروشنده روی همان قلم ببیند چند تا برگشته
      * و تعدادِ مؤثر چند است، نه اینکه فقط جمعِ ته صفحه فرق کند و معلوم نباشد چرا.
      */
-    const { returnedQty, correctedQty, correctedPrice } = await this.effects.lineEffects(
-      invoices.flatMap((inv) => inv.lines.map((l) => l.id)),
-    );
+    const { returnedQty, correctedQty, correctedPrice } =
+      await this.effects.lineEffects(
+        invoices.flatMap((inv) => inv.lines.map((l) => l.id)),
+      );
 
     const grossTotal = invoices.reduce((s, v) => s + v.total, 0);
     const total = invoices.reduce(
@@ -208,7 +218,6 @@ export class OpenAccountsService {
     };
   }
 
-
   /**
    * برگه‌ی تجمیعیِ کلِ حساب — «فاکتور کلی»ی که مشتری سرِ تسویه با خودش می‌برد.
    *
@@ -252,54 +261,63 @@ export class OpenAccountsService {
     const invoices = account.invoices;
     const invoiceIds = invoices.map((v) => v.id);
 
-    const [delta, effects, returns, corrections, allocations] = await Promise.all([
-      this.effects.deltaByInvoice(invoiceIds),
-      this.effects.lineEffects(invoices.flatMap((inv) => inv.lines.map((l) => l.id))),
-      this.prisma.saleReturn.findMany({
-        where: { invoiceId: { in: invoiceIds } },
-        orderBy: { createdAt: 'asc' },
-        include: {
-          lines: {
-            orderBy: { createdAt: 'asc' },
-            include: { product: { select: { name: true, unit: true } } },
-          },
-        },
-      }),
-      this.prisma.saleCorrection.findMany({
-        where: { invoiceId: { in: invoiceIds } },
-        orderBy: { createdAt: 'asc' },
-        select: {
-          id: true,
-          number: true,
-          amountAdjust: true,
-          reason: true,
-          createdAt: true,
-        },
-      }),
-      /*
-       * دریافت‌ها از مسیرِ تخصیص خوانده می‌شوند، نه از کلِ رسیدهای مشتری: مشتری
-       * ممکن است بدهیِ قدیمی‌ترِ بی‌ربط هم داشته باشد و پولش نباید روی این برگه
-       * بیاید. `ReceiptAllocation.amount` دقیقاً سهمِ همین فاکتورهاست.
-       */
-      this.prisma.receiptAllocation.findMany({
-        where: { invoiceId: { in: invoiceIds } },
-        orderBy: { createdAt: 'asc' },
-        include: {
-          receipt: {
-            include: {
-              payments: { include: { cheque: true } },
+    const [delta, effects, returns, corrections, allocations] =
+      await Promise.all([
+        this.effects.deltaByInvoice(invoiceIds),
+        this.effects.lineEffects(
+          invoices.flatMap((inv) => inv.lines.map((l) => l.id)),
+        ),
+        this.prisma.saleReturn.findMany({
+          where: { invoiceId: { in: invoiceIds } },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            lines: {
+              orderBy: { createdAt: 'asc' },
+              include: { product: { select: { name: true, unit: true } } },
             },
           },
-        },
-      }),
-    ]);
+        }),
+        this.prisma.saleCorrection.findMany({
+          where: { invoiceId: { in: invoiceIds } },
+          orderBy: { createdAt: 'asc' },
+          select: {
+            id: true,
+            number: true,
+            amountAdjust: true,
+            reason: true,
+            createdAt: true,
+          },
+        }),
+        /*
+         * دریافت‌ها از مسیرِ تخصیص خوانده می‌شوند، نه از کلِ رسیدهای مشتری: مشتری
+         * ممکن است بدهیِ قدیمی‌ترِ بی‌ربط هم داشته باشد و پولش نباید روی این برگه
+         * بیاید. `ReceiptAllocation.amount` دقیقاً سهمِ همین فاکتورهاست.
+         */
+        this.prisma.receiptAllocation.findMany({
+          where: { invoiceId: { in: invoiceIds } },
+          orderBy: { createdAt: 'asc' },
+          include: {
+            receipt: {
+              include: {
+                payments: { include: { cheque: true } },
+              },
+            },
+          },
+        }),
+      ]);
 
     const { returnedQty, correctedQty, correctedPrice } = effects;
 
     const gross = invoices.reduce((s, v) => s + v.total, 0);
-    const net = invoices.reduce((s, v) => s + v.total + (delta.get(v.id) ?? 0), 0);
+    const net = invoices.reduce(
+      (s, v) => s + v.total + (delta.get(v.id) ?? 0),
+      0,
+    );
     const returnsTotal = returns.reduce((s, r) => s + r.refundAmount, 0);
-    const correctionsTotal = corrections.reduce((s, c) => s + c.amountAdjust, 0);
+    const correctionsTotal = corrections.reduce(
+      (s, c) => s + c.amountAdjust,
+      0,
+    );
     // مانده از خودِ فاکتورها؛ همان عددی که دفتر و گزارشِ مطالبات می‌بینند.
     const remaining = invoices.reduce((s, v) => s + v.dueAmount, 0);
     const paid = allocations.reduce((s, a) => s + a.amount, 0);
@@ -418,7 +436,6 @@ export class OpenAccountsService {
       },
     };
   }
-
 
   /**
    * تسویه — صدورِ فاکتور نهایی.

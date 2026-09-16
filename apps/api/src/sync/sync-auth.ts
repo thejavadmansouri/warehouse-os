@@ -19,7 +19,7 @@ export function syncSecret(): string {
     throw new Error(
       'SYNC_SECRET تنظیم نشده یا کوتاه است (حداقل ۳۲ کاراکتر).\n' +
         'یک کلید تصادفی بسازید و در .env هر دو طرف بگذارید:\n' +
-        '  node -e "console.log(require(\'crypto\').randomBytes(48).toString(\'base64url\'))"',
+        "  node -e \"console.log(require('crypto').randomBytes(48).toString('base64url'))\"",
     );
   }
   return s;

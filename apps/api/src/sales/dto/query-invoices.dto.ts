@@ -1,24 +1,27 @@
-import { IsOptional, IsString, IsInt, Min, Max, IsIn, IsDateString } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsInt,
+  Min,
+  Max,
+  IsIn,
+  IsDateString,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
-
 export class QueryInvoicesDto {
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
 
   @IsOptional()
   @IsString()
-  warehouseId?:string;
-
-
-  @IsOptional()
-  @IsString()
-  customerId?:string;
-
+  customerId?: string;
 
   /** جست‌وجو روی نام/تلفن مشتری و شماره‌ی فاکتور. */
   @IsOptional()
   @IsString()
-  q?:string;
-
+  q?: string;
 
   /**
    * وضعیت فاکتور. علاوه بر وضعیت‌های واقعیِ مدل، `RETURNED` یک وضعیتِ مجازی است
@@ -26,55 +29,46 @@ export class QueryInvoicesDto {
    */
   @IsOptional()
   @IsIn(['OPEN', 'CONFIRMED', 'CANCELLED', 'RETURNED'])
-  status?:string;
-
+  status?: string;
 
   /** فروشنده‌ی ثبت‌کننده‌ی فاکتور. */
   @IsOptional()
   @IsString()
-  userId?:string;
-
+  userId?: string;
 
   /** فقط فاکتورهایی که هنوز مانده دارند. */
   @IsOptional()
   @IsIn(['true', 'false'])
-  hasDue?:string;
-
-
-  @IsOptional()
-  @IsDateString()
-  from?:string;
-
+  hasDue?: string;
 
   @IsOptional()
   @IsDateString()
-  to?:string;
+  from?: string;
 
+  @IsOptional()
+  @IsDateString()
+  to?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?:number;
-
+  page?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(200)
-  pageSize?:number;
-
+  pageSize?: number;
 
   /** وقتی true باشد، ردیف‌های فاکتور (اقلام) هم در پاسخ می‌آیند — برای کاردکس مشتری. */
   @IsOptional()
   @IsIn(['true', 'false'])
-  includeLines?:string;
+  includeLines?: string;
 }
 
-
 export class CancelInvoiceDto {
-
   @IsString()
-  reason:string;
+  reason: string;
 }

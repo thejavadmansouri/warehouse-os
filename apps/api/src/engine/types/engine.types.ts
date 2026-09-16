@@ -17,16 +17,12 @@ export type TokenLabel =
   | 'YEAR'
   | 'UNKNOWN';
 
-
-
 export interface DictionaryEntry {
   key: string;
   normalizedKey: string;
   category: string;
   metadata?: Record<string, any>;
 }
-
-
 
 export interface ClassifiedToken {
   raw: string;
@@ -37,10 +33,7 @@ export interface ClassifiedToken {
   consumed: boolean;
 }
 
-
-
 export interface DomainDictionaryConfig {
-
   products: Array<{
     name: string;
     category: string;
@@ -48,7 +41,6 @@ export interface DomainDictionaryConfig {
     validVehicles?: string[];
     validEngines?: string[];
   }>;
-
 
   vehicles: Array<{
     family: string;
@@ -58,40 +50,32 @@ export interface DomainDictionaryConfig {
     aliases: string[];
   }>;
 
+  brands: Record<string, string>;
 
-  brands: Record<string,string>;
+  engines: Record<string, string>;
 
-  engines: Record<string,string>;
+  gearboxes: Record<string, string>;
 
-  gearboxes: Record<string,string>;
+  units: Record<string, string>;
 
-  units: Record<string,string>;
+  colors: Record<string, string>;
 
-  colors: Record<string,string>;
+  sides: Record<string, string>;
 
-  sides: Record<string,string>;
+  positions: Record<string, string>;
 
-  positions: Record<string,string>;
+  conditions: Record<string, string>;
 
-  conditions: Record<string,string>;
+  actions: Record<string, string>;
 
-  actions: Record<string,string>;
+  locations: Record<string, string>;
 
-  locations: Record<string,string>;
+  packaging: Record<string, string>;
 
-  packaging: Record<string,string>;
-
-  speechErrors: Record<string,string>;
-
+  speechErrors: Record<string, string>;
 }
 
-
-
-
-
 export interface ParseExplanation {
-
-
   // Pipeline Debug
 
   tokens?: string[];
@@ -104,7 +88,6 @@ export interface ParseExplanation {
 
   numberResults?: any[];
 
-
   matched?: any;
 
   classified?: any;
@@ -114,8 +97,6 @@ export interface ParseExplanation {
   context?: any;
 
   confidenceResult?: any;
-
-
 
   // Matched Data
 
@@ -137,11 +118,7 @@ export interface ParseExplanation {
 
   matchedCondition?: string | null;
 
-
-
   matchedQuantity?: number | null;
-
-
 
   // Quantity
 
@@ -149,49 +126,29 @@ export interface ParseExplanation {
 
   badQuantity: number;
 
-
-
   year?: number | null;
-
-
 
   // Validation
 
   unknownTokens: string[];
 
-  validationStatus:
-    | 'Passed'
-    | 'Failed'
-    | 'Warning';
-
+  validationStatus: 'Passed' | 'Failed' | 'Warning';
 
   validationMessages: string[];
-
-
 
   // Confidence
 
   confidence: number;
 
-
-
   // Details
 
-  matchedDetails: Record<string,string|null>;
-
+  matchedDetails: Record<string, string | null>;
 }
 
-
-
-
-
 export interface ParseResult {
-
   success: boolean;
 
-
   data: {
-
     productName: string | null;
 
     productCategory: string | null;
@@ -222,16 +179,11 @@ export interface ParseResult {
     goodQuantity: number;
 
     badQuantity: number;
-
   };
-
 
   explanation: ParseExplanation;
 
-
   rawInput: string;
 
-
   processingTimeMs: number;
-
 }
