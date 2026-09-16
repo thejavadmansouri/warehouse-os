@@ -17,7 +17,7 @@ REM  تمام‌صفحه‌ی سیستم‌عامل است و Esc رویش اث�
 REM ============================================================
 
 REM آدرس سرور — اگر برنامه روی همین کامپیوتر است دست نزنید.
-set KARDO_URL=http://localhost:3000/admin/pos
+set KARDO_URL=http://localhost:3001/admin/pos
 
 REM پروفایل جدا: افزونه‌ها، تاریخچه و تنظیماتِ مرورگرِ شخصی قاطی نشود.
 set KARDO_PROFILE=%LOCALAPPDATA%\Kardo\browser

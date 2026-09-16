@@ -210,6 +210,10 @@ Must (Join-Path $payload 'app\api\node_modules\prisma\build\index.js') 'prisma C
 # went missing from this payload -- check it explicitly.
 Must (Join-Path $payload 'app\api\node_modules\undici\package.json')     'undici'
 Must (Join-Path $payload 'app\web\server.js')                          'app\web\server.js'
+# The seller shell rides inside app\desktop -- the shortcut the operator will
+# actually click. build.ps1 builds it itself when missing, so a failure here
+# means the Rust build itself failed and must be visible, not skipped.
+Must (Join-Path $payload 'app\desktop\warehouse-seller.exe')           'seller shell (warehouse-seller.exe)'
 
 # Native binaries - the whole reason this must build on Windows.
 Step 'Verifying native Windows binaries'

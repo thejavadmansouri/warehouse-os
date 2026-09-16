@@ -111,37 +111,8 @@ if ($needInstall) {
 
 Say 'Generating the Prisma client'
 Push-Location (Join-Path $repo 'apps\api')
-
-<#
-    Prisma's generator replaces the query engine dll with copy-then-rename. On
-    Windows that rename fails with EPERM while ANY process holds the loaded dll
-    open -- including the dev watcher running on the build machine itself. The
-    retry loop below rides out exactly that: the engine file is byte-identical
-    to the installed one, so a failure after 5 attempts with "file in use" is
-    safe to treat as a no-op success. Any other error is fatal, as before.
-#>
-$generated = $false
-for ($i = 1; $i -le 5; $i++) {
-    cmd.exe /c "npx prisma generate 2>&1"
-    if ($LASTEXITCODE -eq 0) { $generated = $true; break }
-    $engine = Join-Path $repo 'node_modules\.prisma\client\query_engine-windows.dll.node'
-    if ($i -lt 5) {
-        Write-Host "  prisma generate attempt $i failed - retrying in 5s..."
-        Start-Sleep -Seconds 5
-    } else {
-        # On a dev box the query engine dll is held open by the running API
-        # (PID of nest --watch / its child) and the final rename fails with
-        # EPERM forever. The engine file is byte-identical to the installed
-        # one, so a stale-but-present dll is still exactly what the runtime
-        # needs. Verify it is real and let the build continue.
-        $engine = Join-Path $repo 'node_modules\.prisma\client\query_engine-windows.dll.node'
-        if ((Test-Path $engine) -and ((Get-Item $engine).Length -gt 0)) {
-            Say 'Engine dll already in place (locked by the running API) - treating as generated'
-            $generated = $true
-        }
-    }
-}
-if (-not $generated) { throw 'prisma generate failed' }
+npx prisma generate
+if ($LASTEXITCODE -ne 0) { throw 'prisma generate failed' }
 Pop-Location
 
 Say 'Building the API'
@@ -250,37 +221,16 @@ require('$target');
     Say 'Web entry point: server.js (already at the root)'
 }
 
-# ------------------------------------------------------------- app\desktop
-# The seller shell (Tauri/Rust). One binary, no runtime dependencies beyond
-# WebView2 (which Windows 10 21H2+ / 11 ship inbox, and first-run checks).
-#
-# It is copied into payload\app\desktop -- inside `app` on purpose: update.ps1
-# replaces that folder wholesale, so shell updates ride the same channel as the
-# API and the web panel. If the exe is missing on the build machine, this
-# script builds it -- one-shot builds should not require a manual pre-step.
-Say 'Collecting the seller desktop shell'
-$sellerExe = Join-Path $repo 'apps\desktop\src-tauri\target\release\warehouse-seller.exe'
-if (-not (Test-Path $sellerExe)) {
-    Write-Host '  not built yet - running tauri build (first time: several minutes)'
-    Push-Location (Join-Path $repo 'apps\desktop')
-    npm run build
-    if ($LASTEXITCODE -ne 0) { Pop-Location; throw 'tauri build (seller shell) failed' }
-    Pop-Location
-}
-if (-not (Test-Path $sellerExe)) {
-    throw ('warehouse-seller.exe still not found after build: ' + $sellerExe)
-}
-$deskOut = Join-Path $payload 'app\desktop'
-New-Item -ItemType Directory -Force -Path $deskOut | Out-Null
-Copy-Item $sellerExe (Join-Path $deskOut 'warehouse-seller.exe') -Force
-Copy-Item (Join-Path $repo 'apps\desktop\src-tauri\icons\icon.png') `
-    (Join-Path $deskOut 'icon.png') -Force
-Write-Host ('  warehouse-seller.exe  ({0:N1} MB)' -f ((Get-Item $sellerExe).Length / 1MB))
-
 # --------------------------------------------------------------- runtimes
 Say 'Extracting Node'
 $tmp = Join-Path $staging 'node'
-Expand-Archive -Path $NodeZip -DestinationPath $tmp -Force
+New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$znode = [System.IO.Compression.ZipFile]::OpenRead($NodeZip)
+$enode = $znode.Entries | Where-Object { $_.Name -eq 'node.exe' } | Select-Object -First 1
+if (-not $enode) { $znode.Dispose(); throw 'node.exe not found in the archive' }
+[System.IO.Compression.ZipFileExtensions]::ExtractToFile($enode, (Join-Path $tmp 'node.exe'), $true)
+$znode.Dispose()
 $nodeExe = Get-ChildItem $tmp -Filter node.exe -Recurse | Select-Object -First 1
 if (-not $nodeExe) { throw 'node.exe not found in the archive' }
 
@@ -294,7 +244,9 @@ Copy-Item $nodeExe.FullName (Join-Path $payload 'app\node\node.exe')
 
 Say 'Extracting PostgreSQL'
 $tmpPg = Join-Path $staging 'pg'
-Expand-Archive -Path $PgZip -DestinationPath $tmpPg -Force
+New-Item -ItemType Directory -Force -Path $tmpPg | Out-Null
+& tar.exe -xf $PgZip -C $tmpPg
+if ($LASTEXITCODE -ne 0) { throw 'tar failed to extract PostgreSQL' }
 $pgRoot = Get-ChildItem $tmpPg -Directory |
           Where-Object { Test-Path (Join-Path $_.FullName 'bin\initdb.exe') } |
           Select-Object -First 1
@@ -317,7 +269,9 @@ Copy-Item $pgRoot.FullName (Join-Path $payload 'pgsql') -Recurse
 
 Say 'Extracting NSSM'
 $tmpN = Join-Path $staging 'nssm'
-Expand-Archive -Path $NssmZip -DestinationPath $tmpN -Force
+New-Item -ItemType Directory -Force -Path $tmpN | Out-Null
+& tar.exe -xf $NssmZip -C $tmpN
+if ($LASTEXITCODE -ne 0) { throw 'tar failed to extract NSSM' }
 $nssm = Get-ChildItem $tmpN -Filter nssm.exe -Recurse |
         Where-Object { $_.FullName -match 'win64' } | Select-Object -First 1
 if (-not $nssm) { throw 'nssm.exe (win64) not found' }
@@ -335,9 +289,7 @@ Copy-Item $nssm.FullName (Join-Path $payload 'nssm.exe')
 Say 'Downloading the Visual C++ redistributable'
 $vc = Join-Path $payload 'vc_redist.x64.exe'
 try {
-    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-    Invoke-WebRequest -Uri 'https://aka.ms/vs/17/release/vc_redist.x64.exe' `
-        -OutFile $vc -UseBasicParsing
+    Copy-Item $env:WOS_VCREDIST $vc -Force
 } catch {
     throw "Could not download vc_redist.x64.exe: $($_.Exception.Message). Download it by hand to $vc and rerun."
 }
@@ -350,14 +302,6 @@ New-Item -ItemType Directory -Force -Path $scriptsOut | Out-Null
 Copy-Item (Join-Path $here 'first-run.ps1')  $scriptsOut
 Copy-Item (Join-Path $here 'services.ps1')   $scriptsOut
 Copy-Item (Join-Path $here 'update.ps1')     $scriptsOut
-# Finishes a half-finished first-run (missing payload file, full disk)
-# without touching secrets or the database. Shipped so an on-site repair is
-# one command, not a list of hand-typed steps.
-Copy-Item (Join-Path $here 'resume-install.ps1') $scriptsOut
-# Watches the API's /health once a minute and restarts what NSSM cannot see:
-# a hung process or a database outage the API survives. Registered by the
-# installer (see first-run.ps1) or manually with -Install.
-Copy-Item (Join-Path $here 'health-watch.ps1') $scriptsOut
 # Shipped so a server that loses LAN access can be repaired on site, without
 # a rebuild and without re-running first-run.ps1 (which refuses to run twice).
 Copy-Item (Join-Path $here 'network-fix.ps1') $scriptsOut

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>عیب‌یابی Warehouse OS — خطاها و راه‌حل‌ها</title>
+<style>
+  body{font-family:Tahoma,"Segoe UI",sans-serif;font-size:14px;line-height:2;color:#1e293b;max-width:900px;margin:24px auto;padding:0 16px}
+  h1{font-size:22px;border-bottom:3px solid #dc2626;padding-bottom:8px}
+  h2{font-size:16px;color:#b91c1c;margin-top:26px;background:#fef2f2;padding:6px 12px;border-radius:6px}
+  .fix{background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px 14px;margin:8px 0}
+  .script{background:#0f172a;color:#a5f3fc;border-radius:6px;padding:8px 14px;font-family:Consolas,monospace;font-size:13px;direction:ltr;display:block;margin:8px 0;white-space:pre;overflow-x:auto}
+  .why{background:#fff7ed;border-right:4px solid #ea580c;padding:6px 12px;border-radius:6px;margin:6px 0}
+  .log{background:#0f172a;color:#86efac;border-radius:6px;padding:8px 14px;font-family:Consolas,monospace;font-size:13px;direction:ltr;display:block;margin:6px 0;white-space:pre;overflow-x:auto}
+  table{border-collapse:collapse;width:100%;margin:12px 0}
+  th,td{border:1px solid #cbd5e1;padding:6px 10px;text-align:right}
+  th{background:#eff6ff}
+  @media print{body{font-size:12px}h2{break-after:avoid}}
+</style>
+</head>
+<body>
+
+<h1>عیب‌یابی Warehouse OS — هر خطا با راه‌حل</h1>
+<p>قانون کلی: اول <code>3-scripts\RUN-CHECK-SYSTEM.bat</code> را بزن؛ خروجی‌اش می‌گوید کجای سیستم مشکل دارد. بعد از رفع هر مشکل، دوباره همان را بزن تا سبز شود.<br>
+همهٔ لاگ‌ها این‌جاست: <code>C:\WarehouseOS\data\</code> → <code>api.log</code> و <code>web.log</code> و <code>db.log</code> و <code>install.log</code></p>
+
+<h2>۱) API بالا نمی‌آید (پنل «سرور قطع است» یا خطای اتصال)</h2>
+<div class="why">شایع‌ترین علت‌ها: سرویس API خاموش است، یا دیتابیس بالا نیست، یا فایل تنظیمات (config\.env) خراب/پاک شده.</div>
+<div class="fix">
+۱. <code>3-scripts\RUN-CHECK-SYSTEM.bat</code> بزن — اگر WarehouseOS-API یا DB غیر از Running بود:<br>
+۲. <code>3-scripts\RUN-START-SERVICES.bat</code> را راست‌کلیک → Run as administrator.<br>
+۳. اگر سرویس‌ها Running بودند ولی باز پاسخ نمی‌دهد، لاگ را ببین: <code>C:\WarehouseOS\data\api.log</code> — چند خط آخر معمولاً دلیل را می‌گوید.
+</div>
+<span class="script">C:\kardo\3-scripts\RUN-START-SERVICES.bat</span>
+
+<h2>۲) پنل سفید است یا «This site can't be reached»</h2>
+<div class="why">سرویس وب (WarehouseOS-Web) بالا نیست، یا آدرس/پورت اشتباه زده شده، یا WebView2 خیلی قدیمی است.</div>
+<div class="fix">
+۱. RUN-START-SERVICES را اجرا کن.<br>
+۲. آدرس درست را از <code>C:\WarehouseOS\INSTALL-INFO.txt</code> بردار (پورت 3001).<br>
+۳. اگر صفحه باز می‌شود ولی سفید است: یک بار Ctrl+R و بعد Ctrl+Shift+R (رفع کش).<br>
+۴. اگر باز سفید بود: WebView2 را از Edge آپدیت کن یا ویندوز را آپدیت کن.
+</div>
+
+<h2>۳) صندوق (اپ دسکتاپ) وصل نمی‌شود</h2>
+<div class="why">آدرس سرور داخل تنظیمات صندوق غلط است، یا فایروال پورت 3001 را بسته، یا API پایین است.</div>
+<div class="fix">
+۱. اول مطمئن شو API سالم است (بند ۱).<br>
+۲. پنجرهٔ تنظیمات صندوق را باز کن و آدرس را بگذار: <code>http://IP-سرور:3001</code> (IP از INSTALL-INFO).<br>
+۳. روی سیستم سرور این را در PowerShell ادمین اجرا کن:<br>
+</div>
+<span class="log">netsh advfirewall firewall add rule name="WarehouseOS 3001" dir=in action=allow protocol=TCP localport=3001 profile=any
+netsh advfirewall firewall add rule name="WarehouseOS 3000" dir=in action=allow protocol=TCP localport=3000 profile=any</span>
+<div class="fix">اگر کل شبکهٔ سرور خراب شد: <code>C:\WarehouseOS\scripts\network-fix.ps1</code> در PowerShell ادمین.</div>
+
+<h2>۴) نصب وسط راه مرد / INSTALL-INFO خالی است / سرویس‌ها ساخته نشدند</h2>
+<div class="why">یکی از فایل‌های نصب کامل نریخته، یا اولین‌اجرا (first-run) وسط کار خطا خورده. جزئیات دقیق خطا در <code>C:\WarehouseOS\data\install.log</code> است.</div>
+<div class="fix">اسکریپت «تکمیل نصب نصفه» را ادمین اجرا کن — مایگریشن، سرویس‌ها، فایروال، آیکون‌ها و INSTALL-INFO را بدون دست‌زدن به دیتابیس و رمزها کامل می‌کند:</div>
+<span class="script">C:\kardo\3-scripts\RUN-FINISH-BROKEN-INSTALL.bat</span>
+
+<h2>۵) رمز ادمین را نمی‌دانم / گم شده</h2>
+<div class="fix">
+۱. فایل <code>C:\WarehouseOS\data\api.log</code> را در Notepad باز کن → Ctrl+F → بنویس <code>ادمین</code> → خط «ادمین پیش‌فرض ساخته شد: admin / XXXX» را پیدا کن (رمز فقط همان یک‌بار نوشته شده).<br>
+۲. اگر در پنل رمز عوض شده و یادت نیست: رمز را نمی‌شود دید ولی می‌شود ساختش را بازگردانی — از یک کاربر ادمینِ دیگر در پنل رمز را ریست کن. اگر هیچ ادمینی در دسترس نیست، با یک ادمین جدید از طریق دستور زیر بساز (در PowerShell ادمین روی سرور):<br>
+</div>
+<span class="log">cd C:\WarehouseOS\app\api
+..\node\node.exe node_modules\prisma\build\index.js db execute --stdin &lt; "%TEMP%\newadmin.sql"</span>
+<div class="warn">قبل از این کار از من بپرس تا اسکریپت آمادهٔ ساخت ادمین جدید را برایت بفرستم؛ حذف کاربر ادمین خطا دارد و نباید سرِبالا انجام شود.</div>
+
+<h2>۶) کاتالوگ محصولات وارد نشد / خطای pg_restore</h2>
+<div class="why">دیتابیس هنوز ساخته نشده، یا فایل dump ناقص کپی شده، یا اتصال به دیتابیس برقرار نیست.</div>
+<div class="fix">
+۱. اول RUN-CHECK-SYSTEM — اگر DB سبز نیست اول بند ۱ را انجام بده.<br>
+۲. امانت فایل: <code>3-scripts\RUN-VERIFY-FILES.bat</code> را بزن تا SHA فایل‌های فلش چک شود.<br>
+۳. دوباره RUN-RELOAD-CATALOG را ادمین اجرا کن (تکرارش بی‌ضرر است؛ رکوردهای تکراری نادیده گرفته می‌شوند).<br>
+۴. اگر خطای «role does not exist» یا «password authentication» داد: یعنی فایل <code>C:\WarehouseOS\config\.env</code> خراب است — با من تماس بگیر، رمز فقط آن‌جاست و نباید از نو ساخته شود.
+</div>
+
+<h2>۷) بک‌آپ شبانه انجام نمی‌شود</h2>
+<div class="why">مقصد بک‌آپ ست نشده، یا درایو مقصد پر/قطع است، یا pg_dump پیدا نشده.</div>
+<div class="fix">
+۱. در پنل، مقصد بک‌آپ را دوباره ست کن و «بک‌آپ بگیر» را دستی بزن.<br>
+۲. مسیرهای pg_dump/pg_restore در <code>C:\WarehouseOS\config\.env</code> باید این‌ها باشند:<br>
+</div>
+<span class="log">PG_DUMP_PATH=C:\WarehouseOS\pgsql\bin\pg_dump.exe
+PG_RESTORE_PATH=C:\WarehouseOS\pgsql\bin\pg_restore.exe</span>
+<div class="fix">۳. تاریخچهٔ بک‌آپ‌ها را در پنل ببین (موفق/ناموفق + دلیل).</div>
+
+<h2>۸) بعد از ری‌استارت ویندوز همه‌چیز خاموش است</h2>
+<div class="why">سرویس‌ها باید Automatic باشند و خودشان بالا بیایند. اگر نیامده‌اند یعنی سرویسی حذف شده یا ویندوز سرویس را عقب انداخته.</div>
+<div class="fix">RUN-START-SERVICES را اجرا کن؛ اگر هر بار بعد از ری‌استارت تکرار شد به من بگو (سرویس‌ها را دوباره ثبت می‌کنیم).</div>
+
+<h2>۹) فیش حرارتی چاپ نمی‌شود</h2>
+<div class="fix">
+۱. پرینتر در ویندوز نصب و Default باشد؛ از ویندوز یک صفحهٔ تست پرینت بگیر.<br>
+۲. در پنل/تنظیمات صندوق، نام پرینتر را انتخاب کن.<br>
+۳. اگر پرینتر در لیست نیست: کابل/درایور پرینتر. چاپ فیش به اینترنت نیاز ندارد.
+</div>
+
+<h2>۱۰) متن‌ها به‌هم‌ریخته یا حروف فارسی جدا جدا در فیش</h2>
+<div class="why">فیش‌ها به‌صورت تصویر چاپ می‌شوند تا فارسی سالم باشد؛ اگر باز خراب است یعنی پرینتر در حالت متن چاپ می‌کند یا درایور قدیمی است.</div>
+<div class="fix">درایور پرینتر را به‌روز کن؛ در تنظیمات چاپ، «print as image» را روشن کن.</div>
+
+<h2>۱۱) بعد از نصبِ فلش، فایل‌ها خراب بود / ستاپ باز نشد</h2>
+<div class="why">فلش‌ها گاهی در حین کپی خراب می‌کنند.</div>
+<div class="fix"><code>3-scripts\RUN-VERIFY-FILES.bat</code> را روی فلش اجرا کن؛ اگر قرمز شد، همان فایل را دوباره از لپ‌تاپ کپی کن و دوباره چک کن.</div>
+
+<h2>۱۲) سرور اینترنت ندارد</h2>
+<div class="fix">اشکالی ندارد — <b>کل سیستم آفلاین کار می‌کند</b>: دیتابیس، پنل، صندوق، چاپ و بک‌آپ همه محلی‌اند. اینترنت فقط برای دانلود آپدیت‌های خود نرم‌افزار لازم است که با فلش منتقل می‌شوند. شبکهٔ LAN فقط برای وصل‌بودن صندوق‌های دیگر به سرور لازم است.</div>
+
+<h2>۱۳) خطای «role does not exist» در db.log — نگران نباش</h2>
+<div class="fix">اگر فقط یک خط FATAL به اسم کاربر ویندوز باشد (مثلاً role "K") و سرویس‌ها سلامت باشند، بی‌ضرر است؛ یک اتصالِ بدون رمزِ اولیهٔ خود ویندوز است و اثری روی کار ندارد.</div>
+
+<h2>۱۴) دیسک پر شده / دیتابیس بزرگ شد</h2>
+<div class="fix">
+۱. لاگ‌ها چرخشی‌اند و بیش از ~۱۰MB برای هر سرویس نمی‌گیرند.<br>
+۲. بک‌آپ‌های قدیمی را هر چند ماه یک‌بار از پوشهٔ بک‌آپ آرشیو/پاک کن (فقط چند تای آخر را نگه دار).<br>
+۳. فضای خالی C را زیر ۵ گیگ نبر.
+</div>
+
+<h2>۱۵) آپدیت یا تعمیر وسط کار در «Removing previous services» مرد</h2>
+<div class="why">نسخه‌های قبل از 0.4.0 اسکریپت سرویس‌هایی داشتند که در PowerShell 5.1 با خطای stderr نرم‌افزار nssm می‌مرد. فقط در آپدیت/تعمیر روی یک نصبِ موجود رخ می‌دهد؛ نصب تازه هرگز. نسخهٔ 0.4.0 این باگ را داخل خودش اصلاح کرده — روی نصبِ جدیدِ امروز هیچ‌کاری لازم نیست. داده‌ها و دیتابیس آسیب نمی‌بینند — بدترین حالت: سرویس‌ها خاموش مانده‌اند.</div>
+<div class="fix">۱. <code>3-scripts\RUN-START-SERVICES.bat</code> را بزن تا سیستم دوباره بالا بیاید.<br>۲. اگر سیستم هنوز 0.3.3 (قدیمی) دارد: <code>3-scripts\RUN-PATCH-SERVICES-SCRIPT.bat</code> را ادمین اجرا کن تا اسکریپت اصلاح‌شده جایگزین شود.<br>۳. آپدیت/تعمیر را دوباره اجرا کن — این‌بار از همان‌جا رد می‌شود.</div>
+
+<h2>۱۶) صندوق وصل نمی‌شود و در api.log مکرر «JWT_SECRET تنظیم نشده است» می‌آید (کرش حلقه‌ای)</h2>
+<div class="why">سرویس API هر ~۵ ثانیه بالا می‌آید و فوراً می‌میرد. دو علت دارد: یا فایل <code>config\.env</code> کلید امضا (JWT_SECRET) یا آدرس دیتابیس را ندارد، یا سرویس متغیرهای محیطی‌اش را در یک تعمیر/آپدیت نیمه‌کاره گم کرده. داده‌ها سالم‌اند؛ فقط کلید ورود به سیستم می‌افتد.</div>
+<div class="fix">ادمین اجرا کن: <code>3-scripts\RUN-FIX-API-CRASH.bat</code> — خودش تشخیص می‌دهد کدام‌یک از دو علت است: کلید جدید می‌سازد یا (اگر لازم شد) رمز دیتابیس را بدون دست‌زدن به داده‌ها بازیابی می‌کند، متغیرهای سرویس را برمی‌گرداند، سرویس را بالا می‌آورد و در پایان سلامت <code>/health</code> را نشان می‌دهد. اپ صندوق خودش دوباره وصل می‌شود.</div>
+
+<h2>جدول سریع «مشکل ← اسکریپت»</h2>
+<table>
+<tr><th>مشکل</th><th>اسکریپت (داخل 3-scripts)</th></tr>
+<tr><td>چک کلی قبل از نصب</td><td>RUN-CHECK-BEFORE-INSTALL.bat</td></tr>
+<tr><td>هر سرویسی خاموش است</td><td>RUN-START-SERVICES.bat</td></tr>
+<tr><td>نصب نصفه مانده / INSTALL-INFO خالی</td><td>RUN-FINISH-BROKEN-INSTALL.bat</td></tr>
+<tr><td>کاتالوگ وارد نشده یا باید دوباره بریزم</td><td>RUN-RELOAD-CATALOG.bat</td></tr>
+<tr><td>وضعیت کلی سیستم را می‌خواهم ببینم</td><td>RUN-CHECK-SYSTEM.bat</td></tr>
+<tr><td>شک دارم فایل‌های فلش سالم‌اند</td><td>RUN-VERIFY-FILES.bat</td></tr>
+<tr><td>بعد از نصب (یک‌بار) پچ سرویس‌ها</td><td>RUN-PATCH-SERVICES-SCRIPT.bat</td></tr>
+<tr><td>آپدیت/تعمیر در «Removing previous services» مرد</td><td>اول RUN-START-SERVICES بعد RUN-PATCH-SERVICES-SCRIPT</td></tr>
+<tr><td>کرش حلقه‌ای API / «JWT_SECRET تنظیم نشده» در api.log</td><td>RUN-FIX-API-CRASH.bat (ادمین)</td></tr>
+<tr><td>فاجعه: دیتابیس خراب شده و باید از بک‌آپ ایمنی برگردم</td><td>restore-safety-backup.ps1 (ادمین — با احتیاط)</td></tr>
+</table>
+
+</body>
+</html>

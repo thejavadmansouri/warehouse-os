@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>راهنمای نصب Warehouse OS روی سیستم مغازه</title>
+<style>
+  body{font-family:Tahoma,"Segoe UI",sans-serif;font-size:14px;line-height:2;color:#1e293b;max-width:860px;margin:24px auto;padding:0 16px}
+  h1{font-size:22px;border-bottom:3px solid #2563eb;padding-bottom:8px}
+  h2{font-size:17px;color:#1d4ed8;margin-top:28px}
+  .step{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;margin:12px 0}
+  .step b.t{color:#0f172a}
+  code,.cmd{background:#0f172a;color:#a5f3fc;border-radius:6px;padding:2px 8px;font-family:Consolas,monospace;font-size:13px;direction:ltr;display:inline-block}
+  .cmd{display:block;padding:10px 14px;margin:8px 0;overflow-x:auto;white-space:pre}
+  .warn{background:#fef3c7;border-right:4px solid #b45309;padding:8px 14px;border-radius:6px;margin:10px 0}
+  .ok{background:#dcfce7;border-right:4px solid #16a34a;padding:8px 14px;border-radius:6px;margin:10px 0}
+  table{border-collapse:collapse;width:100%;margin:10px 0}
+  th,td{border:1px solid #cbd5e1;padding:6px 10px;text-align:right}
+  th{background:#eff6ff}
+  @media print{body{font-size:12px}.step{break-inside:avoid}h2{break-after:avoid}}
+</style>
+</head>
+<body>
+
+<h1>راهنمای نصب Warehouse OS — سیستم مغازه</h1>
+<p>فایل‌های لازم داخل همین فلش، پوشهٔ <code>kardo v1</code> هستند. کل نصب بدون اینترنت انجام می‌شود؛ فقط WebView2 لازم است که ویندوزِ به‌روز معمولاً دارد (مرحلهٔ ۰ چک می‌کند).</p>
+
+<h2>مرحلهٔ ۰ — چک قبل از نصب (۲ دقیقه)</h2>
+<div class="step">فایل <code>3-scripts\RUN-CHECK-BEFORE-INSTALL.bat</code> را دوبارکلیک کن.<br>
+این اسکریپت بررسی می‌کند: حق ادمین، فضای خالی دیسک (حداقل ۱۰ گیگ روی C)، آزاد بودن پورت‌های 3000 و 3001 و 5432، و وجود WebView2.<br>
+اگر همه سبز بود برو مرحلهٔ ۱. اگر قرمز داشت، فایل <code>2-guides\troubleshoot.html</code> را باز کن و خطای متناظر را ببین.</div>
+
+<h2>مرحلهٔ ۱ — نصب (۱۰ دقیقه)</h2>
+<div class="step">
+۱. روی <code>1-install\WarehouseOS-Setup-0.4.0.exe</code> راست‌کلیک → <b>Run as administrator</b>.<br>
+۲. در صفحهٔ اول ویزارد نوع نصب را بگذار روی <b>Full install</b> (پیش‌فرض) → Next → Install.<br>
+۳. صبر کن تا پنجرهٔ سیاه مراحل دیتابیس و سرویس‌ها را انجام دهد و خودش بسته شود.<br>
+۴. در انتها فایل <code>INSTALL-INFO.txt</code> باز می‌شود؛ اگر نشد دستی باز کن:<br>
+<code>C:\WarehouseOS\INSTALL-INFO.txt</code><br>
+داخلش آدرس پنل و API و محل رمز ادمین نوشته شده. <b>این فایل را عکس بگیر یا پرینت کن.</b>
+</div>
+<div class="ok">نصب کامل یعنی: هر سه سرویس <b>WarehouseOS-DB / API / Web</b> در حالت Running باشند. برای چک سریع: <code>3-scripts\RUN-CHECK-SYSTEM.bat</code></div>
+
+<h2>مرحلهٔ ۱٫۵ — پچ سرویس‌ها (فقط برای نصب‌های قدیمی 0.3.3)</h2>
+<div class="step">نسخهٔ 0.4.0 اسکریپت اصلاح‌شدهٔ سرویس‌ها را <b>داخل خودش</b> دارد؛ روی نصبِ تازه هیچ کاری لازم نیست.<br>
+این مرحله فقط اگر روی یک سیستمِ <b>قبلاً نصب‌شده با 0.3.3</b> آپدیت می‌کنی لازم است: فایل <code>3-scripts\RUN-PATCH-SERVICES-SCRIPT.bat</code> را راست‌کلیک → Run as administrator تا اسکریپت اصلاح‌شده جایگزین شود.</div>
+
+<h2>مرحلهٔ ۲ — اولین ورود و تغییر رمز (۵ دقیقه)</h2>
+<div class="step">
+۱. رمز ادمین یک‌بار در لاگ نوشته شده: فایل <code>C:\WarehouseOS\data\api.log</code> را باز کن و دنبال این خط بگرد:<br>
+<code>ادمین پیش‌فرض ساخته شد: admin / XXXXXXXX</code><br>
+۲. در پنل (آدرس از INSTALL-INFO، مثلاً <code>http://192.168.x.x:3001</code>) با <code>admin</code> و آن رمز وارد شو.<br>
+۳. <b>بلافاصله</b> از منوی کاربران رمز را عوض کن.<br>
+۴. یک کاربر «فروشنده» بساز که فقط صندوق ببیند و رمزش را به فروشنده بده.
+</div>
+<div class="warn">رمز ادمین هر نصب، مخصوص همان نصب است. رمزِ لپ‌تاپ روی مغازه کار نمی‌کند.</div>
+
+<h2>مرحلهٔ ۳ — وارد کردن کاتالوگ محصولات (۳ دقیقه)</h2>
+<div class="step">فایل <code>3-scripts\RUN-RELOAD-CATALOG.bat</code> را راست‌کلیک → Run as administrator.<br>
+این اسکریپت ۳۳ هزار کالا (با قیمت و بارکد و خودروها) را از <code>catalog-only.dump</code> داخل دیتابیس می‌ریزد.<br>
+بعد از تمام‌شدن، پنل را با Ctrl+R رفرش کن و چند محصول را سرچ کن.</div>
+
+<h2>مرحلهٔ ۴ — تنظیم بک‌آپ شبانه (۵ دقیقه)</h2>
+<div class="step">
+۱. از منوی مدیریت، مقصد بک‌آپ را روی یک <b>درایوی غیر از C</b> بگذار (مثلاً D یا یک هارد دوم).<br>
+۲. بک‌آپ شبانه ساعت ۲۳:۰۰ خودکار اجرا می‌شود؛ یک بار دستی هم از پنل «بک‌آپ بگیر» تا مطمئن شوی فایل ساخته می‌شود.<br>
+۳. بعد از بستنِ صندوق هم دیالوگ «بک‌آپ بگیر و ببند» می‌آید — این عمدی است و باید کار کند.
+</div>
+
+<h2>مرحلهٔ ۴٫۵ — آیکون وضعیت سرور (۱ دقیقه)</h2>
+<div class="step">فایل <code>3-scripts\INSTALL-STATUS-TOOL.bat</code> را دوبل‌کلیک کن و اجازهٔ ویندوز را بده.<br>
+از این به بعد یک <b>نقطهٔ سبز/قرمز</b> کنار ساعت ویندوز می‌ماند:<br>
+سبز = سرور فعال · قرمز = سرور قطع · با نگه‌داشتن ماوس روی آن، IP سرور دیده می‌شود<br>
+راست‌کلیک → «نمایش وضعیت» یا «تعمیر سرور» — اگر سرویسی خاموش باشد خودش برش می‌گرداند.<br>
+شورتکات «Warehouse OS Status» هم روی دسکتاپ ساخته می‌شود.</div>
+
+<h2>مرحلهٔ ۵ — شبکه و رزرو IP (۵ دقیقه)</h2>
+<div class="step">
+۱. آدرسی که INSTALL-INFO داده (مثلاً 192.168.1.50) را در تنظیمات روتر <b>Static/Reserve</b> کن.<br>
+۲. اگر رزرو نکنی، هر بار روشن‌شدن مودم احتمال دارد IP عوض شود و صندوق‌ها و موبایل‌ها قطع شوند.<br>
+۳. روی سیستم صندوقِ دوم فقط لازم است همان آدرس پنل را در پنجرهٔ تنظیمات صندوق بدهی.
+</div>
+
+<h2>مرحلهٔ ۶ — تست نهایی قبل از ترک مغازه (۱۰ دقیقه)</h2>
+<div class="step">این ۵ مورد را حتماً با هم چک کن:<br>
+۱. اسکن یک بارکد ← کالا با قیمت بیاید بالا<br>
+۲. یک فاکتور نسیه بزن ← در «حساب‌باز» مشتری دیده شود<br>
+۳. یک رسید/پرداخت ثبت کن ← مانده همان لحظه صفر شود<br>
+۴. پرینت فیش حرارتی بگیر<br>
+۵. صندوق را ببند ← اگر دیالوگ بک‌آپ آمد، «بک‌آپ بگیر و ببند» را بزن ← فایل dump در پوشهٔ بک‌آپ ساخته شود<br>
+<code>3-scripts\RUN-CHECK-SYSTEM.bat</code> هم بزن و خروجی سبز را ببین.</div>
+
+<h2>نصب صندوق روی کامپیوتر دوم (اگر لازم شد)</h2>
+<div class="step">همان Setup را روی آن سیستم اجرا کن و نوع نصب را <b>Seller app only</b> بگذار.<br>اولین اجرای صندوق فقط آدرس سرور را می‌پرسد: <code>http://&lt;IP-سرور&gt;:3001</code></div>
+
+<h2>آپدیت‌های بعدی</h2>
+<div class="step">
+هر نسخهٔ جدید فقط یک فایل Setup است. روی <b>سیستم سرورِ مغازه</b>:<br>
+<ol style="margin:4px 0">
+<li>فایل Setup جدید را روی فلش بگذار (پوشهٔ <code>updates</code>) و به مغازه ببر.</li>
+<li>PowerShell را Run as administrator باز کن و بزن:</li>
+</ol>
+<span class="cmd">C:\WarehouseOS\scripts\update.ps1 -Setup E:\kardo v1\updates\WarehouseOS-Setup-0.4.x.exe</span>
+این دستور خودش: بک‌آپ می‌گیرد → نسخهٔ جدید را نصب می‌کند → مایگریشن دیتابیس را می‌زند → سرویس‌ها را دوباره می‌سازد و بالا می‌آورد → و از نسخهٔ قبلی یک کپی در <code>C:\WarehouseOS\versions</code> نگه می‌دارد.<br>
+جزئیات بیشتر: <code>updates\HOW-TO-UPDATE.txt</code>
+</div>
+
+<h2>جمع‌بندی پوشه‌های فلش</h2>
+<table>
+<tr><th>پوشه/فایل</th><th>کار</th></tr>
+<tr><td>1-install\</td><td>Setup 0.4.0 + کاتالوگ + بک‌آپ ایمنی</td></tr>
+<tr><td>2-guides\</td><td>همین راهنما + راهنمای خطاها</td></tr>
+<tr><td>3-scripts\</td><td>اسکریپت‌های چک و تعمیر (هر کدام یک باتِ دوبل‌کلیک دارند)</td></tr>
+<tr><td>updates\</td><td>جای فایل Setupهای نسخه‌های بعدی + آموزش آپدیت</td></tr>
+<tr><td>MANIFEST.txt</td><td>اثر انگشت SHA256 فایل‌ها — با RUN-VERIFY-FILES.bat چک کن</td></tr>
+</table>
+
+</body>
+</html>

@@ -16,7 +16,14 @@
 param(
     [string]$Root = 'C:\WarehouseOS',
     [int]$ApiPort = 3000,
-    [int]$WebPort = 3001
+    [int]$WebPort = 3001,
+    # The seller shell (warehouse-seller.exe) is present under app\desktop --
+    # set by installer.iss when the seller component was installed. With the
+    # server on the SAME machine the shell's own first-run question (server
+    # address) has a known answer, so we write it in and the POS opens straight
+    # to the panel. On a seller-only machine (server elsewhere) the app keeps
+    # asking the operator, which is exactly right.
+    [switch]$WithSeller
 )
 
 $ErrorActionPreference = 'Stop'
@@ -32,6 +39,10 @@ function FromCodePoints([int[]]$points) {
 }
 $LabelPanel  = FromCodePoints @(0x067E,0x0646,0x0644,0x0020,0x0641,0x0631,0x0648,0x0634)
 $LabelFolder = FromCodePoints @(0x067E,0x0648,0x0634,0x0647,0x0020,0x0646,0x0635,0x0628)
+# "sandoogh-e forush" (POS/cash register) -- the seller app's shortcut label.
+$LabelPos    = FromCodePoints @(0x0635,0x0646,0x062F,0x0648,0x0642,0x0020,0x0641,0x0631,0x0648,0x0634)
+# "sandoogh-e forush" read as the app's own window title would show it.
+$SellerExe   = Join-Path $Root 'app\desktop\warehouse-seller.exe'
 
 $pgBin   = Join-Path $Root 'pgsql\bin'
 $dataDir = Join-Path $Root 'data\pg'
@@ -52,6 +63,110 @@ if (Test-Path $envFile) {
     Warn 'config\.env already exists -- this install is already set up. Skipping.'
     Stop-Transcript | Out-Null
     exit 0
+}
+
+# ------------------------------------------------------------------ preflight
+# Fail here, in two seconds, naming the exact file -- not three minutes later
+# in the middle of "Running migrations" after the database cluster already
+# exists. That exact failure shipped once: build.ps1 staged app\node\node.exe
+# but the installer's [Files] list forgot it, so first-run died at the
+# migrations step and the only trace was a PowerShell error inside
+# data\install.log. With this check a broken payload cannot get that far.
+Say 'Checking the files this install needs'
+$required = @(
+    (Join-Path $Root 'app\node\node.exe'),
+    (Join-Path $Root 'app\api\dist\src\main.js'),
+    (Join-Path $Root 'app\api\node_modules\prisma\build\index.js'),
+    (Join-Path $Root 'app\web\server.js'),
+    (Join-Path $Root 'nssm.exe'),
+    (Join-Path $pgBin 'postgres.exe')
+)
+$missing = @($required | Where-Object { -not (Test-Path $_) })
+if ($missing.Count -gt 0) {
+    foreach ($m in $missing) { Warn "Missing: $m" }
+    throw 'The install payload is incomplete -- the file(s) above never reached this machine. Rebuild the setup (build.ps1) and reinstall.'
+}
+Write-Host '  all present'
+
+# ------------------------------------------------------------- seller shell
+# Must run BEFORE the env-exists skip? No -- this block sits after it on
+# purpose: re-running the installer over an existing install must not touch
+# the operator's saved settings. Only a brand-new install configures the
+# shell.
+if ($WithSeller -or (Test-Path $SellerExe)) {
+    if (-not (Test-Path $SellerExe)) {
+        Warn "Seller shell missing: $SellerExe (seller component installed but the exe is not there)"
+    } else {
+        # WebView2 is the shell's only runtime dependency. It ships inbox on
+        # Windows 11 and recent Windows 10; a clean Win10 without Edge updates
+        # may not have it, and the app would open as an empty frame. Say it in
+        # words instead of letting a blank window be the message.
+        $wv2 = Get-ItemProperty `
+            'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', `
+            'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', `
+            'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}' `
+            -ErrorAction SilentlyContinue
+        if (-not $wv2) {
+            Warn 'WebView2 Runtime not found.'
+            Write-Host '    The seller app needs it. Install (needs internet):' -ForegroundColor Yellow
+            Write-Host '    https://go.microsoft.com/fwlink/?linkid=2124701' -ForegroundColor Yellow
+            Write-Host '    (Windows 10/11 with current updates usually already have it.)' -ForegroundColor Yellow
+        }
+
+        # Server on this same machine: the shell's address is known. Write the
+        # app's own config so the first launch goes straight to the panel
+        # instead of asking what first-run already knows.
+        $sellerCfgDir = Join-Path $env:APPDATA 'com.warehouseos.seller'
+        try {
+            New-Item -ItemType Directory -Force -Path $sellerCfgDir | Out-Null
+            $sellerCfg = Join-Path $sellerCfgDir 'config.json'
+            if (-not (Test-Path $sellerCfg)) {
+                $json = '{"server_url":"http://localhost:' + $WebPort + '","printer_name":""}'
+                # No BOM: the Rust side reads the file with serde_json, which
+                # tolerates none. ASCII-only content, so [IO.File]::WriteAllText
+                # with ASCII encoding is exact.
+                [IO.File]::WriteAllText($sellerCfg, $json, [Text.Encoding]::ASCII)
+                Write-Host '  seller app pre-configured: http://localhost:'$WebPort
+            } else {
+                Write-Host '  seller app config already present - left untouched'
+            }
+
+            # Desktop shortcut -- the one icon the operator actually uses. The
+            # .lnk COM API cannot save under a Persian FILE name, but the
+            # shortcut's own name here is ASCII-safe (Warehouse OS POS) while
+            # the Start-Menu label below carries the Persian text.
+            $ws = New-Object -ComObject WScript.Shell
+            $desktop = [Environment]::GetFolderPath('Desktop')
+            $lnk = $ws.CreateShortcut((Join-Path $desktop 'Warehouse OS.lnk'))
+            $lnk.TargetPath = $SellerExe
+            $lnk.WorkingDirectory = (Split-Path -Parent $SellerExe)
+            $lnk.IconLocation = "$SellerExe,0"
+            $lnk.Description = $LabelPos
+            $lnk.Save()
+
+            # Start Menu entry with the Persian label (ascii .url fallback,
+            # same trick the panel shortcut uses).
+            $group = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'Warehouse OS'
+            New-Item -ItemType Directory -Force -Path $group | Out-Null
+            try {
+                $lnk2 = $ws.CreateShortcut((Join-Path $group ($LabelPos + '.lnk')))
+                $lnk2.TargetPath = $SellerExe
+                $lnk2.WorkingDirectory = (Split-Path -Parent $SellerExe)
+                $lnk2.Save()
+            } catch {
+                # Same Persian-filename problem as the .lnk -- fall back to a
+                # plain .url, which Set-Content writes without complaint.
+                $url = "[InternetShortcut]" + [char]13 + [char]10 + "URL=file:///" + ($SellerExe -replace '\\','/')
+                Set-Content -Path (Join-Path $group 'Warehouse OS POS.url') -Encoding ascii -Value $url
+            }
+
+            # Autostart at login is written by the installer itself
+            # (installer.iss -> [Registry], driven by the task checkbox), so
+            # the operator's choice in the wizard is exactly what happens.
+        } catch {
+            Warn ("Seller shell setup failed (not fatal): $($_.Exception.Message)")
+        }
+    }
 }
 
 # ------------------------------------------------------------------ secrets
@@ -258,7 +373,7 @@ try {
 # ------------------------------------------------------------- health check
 # Either this says OK or it says exactly what failed. Finishing an install with
 # "probably fine" is how a warehouse discovers on Saturday morning that it is not.
-function Wait-Http([string]$url, [int]$timeoutSeconds) {
+function Wait-Http([string]$url, [int]$timeoutSeconds, [switch]$RequireOk) {
     $deadline = (Get-Date).AddSeconds($timeoutSeconds)
     while ((Get-Date) -lt $deadline) {
         try {
@@ -272,7 +387,14 @@ function Wait-Http([string]$url, [int]$timeoutSeconds) {
                 and routing; only a connection failure means it is not up.
             #>
             $response = $_.Exception.Response
-            if ($null -ne $response -and $null -ne $response.StatusCode) { return $true }
+            if ($RequireOk) {
+                <#
+                    /health answers 503 when the app is up but the database is
+                    not. An install that cannot read its own database is not
+                    complete, so only a 200 counts here.
+                #>
+                if ($null -ne $response -and [int]$response.StatusCode -eq 200) { return $true }
+            } elseif ($null -ne $response -and $null -ne $response.StatusCode) { return $true }
         }
         Start-Sleep -Seconds 2
     }
@@ -280,14 +402,37 @@ function Wait-Http([string]$url, [int]$timeoutSeconds) {
 }
 
 Say 'Checking that the services answer'
-$apiOk = Wait-Http "http://localhost:$ApiPort/" 60
+$apiOk = Wait-Http "http://localhost:$ApiPort/health" 60 -RequireOk
 $webOk = Wait-Http "http://localhost:$WebPort/" 60
 
+Say 'Registering the health watch'
+& (Join-Path $Root 'scripts\health-watch.ps1') -Install
+
 # --------------------------------------------------------------- the address
-$ip = (Get-NetIPAddress -AddressFamily IPv4 |
-       Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } |
-       Sort-Object -Property InterfaceMetric |
-       Select-Object -First 1).IPAddress
+<#
+    The address the phones must reach is the one on the interface that owns
+    the default route. Picking "first non-loopback IPv4" instead hands out a
+    virtual adapter's address (WSL/Hyper-V/VMware create those) that no phone
+    can reach -- 172.18.0.1 showed up in a real install's INSTALL-INFO.
+#>
+function Select-LanIp {
+    $best = $null
+    try {
+        $best = Get-NetRoute -DestinationPrefix '0.0.0.0/0' -ErrorAction Stop |
+                Sort-Object RouteMetric | Select-Object -First 1
+    } catch { }
+    if ($best) {
+        $addr = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $best.InterfaceIndex -ErrorAction SilentlyContinue |
+                Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } |
+                Select-Object -First 1
+        if ($addr) { return $addr.IPAddress }
+    }
+    return (Get-NetIPAddress -AddressFamily IPv4 |
+            Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' } |
+            Sort-Object -Property InterfaceMetric |
+            Select-Object -First 1).IPAddress
+}
+$ip = Select-LanIp
 
 Write-Host ''
 if ($apiOk -and $webOk) {

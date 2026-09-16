@@ -10,7 +10,7 @@ REM  Alt+F4. اگر روی همان کامپیوتر کار دیگری هم می
 REM  را اجرا کنید نه این را.
 REM ============================================================
 
-set KARDO_URL=http://localhost:3000/admin/pos
+set KARDO_URL=http://localhost:3001/admin/pos
 set KARDO_PROFILE=%LOCALAPPDATA%\Kardo\browser
 
 set CHROME=%ProgramFiles%\Google\Chrome\Application\chrome.exe

@@ -114,6 +114,14 @@ Write-Host ("  {0}  ({1} MB, readable)" -f $dump, $size)
 # ------------------------------------------------------------------- rollback
 # Setup.exe overwrites `app` in place, so the copy has to be taken now.
 
+# The seller shell lives inside `app\desktop` too. While it runs, its exe is
+# locked and the installer cannot replace it -- the update dies mid-file-copy.
+# Kill it here (best effort), and tell the operator to reopen it afterwards.
+Say 'Closing the seller app if it is running'
+Get-Process -Name 'warehouse-seller' -ErrorAction SilentlyContinue |
+    Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 1
+
 Say 'Keeping a copy of the current version'
 New-Item -ItemType Directory -Force -Path $versions | Out-Null
 $snapshot = Join-Path $versions $stamp
