@@ -3,60 +3,42 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class VehicleModelsService {
+  constructor(private prisma: PrismaService) {}
 
-  constructor(
-    private prisma: PrismaService
-  ) {}
-
-
-  findAll(){
-
+  findAll() {
     return this.prisma.vehicleModel.findMany({
-      orderBy:{
-        name:'asc'
-      }
+      orderBy: {
+        name: 'asc',
+      },
     });
-
   }
 
-
-  create(dto:any){
-
+  create(dto: any) {
     return this.prisma.vehicleModel.create({
-
-      data:{
-        name:dto.name,
-        startYear:dto.startYear,
-        endYear:dto.endYear,
-        systemType:dto.systemType
-      }
-
+      data: {
+        name: dto.name,
+        startYear: dto.startYear,
+        endYear: dto.endYear,
+        systemType: dto.systemType,
+      },
     });
-
   }
 
-
-  update(id:string, dto:any){
-
+  update(id: string, dto: any) {
     return this.prisma.vehicleModel.update({
-      where:{ id },
-      data:{
-        name:dto.name,
-        startYear:dto.startYear,
-        endYear:dto.endYear,
-        systemType:dto.systemType
-      }
+      where: { id },
+      data: {
+        name: dto.name,
+        startYear: dto.startYear,
+        endYear: dto.endYear,
+        systemType: dto.systemType,
+      },
     });
-
   }
 
-
-  remove(id:string){
-
+  remove(id: string) {
     return this.prisma.vehicleModel.delete({
-      where:{ id }
+      where: { id },
     });
-
   }
-
 }

@@ -26,7 +26,10 @@ describe('BarcodeService — اتصال بارکد', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    prisma.product.findFirst.mockResolvedValue({ id: 'p1', name: 'لنت جلو پراید' });
+    prisma.product.findFirst.mockResolvedValue({
+      id: 'p1',
+      name: 'لنت جلو پراید',
+    });
     prisma.productBarcode.findUnique.mockResolvedValue(null);
     prisma.productBarcode.create.mockImplementation(({ data }: any) =>
       Promise.resolve({ id: 'b1', ...data }),
@@ -36,7 +39,10 @@ describe('BarcodeService — اتصال بارکد', () => {
       providers: [
         BarcodeService,
         { provide: PrismaService, useValue: prisma },
-        { provide: InventoryOperationService, useValue: { execute: jest.fn() } },
+        {
+          provide: InventoryOperationService,
+          useValue: { execute: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -121,6 +127,8 @@ describe('BarcodeService — اتصال بارکد', () => {
 
     await service.unlinkBarcode('b2');
 
-    expect(prisma.productBarcode.delete).toHaveBeenCalledWith({ where: { id: 'b2' } });
+    expect(prisma.productBarcode.delete).toHaveBeenCalledWith({
+      where: { id: 'b2' },
+    });
   });
 });

@@ -5,18 +5,9 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { LabelsModule } from '../labels/labels.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    LabelsModule,
-  ],
-  controllers: [
-    PrintJobsController,
-  ],
-  providers: [
-    PrintJobsService,
-  ],
-  exports: [
-    PrintJobsService,
-  ],
+  imports: [PrismaModule, LabelsModule],
+  controllers: [PrintJobsController],
+  providers: [PrintJobsService],
+  exports: [PrintJobsService],
 })
 export class PrintJobsModule {}

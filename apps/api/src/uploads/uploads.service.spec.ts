@@ -12,7 +12,9 @@ const jpegMagic = Buffer.from([0xff, 0xd8, 0xff, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
 /** یک JPEG واقعی — برای مسیرهایی که باید از مرحله‌ی sharp هم رد شوند. */
 let realJpeg: Buffer;
 
-function makeFile(over: Partial<Express.Multer.File> = {}): Express.Multer.File {
+function makeFile(
+  over: Partial<Express.Multer.File> = {},
+): Express.Multer.File {
   return {
     buffer: realJpeg ?? jpegMagic,
     size: (realJpeg ?? jpegMagic).length,
@@ -54,7 +56,12 @@ describe('UploadsService', () => {
       // از آنجا که اعتبارسنجیِ sharp حالا قبل از جستجوی عملیات اجرا می‌شود،
       // تستِ «عملیات پیدا نشد» به یک تصویرِ واقعاً قابل‌پردازش نیاز دارد.
       realJpeg = await sharp({
-        create: { width: 4, height: 4, channels: 3, background: { r: 255, g: 0, b: 0 } },
+        create: {
+          width: 4,
+          height: 4,
+          channels: 3,
+          background: { r: 255, g: 0, b: 0 },
+        },
       })
         .jpeg()
         .toBuffer();
@@ -68,13 +75,19 @@ describe('UploadsService', () => {
 
     it('rejects an oversized file', async () => {
       await expect(
-        service.uploadPendingOperationPhoto(id, makeFile({ size: 99 * 1024 * 1024 })),
+        service.uploadPendingOperationPhoto(
+          id,
+          makeFile({ size: 99 * 1024 * 1024 }),
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('rejects a disallowed MIME type', async () => {
       await expect(
-        service.uploadPendingOperationPhoto(id, makeFile({ mimetype: 'image/gif' })),
+        service.uploadPendingOperationPhoto(
+          id,
+          makeFile({ mimetype: 'image/gif' }),
+        ),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 

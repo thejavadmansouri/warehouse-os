@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -7,7 +11,6 @@ import { buildSearchTokens, tokenizeQuery } from './search-tokens';
 import { nextSku } from './sku.util';
 import { BulkOnlineDto } from './dto/bulk-online.dto';
 import { BulkPriceDto } from './dto/bulk-price.dto';
-
 
 /** سقف نتایج جستجو — صندوق فروش هیچ‌وقت بیش از این را نشان نمی‌دهد. */
 const MAX_SEARCH_RESULTS = 100;
@@ -30,235 +33,183 @@ function escapeLike(s: string): string {
   return s.replace(/\\/g, '\\\\').replace(/[%_]/g, (c) => '\\' + c);
 }
 
-
 @Injectable()
 export class ProductsService {
-
-  constructor(
-    private prisma: PrismaService
-  ) {}
-
-
+  constructor(private prisma: PrismaService) {}
 
   async findAll(
-    page:number = 1,
-    limit:number = 50,
-    search?:string,
-    brandId?:string
-  ){
+    page: number = 1,
+    limit: number = 50,
+    search?: string,
+    brandId?: string,
+  ) {
+    const skip = (page - 1) * limit;
 
-    const skip=(page-1)*limit;
-
-
-    const where:any = {
-      deletedAt:null
+    const where: any = {
+      deletedAt: null,
     };
 
-
     // فیلتر برند برای صفحه‌ی قیمت‌گذاری: «همه‌ی کالاهای این برند».
-    if(brandId){
+    if (brandId) {
       where.brandId = brandId;
     }
 
-
-    if(search){
-
-      where.OR=[
-
+    if (search) {
+      where.OR = [
         {
-          name:{
-            contains:search,
-            mode:'insensitive'
-          }
+          name: {
+            contains: search,
+            mode: 'insensitive',
+          },
         },
 
         {
-          sku:{
-            contains:search,
-            mode:'insensitive'
-          }
+          sku: {
+            contains: search,
+            mode: 'insensitive',
+          },
         },
 
         {
-          barcodes:{
-            some:{
-              barcode:{
-                contains:search,
-                mode:'insensitive'
-              }
-            }
-          }
+          barcodes: {
+            some: {
+              barcode: {
+                contains: search,
+                mode: 'insensitive',
+              },
+            },
+          },
         },
 
         {
-          partNumber:{
-            contains:search,
-            mode:'insensitive'
-          }
+          partNumber: {
+            contains: search,
+            mode: 'insensitive',
+          },
         },
 
         {
-          brand:{
-            name:{
-              contains:search,
-              mode:'insensitive'
-            }
-          }
-        }
-
+          brand: {
+            name: {
+              contains: search,
+              mode: 'insensitive',
+            },
+          },
+        },
       ];
-
     }
 
-
-
-    const [data,total]=await Promise.all([
-
-
+    const [data, total] = await Promise.all([
       this.prisma.product.findMany({
-
         where,
 
         skip,
 
-        take:limit,
+        take: limit,
 
+        include: {
+          brand: true,
 
-        include:{
+          vehicleModel: true,
 
-          brand:true,
+          category: true,
 
-          vehicleModel:true,
+          barcodes: true,
 
-          category:true,
-
-          barcodes:true,
-
-          assets:true,
+          assets: true,
 
           // آخرین قیمت — صفحه‌ی قیمت‌گذاری باید بدون درخواست جداگانه به‌ازای
           // هر ردیف بداند قیمت فعلی چیست.
-          prices:{
-            orderBy:{
-              createdAt:'desc'
+          prices: {
+            orderBy: {
+              createdAt: 'desc',
             },
-            take:1
+            take: 1,
           },
 
-          inventories:{
-            include:{
-              location:true
-            }
-          }
-
+          inventories: {
+            include: {
+              location: true,
+            },
+          },
         },
 
-
-        orderBy:{
-          createdAt:'desc'
-        }
-
+        orderBy: {
+          createdAt: 'desc',
+        },
       }),
 
-
       this.prisma.product.count({
-        where
-      })
-
-
+        where,
+      }),
     ]);
 
-
-
     return {
+      data: data.map((p) => ({
+        ...p,
+        image:
+          p.assets.find((a) => a.type === 'PRODUCT_IMAGE')?.path ?? null,
+      })),
 
-      data,
-
-      meta:{
+      meta: {
         total,
         page,
-        lastPage:Math.ceil(total/limit)
-      }
-
+        lastPage: Math.ceil(total / limit),
+      },
     };
-
   }
 
+  async findOne(id: string) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        id,
+        deletedAt: null,
+      },
 
+      include: {
+        brand: true,
 
+        vehicleModel: true,
 
+        category: true,
 
-  async findOne(id:string){
+        barcodes: true,
 
+        assets: true,
 
-    const product =
-      await this.prisma.product.findFirst({
-
-        where:{
-          id,
-          deletedAt:null
+        prices: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 1,
         },
 
-
-        include:{
-
-          brand:true,
-
-          vehicleModel:true,
-
-          category:true,
-
-          barcodes:true,
-
-          assets:true,
-
-          prices:{
-            orderBy:{
-              createdAt:'desc'
-            },
-            take:1
+        inventories: {
+          include: {
+            location: true,
           },
+        },
+      },
+    });
 
-
-          inventories:{
-            include:{
-              location:true
-            }
-          }
-
-        }
-
-      });
-
-
-
-    if(!product){
-
-      throw new NotFoundException(
-        'کالا پیدا نشد'
-      );
-
+    if (!product) {
+      throw new NotFoundException('کالا پیدا نشد');
     }
 
-
-    return product;
-
+    return {
+      ...product,
+      image:
+        product.assets.find((a) => a.type === 'PRODUCT_IMAGE')?.path ?? null,
+    };
   }
 
-
-
-
-
-  async create(dto:any){
-
+  async create(dto: any) {
     // کد کالا = کد حسابداری و همان چیزی که روی لیبل بارکد می‌شود.
     // اگر داده نشده باشد، عدد بعدیِ دنباله تخصیص می‌یابد تا هیچ کالایی
     // بدون کد قابل چاپ نماند.
     const sku: string = dto.sku?.trim()
       ? String(dto.sku).trim()
       : await nextSku(this.prisma);
-
-
 
     /*
      * بارکدِ داخلی — تصادفی، نه بر پایه‌ی زمان.
@@ -276,129 +227,100 @@ export class ProductsService {
       dto.internalBarcode ||
       `WOS${randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
-
-    const barcodesToCreate:{barcode:string; type:'INTERNAL'|'FACTORY'}[] = [
+    const barcodesToCreate: {
+      barcode: string;
+      type: 'INTERNAL' | 'FACTORY';
+    }[] = [
       {
-        barcode:internalBarcode,
-        type:'INTERNAL'
-      }
+        barcode: internalBarcode,
+        type: 'INTERNAL',
+      },
     ];
 
-    if(dto.factoryBarcode){
+    if (dto.factoryBarcode) {
       barcodesToCreate.push({
-        barcode:dto.factoryBarcode,
-        type:'FACTORY'
+        barcode: dto.factoryBarcode,
+        type: 'FACTORY',
       });
     }
 
-
     return this.prisma.product.create({
-
-      data:{
+      data: {
         internalBarcode: internalBarcode,
-        
 
-
-        name:dto.name,
-
+        name: dto.name,
 
         sku,
 
-
-        partNumber:dto.partNumber,
-
+        partNumber: dto.partNumber,
 
         // بدون این، کالای تازه‌ساخته‌شده در جستجو پیدا نمی‌شود (جستجو روی
         // searchTokens است، نه روی name).
         searchTokens: buildSearchTokens(dto.name, sku, dto.partNumber),
 
+        description: dto.description,
 
-        description:dto.description,
+        unit: dto.unit,
 
+        weight: dto.weight,
 
-        unit:dto.unit,
+        brandId: dto.brandId,
 
+        categoryId: dto.categoryId,
 
-        weight:dto.weight,
+        vehicleModelId: dto.vehicleModelId,
 
+        supplierId: dto.supplierId,
 
+        minStock: dto.minStock || 0,
 
-        brandId:dto.brandId,
-
-
-        categoryId:dto.categoryId,
-
-
-        vehicleModelId:dto.vehicleModelId,
-
-
-        supplierId:dto.supplierId,
-
-
-
-        minStock:dto.minStock || 0,
-
-
-
-        barcodes:{
-          create:barcodesToCreate
+        barcodes: {
+          create: barcodesToCreate,
         },
 
-
         // فقط اگه قیمتی داده شده یه رکورد قیمت هم می‌سازیم
-        ...(
-          (dto.purchasePrice != null || dto.salePrice != null || dto.compareAtPrice != null)
-            ? {
-                prices:{
-                  create:{
-                    purchasePrice:dto.purchasePrice ?? null,
-                    salePrice:dto.salePrice ?? null,
-                    wholesalePrice:dto.wholesalePrice ?? null,
-                    compareAtPrice:dto.compareAtPrice ?? null
-                  }
-                }
-              }
-            : {}
-        ),
-
+        ...(dto.purchasePrice != null ||
+        dto.salePrice != null ||
+        dto.compareAtPrice != null ||
+        dto.managerPrice != null
+          ? {
+              prices: {
+                create: {
+                  purchasePrice: dto.purchasePrice ?? null,
+                  salePrice: dto.salePrice ?? null,
+                  wholesalePrice: dto.wholesalePrice ?? null,
+                  managerPrice: dto.managerPrice ?? null,
+                  compareAtPrice: dto.compareAtPrice ?? null,
+                },
+              },
+            }
+          : {}),
 
         // فقط اگه مسیر عکسی داده شده یه Asset می‌سازیم
-        ...(
-          dto.image
-            ? {
-                assets:{
-                  create:{
-                    path:dto.image,
-                    type:'PRODUCT_IMAGE'
-                  }
-                }
-              }
-            : {}
-        )
-
-
+        ...(dto.image
+          ? {
+              assets: {
+                create: {
+                  path: dto.image,
+                  type: 'PRODUCT_IMAGE',
+                },
+              },
+            }
+          : {}),
       },
 
-      include:{
-        barcodes:true,
-        prices:true,
-        assets:true,
-        brand:true,
-        category:true,
-        vehicleModel:true
-      }
-
+      include: {
+        barcodes: true,
+        prices: true,
+        assets: true,
+        brand: true,
+        category: true,
+        vehicleModel: true,
+      },
     });
-
-
   }
 
-
-
-
-
-  async update(id:string, dto:any){
-
+  async update(id: string, dto: any) {
     // بارکد و عکس از endpointهای خودشان عوض می‌شوند.
     // قیمت اما همین‌جا پذیرفته می‌شود: فرم محصول فیلد قیمت دارد و آن را
     // می‌فرستد، و اگر اینجا بی‌صدا دور ریخته شود کاربر «ذخیره شد» می‌بیند
@@ -407,6 +329,7 @@ export class ProductsService {
       dto.purchasePrice != null ||
       dto.salePrice != null ||
       dto.wholesalePrice != null ||
+      dto.managerPrice != null ||
       dto.compareAtPrice != null
     ) {
       await this.setPrice(id, dto);
@@ -451,19 +374,20 @@ export class ProductsService {
     // صف چاپ برمی‌گردد. تغییر قیمت عمداً بی‌اثر است.
     const nameChanged =
       name !== undefined &&
-      name !== (await this.prisma.product.findUnique({
-        where: { id },
-        select: { name: true },
-      }))?.name;
+      name !==
+        (
+          await this.prisma.product.findUnique({
+            where: { id },
+            select: { name: true },
+          })
+        )?.name;
 
     return this.prisma.product.update({
-
-      where:{
-        id
+      where: {
+        id,
       },
 
-
-      data:{
+      data: {
         name,
         sku,
         partNumber,
@@ -478,16 +402,9 @@ export class ProductsService {
         isActive,
         ...(searchTokens ? { searchTokens } : {}),
         ...(nameChanged ? { labelPrintedAt: null } : {}),
-      }
-
+      },
     });
-
-
   }
-
-
-
-
 
   /**
    * کالاهایی که هنوز لیبل نخورده‌اند.
@@ -559,10 +476,14 @@ export class ProductsService {
         createdAt: p.createdAt,
         stock: p.inventories.reduce((s, i) => s + i.quantity, 0),
       })),
-      meta: { total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) },
+      meta: {
+        total,
+        page,
+        limit,
+        lastPage: Math.max(1, Math.ceil(total / limit)),
+      },
     };
   }
-
 
   /** ثبت اینکه لیبل این کالاها چاپ شد — از صف خارج می‌شوند. */
   async markLabelsPrinted(productIds: string[]) {
@@ -575,7 +496,6 @@ export class ProductsService {
 
     return { updated: res.count };
   }
-
 
   /**
    * ثبت قیمت جدید برای یک کالا.
@@ -594,6 +514,7 @@ export class ProductsService {
       purchasePrice?: number | null;
       salePrice?: number | null;
       wholesalePrice?: number | null;
+      managerPrice?: number | null;
       compareAtPrice?: number | null;
     },
   ) {
@@ -614,6 +535,7 @@ export class ProductsService {
       purchasePrice: dto.purchasePrice ?? latest?.purchasePrice ?? null,
       salePrice: dto.salePrice ?? latest?.salePrice ?? null,
       wholesalePrice: dto.wholesalePrice ?? latest?.wholesalePrice ?? null,
+      managerPrice: dto.managerPrice ?? latest?.managerPrice ?? null,
       compareAtPrice: dto.compareAtPrice ?? latest?.compareAtPrice ?? null,
     };
 
@@ -622,6 +544,7 @@ export class ProductsService {
       latest.purchasePrice === next.purchasePrice &&
       latest.salePrice === next.salePrice &&
       latest.wholesalePrice === next.wholesalePrice &&
+      latest.managerPrice === next.managerPrice &&
       // بدون این، عوض‌کردنِ تنهای «قیمت پیش از تخفیف» ذخیره نمی‌شد.
       latest.compareAtPrice === next.compareAtPrice;
 
@@ -632,7 +555,6 @@ export class ProductsService {
     });
   }
 
-
   /** تاریخچه‌ی قیمت یک کالا، جدیدترین اول. */
   priceHistory(productId: string) {
     return this.prisma.productPrice.findMany({
@@ -640,7 +562,6 @@ export class ProductsService {
       orderBy: { createdAt: 'desc' },
     });
   }
-
 
   /**
    * قیمت‌گذاری دسته‌ای — انتخاب دستی، یک برند، یا نتیجه‌ی یک جست‌وجو.
@@ -660,12 +581,16 @@ export class ProductsService {
     if (!where) {
       throw new BadRequestException({
         error: 'NO_SELECTION',
-        message: 'هیچ کالایی انتخاب نشده — برند، جست‌وجو یا فهرست کالا لازم است',
+        message:
+          'هیچ کالایی انتخاب نشده — برند، جست‌وجو یا فهرست کالا لازم است',
       });
     }
 
     const { kind, percent } = dto.op;
-    if ((kind === 'percent' || kind === 'markup') && typeof percent !== 'number') {
+    if (
+      (kind === 'percent' || kind === 'markup') &&
+      typeof percent !== 'number'
+    ) {
       throw new BadRequestException({
         error: 'PERCENT_REQUIRED',
         message: 'برای تغییر درصدی، درصد باید مشخص باشد',
@@ -719,9 +644,11 @@ export class ProductsService {
       const next = { ...base };
 
       if (kind === 'set') {
-        if (dto.op.purchasePrice !== undefined) next.purchasePrice = dto.op.purchasePrice;
+        if (dto.op.purchasePrice !== undefined)
+          next.purchasePrice = dto.op.purchasePrice;
         if (dto.op.salePrice !== undefined) next.salePrice = dto.op.salePrice;
-        if (dto.op.wholesalePrice !== undefined) next.wholesalePrice = dto.op.wholesalePrice;
+        if (dto.op.wholesalePrice !== undefined)
+          next.wholesalePrice = dto.op.wholesalePrice;
       } else if (kind === 'percent') {
         const field = dto.op.field!;
         const from = base[field];
@@ -759,12 +686,13 @@ export class ProductsService {
     // تکه‌تکه، تا نه تراکنش طولانی شود نه حافظه.
     const CHUNK = 2000;
     for (let i = 0; i < rows.length; i += CHUNK) {
-      await this.prisma.productPrice.createMany({ data: rows.slice(i, i + CHUNK) });
+      await this.prisma.productPrice.createMany({
+        data: rows.slice(i, i + CHUNK),
+      });
     }
 
     return { matched, updated: rows.length, skipped, dryRun: false };
   }
-
 
   /** فیلترِ انتخاب. برگرداندن null یعنی «هیچ معیاری داده نشده». */
   /**
@@ -778,11 +706,12 @@ export class ProductsService {
    * روی ۳۳ هزار کالا کلِ کاتالوگ را عمومی می‌کند.
    */
   async bulkSetOnline(dto: BulkOnlineDto) {
-    const where = this.buildBulkPriceWhere(dto.select as BulkPriceDto['select']);
+    const where = this.buildBulkPriceWhere(dto.select);
     if (!where) {
       throw new BadRequestException({
         error: 'NO_SELECTION',
-        message: 'هیچ کالایی انتخاب نشده — برند، دسته، جست‌وجو یا فهرست کالا لازم است',
+        message:
+          'هیچ کالایی انتخاب نشده — برند، دسته، جست‌وجو یا فهرست کالا لازم است',
       });
     }
 
@@ -809,8 +738,9 @@ export class ProductsService {
     return { affected, applied: true };
   }
 
-
-  private buildBulkPriceWhere(sel: BulkPriceDto['select']): Prisma.ProductWhereInput | null {
+  private buildBulkPriceWhere(
+    sel: BulkPriceDto['select'],
+  ): Prisma.ProductWhereInput | null {
     const where: Prisma.ProductWhereInput = { deletedAt: null };
     let hasCriteria = false;
 
@@ -844,32 +774,19 @@ export class ProductsService {
     return hasCriteria ? where : null;
   }
 
-
-  async remove(id:string){
-
-
+  async remove(id: string) {
     return this.prisma.product.update({
-
-      where:{
-        id
+      where: {
+        id,
       },
 
+      data: {
+        isActive: false,
 
-      data:{
-
-        isActive:false,
-
-        deletedAt:new Date()
-
-      }
-
+        deletedAt: new Date(),
+      },
     });
-
   }
-
-
-
-
 
   // نرمال‌سازی کوئری هم‌راستا با نرمال‌سازی نام‌ها هنگام import:
   // عربی ي/ك → فارسی ی/ک، یکدست‌کردن فاصله‌ها. بدون این، ورودی عربیِ کاربر/STT
@@ -1039,10 +956,12 @@ export class ProductsService {
       tokens.length < 2
         ? Prisma.sql`0`
         : Prisma.sql`CASE WHEN ${Prisma.join(
-            tokens.slice(0, -1).map(
-              (t, i) =>
-                Prisma.sql`strpos(s.txt, ${t}) < strpos(s.txt, ${tokens[i + 1]})`,
-            ),
+            tokens
+              .slice(0, -1)
+              .map(
+                (t, i) =>
+                  Prisma.sql`strpos(s.txt, ${t}) < strpos(s.txt, ${tokens[i + 1]})`,
+              ),
             ' AND ',
           )} THEN 5 ELSE 0 END`;
 
@@ -1164,8 +1083,9 @@ export class ProductsService {
    * مشخص، برای لحظه‌ی افزودن به سبد در POS) — یک‌بار نوشته شده تا این دو
    * هیچ‌وقت در تعریفِ «موجودی» از هم جدا نشوند.
    *
-   * عمداً `purchasePrice` را برنمی‌گرداند: این مسیر به نقشِ SALES هم باز است
-   * و بهای خرید نباید دستِ فروشنده باشد (حاشیه‌ی سود لو نرود).
+   * `purchasePrice` پیش‌فرض برنمی‌گردد: این مسیر به نقشِ SALES هم باز است
+   * و بهای خرید نباید دستِ فروشنده باشد (حاشیه‌ی سود لو نرود). فقط مدیر
+   * با `includePurchase` آن را می‌گیرد — به‌همراه قیمتِ پیشنهادیِ ۱۵٪ سود.
    */
   private async attachStock<
     T extends {
@@ -1177,9 +1097,13 @@ export class ProductsService {
       salePrice: number | null;
       brand?: { name: string } | null;
       vehicleModel?: { name: string } | null;
-      prices?: { salePrice: number | null }[];
+      prices?: {
+        salePrice: number | null;
+        purchasePrice?: number | null;
+        managerPrice?: number | null;
+      }[];
     },
-  >(products: T[]) {
+  >(products: T[], opts?: { includePurchase?: boolean }) {
     if (products.length === 0) return [];
 
     const ids = products.map((p) => p.id);
@@ -1198,6 +1122,7 @@ export class ProductsService {
 
     return products.map((p) => {
       const rows = byProduct.get(p.id) ?? [];
+      const purchasePrice = p.prices?.[0]?.purchasePrice ?? null;
       return {
         id: p.id,
         name: p.name,
@@ -1206,6 +1131,16 @@ export class ProductsService {
         partNumber: p.partNumber,
         // قیمت فروش تا صندوق بتواند مستقیم به سبد اضافه کند، بدون رفت‌وبرگشتِ جدا.
         salePrice: p.salePrice ?? p.prices?.[0]?.salePrice ?? null,
+        // فقط برای مدیر: بهای خرید + قیمتِ پیشنهادیِ ۱۵٪ سود روی همان بهای خرید
+        // + «قیمتِ مدیر» (عددِ آزادِ مدیر).
+        ...(opts?.includePurchase
+          ? {
+              purchasePrice,
+              suggestedPrice:
+                purchasePrice != null ? Math.round(purchasePrice * 1.15) : null,
+              managerPrice: p.prices?.[0]?.managerPrice ?? null,
+            }
+          : {}),
         brandName: p.brand?.name ?? null,
         vehicleModelName: p.vehicleModel?.name ?? null,
         totalStock: rows.reduce((s, r) => s + r.quantity, 0),
@@ -1225,7 +1160,7 @@ export class ProductsService {
   // «یافتن کالا»: سرچ قوی + آدرسِ دقیق. برای هر نتیجه، مکان‌هایی که موجودی دارد
   // (نام/کد/مسیرِ کامل + تعداد) و مجموع کل را ضمیمه می‌کند. برای مدیر/فروشنده/کارگر:
   // اسم را می‌زند → اگر موجود باشد، دقیقاً می‌گوید کجاست.
-  async searchWithStock(query: string) {
+  async searchWithStock(query: string, opts?: { includePurchase?: boolean }) {
     const products = (await this.search(query)) as unknown as Array<{
       id: string;
       name: string;
@@ -1235,11 +1170,11 @@ export class ProductsService {
       salePrice: number | null;
       brand?: { name: string } | null;
       vehicleModel?: { name: string } | null;
-      prices?: { salePrice: number | null }[];
+      prices?: { salePrice: number | null; purchasePrice?: number | null }[];
     }>;
     if (products.length === 0) return [];
 
-    const mapped = await this.attachStock(products);
+    const mapped = await this.attachStock(products, opts);
 
     // کالاهایی که موجودی (و آدرس) دارند بالای لیست بیایند؛ ترتیب ربط در هر گروه حفظ می‌شود.
     return mapped
@@ -1258,7 +1193,7 @@ export class ProductsService {
    * چون کش‌شدنِ آن یعنی فروش روی یک عددِ ممکن‌است‌کهنه. این endpoint دقیقاً
    * لحظه‌ی pick صدا زده می‌شود تا آن عدد همیشه تازه باشد.
    */
-  async productStock(productId: string) {
+  async productStock(productId: string, opts?: { includePurchase?: boolean }) {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, deletedAt: null },
       select: {
@@ -1269,126 +1204,117 @@ export class ProductsService {
         partNumber: true,
         brand: { select: { name: true } },
         vehicleModel: { select: { name: true } },
-        prices: { orderBy: { createdAt: 'desc' }, take: 1, select: { salePrice: true } },
+        prices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            salePrice: true,
+            ...(opts?.includePurchase
+              ? { purchasePrice: true, managerPrice: true }
+              : {}),
+          },
+        },
       },
     });
     if (!product) throw new NotFoundException('کالا پیدا نشد');
 
-    const [mapped] = await this.attachStock([{ ...product, salePrice: null }]);
+    const [mapped] = await this.attachStock(
+      [{ ...product, salePrice: null }],
+      opts,
+    );
     return mapped;
   }
 
-
-
-  async detailByBarcode(barcode:string){
-
+  async detailByBarcode(barcode: string) {
     const product = await this.prisma.product.findFirst({
-
-      where:{
-        barcodes:{
-          some:{
-            barcode
-          }
-        }
+      where: {
+        barcodes: {
+          some: {
+            barcode,
+          },
+        },
       },
 
-      include:{
+      include: {
+        brand: true,
 
-        brand:true,
+        vehicleModel: true,
 
-        vehicleModel:true,
+        category: true,
 
-        category:true,
+        barcodes: true,
 
-        barcodes:true,
+        assets: true,
 
-        assets:true,
-
-
-        inventories:{
-          include:{
-            location:true
-          }
+        inventories: {
+          include: {
+            location: true,
+          },
         },
 
-
-        inventoryLogs:{
-          orderBy:{
-            createdAt:'desc'
+        inventoryLogs: {
+          orderBy: {
+            createdAt: 'desc',
           },
-          take:20,
-          include:{
-            location:true,
-            user:true,
-            assets:true
-          }
-        }
-
-      }
-
+          take: 20,
+          include: {
+            location: true,
+            user: true,
+            assets: true,
+          },
+        },
+      },
     });
 
-
-    if(!product){
-
-      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا پیدا نشد' });
-
+    if (!product) {
+      throw new NotFoundException({
+        error: 'PRODUCT_NOT_FOUND',
+        message: 'کالا پیدا نشد',
+      });
     }
 
-
-    const totalStock =
-      product.inventories.reduce(
-        (sum:number,item)=>sum+item.quantity,
-        0
-      );
-
+    const totalStock = product.inventories.reduce(
+      (sum: number, item) => sum + item.quantity,
+      0,
+    );
 
     return {
+      product: {
+        id: product.id,
 
-      product:{
+        name: product.name,
 
-        id:product.id,
-
-        name:product.name,
-
-        sku:product.sku,
+        sku: product.sku,
 
         internalBarcode:
-          product.barcodes.find(b=>b.type === 'INTERNAL')?.barcode ?? null,
+          product.barcodes.find((b) => b.type === 'INTERNAL')?.barcode ?? null,
 
         factoryBarcode:
-          product.barcodes.find(b=>b.type === 'FACTORY')?.barcode ?? null,
+          product.barcodes.find((b) => b.type === 'FACTORY')?.barcode ?? null,
 
-        partNumber:product.partNumber,
+        partNumber: product.partNumber,
 
         image:
-          product.assets.find(a=>a.type === 'PRODUCT_IMAGE')?.path ?? null,
+          product.assets.find((a) => a.type === 'PRODUCT_IMAGE')?.path ?? null,
 
-        brand:product.brand,
+        brand: product.brand,
 
-        vehicleModel:product.vehicleModel,
+        vehicleModel: product.vehicleModel,
 
-        category:product.category
-
+        category: product.category,
       },
-
 
       totalStock,
 
+      locations: product.inventories.map((i) => ({
+        location: i.location.name,
 
-      locations:product.inventories.map(i=>({
+        barcode: i.location.barcode,
 
-        location:i.location.name,
-
-        barcode:i.location.barcode,
-
-        quantity:i.quantity
-
+        quantity: i.quantity,
       })),
 
-
-      lastOperations: product.inventoryLogs.map(log => ({
-
+      lastOperations: product.inventoryLogs.map((log) => ({
         id: log.id,
 
         action: log.action,
@@ -1398,30 +1324,22 @@ export class ProductsService {
         note: log.note,
 
         image:
-          log.assets?.find(a=>a.type === 'INVENTORY_IMAGE')?.path ?? null,
+          log.assets?.find((a) => a.type === 'INVENTORY_IMAGE')?.path ?? null,
 
-        location:{
-
+        location: {
           name: log.location.name,
 
-          barcode: log.location.barcode
-
+          barcode: log.location.barcode,
         },
 
         user: log.user?.fullName || null,
 
-        createdAt: log.createdAt
-
-      }))
-
+        createdAt: log.createdAt,
+      })),
     };
-
-
   }
 
-
   async exportCsv() {
-
     const products = await this.prisma.product.findMany({
       where: { deletedAt: null },
       include: {
@@ -1457,9 +1375,14 @@ export class ProductsService {
     };
 
     const rows = products.map((p) => {
-      const internalBarcode = p.barcodes.find((b) => b.type === 'INTERNAL')?.barcode ?? '';
-      const factoryBarcode = p.barcodes.find((b) => b.type === 'FACTORY')?.barcode ?? '';
-      const totalStock = p.inventories.reduce((sum, inv) => sum + inv.quantity, 0);
+      const internalBarcode =
+        p.barcodes.find((b) => b.type === 'INTERNAL')?.barcode ?? '';
+      const factoryBarcode =
+        p.barcodes.find((b) => b.type === 'FACTORY')?.barcode ?? '';
+      const totalStock = p.inventories.reduce(
+        (sum, inv) => sum + inv.quantity,
+        0,
+      );
 
       return [
         p.name,
@@ -1473,7 +1396,9 @@ export class ProductsService {
         p.unit,
         p.minStock,
         totalStock,
-      ].map(escapeCsv).join(',');
+      ]
+        .map(escapeCsv)
+        .join(',');
     });
 
     // BOM (\uFEFF) برای اینکه اکسل فارسی رو درست نمایش بده
@@ -1500,6 +1425,7 @@ export class ProductsService {
     limit: number = 500,
     updatedSince?: string,
     includePrice = false,
+    includePurchase = false,
   ) {
     const since = updatedSince ? new Date(updatedSince) : undefined;
     if (since && Number.isNaN(since.getTime())) {
@@ -1533,7 +1459,18 @@ export class ProductsService {
           // آخرین ردیفِ قیمت (ProductPrice جدولِ تاریخچه است) — همان الگویی که
           // locate/findAll استفاده می‌کنند تا عددِ قیمت همه‌جا یکی باشد.
           ...(includePrice
-            ? { prices: { orderBy: { createdAt: 'desc' as const }, take: 1, select: { salePrice: true } } }
+            ? {
+                prices: {
+                  orderBy: { createdAt: 'desc' as const },
+                  take: 1,
+                  select: {
+                    salePrice: true,
+                    ...(includePurchase
+                      ? { purchasePrice: true, managerPrice: true }
+                      : {}),
+                  },
+                },
+              }
             : {}),
         },
       }),
@@ -1542,7 +1479,16 @@ export class ProductsService {
     const totalPages = Math.max(1, Math.ceil(total / limit));
     return {
       products: rows.map((p) => {
-        const priced = p as typeof p & { prices?: { salePrice: number | null }[] };
+        const priced = p as typeof p & {
+          prices?: {
+            salePrice: number | null;
+            purchasePrice?: number | null;
+            managerPrice?: number | null;
+          }[];
+        };
+        const purchasePrice = includePurchase
+          ? (priced.prices?.[0]?.purchasePrice ?? null)
+          : null;
         return {
           id: p.id,
           name: p.name,
@@ -1556,7 +1502,19 @@ export class ProductsService {
           vehicleModel: p.vehicleModel?.name ?? null,
           updatedAt: p.updatedAt.toISOString(),
           deleted: !!p.deletedAt,
-          ...(includePrice ? { salePrice: priced.prices?.[0]?.salePrice ?? null } : {}),
+          ...(includePrice
+            ? { salePrice: priced.prices?.[0]?.salePrice ?? null }
+            : {}),
+          ...(includePurchase
+            ? {
+                purchasePrice,
+                suggestedPrice:
+                  purchasePrice != null
+                    ? Math.round(purchasePrice * 1.15)
+                    : null,
+                managerPrice: priced.prices?.[0]?.managerPrice ?? null,
+              }
+            : {}),
         };
       }),
       page,

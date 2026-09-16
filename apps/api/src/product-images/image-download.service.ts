@@ -74,7 +74,7 @@ export class ImageDownloadService {
               if (err) return callback(err, '', 0);
               if (!addresses.length) {
                 return callback(
-                  new Error(`Host did not resolve: ${hostname}`) as NodeJS.ErrnoException,
+                  new Error(`Host did not resolve: ${hostname}`),
                   '',
                   0,
                 );
@@ -84,7 +84,7 @@ export class ImageDownloadService {
                   return callback(
                     new Error(
                       `SSRF blocked: ${hostname} resolves to internal address ${a.address}`,
-                    ) as NodeJS.ErrnoException,
+                    ),
                     '',
                     0,
                   );
@@ -116,11 +116,16 @@ export class ImageDownloadService {
     // 3. Check Content-Length
     const contentLength = response.headers.get('content-length');
     if (contentLength && parseInt(contentLength, 10) > MAX_CONTENT_LENGTH) {
-      throw new BadRequestException('File too large (Content-Length exceeds 10MB)');
+      throw new BadRequestException(
+        'File too large (Content-Length exceeds 10MB)',
+      );
     }
 
     // 4. Check Content-Type
-    const contentType = response.headers.get('content-type')?.split(';')[0]?.trim();
+    const contentType = response.headers
+      .get('content-type')
+      ?.split(';')[0]
+      ?.trim();
     if (contentType && !ALLOWED_MIME.has(contentType)) {
       throw new BadRequestException(`Unsupported MIME type: ${contentType}`);
     }
@@ -128,7 +133,9 @@ export class ImageDownloadService {
     // 5. Download with size limit
     const arrayBuffer = await response.arrayBuffer();
     if (arrayBuffer.byteLength > MAX_DOWNLOAD_BYTES) {
-      throw new BadRequestException('File too large (exceeds 10MB after download)');
+      throw new BadRequestException(
+        'File too large (exceeds 10MB after download)',
+      );
     }
     if (arrayBuffer.byteLength === 0) {
       throw new BadRequestException('Empty file');
@@ -139,7 +146,9 @@ export class ImageDownloadService {
     // 6. Validate magic bytes
     const detectedMime = this.sniffMime(buffer);
     if (!detectedMime) {
-      throw new BadRequestException('File is not a valid image (magic bytes check failed)');
+      throw new BadRequestException(
+        'File is not a valid image (magic bytes check failed)',
+      );
     }
 
     // 7. Compute SHA-256
@@ -238,7 +247,9 @@ export class ImageDownloadService {
 
     if (net.isIP(host)) {
       if (this.isBlockedIp(host)) {
-        throw new BadRequestException('Access to private/internal IPs is blocked');
+        throw new BadRequestException(
+          'Access to private/internal IPs is blocked',
+        );
       }
       return;
     }
@@ -282,7 +293,10 @@ export class ImageDownloadService {
 
     if (net.isIPv4(target)) {
       const parts = target.split('.').map(Number);
-      if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) {
+      if (
+        parts.length !== 4 ||
+        parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)
+      ) {
         return true; // malformed → block
       }
       const [a, b] = parts;
@@ -353,11 +367,16 @@ export class ImageDownloadService {
 
   private mimeToExt(mime: string): string {
     switch (mime) {
-      case 'image/jpeg': return '.jpg';
-      case 'image/png': return '.png';
-      case 'image/webp': return '.webp';
-      case 'image/gif': return '.gif';
-      default: return '.jpg';
+      case 'image/jpeg':
+        return '.jpg';
+      case 'image/png':
+        return '.png';
+      case 'image/webp':
+        return '.webp';
+      case 'image/gif':
+        return '.gif';
+      default:
+        return '.jpg';
     }
   }
 }

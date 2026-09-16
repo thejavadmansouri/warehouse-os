@@ -1,6 +1,14 @@
 import { Roles } from '../auth/roles.decorator';
 import { Role } from '@prisma/client';
-import { Controller, Get, Post, Patch, Delete, Param, Body } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Param,
+  Body,
+} from '@nestjs/common';
 import { VehicleModelsService } from './vehicle-models.service';
 
 @Controller('vehicle-models')

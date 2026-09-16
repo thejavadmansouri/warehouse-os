@@ -9,16 +9,21 @@ import { ValidateNested } from 'class-validator';
  * نگیرد: انتخاب دستی، یا برند/دسته/جست‌وجو.
  */
 export class BulkOnlineSelectDto {
-  @IsOptional() @IsArray() @IsString({ each: true })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
   productIds?: string[];
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   brandId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   categoryId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   search?: string;
 
   /**
@@ -28,12 +33,14 @@ export class BulkOnlineSelectDto {
    * می‌کند)، پس روشن‌کردنش فقط عدد را گمراه‌کننده می‌کند. این گزینه به مدیر
    * اجازه می‌دهد از همان اول فقط کالاهای فروختنی را انتخاب کند.
    */
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   onlyWithSalePrice?: boolean;
 }
 
 export class BulkOnlineDto {
-  @ValidateNested() @Type(() => BulkOnlineSelectDto)
+  @ValidateNested()
+  @Type(() => BulkOnlineSelectDto)
   select: BulkOnlineSelectDto;
 
   /** true یعنی روی سایت دیده شود. */
@@ -46,6 +53,7 @@ export class BulkOnlineDto {
    * روی ۳۳ هزار کالا، «اعمال کن و ببین چه شد» گران است. مدیر اول عدد را
    * می‌بیند، بعد تأیید می‌کند.
    */
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   dryRun?: boolean;
 }

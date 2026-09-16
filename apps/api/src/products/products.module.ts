@@ -5,15 +5,9 @@ import { ProductsService } from './products.service';
 import { BarcodeModule } from '../barcode/barcode.module';
 
 @Module({
-  imports: [
-    BarcodeModule,
-  ],
-  controllers: [
-    ProductsController,
-  ],
+  imports: [BarcodeModule],
+  controllers: [ProductsController],
   providers: [ProductsService, ProductPopularityService],
-  exports: [
-    ProductsService,
-  ],
+  exports: [ProductsService],
 })
 export class ProductsModule {}

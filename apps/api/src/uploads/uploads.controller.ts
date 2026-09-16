@@ -27,12 +27,27 @@ export class UploadsController {
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('product/:id/image')
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
   async uploadProductImage(
     @Param('id') id: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
     return this.uploadsService.uploadProductImage(id, file);
+  }
+
+  /**
+   * عکسِ گرفته‌شده در کاردکس را «تصویر محصول» می‌کند — بک‌اند یک کپیِ
+   * مستقل زیر پوشه‌ی عمومی /storage/products می‌سازد و عکسِ قبلی را عزل می‌کند.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('product/:productId/from-asset/:assetId')
+  async setProductImageFromAsset(
+    @Param('productId') productId: string,
+    @Param('assetId', new ParseUUIDPipe()) assetId: string,
+  ) {
+    return this.uploadsService.setProductImageFromAsset(productId, assetId);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
@@ -57,7 +72,10 @@ export class UploadsController {
     @Param('clientRequestId', new ParseUUIDPipe()) clientRequestId: string,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.uploadsService.uploadPendingOperationPhoto(clientRequestId, file);
+    return this.uploadsService.uploadPendingOperationPhoto(
+      clientRequestId,
+      file,
+    );
   }
 
   /**

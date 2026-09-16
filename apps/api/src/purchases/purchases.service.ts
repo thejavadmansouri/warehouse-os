@@ -4,11 +4,18 @@ import {
   NotFoundException,
   ConflictException,
 } from '@nestjs/common';
-import { Prisma, PurchaseStatus, WorkTaskKind } from '@prisma/client';
+import {
+  Prisma,
+  PurchaseStatus,
+  WorkTaskKind,
+  FixedAccount,
+  VoucherSourceType,
+} from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { SystemLocationsService } from '../inventory/system-locations.service';
+import { PostingService } from '../vouchers/posting.service';
 import { WorkTasksService } from '../work-tasks/work-tasks.service';
 import { INT4_MAX } from '../common/money';
 import { inLockOrder } from '../common/lock-order';
@@ -18,7 +25,6 @@ import {
   CreatePurchaseDto,
   QueryPurchasesDto,
 } from './dto/create-purchase.dto';
-
 
 /**
  * فاکتور خرید — ورودِ کالا از روی برگه‌ای که فروشنده همراه جنس می‌آورد.
@@ -37,77 +43,73 @@ import {
  */
 @Injectable()
 export class PurchasesService {
-
   constructor(
     private prisma: PrismaService,
     private operation: InventoryOperationService,
     private systemLocations: SystemLocationsService,
     private workTasks: WorkTasksService,
+    private posting: PostingService,
   ) {}
 
-
   async create(dto: CreatePurchaseDto, userId?: string) {
-
     // ---- بررسی‌های ارزان، پیش از باز کردن تراکنش ----
 
     const existing = await this.prisma.purchaseInvoice.findUnique({
-      where:{ idempotencyKey: dto.idempotencyKey },
+      where: { idempotencyKey: dto.idempotencyKey },
     });
     if (existing) return this.findOne(existing.id);
 
-
     const warehouse = await this.prisma.warehouse.findUnique({
-      where:{ id: dto.warehouseId },
-      select:{ id:true },
+      where: { id: dto.warehouseId },
+      select: { id: true },
     });
     if (!warehouse) {
       throw new NotFoundException({
-        error:'WAREHOUSE_NOT_FOUND',
-        message:'انبار پیدا نشد',
+        error: 'WAREHOUSE_NOT_FOUND',
+        message: 'انبار پیدا نشد',
       });
     }
-
 
     // مکانِ هر ردیف باید در همین انبار باشد — همان محافظی که فروش دارد. بدون
     // آن یک locationId از انبار دیگر، موجودیِ آن انبار را زیاد می‌کرد.
     const locationIds = [
       ...new Set(
-        dto.lines.map(l => l.locationId).filter((id): id is string => !!id),
+        dto.lines.map((l) => l.locationId).filter((id): id is string => !!id),
       ),
     ];
 
     if (locationIds.length) {
       const valid = await this.prisma.location.findMany({
-        where:{ id:{ in: locationIds }, warehouseId: dto.warehouseId },
-        select:{ id:true },
+        where: { id: { in: locationIds }, warehouseId: dto.warehouseId },
+        select: { id: true },
       });
 
       if (valid.length !== locationIds.length) {
-        const ok = new Set(valid.map(l => l.id));
-        const lineIndex = dto.lines.findIndex(l => l.locationId && !ok.has(l.locationId));
+        const ok = new Set(valid.map((l) => l.id));
+        const lineIndex = dto.lines.findIndex(
+          (l) => l.locationId && !ok.has(l.locationId),
+        );
         throw new BadRequestException({
-          error:'LOCATION_NOT_IN_WAREHOUSE',
+          error: 'LOCATION_NOT_IN_WAREHOUSE',
           lineIndex,
           locationId: dto.lines[lineIndex]?.locationId,
-          message:'مکان انتخاب‌شده در این انبار نیست',
+          message: 'مکان انتخاب‌شده در این انبار نیست',
         });
       }
     }
-
 
     if (dto.supplierId) {
       const supplier = await this.prisma.supplier.findUnique({
-        where:{ id: dto.supplierId },
-        select:{ id:true },
+        where: { id: dto.supplierId },
+        select: { id: true },
       });
       if (!supplier) {
         throw new NotFoundException({
-          error:'SUPPLIER_NOT_FOUND',
-          message:'تأمین‌کننده پیدا نشد',
+          error: 'SUPPLIER_NOT_FOUND',
+          message: 'تأمین‌کننده پیدا نشد',
         });
       }
     }
-
 
     // یک کالا از یک مکان نباید دو ردیف جدا داشته باشد؛ وگرنه سقفِ ابطال و
     // شمارشِ ردیف‌ها گمراه‌کننده می‌شود. کلاینت باید ادغام کند.
@@ -116,19 +118,18 @@ export class PurchasesService {
       const key = `${line.productId}::${line.locationId ?? ''}`;
       if (seen.has(key)) {
         throw new BadRequestException({
-          error:'DUPLICATE_LINE',
-          lineIndex:i,
-          message:'یک کالا برای یک مکان نباید دو ردیف جداگانه داشته باشد',
+          error: 'DUPLICATE_LINE',
+          lineIndex: i,
+          message: 'یک کالا برای یک مکان نباید دو ردیف جداگانه داشته باشد',
         });
       }
       seen.add(key);
     });
 
-
     // ---- مبالغ ----
 
     const subtotal = dto.lines.reduce(
-      (sum, l) => sum + (l.quantity * l.unitPrice) - (l.discount ?? 0),
+      (sum, l) => sum + l.quantity * l.unitPrice - (l.discount ?? 0),
       0,
     );
 
@@ -136,8 +137,8 @@ export class PurchasesService {
 
     if (discount > subtotal) {
       throw new BadRequestException({
-        error:'DISCOUNT_EXCEEDS_TOTAL',
-        message:'تخفیف از مبلغ فاکتور بیشتر است',
+        error: 'DISCOUNT_EXCEEDS_TOTAL',
+        message: 'تخفیف از مبلغ فاکتور بیشتر است',
       });
     }
 
@@ -145,12 +146,11 @@ export class PurchasesService {
 
     if (subtotal > INT4_MAX || total > INT4_MAX) {
       throw new BadRequestException({
-        error:'AMOUNT_TOO_LARGE',
+        error: 'AMOUNT_TOO_LARGE',
         max: INT4_MAX,
-        message:'مبلغ فاکتور از حد مجاز بیشتر است',
+        message: 'مبلغ فاکتور از حد مجاز بیشتر است',
       });
     }
-
 
     // ---- گاردِ قیمتِ مشکوک ----
     //
@@ -164,21 +164,18 @@ export class PurchasesService {
 
     if (priceWarnings.length && !dto.confirmPriceWarnings) {
       throw new ConflictException({
-        error:'PRICE_WARNINGS',
+        error: 'PRICE_WARNINGS',
         warnings: priceWarnings,
-        message:'چند قیمت غیرعادی به‌نظر می‌رسد — بررسی کنید',
+        message: 'چند قیمت غیرعادی به‌نظر می‌رسد — بررسی کنید',
       });
     }
-
 
     // ---- تراکنش ----
 
     try {
-
       const purchaseId = await this.prisma.$transaction(async (tx) => {
-
         const purchase = await tx.purchaseInvoice.create({
-          data:{
+          data: {
             idempotencyKey: dto.idempotencyKey,
             warehouseId: dto.warehouseId,
             supplierId: dto.supplierId ?? null,
@@ -195,7 +192,7 @@ export class PurchasesService {
 
         // ردیفِ بی‌مکان روی «انبار موقت» می‌نشیند. یک بار حساب می‌شود تا برای
         // هر ردیف کوئری تکراری نزنیم.
-        const needsStaging = dto.lines.some(l => !l.locationId);
+        const needsStaging = dto.lines.some((l) => !l.locationId);
         const stagingId = needsStaging
           ? await this.systemLocations.staging(tx, dto.warehouseId)
           : null;
@@ -213,14 +210,14 @@ export class PurchasesService {
         for (const { line, locationId } of orderedLines) {
           await this.operation.execute(
             {
-              type:'IN',
+              type: 'IN',
               productId: line.productId,
               locationId,
               quantity: line.quantity,
               unitPrice: line.unitPrice,
               purchaseId: purchase.id,
               userId: userId ?? null,
-              source:'PURCHASE',
+              source: 'PURCHASE',
             },
             tx,
           );
@@ -237,15 +234,43 @@ export class PurchasesService {
          */
         if (priceWarnings.length) {
           await tx.auditLog.create({
-            data:{
+            data: {
               userId: userId ?? null,
-              action:'PURCHASE_PRICE_WARNING_CONFIRMED',
-              entity:'PurchaseInvoice',
+              action: 'PURCHASE_PRICE_WARNING_CONFIRMED',
+              entity: 'PurchaseInvoice',
               entityId: purchase.id,
               newData: priceWarnings as unknown as Prisma.InputJsonValue,
             },
           });
         }
+
+        /*
+         * ---- سند خودکارِ این خرید (پشت صحنه) ----
+         *
+         * بدهکار: موجودی انبار به بهای خریدِ خالص (جمعِ سند). بستانکار: حسابِ
+         * تأمین‌کنندگان — چه تأمین‌کننده ثبت شده باشد چه نه، بدهیِ خریدِ
+         * پرداخت‌نشده است. (پرداخت به تأمین‌کننده در فاز ۲ سندِ خودش را
+         * می‌گیرد.)
+         */
+        await this.posting.post(tx, {
+          sourceType: VoucherSourceType.PURCHASE_INVOICE,
+          sourceId: purchase.id,
+          idempotencyKey: `purchase:${purchase.id}`,
+          lines: [
+            {
+              account: FixedAccount.INVENTORY,
+              amount: total,
+              note: 'کالای خریداری‌شده به بهای خرید',
+            },
+            {
+              account: FixedAccount.SUPPLIERS,
+              amount: -total,
+              note: 'بدهی به تأمین‌کننده',
+            },
+          ],
+          note: `فاکتور خرید ${purchase.number}`,
+          userId: userId ?? null,
+        });
 
         return purchase.id;
       });
@@ -253,19 +278,17 @@ export class PurchasesService {
       await this.queuePutaway(purchaseId, dto, userId);
 
       return this.findOne(purchaseId);
-
-    } catch (err:any) {
+    } catch (err: any) {
       // برخورد همزمان روی همان کلید: سند موجود برگردانده شود.
       if (err?.code === 'P2002') {
         const dup = await this.prisma.purchaseInvoice.findUnique({
-          where:{ idempotencyKey: dto.idempotencyKey },
+          where: { idempotencyKey: dto.idempotencyKey },
         });
         if (dup) return this.findOne(dup.id);
       }
       throw err;
     }
   }
-
 
   /**
    * ابطال فاکتور خرید.
@@ -279,13 +302,11 @@ export class PurchasesService {
    * رد باقی می‌گذارد.
    */
   async cancel(id: string, reason: string, userId?: string) {
-
     await this.prisma.$transaction(async (tx) => {
-
       // ادعای اتمیک: فقط یک درخواست موفق می‌شود، حتی اگر دو نفر همزمان بزنند.
       const claimed = await tx.purchaseInvoice.updateMany({
-        where:{ id, status: PurchaseStatus.CONFIRMED },
-        data:{
+        where: { id, status: PurchaseStatus.CONFIRMED },
+        data: {
           status: PurchaseStatus.CANCELLED,
           cancelReason: reason,
           cancelledAt: new Date(),
@@ -294,21 +315,21 @@ export class PurchasesService {
       });
 
       if (claimed.count === 0) {
-        const current = await tx.purchaseInvoice.findUnique({ where:{ id } });
+        const current = await tx.purchaseInvoice.findUnique({ where: { id } });
         if (!current) {
           throw new NotFoundException({
-            error:'PURCHASE_NOT_FOUND',
-            message:'فاکتور خرید پیدا نشد',
+            error: 'PURCHASE_NOT_FOUND',
+            message: 'فاکتور خرید پیدا نشد',
           });
         }
         throw new ConflictException({
-          error:'ALREADY_CANCELLED',
-          message:'این فاکتور قبلاً باطل شده است',
+          error: 'ALREADY_CANCELLED',
+          message: 'این فاکتور قبلاً باطل شده است',
         });
       }
 
       const lines = await tx.inventoryLog.findMany({
-        where:{ purchaseId: id, action:'IN' },
+        where: { purchaseId: id, action: 'IN' },
       });
 
       // ترتیبِ ثابتِ قفل‌گیری؛ `lineIndex` همان اندیسِ ردیف در سندِ خرید
@@ -322,22 +343,22 @@ export class PurchasesService {
         try {
           await this.operation.execute(
             {
-              type:'OUT',
+              type: 'OUT',
               productId: line.productId,
               locationId: line.locationId,
               quantity: line.quantity,
               userId: userId ?? null,
-              source:'PURCHASE_CANCEL',
-              note:`ابطال فاکتور خرید: ${reason}`,
+              source: 'PURCHASE_CANCEL',
+              note: `ابطال فاکتور خرید: ${reason}`,
             },
             tx,
           );
-        } catch (err:any) {
+        } catch (err: any) {
           const body = err?.response ?? err?.getResponse?.();
           if (body?.error === 'INSUFFICIENT_STOCK') {
             throw new ConflictException({
-              error:'STOCK_ALREADY_MOVED',
-              lineIndex:i,
+              error: 'STOCK_ALREADY_MOVED',
+              lineIndex: i,
               productId: line.productId,
               locationId: line.locationId,
               received: line.quantity,
@@ -349,46 +370,87 @@ export class PurchasesService {
           throw err;
         }
       }
+
+      /*
+       * ---- سندِ معکوسِ ابطالِ خرید (پشت صحنه) ----
+       *
+       * آینه‌ی سندِ خرید: موجودی انبار بیرون می‌رود و بدهیِ تأمین‌کننده صاف
+       * می‌شود. ابطال فقط وقتی موفق می‌شود که کلِ جنس هنوز در انبار باشد، پس
+       * آینه‌ی کامل دقیق است.
+       */
+      const purchase = await tx.purchaseInvoice.findUniqueOrThrow({
+        where: { id },
+        select: { number: true, total: true },
+      });
+
+      const original = await tx.voucher.findFirst({
+        where: {
+          sourceType: VoucherSourceType.PURCHASE_INVOICE,
+          sourceId: id,
+        },
+        select: { id: true },
+      });
+
+      await this.posting.post(tx, {
+        sourceType: VoucherSourceType.PURCHASE_CANCEL,
+        sourceId: id,
+        idempotencyKey: `purchase-cancel:${id}`,
+        lines: [
+          {
+            account: FixedAccount.INVENTORY,
+            amount: -purchase.total,
+            note: 'خروجِ کالای ابطال‌شده',
+          },
+          {
+            account: FixedAccount.SUPPLIERS,
+            amount: purchase.total,
+            note: 'ابطالِ بدهی به تأمین‌کننده',
+          },
+        ],
+        note: `ابطال فاکتور خرید ${purchase.number}: ${reason}`,
+        userId: userId ?? null,
+        reversesVoucherId: original?.id ?? null,
+      });
     });
 
     return this.findOne(id);
   }
 
-
   async findOne(id: string) {
-
     const purchase = await this.prisma.purchaseInvoice.findUnique({
-      where:{ id },
-      include:{
-        supplier:{ select:{ id:true, name:true, phone:true } },
-        warehouse:{ select:{ id:true, name:true, code:true } },
-        user:{ select:{ id:true, fullName:true, username:true } },
+      where: { id },
+      include: {
+        supplier: { select: { id: true, name: true, phone: true } },
+        warehouse: { select: { id: true, name: true, code: true } },
+        user: { select: { id: true, fullName: true, username: true } },
         // فقط ردیف‌های ورود. حرکت‌های OUTِ ابطال هم purchaseId ندارند ولی
         // فیلتر صریح می‌ماند تا اگر روزی داشتند، جمعِ نمایشی خراب نشود.
-        lines:{
-          where:{ action:'IN' },
-          include:{
-            product:{ select:{ id:true, name:true, sku:true, unit:true } },
-            location:{ select:{ id:true, name:true, code:true, path:true } },
+        lines: {
+          where: { action: 'IN' },
+          include: {
+            product: {
+              select: { id: true, name: true, sku: true, unit: true },
+            },
+            location: {
+              select: { id: true, name: true, code: true, path: true },
+            },
           },
-          orderBy:{ createdAt:'asc' },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
 
     if (!purchase) {
       throw new NotFoundException({
-        error:'PURCHASE_NOT_FOUND',
-        message:'فاکتور خرید پیدا نشد',
+        error: 'PURCHASE_NOT_FOUND',
+        message: 'فاکتور خرید پیدا نشد',
       });
     }
 
     return purchase;
   }
 
-
   async findAll(q: QueryPurchasesDto) {
-
     const page = Math.max(1, Number(q.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(q.limit) || 20));
 
@@ -408,8 +470,8 @@ export class PurchasesService {
       const term = q.q.trim();
       const asNumber = Number(term);
       where.OR = [
-        { supplierRef:{ contains: term, mode:'insensitive' } },
-        { supplier:{ name:{ contains: term, mode:'insensitive' } } },
+        { supplierRef: { contains: term, mode: 'insensitive' } },
+        { supplier: { name: { contains: term, mode: 'insensitive' } } },
         ...(Number.isInteger(asNumber) ? [{ number: asNumber }] : []),
       ];
     }
@@ -417,15 +479,15 @@ export class PurchasesService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.purchaseInvoice.findMany({
         where,
-        include:{
-          supplier:{ select:{ id:true, name:true } },
-          user:{ select:{ id:true, fullName:true } },
+        include: {
+          supplier: { select: { id: true, name: true } },
+          user: { select: { id: true, fullName: true } },
           // فقط ردیف‌های ورود شمرده می‌شوند — همان درسی که شمارشِ اقلامِ
           // فاکتور فروش داد.
-          _count:{ select:{ lines:{ where:{ action:'IN' } } } },
+          _count: { select: { lines: { where: { action: 'IN' } } } },
         },
-        orderBy:{ createdAt:'desc' },
-        skip:(page - 1) * limit,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * limit,
         take: limit,
       }),
       this.prisma.purchaseInvoice.count({ where }),
@@ -433,10 +495,14 @@ export class PurchasesService {
 
     return {
       data,
-      meta:{ total, page, limit, lastPage: Math.max(1, Math.ceil(total / limit)) },
+      meta: {
+        total,
+        page,
+        limit,
+        lastPage: Math.max(1, Math.ceil(total / limit)),
+      },
     };
   }
-
 
   // ---------- کمکی‌ها ----------
 
@@ -470,13 +536,12 @@ export class PurchasesService {
     dto: CreatePurchaseDto,
     userId?: string,
   ): Promise<void> {
-
-    const unplaced = dto.lines.filter(l => !l.locationId);
+    const unplaced = dto.lines.filter((l) => !l.locationId);
     if (!unplaced.length) return;
 
     try {
       const staging = await this.systemLocations.staging(
-        this.prisma as any,
+        this.prisma,
         dto.warehouseId,
       );
 
@@ -485,7 +550,7 @@ export class PurchasesService {
           warehouseId: dto.warehouseId,
           kind: WorkTaskKind.PUTAWAY,
           // مکانِ هر قلم «کجاست»، نه «کجا برود» — کارگر مقصد را خودش اسکن می‌کند.
-          lines: unplaced.map(l => ({
+          lines: unplaced.map((l) => ({
             productId: l.productId,
             locationId: staging,
             quantity: l.quantity,
@@ -501,38 +566,41 @@ export class PurchasesService {
     }
   }
 
-
   /**
    * ردیف‌هایی که قیمتشان مشکوک است، با نامِ کالا تا فرم بتواند سطر را قرمز کند.
    *
    * یک کوئری برای همه‌ی ردیف‌ها: فاکتور خرید تا ۵۰۰ قلم دارد و یک کوئری به
    * ازای هر قلم، ثبتِ یک بارِ کامیون را به یک انتظارِ محسوس تبدیل می‌کند.
    */
-  private async findPriceWarnings(
-    dto: CreatePurchaseDto,
-  ): Promise<Array<PriceWarning & {
-    lineIndex: number;
-    productId: string;
-    productName: string;
-  }>> {
-
-    const productIds = [...new Set(dto.lines.map(l => l.productId))];
+  private async findPriceWarnings(dto: CreatePurchaseDto): Promise<
+    Array<
+      PriceWarning & {
+        lineIndex: number;
+        productId: string;
+        productName: string;
+      }
+    >
+  > {
+    const productIds = [...new Set(dto.lines.map((l) => l.productId))];
     if (!productIds.length) return [];
 
     const [prices, products] = await Promise.all([
       this.prisma.productPrice.findMany({
-        where:{ productId:{ in: productIds } },
-        orderBy:{ createdAt:'desc' },
-        select:{ productId:true, purchasePrice:true, salePrice:true },
+        where: { productId: { in: productIds } },
+        orderBy: { createdAt: 'desc' },
+        select: { productId: true, purchasePrice: true, salePrice: true },
       }),
       this.prisma.product.findMany({
-        where:{ id:{ in: productIds } },
-        select:{ id:true, name:true },
+        where: { id: { in: productIds } },
+        select: { id: true, name: true },
       }),
     ]);
 
     // فقط تازه‌ترین ردیفِ هر کالا؛ بقیه تاریخچه‌اند.
-    const latest = new Map<string, { purchasePrice: number | null; salePrice: number | null }>();
+    const latest = new Map<
+      string,
+      { purchasePrice: number | null; salePrice: number | null }
+    >();
     for (const p of prices) {
       if (!latest.has(p.productId)) {
         latest.set(p.productId, {
@@ -542,13 +610,15 @@ export class PurchasesService {
       }
     }
 
-    const names = new Map(products.map(p => [p.id, p.name]));
+    const names = new Map(products.map((p) => [p.id, p.name]));
 
-    const out: Array<PriceWarning & {
-      lineIndex: number;
-      productId: string;
-      productName: string;
-    }> = [];
+    const out: Array<
+      PriceWarning & {
+        lineIndex: number;
+        productId: string;
+        productName: string;
+      }
+    > = [];
 
     dto.lines.forEach((line, lineIndex) => {
       const prev = latest.get(line.productId);
@@ -572,14 +642,13 @@ export class PurchasesService {
     return out;
   }
 
-
   private async learnPurchasePrices(
     tx: Prisma.TransactionClient,
     dto: CreatePurchaseDto,
   ) {
     // قیمت صفر یعنی «هدیه/گارانتی»، نه قیمتِ واقعی — یاد گرفته نمی‌شود، وگرنه
     // سودِ آن کالا تا ابد برابر کلِ قیمتِ فروش نشان داده می‌شود.
-    const priced = dto.lines.filter(l => l.unitPrice > 0);
+    const priced = dto.lines.filter((l) => l.unitPrice > 0);
     if (!priced.length) return;
 
     // آخرین قیمتِ هر کالا در همین فاکتور برنده است.
@@ -587,13 +656,17 @@ export class PurchasesService {
     for (const l of priced) wanted.set(l.productId, l.unitPrice);
 
     const current = await tx.productPrice.findMany({
-      where:{ productId:{ in: [...wanted.keys()] } },
-      orderBy:{ createdAt:'desc' },
+      where: { productId: { in: [...wanted.keys()] } },
+      orderBy: { createdAt: 'desc' },
     });
 
     const latest = new Map<
       string,
-      { salePrice: number | null; purchasePrice: number | null; wholesalePrice: number | null }
+      {
+        salePrice: number | null;
+        purchasePrice: number | null;
+        wholesalePrice: number | null;
+      }
     >();
     for (const p of current) {
       if (!latest.has(p.productId)) {
@@ -607,8 +680,10 @@ export class PurchasesService {
 
     const rows = [...wanted.entries()]
       // قیمتی که عوض نشده ردیف تازه نمی‌سازد، وگرنه تاریخچه با هر خرید شلوغ می‌شود.
-      .filter(([productId, purchasePrice]) =>
-        latest.get(productId)?.purchasePrice !== purchasePrice)
+      .filter(
+        ([productId, purchasePrice]) =>
+          latest.get(productId)?.purchasePrice !== purchasePrice,
+      )
       .map(([productId, purchasePrice]) => ({
         productId,
         purchasePrice,

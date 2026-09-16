@@ -6,25 +6,13 @@ import { BarcodeController } from './barcode.controller';
 import { PrismaModule } from '../prisma/prisma.module';
 import { InventoryOperationModule } from '../inventory-operation/inventory-operation.module';
 
-
 @Module({
+  imports: [PrismaModule, InventoryOperationModule],
 
-  imports:[
-    PrismaModule,
-    InventoryOperationModule
-  ],
+  controllers: [BarcodeController],
 
-  controllers:[
-    BarcodeController
-  ],
+  providers: [BarcodeService],
 
-  providers:[
-    BarcodeService
-  ],
-
-  exports:[
-    BarcodeService
-  ]
-
+  exports: [BarcodeService],
 })
 export class BarcodeModule {}

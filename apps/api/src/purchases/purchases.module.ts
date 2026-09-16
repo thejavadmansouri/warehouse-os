@@ -8,15 +8,11 @@ import { InventoryOperationService } from '../inventory-operation/inventory-oper
 import { SystemLocationsService } from '../inventory/system-locations.service';
 import { WorkTasksModule } from '../work-tasks/work-tasks.module';
 
-
 @Module({
-
   // برای ساختِ «کار چیدمان» پس از ثبت فاکتور خرید.
   imports: [WorkTasksModule],
 
-  controllers: [
-    PurchasesController,
-  ],
+  controllers: [PurchasesController],
 
   providers: [
     PrismaService,
@@ -25,10 +21,6 @@ import { WorkTasksModule } from '../work-tasks/work-tasks.module';
     SystemLocationsService,
   ],
 
-  exports: [
-    PurchasesService,
-  ],
-
+  exports: [PurchasesService],
 })
-
 export class PurchasesModule {}

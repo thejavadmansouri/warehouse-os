@@ -16,13 +16,10 @@ import { Type } from 'class-transformer';
 
 import { INT4_MAX } from '../../common/money';
 
-
 /** یک قلمِ فاکتور خرید: کالا، تعداد، و قیمتی که بابتش پرداخت شده. */
 export class PurchaseLineDto {
-
   @IsString()
-  productId:string;
-
+  productId: string;
 
   /**
    * قفسه‌ای که کالا رویش می‌نشیند.
@@ -33,13 +30,11 @@ export class PurchaseLineDto {
    */
   @IsOptional()
   @IsString()
-  locationId?:string;
-
+  locationId?: string;
 
   @IsInt()
   @Min(1)
-  quantity:number;
-
+  quantity: number;
 
   /**
    * قیمتِ خریدِ هر واحد به ریال.
@@ -51,56 +46,46 @@ export class PurchaseLineDto {
   @IsInt()
   @Min(0)
   @Max(INT4_MAX)
-  unitPrice:number;
-
+  unitPrice: number;
 
   /** تخفیفِ همین ردیف به ریال. */
   @IsOptional()
   @IsInt()
   @Min(0)
-  discount?:number;
+  discount?: number;
 }
 
-
 export class CreatePurchaseDto {
-
   /** کلید یکتای کلاینت؛ ارسال دوباره سند تکراری نمی‌سازد. */
   @IsString()
-  idempotencyKey:string;
-
+  idempotencyKey: string;
 
   @IsString()
-  warehouseId:string;
-
+  warehouseId: string;
 
   @IsOptional()
   @IsString()
-  supplierId?:string | null;
-
+  supplierId?: string | null;
 
   /** شماره‌ی فاکتور روی برگه‌ی فروشنده — برای تطبیق سند با کاغذ. */
   @IsOptional()
   @IsString()
-  supplierRef?:string;
-
+  supplierRef?: string;
 
   /** تاریخِ روی برگه (ISO). تبدیل شمسی سمت کلاینت انجام می‌شود. */
   @IsOptional()
   @IsDateString()
-  invoiceDate?:string;
-
+  invoiceDate?: string;
 
   /** تخفیفِ کلِ فاکتور به ریال، جدا از تخفیف ردیف‌ها. */
   @IsOptional()
   @IsInt()
   @Min(0)
-  discount?:number;
-
+  discount?: number;
 
   @IsOptional()
   @IsString()
-  note?:string;
-
+  note?: string;
 
   /**
    * «هشدارهای قیمت را دیدم، ثبت کن».
@@ -111,72 +96,60 @@ export class CreatePurchaseDto {
    */
   @IsOptional()
   @IsBoolean()
-  confirmPriceWarnings?:boolean;
-
+  confirmPriceWarnings?: boolean;
 
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => PurchaseLineDto)
-  lines:PurchaseLineDto[];
+  lines: PurchaseLineDto[];
 }
-
 
 /** ابطال فاکتور خرید — دلیل اجباری است. */
 export class CancelPurchaseDto {
-
   @IsString()
   @MinLength(3)
-  reason:string;
+  reason: string;
 }
-
 
 /** فیلترهای فهرست. */
 export class QueryPurchasesDto {
+  @IsOptional()
+  @IsString()
+  warehouseId?: string;
 
   @IsOptional()
   @IsString()
-  warehouseId?:string;
-
-
-  @IsOptional()
-  @IsString()
-  supplierId?:string;
-
+  supplierId?: string;
 
   @IsOptional()
   @IsString()
-  status?:string;
-
+  status?: string;
 
   /** جست‌وجو روی شماره‌ی سند یا شماره‌ی فاکتور کاغذی. */
   @IsOptional()
   @IsString()
-  q?:string;
-
-
-  @IsOptional()
-  @IsDateString()
-  from?:string;
-
+  q?: string;
 
   @IsOptional()
   @IsDateString()
-  to?:string;
+  from?: string;
 
+  @IsOptional()
+  @IsDateString()
+  to?: string;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  page?:number;
-
+  page?: number;
 
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(200)
-  limit?:number;
+  limit?: number;
 }

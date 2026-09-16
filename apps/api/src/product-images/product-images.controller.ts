@@ -173,7 +173,10 @@ export class ProductImagesController {
     const absolute = join(process.cwd(), normalized);
 
     // Only allow serving from storage/staging or storage/products
-    if (!absolute.includes('storage/staging') && !absolute.includes('storage/products')) {
+    if (
+      !absolute.includes('storage/staging') &&
+      !absolute.includes('storage/products')
+    ) {
       throw new NotFoundException('File not found');
     }
 

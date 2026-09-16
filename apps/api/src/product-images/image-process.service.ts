@@ -12,8 +12,8 @@ export interface ProcessedImage {
 }
 
 export interface ProcessedImageSet {
-  master: ProcessedImage;   // Max 1200x1200
-  product: ProcessedImage;  // Max 800x800
+  master: ProcessedImage; // Max 1200x1200
+  product: ProcessedImage; // Max 800x800
   thumbnail: ProcessedImage; // Max 300x300
 }
 
@@ -90,11 +90,13 @@ export class ImageProcessService {
         background: { r: 255, g: 255, b: 255, alpha: 1 },
       },
     })
-      .composite([{
-        input: resized.data,
-        left: Math.round((maxSize - info.width) / 2),
-        top: Math.round((maxSize - info.height) / 2),
-      }])
+      .composite([
+        {
+          input: resized.data,
+          left: Math.round((maxSize - info.width) / 2),
+          top: Math.round((maxSize - info.height) / 2),
+        },
+      ])
       .webp({ quality: WEBP_QUALITY })
       .toBuffer({ resolveWithObject: true });
 
@@ -110,7 +112,9 @@ export class ImageProcessService {
   /**
    * Validate an image buffer - checks if it can be processed by sharp.
    */
-  async validateImage(buffer: Buffer): Promise<{ valid: boolean; error?: string }> {
+  async validateImage(
+    buffer: Buffer,
+  ): Promise<{ valid: boolean; error?: string }> {
     try {
       const metadata = await sharp(buffer).metadata();
       if (!metadata.width || !metadata.height) {
@@ -118,11 +122,17 @@ export class ImageProcessService {
       }
       // Minimum resolution check
       if (metadata.width < 100 || metadata.height < 100) {
-        return { valid: false, error: `Image too small: ${metadata.width}x${metadata.height}` };
+        return {
+          valid: false,
+          error: `Image too small: ${metadata.width}x${metadata.height}`,
+        };
       }
       return { valid: true };
     } catch (error) {
-      return { valid: false, error: `Invalid image: ${(error as Error).message}` };
+      return {
+        valid: false,
+        error: `Invalid image: ${(error as Error).message}`,
+      };
     }
   }
 

@@ -9,7 +9,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ImageSearchService } from './image-search.service';
 import { ImageDownloadService } from './image-download.service';
 import { ImageProcessService } from './image-process.service';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'fs';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  unlinkSync,
+} from 'fs';
 import { join } from 'path';
 
 const STAGING_BASE = 'storage/staging/product-images';
@@ -145,12 +151,22 @@ export class ProductImagesService {
     });
 
     if (queries.length === 0) {
-      this.logger.warn(`No search queries could be built for product ${productId}`);
+      this.logger.warn(
+        `No search queries could be built for product ${productId}`,
+      );
       return { candidatesFound: 0, candidates: [] };
     }
 
     // 4. Search for images using multiple queries
-    const allResults = new Map<string, { imageUrl: string; sourceUrl: string; sourceDomain: string; query: string }>();
+    const allResults = new Map<
+      string,
+      {
+        imageUrl: string;
+        sourceUrl: string;
+        sourceDomain: string;
+        query: string;
+      }
+    >();
 
     for (const q of queries) {
       try {
@@ -159,7 +175,10 @@ export class ProductImagesService {
           await this.sleep(1000 + Math.random() * 1000);
         }
 
-        const results = await this.searchService.searchImagesWithFallback(q.query, 8);
+        const results = await this.searchService.searchImagesWithFallback(
+          q.query,
+          8,
+        );
         for (const r of results) {
           if (!allResults.has(r.imageUrl)) {
             allResults.set(r.imageUrl, {
@@ -171,7 +190,9 @@ export class ProductImagesService {
           }
         }
       } catch (error) {
-        this.logger.error(`Search error for query "${q.query}": ${(error as Error).message}`);
+        this.logger.error(
+          `Search error for query "${q.query}": ${(error as Error).message}`,
+        );
       }
     }
 
@@ -182,7 +203,11 @@ export class ProductImagesService {
     }
 
     // 6. Download, validate, and process each candidate
-    const candidates: Array<{ id: string; confidenceScore: number; status: string }> = [];
+    const candidates: Array<{
+      id: string;
+      confidenceScore: number;
+      status: string;
+    }> = [];
     let candidateIndex = 0;
 
     for (const [, result] of allResults) {
@@ -192,20 +217,27 @@ export class ProductImagesService {
         candidateIndex++;
 
         // Download image
-        const downloaded = await this.downloadService.downloadImage(result.imageUrl);
+        const downloaded = await this.downloadService.downloadImage(
+          result.imageUrl,
+        );
 
         // Check for exact duplicate (SHA-256)
-        const existingDuplicate = await this.prisma.productImageCandidate.findFirst({
-          where: {
-            sha256: downloaded.sha256,
-            productId: { not: productId },
-          },
-        });
+        const existingDuplicate =
+          await this.prisma.productImageCandidate.findFirst({
+            where: {
+              sha256: downloaded.sha256,
+              productId: { not: productId },
+            },
+          });
 
         // Validate image
-        const validation = await this.processService.validateImage(downloaded.buffer);
+        const validation = await this.processService.validateImage(
+          downloaded.buffer,
+        );
         if (!validation.valid) {
-          this.logger.debug(`Invalid image from ${result.sourceDomain}: ${validation.error}`);
+          this.logger.debug(
+            `Invalid image from ${result.sourceDomain}: ${validation.error}`,
+          );
           continue;
         }
 
@@ -222,21 +254,34 @@ export class ProductImagesService {
         let backgroundRemoved = false;
 
         try {
-          const processed = await this.processService.processImage(downloaded.buffer);
+          const processed = await this.processService.processImage(
+            downloaded.buffer,
+          );
           const processedFileName = `processed-${downloaded.sha256.slice(0, 12)}.webp`;
-          const processedLocalPath = join(STAGING_BASE, productId, processedFileName);
-          writeFileSync(join(process.cwd(), processedLocalPath), Buffer.from(processed.product.buffer));
+          const processedLocalPath = join(
+            STAGING_BASE,
+            productId,
+            processedFileName,
+          );
+          writeFileSync(
+            join(process.cwd(), processedLocalPath),
+            Buffer.from(processed.product.buffer),
+          );
           processedPath = processedLocalPath;
           processedWidth = processed.product.width;
           processedHeight = processed.product.height;
           processedSize = processed.product.size;
           backgroundRemoved = true;
         } catch (error) {
-          this.logger.warn(`Image processing failed: ${(error as Error).message}`);
+          this.logger.warn(
+            `Image processing failed: ${(error as Error).message}`,
+          );
         }
 
         // Compute perceptual hash
-        const perceptualHash = await this.processService.computePerceptualHash(downloaded.buffer);
+        const perceptualHash = await this.processService.computePerceptualHash(
+          downloaded.buffer,
+        );
 
         // Compute confidence score
         const { score, level, reason } = this.computeConfidenceScore(
@@ -278,7 +323,9 @@ export class ProductImagesService {
           status: candidate.status,
         });
       } catch (error) {
-        this.logger.error(`Candidate processing error: ${(error as Error).message}`);
+        this.logger.error(
+          `Candidate processing error: ${(error as Error).message}`,
+        );
       }
     }
 
@@ -318,7 +365,10 @@ export class ProductImagesService {
     if (!productIds.length) return { queued: 0, alreadyQueued: 0 };
 
     const pending = await this.prisma.imageSearchJob.findMany({
-      where: { productId: { in: productIds }, status: { in: ['QUEUED', 'RUNNING'] } },
+      where: {
+        productId: { in: productIds },
+        status: { in: ['QUEUED', 'RUNNING'] },
+      },
       select: { productId: true },
     });
     const pendingIds = new Set(pending.map((j) => j.productId));
@@ -326,7 +376,10 @@ export class ProductImagesService {
 
     if (toQueue.length) {
       await this.prisma.imageSearchJob.createMany({
-        data: toQueue.map((productId) => ({ productId, status: 'QUEUED' as const })),
+        data: toQueue.map((productId) => ({
+          productId,
+          status: 'QUEUED' as const,
+        })),
       });
     }
 
@@ -371,7 +424,11 @@ export class ProductImagesService {
           await this.searchForProduct(job.productId);
           await this.prisma.imageSearchJob.update({
             where: { id: job.id },
-            data: { status: 'COMPLETED', completedAt: new Date(), lastError: null },
+            data: {
+              status: 'COMPLETED',
+              completedAt: new Date(),
+              lastError: null,
+            },
           });
         } catch (error) {
           const message = (error as Error).message;
@@ -379,7 +436,8 @@ export class ProductImagesService {
             where: { id: job.id },
             select: { attempts: true, maxAttempts: true },
           });
-          const exhausted = (current?.attempts ?? 0) >= (current?.maxAttempts ?? 3);
+          const exhausted =
+            (current?.attempts ?? 0) >= (current?.maxAttempts ?? 3);
 
           await this.prisma.imageSearchJob.update({
             where: { id: job.id },
@@ -396,7 +454,9 @@ export class ProductImagesService {
         }
       }
     } catch (error) {
-      this.logger.error(`Search queue tick failed: ${(error as Error).message}`);
+      this.logger.error(
+        `Search queue tick failed: ${(error as Error).message}`,
+      );
     } finally {
       this.queueRunning = false;
     }
@@ -414,8 +474,17 @@ export class ProductImagesService {
       sku: string;
     },
     result: { sourceDomain: string; sourceUrl: string; query: string },
-    downloaded: { sha256: string; buffer: Buffer; width?: number; height?: number },
-  ): { score: number; level: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE'; reason: string } {
+    downloaded: {
+      sha256: string;
+      buffer: Buffer;
+      width?: number;
+      height?: number;
+    },
+  ): {
+    score: number;
+    level: 'HIGH' | 'MEDIUM' | 'LOW' | 'NONE';
+    reason: string;
+  } {
     let score = 0;
     const reasons: string[] = [];
 
@@ -423,19 +492,30 @@ export class ProductImagesService {
     if (product.partNumber && result.sourceUrl.includes(product.partNumber)) {
       score += 40;
       reasons.push('Part Number in URL +40');
-    } else if (product.partNumber && result.sourceDomain.includes(product.partNumber)) {
+    } else if (
+      product.partNumber &&
+      result.sourceDomain.includes(product.partNumber)
+    ) {
       score += 40;
       reasons.push('Part Number in domain +40');
     }
 
     // Brand in source domain: +15
-    if (product.brand?.name && result.sourceDomain.toLowerCase().includes(product.brand.name.toLowerCase())) {
+    if (
+      product.brand?.name &&
+      result.sourceDomain
+        .toLowerCase()
+        .includes(product.brand.name.toLowerCase())
+    ) {
       score += 15;
       reasons.push('Brand in domain +15');
     }
 
     // Brand in search query: +10
-    if (product.brand?.name && result.query.toLowerCase().includes(product.brand.name.toLowerCase())) {
+    if (
+      product.brand?.name &&
+      result.query.toLowerCase().includes(product.brand.name.toLowerCase())
+    ) {
       score += 10;
       reasons.push('Brand in query +10');
     }
@@ -458,14 +538,29 @@ export class ProductImagesService {
     }
 
     // Known good sources: +5
-    const trustedDomains = ['bosch', 'denso', 'ngk', 'mann-filter', 'mahle', 'febi', 'skf', 'tnl', 'luk'];
-    if (trustedDomains.some((d) => result.sourceDomain.toLowerCase().includes(d))) {
+    const trustedDomains = [
+      'bosch',
+      'denso',
+      'ngk',
+      'mann-filter',
+      'mahle',
+      'febi',
+      'skf',
+      'tnl',
+      'luk',
+    ];
+    if (
+      trustedDomains.some((d) => result.sourceDomain.toLowerCase().includes(d))
+    ) {
       score += 5;
       reasons.push('Trusted source +5');
     }
 
     // Negative signals
-    if (result.sourceDomain.includes('amazon') || result.sourceDomain.includes('ebay')) {
+    if (
+      result.sourceDomain.includes('amazon') ||
+      result.sourceDomain.includes('ebay')
+    ) {
       score -= 5;
       reasons.push('Marketplace source -5');
     }
@@ -489,18 +584,23 @@ export class ProductImagesService {
   /**
    * Approve a candidate image — atomically move to final storage and create Asset.
    */
-  async approveCandidate(candidateId: string, userId: string): Promise<{ assetId: string }> {
+  async approveCandidate(
+    candidateId: string,
+    userId: string,
+  ): Promise<{ assetId: string }> {
     const candidate = await this.prisma.productImageCandidate.findUnique({
       where: { id: candidateId },
       include: { product: true },
     });
 
     if (!candidate) throw new NotFoundException('Candidate not found');
-    if (candidate.status === 'APPROVED') throw new BadRequestException('Already approved');
+    if (candidate.status === 'APPROVED')
+      throw new BadRequestException('Already approved');
 
     // Read the processed image from staging
     const processedPath = candidate.processedPath;
-    if (!processedPath) throw new BadRequestException('No processed image available');
+    if (!processedPath)
+      throw new BadRequestException('No processed image available');
 
     const absoluteProcessedPath = join(process.cwd(), processedPath);
     if (!existsSync(absoluteProcessedPath)) {
@@ -522,7 +622,12 @@ export class ProductImagesService {
     try {
       const sharp = (await import('sharp')).default;
       const thumb = await sharp(imageBuffer)
-        .resize({ width: 300, height: 300, fit: 'inside', withoutEnlargement: true })
+        .resize({
+          width: 300,
+          height: 300,
+          fit: 'inside',
+          withoutEnlargement: true,
+        })
         .webp({ quality: 75 })
         .toBuffer();
       thumbBuffer = Buffer.from(thumb);
@@ -586,8 +691,16 @@ export class ProductImagesService {
     } catch (err) {
       // Compensating cleanup: the commit failed, so roll back the files we just
       // wrote to final storage. Leaving them would create an orphaned image.
-      try { unlinkSync(join(finalDir, mainFileName)); } catch { /* best effort */ }
-      try { unlinkSync(join(finalDir, thumbFileName)); } catch { /* best effort */ }
+      try {
+        unlinkSync(join(finalDir, mainFileName));
+      } catch {
+        /* best effort */
+      }
+      try {
+        unlinkSync(join(finalDir, thumbFileName));
+      } catch {
+        /* best effort */
+      }
       throw err;
     }
 
@@ -606,7 +719,11 @@ export class ProductImagesService {
   /**
    * Reject a candidate image.
    */
-  async rejectCandidate(candidateId: string, userId: string, reason?: string): Promise<void> {
+  async rejectCandidate(
+    candidateId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<void> {
     const candidate = await this.prisma.productImageCandidate.findUnique({
       where: { id: candidateId },
     });
@@ -661,11 +778,19 @@ export class ProductImagesService {
     });
 
     const eligible = candidates.filter(
-      (c) => c.confidenceLevel === 'HIGH' && c.status === 'PENDING' && c.processedPath,
+      (c) =>
+        c.confidenceLevel === 'HIGH' &&
+        c.status === 'PENDING' &&
+        c.processedPath,
     );
     const skipped = candidateIds.length - eligible.length;
 
-    const results: Array<{ candidateId: string; success: boolean; assetId?: string; error?: string }> = [];
+    const results: Array<{
+      candidateId: string;
+      success: boolean;
+      assetId?: string;
+      error?: string;
+    }> = [];
 
     for (const c of eligible) {
       try {
@@ -680,7 +805,11 @@ export class ProductImagesService {
       }
     }
 
-    return { approved: results.filter((r) => r.success).length, skipped, results };
+    return {
+      approved: results.filter((r) => r.success).length,
+      skipped,
+      results,
+    };
   }
 
   async bulkReject(candidateIds: string[], userId: string, reason?: string) {
@@ -760,9 +889,12 @@ export class ProductImagesService {
       mediumConfidence: confidenceCounts['MEDIUM'] ?? 0,
       lowConfidence: confidenceCounts['LOW'] ?? 0,
       noConfidence: confidenceCounts['NONE'] ?? 0,
-      progress: totalProducts > 0
-        ? Math.round(((totalProducts - productsWithoutImages) / totalProducts) * 100)
-        : 0,
+      progress:
+        totalProducts > 0
+          ? Math.round(
+              ((totalProducts - productsWithoutImages) / totalProducts) * 100,
+            )
+          : 0,
     };
   }
 
@@ -788,13 +920,27 @@ export class ProductImagesService {
     // Status filter
     if (filters.filter && filters.filter !== 'ALL') {
       switch (filters.filter) {
-        case 'PENDING': where.status = 'PENDING'; break;
-        case 'APPROVED': where.status = 'APPROVED'; break;
-        case 'REJECTED': where.status = 'REJECTED'; break;
-        case 'FAILED': where.status = 'FAILED'; break;
-        case 'HIGH_CONFIDENCE': where.confidenceLevel = 'HIGH'; break;
-        case 'MEDIUM_CONFIDENCE': where.confidenceLevel = 'MEDIUM'; break;
-        case 'LOW_CONFIDENCE': where.confidenceLevel = 'LOW'; break;
+        case 'PENDING':
+          where.status = 'PENDING';
+          break;
+        case 'APPROVED':
+          where.status = 'APPROVED';
+          break;
+        case 'REJECTED':
+          where.status = 'REJECTED';
+          break;
+        case 'FAILED':
+          where.status = 'FAILED';
+          break;
+        case 'HIGH_CONFIDENCE':
+          where.confidenceLevel = 'HIGH';
+          break;
+        case 'MEDIUM_CONFIDENCE':
+          where.confidenceLevel = 'MEDIUM';
+          break;
+        case 'LOW_CONFIDENCE':
+          where.confidenceLevel = 'LOW';
+          break;
         case 'NO_IMAGE_FOUND':
           // Products with no candidates at all
           where.candidates = { none: {} };
@@ -844,10 +990,7 @@ export class ProductImagesService {
             select: { id: true, fullName: true },
           },
         },
-        orderBy: [
-          { confidenceScore: 'desc' },
-          { createdAt: 'desc' },
-        ],
+        orderBy: [{ confidenceScore: 'desc' }, { createdAt: 'desc' }],
         skip,
         take: limit,
       }),

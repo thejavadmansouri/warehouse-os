@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsInt, Min, Max, IsArray, IsEnum, IsBoolean } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsInt,
+  Min,
+  Max,
+  IsArray,
+  IsEnum,
+  IsBoolean,
+} from 'class-validator';
 
 export enum CandidateFilter {
   ALL = 'ALL',
@@ -13,25 +22,32 @@ export enum CandidateFilter {
 }
 
 export class ListCandidatesDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   page?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   limit?: string;
 
-  @IsOptional() @IsEnum(CandidateFilter)
+  @IsOptional()
+  @IsEnum(CandidateFilter)
   filter?: CandidateFilter;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   brandId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   categoryId?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   search?: string;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   productId?: string;
 }
 
@@ -42,21 +58,28 @@ export class BulkActionDto {
 }
 
 export class RejectDto {
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   reason?: string;
 }
 
 export class StartSearchDto {
-  @IsOptional() @IsArray()
+  @IsOptional()
+  @IsArray()
   @IsString({ each: true })
   productIds?: string[];
 
-  @IsOptional() @IsInt() @Min(1) @Max(100)
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number;
 
-  @IsOptional() @IsBoolean()
+  @IsOptional()
+  @IsBoolean()
   onlyWithoutImage?: boolean;
 
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   brandId?: string;
 }

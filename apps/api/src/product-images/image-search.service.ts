@@ -72,7 +72,10 @@ export class ImageSearchService {
 
     // 6. Brand + Name + "part" (to disambiguate from logos/banners)
     if (brand && name) {
-      queries.push({ query: `${brand} ${name} part`, label: 'Brand+Name+Part' });
+      queries.push({
+        query: `${brand} ${name} part`,
+        label: 'Brand+Name+Part',
+      });
     }
 
     // Limit to top 5 most specific queries
@@ -98,14 +101,17 @@ export class ImageSearchService {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          Accept:
+            'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
           'Accept-Language': 'en-US,en;q=0.9',
         },
         signal: AbortSignal.timeout(15000),
       });
 
       if (!response.ok) {
-        this.logger.warn(`Search failed for query "${query}": ${response.status}`);
+        this.logger.warn(
+          `Search failed for query "${query}": ${response.status}`,
+        );
         return results;
       }
 
@@ -123,7 +129,9 @@ export class ImageSearchService {
         });
       }
     } catch (error) {
-      this.logger.error(`Image search error for "${query}": ${(error as Error).message}`);
+      this.logger.error(
+        `Image search error for "${query}": ${(error as Error).message}`,
+      );
     }
 
     return results;
@@ -140,7 +148,9 @@ export class ImageSearchService {
   ): Promise<SearchResult[]> {
     const google = await this.searchImages(query, maxResults);
     if (google.length > 0) return google;
-    this.logger.warn(`Google returned no images for "${query}"; falling back to Bing`);
+    this.logger.warn(
+      `Google returned no images for "${query}"; falling back to Bing`,
+    );
     return this.searchBingImages(query, maxResults);
   }
 
@@ -168,7 +178,9 @@ export class ImageSearchService {
       });
 
       if (!response.ok) {
-        this.logger.warn(`Bing search failed for "${query}": ${response.status}`);
+        this.logger.warn(
+          `Bing search failed for "${query}": ${response.status}`,
+        );
         return results;
       }
 
@@ -184,7 +196,9 @@ export class ImageSearchService {
         });
       }
     } catch (error) {
-      this.logger.error(`Bing search error for "${query}": ${(error as Error).message}`);
+      this.logger.error(
+        `Bing search error for "${query}": ${(error as Error).message}`,
+      );
     }
 
     return results;

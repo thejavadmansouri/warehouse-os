@@ -5,10 +5,10 @@ import { PurchasesService } from './purchases.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
 import { SystemLocationsService } from '../inventory/system-locations.service';
+import { PostingService } from '../vouchers/posting.service';
 import { WorkTasksService } from '../work-tasks/work-tasks.service';
 import { INT4_MAX } from '../common/money';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
-
 
 /**
  * بدلِ Prisma — فقط همان چند متدی که مسیرِ بررسی‌های پیش از تراکنش لمس می‌کند.
@@ -52,7 +52,7 @@ function dto(over: Partial<CreatePurchaseDto> = {}): CreatePurchaseDto {
     warehouseId: 'w1',
     lines: [{ productId: 'p1', quantity: 2, unitPrice: 1000 }],
     ...over,
-  } as CreatePurchaseDto;
+  };
 }
 
 /** خطای پرتاب‌شده را برمی‌گرداند تا بدنه‌اش بررسی شود. */
@@ -65,7 +65,6 @@ async function thrown(fn: () => Promise<unknown>) {
   throw new Error('انتظار می‌رفت خطا پرتاب شود');
 }
 
-
 describe('PurchasesService', () => {
   let service: PurchasesService;
   let prisma: ReturnType<typeof makePrisma>;
@@ -76,17 +75,21 @@ describe('PurchasesService', () => {
       providers: [
         PurchasesService,
         { provide: PrismaService, useValue: p },
-        { provide: InventoryOperationService, useValue: { execute: jest.fn() } },
+        {
+          provide: InventoryOperationService,
+          useValue: { execute: jest.fn() },
+        },
         { provide: SystemLocationsService, useValue: { staging: jest.fn() } },
         // «کار چیدمان» بیرون از تراکنش ساخته می‌شود و این تست‌ها کاری با آن ندارند.
         { provide: WorkTasksService, useValue: { create: jest.fn() } },
+        // سندِ خودکار — این تست‌ها ریاضیِ سند را چک می‌کنند، نه سندِ پشت صحنه.
+        { provide: PostingService, useValue: { post: jest.fn() } },
       ],
     }).compile();
     service = module.get(PurchasesService);
   }
 
   beforeEach(() => build());
-
 
   describe('ریاضیِ مبالغ', () => {
     /*
@@ -95,8 +98,8 @@ describe('PurchasesService', () => {
      * می‌شود چون درآمد و هزینه با دو فرمول مختلف حساب شده‌اند.
      */
     it('تخفیف بیشتر از جمع فاکتور رد می‌شود', async () => {
-      const e = await thrown(() =>
-        service.create(dto({ discount: 5000 })), // جمع = ۲۰۰۰
+      const e = await thrown(
+        () => service.create(dto({ discount: 5000 })), // جمع = ۲۰۰۰
       );
       expect(e).toBeInstanceOf(BadRequestException);
       expect(e.getResponse().error).toBe('DISCOUNT_EXCEEDS_TOTAL');
@@ -104,31 +107,39 @@ describe('PurchasesService', () => {
 
     it('تخفیفِ ردیف در جمع لحاظ می‌شود', async () => {
       // ۲×۱۰۰۰ − ۵۰۰ = ۱۵۰۰ ⇒ تخفیف کل ۱۵۰۰ مجاز است، ۱۵۰۱ نه.
-      const lines = [{ productId: 'p1', quantity: 2, unitPrice: 1000, discount: 500 }];
-      const e = await thrown(() => service.create(dto({ lines, discount: 1501 } as any)));
+      const lines = [
+        { productId: 'p1', quantity: 2, unitPrice: 1000, discount: 500 },
+      ];
+      const e = await thrown(() =>
+        service.create(dto({ lines, discount: 1501 })),
+      );
       expect(e.getResponse().error).toBe('DISCOUNT_EXCEEDS_TOTAL');
     });
 
     it('مبلغِ خارج از برد ستون Int رد می‌شود، نه اینکه به Prisma برسد', async () => {
       const lines = [{ productId: 'p1', quantity: 1000, unitPrice: INT4_MAX }];
-      const e = await thrown(() => service.create(dto({ lines } as any)));
+      const e = await thrown(() => service.create(dto({ lines })));
       expect(e.getResponse().error).toBe('AMOUNT_TOO_LARGE');
       expect(e.getResponse().max).toBe(INT4_MAX);
     });
   });
 
-
   describe('گاردِ قیمتِ مشکوک', () => {
     /** سابقه‌ی قیمتِ کالای p1 — گارد از همین می‌خواند. */
-    const withHistory = (purchasePrice: number | null, salePrice: number | null) =>
+    const withHistory = (
+      purchasePrice: number | null,
+      salePrice: number | null,
+    ) =>
       makePrisma({
         productPrice: {
-          findMany: jest.fn().mockResolvedValue([
-            { productId: 'p1', purchasePrice, salePrice },
-          ]),
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ productId: 'p1', purchasePrice, salePrice }]),
         },
         product: {
-          findMany: jest.fn().mockResolvedValue([{ id: 'p1', name: 'لنت جلو پراید' }]),
+          findMany: jest
+            .fn()
+            .mockResolvedValue([{ id: 'p1', name: 'لنت جلو پراید' }]),
         },
       });
 
@@ -136,7 +147,11 @@ describe('PurchasesService', () => {
       await build(withHistory(100, null));
 
       const e = await thrown(() =>
-        service.create(dto({ lines: [{ productId: 'p1', quantity: 1, unitPrice: 1000 }] } as any)),
+        service.create(
+          dto({
+            lines: [{ productId: 'p1', quantity: 1, unitPrice: 1000 }],
+          }),
+        ),
       );
 
       expect(e).toBeInstanceOf(ConflictException);
@@ -165,7 +180,7 @@ describe('PurchasesService', () => {
         dto({
           lines: [{ productId: 'p1', quantity: 1, unitPrice: 1000 }],
           confirmPriceWarnings: true,
-        } as any),
+        }),
       );
 
       expect(prisma.$transaction).toHaveBeenCalled();
@@ -180,17 +195,22 @@ describe('PurchasesService', () => {
         .mockResolvedValue({ id: 'purchase-1' });
 
       await service.create(
-        dto({ lines: [{ productId: 'p1', quantity: 1, unitPrice: 1100 }] } as any),
+        dto({
+          lines: [{ productId: 'p1', quantity: 1, unitPrice: 1100 }],
+        }),
       );
 
       expect(prisma.$transaction).toHaveBeenCalled();
     });
   });
 
-
   describe('محافظ‌ها', () => {
     it('انبار ناموجود ⇒ ۴۰۴ روشن، نه خطای FK', async () => {
-      await build(makePrisma({ warehouse: { findUnique: jest.fn().mockResolvedValue(null) } }));
+      await build(
+        makePrisma({
+          warehouse: { findUnique: jest.fn().mockResolvedValue(null) },
+        }),
+      );
       const e = await thrown(() => service.create(dto()));
       expect(e.getResponse().error).toBe('WAREHOUSE_NOT_FOUND');
     });
@@ -200,12 +220,19 @@ describe('PurchasesService', () => {
      * همان نشتی که سمت فروش هم پیدا و بسته شد.
      */
     it('مکانی که در این انبار نیست رد می‌شود، با شماره‌ی ردیف', async () => {
-      await build(makePrisma({ location: { findMany: jest.fn().mockResolvedValue([]) } }));
+      await build(
+        makePrisma({ location: { findMany: jest.fn().mockResolvedValue([]) } }),
+      );
       const lines = [
         { productId: 'p1', quantity: 1, unitPrice: 100 },
-        { productId: 'p2', quantity: 1, unitPrice: 100, locationId: 'other-wh' },
+        {
+          productId: 'p2',
+          quantity: 1,
+          unitPrice: 100,
+          locationId: 'other-wh',
+        },
       ];
-      const e = await thrown(() => service.create(dto({ lines } as any)));
+      const e = await thrown(() => service.create(dto({ lines })));
       expect(e.getResponse().error).toBe('LOCATION_NOT_IN_WAREHOUSE');
       expect(e.getResponse().lineIndex).toBe(1);
     });
@@ -215,13 +242,17 @@ describe('PurchasesService', () => {
         { productId: 'p1', quantity: 1, unitPrice: 100 },
         { productId: 'p1', quantity: 2, unitPrice: 100 },
       ];
-      const e = await thrown(() => service.create(dto({ lines } as any)));
+      const e = await thrown(() => service.create(dto({ lines })));
       expect(e.getResponse().error).toBe('DUPLICATE_LINE');
       expect(e.getResponse().lineIndex).toBe(1);
     });
 
     it('تأمین‌کننده‌ی ناموجود رد می‌شود', async () => {
-      await build(makePrisma({ supplier: { findUnique: jest.fn().mockResolvedValue(null) } }));
+      await build(
+        makePrisma({
+          supplier: { findUnique: jest.fn().mockResolvedValue(null) },
+        }),
+      );
       const e = await thrown(() => service.create(dto({ supplierId: 'nope' })));
       expect(e.getResponse().error).toBe('SUPPLIER_NOT_FOUND');
     });
@@ -237,7 +268,9 @@ describe('PurchasesService', () => {
         },
       });
       await build(p);
-      const spy = jest.spyOn(service, 'findOne').mockResolvedValue({ id: 'existing' } as any);
+      const spy = jest
+        .spyOn(service, 'findOne')
+        .mockResolvedValue({ id: 'existing' } as any);
 
       await service.create(dto());
 

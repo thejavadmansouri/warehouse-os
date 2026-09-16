@@ -15,10 +15,6 @@ import { PrinterTransportService } from './printer-transport.service';
     TsplService,
     PrinterTransportService,
   ],
-  exports: [
-    LabelsService,
-    TsplService,
-    PrinterTransportService,
-  ],
+  exports: [LabelsService, TsplService, PrinterTransportService],
 })
 export class LabelsModule {}

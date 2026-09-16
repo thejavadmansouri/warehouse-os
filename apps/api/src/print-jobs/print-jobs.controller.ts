@@ -3,10 +3,7 @@ import { PrintJobsService } from './print-jobs.service';
 
 @Controller('print-jobs')
 export class PrintJobsController {
-
-  constructor(
-    private readonly service: PrintJobsService,
-  ) {}
+  constructor(private readonly service: PrintJobsService) {}
 
   @Get()
   getJobs() {
@@ -14,9 +11,7 @@ export class PrintJobsController {
   }
 
   @Post(':id/run')
-  runJob(
-    @Param('id') id: string,
-  ) {
+  runJob(@Param('id') id: string) {
     return this.service.runJob(id);
   }
 }

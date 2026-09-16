@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Param,
-  Post,
-  Query,
-  Req,
-} from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { Role } from '@prisma/client';
 
 import { Roles } from '../auth/roles.decorator';
@@ -17,7 +9,6 @@ import {
   QueryPurchasesDto,
 } from './dto/create-purchase.dto';
 
-
 /**
  * فاکتور خرید — همه‌ی روت‌ها فقط مدیر.
  *
@@ -26,37 +17,25 @@ import {
  */
 @Controller('purchases')
 export class PurchasesController {
-
   constructor(private readonly purchases: PurchasesService) {}
-
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post()
-  create(
-    @Body() dto: CreatePurchaseDto,
-    @Req() req: any,
-  ){
+  create(@Body() dto: CreatePurchaseDto, @Req() req: any) {
     return this.purchases.create(dto, req.user?.userId);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get()
-  findAll(
-    @Query() q: QueryPurchasesDto,
-  ){
+  findAll(@Query() q: QueryPurchasesDto) {
     return this.purchases.findAll(q);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get(':id')
-  findOne(
-    @Param('id') id: string,
-  ){
+  findOne(@Param('id') id: string) {
     return this.purchases.findOne(id);
   }
-
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post(':id/cancel')
@@ -64,7 +43,7 @@ export class PurchasesController {
     @Param('id') id: string,
     @Body() dto: CancelPurchaseDto,
     @Req() req: any,
-  ){
+  ) {
     return this.purchases.cancel(id, dto.reason, req.user?.userId);
   }
 }

@@ -6,26 +6,13 @@ import { UploadsService } from './uploads.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { ImagePipeline } from '../common/image-pipeline';
 
-
 @Module({
+  imports: [PrismaModule],
 
-  imports:[
-    PrismaModule
-  ],
+  controllers: [UploadsController],
 
-  controllers:[
-    UploadsController
-  ],
+  providers: [UploadsService, ImagePipeline],
 
-  providers:[
-    UploadsService,
-    ImagePipeline
-  ],
-
-  exports:[
-    UploadsService
-  ]
-
+  exports: [UploadsService],
 })
-
 export class UploadsModule {}

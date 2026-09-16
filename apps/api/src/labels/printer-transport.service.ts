@@ -1,4 +1,8 @@
-import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { spawn } from 'child_process';
 import { createConnection } from 'net';
 import { randomUUID } from 'crypto';
@@ -46,7 +50,8 @@ export class PrinterTransportService {
     }
     throw new ServiceUnavailableException({
       error: 'PRINTER_NOT_CONFIGURED',
-      message: 'پرینتر لیبل تنظیم نشده — نام یا آدرس شبکه‌اش را در تنظیمات وارد کنید',
+      message:
+        'پرینتر لیبل تنظیم نشده — نام یا آدرس شبکه‌اش را در تنظیمات وارد کنید',
     });
   }
 
@@ -88,7 +93,10 @@ export class PrinterTransportService {
    * صف هم باید RAW ساخته شده باشد (`lpadmin -m raw`)، وگرنه درایورِ صف حتی
    * قبل از این مرحله محتوا را رستر می‌کند.
    */
-  private async sendPosixRaw(payload: Buffer, printerName: string): Promise<void> {
+  private async sendPosixRaw(
+    payload: Buffer,
+    printerName: string,
+  ): Promise<void> {
     const file = join(tmpdir(), `label-${randomUUID()}.bin`);
     await writeFile(file, payload);
     try {
@@ -122,7 +130,6 @@ export class PrinterTransportService {
     }
   }
 
-
   /**
    * ویندوز: فایل موقت + دستور `print /d:`.
    *
@@ -130,7 +137,10 @@ export class PrinterTransportService {
    * دارد و همه‌ی نصب‌ها آن را ندارند. صف چاپِ ویندوز با درایور «Generic / Text
    * Only» یا درایور خود TSC در حالت pass-through بایت‌ها را دست‌نخورده می‌فرستد.
    */
-  private async sendWindowsRaw(payload: Buffer, printerName: string): Promise<void> {
+  private async sendWindowsRaw(
+    payload: Buffer,
+    printerName: string,
+  ): Promise<void> {
     const file = join(tmpdir(), `label-${randomUUID()}.bin`);
     await writeFile(file, payload);
     try {

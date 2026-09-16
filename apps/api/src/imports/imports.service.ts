@@ -61,22 +61,36 @@ export class ImportsService {
     for (let index = 0; index < rawRows.length; index++) {
       const row = rawRows[index];
 
-      const productName = String(row['productName'] || row['نام قطعه'] || '').trim();
+      const productName = String(
+        row['productName'] || row['نام قطعه'] || '',
+      ).trim();
       const brandName = String(row['brand'] || row['برند'] || '').trim();
-      const vehicleName = String(row['vehicleModel'] || row['خودرو'] || '').trim();
-      const partNumber = row['partNumber'] || row['شماره فنی'] ? String(row['partNumber'] || row['شماره فنی']).trim() : null;
+      const vehicleName = String(
+        row['vehicleModel'] || row['خودرو'] || '',
+      ).trim();
+      const partNumber =
+        row['partNumber'] || row['شماره فنی']
+          ? String(row['partNumber'] || row['شماره فنی']).trim()
+          : null;
       // بارکد کارخانه — چند نامِ رایجِ ستون پشتیبانی می‌شود. عددِ اکسل ممکن است
       // به‌صورت علمی (E+13) آمده باشد؛ در آن صورت round می‌کنیم تا رقم‌ها نریزند.
-      const rawBarcode = row['factoryBarcode'] ?? row['بارکد'] ?? row['barcode'] ?? null;
+      const rawBarcode =
+        row['factoryBarcode'] ?? row['بارکد'] ?? row['barcode'] ?? null;
       const factoryBarcode =
-        rawBarcode === null || rawBarcode === undefined || String(rawBarcode).trim() === ''
+        rawBarcode === null ||
+        rawBarcode === undefined ||
+        String(rawBarcode).trim() === ''
           ? null
           : normalizeBarcodeCell(rawBarcode);
       const unit = String(row['unit'] || row['واحد'] || 'عدد').trim();
 
-      const purchasePrice = this.parsePrice(row['purchasePrice'] ?? row['قیمت خرید']);
+      const purchasePrice = this.parsePrice(
+        row['purchasePrice'] ?? row['قیمت خرید'],
+      );
       const salePrice = this.parsePrice(row['salePrice'] ?? row['قیمت فروش']);
-      const wholesalePrice = this.parsePrice(row['wholesalePrice'] ?? row['قیمت عمده']);
+      const wholesalePrice = this.parsePrice(
+        row['wholesalePrice'] ?? row['قیمت عمده'],
+      );
       const quantity = this.parseQuantity(row['quantity'] ?? row['تعداد']);
 
       const matchedBrand = brands.find((b) =>
@@ -159,154 +173,158 @@ export class ImportsService {
 
     return await this.prisma.$transaction(
       async (tx) => {
-      let createdProductsCount = 0;
+        let createdProductsCount = 0;
 
-      // بارکدها یکتای‌اند؛ اگر یک بارکد کارخانه تکراری باشد (در همین دسته یا در
-      // دیتابیس)، نباید کل ایمپورت را خراب کند — فقط ردیفِ FACTORYِ تکراری را
-      // نمی‌سازیم، خود کالا همچنان ایمپورت می‌شود.
-      //
-      // فقط بارکدهای همین دسته را می‌پرسیم، نه کل جدول: خواندن هر ۳۳هزار ردیف
-      // داخل تراکنش، بودجه‌ی زمانی را همان اول می‌سوزاند.
-      const candidateBarcodes = job.rows
-        .map((r) => r.factoryBarcode)
-        .filter((b): b is string => !!b);
-      const existingBarcodes = new Set(
-        candidateBarcodes.length === 0
-          ? []
-          : (
-              await tx.productBarcode.findMany({
-                where: { barcode: { in: candidateBarcodes } },
-                select: { barcode: true },
-              })
-            ).map((b) => b.barcode),
-      );
-      const seenInBatch = new Set<string>();
+        // بارکدها یکتای‌اند؛ اگر یک بارکد کارخانه تکراری باشد (در همین دسته یا در
+        // دیتابیس)، نباید کل ایمپورت را خراب کند — فقط ردیفِ FACTORYِ تکراری را
+        // نمی‌سازیم، خود کالا همچنان ایمپورت می‌شود.
+        //
+        // فقط بارکدهای همین دسته را می‌پرسیم، نه کل جدول: خواندن هر ۳۳هزار ردیف
+        // داخل تراکنش، بودجه‌ی زمانی را همان اول می‌سوزاند.
+        const candidateBarcodes = job.rows
+          .map((r) => r.factoryBarcode)
+          .filter((b): b is string => !!b);
+        const existingBarcodes = new Set(
+          candidateBarcodes.length === 0
+            ? []
+            : (
+                await tx.productBarcode.findMany({
+                  where: { barcode: { in: candidateBarcodes } },
+                  select: { barcode: true },
+                })
+              ).map((b) => b.barcode),
+        );
+        const seenInBatch = new Set<string>();
 
-      for (const row of job.rows) {
-        if (row.status === ImportRowStatus.COMPLETED) {
-          continue;
-        }
-
-        let brandId = row.matchedBrandId;
-        let catalogId = row.matchedCatalogId;
-        let vehicleId = row.matchedVehicleId;
-
-        if (!brandId && row.brandName) {
-          const existingBrand = await tx.brand.findUnique({
-            where: { name: row.brandName },
-          });
-
-          if (existingBrand) {
-            brandId = existingBrand.id;
-          } else {
-            const newBrand = await tx.brand.create({
-              data: {
-                name: row.brandName,
-                aliases: [row.brandName],
-              },
-            });
-            brandId = newBrand.id;
+        for (const row of job.rows) {
+          if (row.status === ImportRowStatus.COMPLETED) {
+            continue;
           }
-        }
 
-        if (!catalogId && row.productName) {
-          const existingCatalog = await tx.partCatalog.findUnique({
-            where: { name: row.productName },
-          });
+          let brandId = row.matchedBrandId;
+          let catalogId = row.matchedCatalogId;
+          let vehicleId = row.matchedVehicleId;
 
-          if (existingCatalog) {
-            catalogId = existingCatalog.id;
-          } else {
-            const newCatalog = await tx.partCatalog.create({
-              data: {
-                name: row.productName ?? 'بدون نام',
-                unit: row.unit || 'عدد',
-                aliases: [row.productName ?? 'بدون نام'],
-              },
+          if (!brandId && row.brandName) {
+            const existingBrand = await tx.brand.findUnique({
+              where: { name: row.brandName },
             });
-            catalogId = newCatalog.id;
+
+            if (existingBrand) {
+              brandId = existingBrand.id;
+            } else {
+              const newBrand = await tx.brand.create({
+                data: {
+                  name: row.brandName,
+                  aliases: [row.brandName],
+                },
+              });
+              brandId = newBrand.id;
+            }
           }
-        }
 
-        if (!vehicleId && row.vehicleModelName) {
-          const existingVehicle = await tx.vehicleModel.findFirst({
-            where: { name: row.vehicleModelName },
-          });
-
-          if (existingVehicle) {
-            vehicleId = existingVehicle.id;
-          } else {
-            const newVehicle = await tx.vehicleModel.create({
-              data: {
-                name: row.vehicleModelName,
-                startYear: 1300,
-                endYear: 1405,
-                aliases: [row.vehicleModelName],
-              },
+          if (!catalogId && row.productName) {
+            const existingCatalog = await tx.partCatalog.findUnique({
+              where: { name: row.productName },
             });
-            vehicleId = newVehicle.id;
+
+            if (existingCatalog) {
+              catalogId = existingCatalog.id;
+            } else {
+              const newCatalog = await tx.partCatalog.create({
+                data: {
+                  name: row.productName ?? 'بدون نام',
+                  unit: row.unit || 'عدد',
+                  aliases: [row.productName ?? 'بدون نام'],
+                },
+              });
+              catalogId = newCatalog.id;
+            }
           }
-        }
 
-        const generatedSku = `SKU-${Date.now()}-${row.rowNumber}`;
+          if (!vehicleId && row.vehicleModelName) {
+            const existingVehicle = await tx.vehicleModel.findFirst({
+              where: { name: row.vehicleModelName },
+            });
 
-        // بارکد داخلی (چاپ لیبل) — مقدارش مشخص است تا همین‌جا رکورد بارکد هم ساخته شود.
-        // runToken + rowNumber در سطح کل دیتابیس یکتاست.
-        const internalBarcode = `WOS${runToken}${row.rowNumber}`;
+            if (existingVehicle) {
+              vehicleId = existingVehicle.id;
+            } else {
+              const newVehicle = await tx.vehicleModel.create({
+                data: {
+                  name: row.vehicleModelName,
+                  startYear: 1300,
+                  endYear: 1405,
+                  aliases: [row.vehicleModelName],
+                },
+              });
+              vehicleId = newVehicle.id;
+            }
+          }
 
-        // بارکدها باید توی ProductBarcode هم باشند، وگرنه اسکنر فروشنده بارکد
-        // کارخانه را پیدا نمی‌کند (resolveForSale از همین جدول می‌خواند).
-        const barcodesToCreate: { barcode: string; type: 'INTERNAL' | 'FACTORY' }[] = [
-          { barcode: internalBarcode, type: 'INTERNAL' },
-        ];
-        if (
-          row.factoryBarcode &&
-          !existingBarcodes.has(row.factoryBarcode) &&
-          !seenInBatch.has(row.factoryBarcode)
-        ) {
-          barcodesToCreate.push({ barcode: row.factoryBarcode, type: 'FACTORY' });
-          seenInBatch.add(row.factoryBarcode);
-        }
+          const generatedSku = `SKU-${Date.now()}-${row.rowNumber}`;
 
-        await tx.product.create({
-          data: {
-            name: row.productName ?? 'بدون نام',
-            sku: generatedSku,
-            internalBarcode,
-            partNumber: row.partNumber,
-            searchTokens: buildSearchTokens(
-              row.productName ?? 'بدون نام',
-              generatedSku,
-              row.partNumber,
-            ),
-            unit: row.unit || 'عدد',
-            partCatalogId: catalogId,
-            brandId: brandId,
-            vehicleModelId: vehicleId,
-            barcodes: { create: barcodesToCreate },
-            prices: {
-              create: {
-                purchasePrice: row.purchasePrice,
-                salePrice: row.salePrice,
-                wholesalePrice: row.wholesalePrice,
+          // بارکد داخلی (چاپ لیبل) — مقدارش مشخص است تا همین‌جا رکورد بارکد هم ساخته شود.
+          // runToken + rowNumber در سطح کل دیتابیس یکتاست.
+          const internalBarcode = `WOS${runToken}${row.rowNumber}`;
+
+          // بارکدها باید توی ProductBarcode هم باشند، وگرنه اسکنر فروشنده بارکد
+          // کارخانه را پیدا نمی‌کند (resolveForSale از همین جدول می‌خواند).
+          const barcodesToCreate: {
+            barcode: string;
+            type: 'INTERNAL' | 'FACTORY';
+          }[] = [{ barcode: internalBarcode, type: 'INTERNAL' }];
+          if (
+            row.factoryBarcode &&
+            !existingBarcodes.has(row.factoryBarcode) &&
+            !seenInBatch.has(row.factoryBarcode)
+          ) {
+            barcodesToCreate.push({
+              barcode: row.factoryBarcode,
+              type: 'FACTORY',
+            });
+            seenInBatch.add(row.factoryBarcode);
+          }
+
+          await tx.product.create({
+            data: {
+              name: row.productName ?? 'بدون نام',
+              sku: generatedSku,
+              internalBarcode,
+              partNumber: row.partNumber,
+              searchTokens: buildSearchTokens(
+                row.productName ?? 'بدون نام',
+                generatedSku,
+                row.partNumber,
+              ),
+              unit: row.unit || 'عدد',
+              partCatalogId: catalogId,
+              brandId: brandId,
+              vehicleModelId: vehicleId,
+              barcodes: { create: barcodesToCreate },
+              prices: {
+                create: {
+                  purchasePrice: row.purchasePrice,
+                  salePrice: row.salePrice,
+                  wholesalePrice: row.wholesalePrice,
+                },
               },
             },
-          },
-        });
+          });
 
-        await tx.importRow.update({
-          where: { id: row.id },
-          data: { status: ImportRowStatus.COMPLETED },
-        });
+          await tx.importRow.update({
+            where: { id: row.id },
+            data: { status: ImportRowStatus.COMPLETED },
+          });
 
-        createdProductsCount++;
-      }
+          createdProductsCount++;
+        }
 
-      return {
-        success: true,
-        message: 'عملیات ایمپورت با موفقیت تایید و اعمال شد.',
-        createdProducts: createdProductsCount,
-      };
+        return {
+          success: true,
+          message: 'عملیات ایمپورت با موفقیت تایید و اعمال شد.',
+          createdProducts: createdProductsCount,
+        };
       },
       {
         // هر ردیف چند کوئری دارد و یک اکسل واقعی هزاران ردیف است؛ با سقف پیش‌فرضِ

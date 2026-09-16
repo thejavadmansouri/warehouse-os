@@ -1,9 +1,7 @@
 export class CreatePartCatalogDto {
+  name: string;
 
-  name:string;
+  aliases?: string[];
 
-  aliases?:string[];
-
-  unit?:string;
-
+  unit?: string;
 }

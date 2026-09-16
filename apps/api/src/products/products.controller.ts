@@ -8,6 +8,7 @@ import {
   Body,
   Query,
   Res,
+  Req,
 } from '@nestjs/common';
 import type { Response } from 'express';
 
@@ -20,14 +21,9 @@ import { BulkPriceDto } from './dto/bulk-price.dto';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/roles.decorator';
 
-
 @Controller('products')
 export class ProductsController {
-
-  constructor(
-    private readonly productsService: ProductsService
-  ) {}
-
+  constructor(private readonly productsService: ProductsService) {}
 
   /**
    * کاتالوگ سبک برای اپ کارگر (دانلود آفلاین). فقط فیلدهای لازم برای
@@ -43,7 +39,10 @@ export class ProductsController {
     @Query('updatedSince') updatedSince?: string,
   ) {
     const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
-    const limitNum = Math.min(2000, Math.max(1, parseInt(limit ?? '500', 10) || 500));
+    const limitNum = Math.min(
+      2000,
+      Math.max(1, parseInt(limit ?? '500', 10) || 500),
+    );
     return this.productsService.catalog(
       pageNum,
       limitNum,
@@ -59,20 +58,25 @@ export class ProductsController {
   @Get('pos-catalog')
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
   posCatalog(
+    @Req() req: any,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Query('updatedSince') updatedSince?: string,
   ) {
     const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
-    const limitNum = Math.min(2000, Math.max(1, parseInt(limit ?? '500', 10) || 500));
+    const limitNum = Math.min(
+      2000,
+      Math.max(1, parseInt(limit ?? '500', 10) || 500),
+    );
     return this.productsService.catalog(
       pageNum,
       limitNum,
       updatedSince?.trim() || undefined,
       true,
+      // فقط مدیر: بهای خرید و قیمتِ پیشنهادی، همان قاعده‌ی attachStock.
+      req.user?.role === Role.ADMIN || req.user?.role === Role.MANAGER,
     );
   }
-
 
   @Get()
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
@@ -83,7 +87,10 @@ export class ProductsController {
     @Query('brandId') brandId?: string,
   ) {
     const pageNum = Math.max(1, parseInt(page ?? '1', 10) || 1);
-    const limitNum = Math.min(200, Math.max(1, parseInt(limit ?? '50', 10) || 50));
+    const limitNum = Math.min(
+      200,
+      Math.max(1, parseInt(limit ?? '50', 10) || 50),
+    );
     return this.productsService.findAll(
       pageNum,
       limitNum,
@@ -92,22 +99,22 @@ export class ProductsController {
     );
   }
 
-
   @Get('search')
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
-  search(
-    @Query('q') q: string
-  ) {
+  search(@Query('q') q: string) {
     return this.productsService.search(q);
   }
 
   // «یافتن کالا» — سرچ + آدرس دقیقِ موجودی (همه‌ی نقش‌ها)
+  // مدیر بهای خرید و قیمتِ پیشنهادیِ ۱۵٪ را هم می‌گیرد؛ بهای خرید برای
+  // فروشنده نمی‌آید (حاشیه‌ی سود لو نرود) — همان قاعده‌ی قبلیِ attachStock.
   @Get('locate')
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
-  locate(
-    @Query('q') q: string
-  ) {
-    return this.productsService.searchWithStock(q);
+  locate(@Query('q') q: string, @Req() req: any) {
+    return this.productsService.searchWithStock(q, {
+      includePurchase:
+        req.user?.role === Role.ADMIN || req.user?.role === Role.MANAGER,
+    });
   }
 
   /**
@@ -116,49 +123,42 @@ export class ProductsController {
    */
   @Get(':id/pos-stock')
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
-  posStock(
-    @Param('id') id: string
-  ) {
-    return this.productsService.productStock(id);
+  posStock(@Param('id') id: string, @Req() req: any) {
+    return this.productsService.productStock(id, {
+      includePurchase:
+        req.user?.role === Role.ADMIN || req.user?.role === Role.MANAGER,
+    });
   }
-
 
   @Get('export')
   @Roles(Role.ADMIN, Role.MANAGER)
   async exportCsv(@Res() res: Response) {
     const csv = await this.productsService.exportCsv();
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename=products-export.csv');
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename=products-export.csv',
+    );
     res.send(csv);
   }
 
-
   @Get('barcode/:barcode')
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
-  detailByBarcode(
-    @Param('barcode') barcode:string
-  ){
+  detailByBarcode(@Param('barcode') barcode: string) {
     return this.productsService.detailByBarcode(barcode);
   }
 
-
   @Get(':id')
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
-  findOne(
-    @Param('id') id: string
-  ) {
+  findOne(@Param('id') id: string) {
     return this.productsService.findOne(id);
   }
 
-
   @Post()
   @Roles(Role.ADMIN, Role.MANAGER)
-  create(
-    @Body() dto: CreateProductDto
-  ) {
+  create(@Body() dto: CreateProductDto) {
     return this.productsService.create(dto);
   }
-
 
   // کالاهایی که هنوز لیبل نخورده‌اند — صف چاپ روزانه.
   @Roles(Role.ADMIN, Role.MANAGER)
@@ -168,7 +168,7 @@ export class ProductsController {
     @Query('since') since?: string,
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-  ){
+  ) {
     return this.productsService.pendingLabels({
       onlyWithStock: onlyWithStock === 'true',
       since,
@@ -177,26 +177,27 @@ export class ProductsController {
     });
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('labels/mark-printed')
-  markLabelsPrinted(
-    @Body() body: { productIds: string[] },
-  ){
+  markLabelsPrinted(@Body() body: { productIds: string[] }) {
     return this.productsService.markLabelsPrinted(body?.productIds ?? []);
   }
-
 
   // ثبت قیمت جدید. ردیف تازه در تاریخچه می‌سازد، قیمت قبلی را بازنویسی نمی‌کند.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post(':id/prices')
   setPrice(
     @Param('id') id: string,
-    @Body() dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number },
-  ){
+    @Body()
+    dto: {
+      purchasePrice?: number;
+      salePrice?: number;
+      wholesalePrice?: number;
+      managerPrice?: number;
+    },
+  ) {
     return this.productsService.setPrice(id, dto);
   }
-
 
   /** قیمت‌گذاری دسته‌ای: انتخاب دستی، یک برند، یا نتیجه‌ی یک جست‌وجو. */
   @Roles(Role.ADMIN, Role.MANAGER)
@@ -204,7 +205,6 @@ export class ProductsController {
   bulkSetPrice(@Body() dto: BulkPriceDto) {
     return this.productsService.bulkSetPrice(dto);
   }
-
 
   /**
    * «نمایش در سایت» به‌صورت گروهی.
@@ -217,32 +217,21 @@ export class ProductsController {
     return this.productsService.bulkSetOnline(dto);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get(':id/prices')
-  priceHistory(
-    @Param('id') id: string,
-  ){
+  priceHistory(@Param('id') id: string) {
     return this.productsService.priceHistory(id);
   }
 
-
   @Patch(':id')
   @Roles(Role.ADMIN, Role.MANAGER)
-  update(
-    @Param('id') id: string,
-    @Body() dto: UpdateProductDto
-  ) {
+  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
   }
 
-
   @Delete(':id')
   @Roles(Role.ADMIN)
-  remove(
-    @Param('id') id: string
-  ) {
+  remove(@Param('id') id: string) {
     return this.productsService.remove(id);
   }
-
 }

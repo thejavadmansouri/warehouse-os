@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { TsplService } from './tspl.service';
@@ -7,11 +11,17 @@ import { isNumericSku } from '../products/sku.util';
 import {
   buildThermalLabelHtml,
   buildSheetLabelHtml,
+  buildHalfSheetLocationHtml,
+  buildRollLabelHtml,
   type LabelPaper,
   buildProductSheetLabelHtml,
   LabelData,
   ProductLabelData,
   ProductSheetOptions,
+  RollSheetOptions,
+  RollLocationOptions,
+  buildRollLocationHtml,
+  type HalfSheetLocationOptions,
 } from './label-template';
 
 @Injectable()
@@ -135,7 +145,6 @@ export class LabelsService {
     return { printed, requested: productIds.length };
   }
 
-
   async getSettings() {
     const existing = await this.prisma.labelSettings.findUnique({
       where: { id: 'singleton' },
@@ -143,7 +152,6 @@ export class LabelsService {
     if (existing) return existing;
     return this.prisma.labelSettings.create({ data: { id: 'singleton' } });
   }
-
 
   async updateSettings(dto: {
     columns?: number;
@@ -153,14 +161,21 @@ export class LabelsService {
     showName?: boolean;
     showBarcodeText?: boolean;
     cropMarks?: boolean;
+    footerText?: string;
+    /** عرض فیزیکی رول؛ بزرگ‌تر از widthMm = چند لیبل کنار هم. */
+    mediaWidthMm?: number | null;
   }) {
     await this.getSettings();
+    // خالی‌کردنِ متن هم باید کار کند؛ null → پاک‌کردنِ مقدار قبلی.
+    const data: any = { ...dto };
+    if (data.footerText !== undefined) {
+      data.footerText = data.footerText?.trim() ? data.footerText.trim() : null;
+    }
     return this.prisma.labelSettings.update({
       where: { id: 'singleton' },
-      data: dto,
+      data,
     });
   }
-
 
   async productLabel(id: string) {
     const product = await this.prisma.product.findUnique({
@@ -186,7 +201,9 @@ export class LabelsService {
       // و اگر لیبل خط بخورد کسی نمی‌تواند دستی تایپش کند.
       // اگر کالا کد عددی نداشته باشد (کدهای موقت قدیمی)، به internalBarcode
       // برمی‌گردیم تا لیبل بدون بارکد چاپ نشود.
-      barcode: isNumericSku(product.sku) ? product.sku : product.internalBarcode,
+      barcode: isNumericSku(product.sku)
+        ? product.sku
+        : product.internalBarcode,
       qrCode: await this.qr(
         isNumericSku(product.sku) ? product.sku : product.internalBarcode,
       ),
@@ -208,15 +225,26 @@ export class LabelsService {
   ): Promise<string> {
     const labels = await this.bulkLocationLabels(ids);
 
-    const html = buildSheetLabelHtml(
-      labels,
-      columns,
-      paper,
-    );
+    const html = buildSheetLabelHtml(labels, columns, paper);
 
     return html;
   }
 
+  /*
+   * برگهٔ نیم‌برگ — هر لیبل دقیقاً نیمی از کاغذ (A5 → دو A6).
+   * مسیرِ مستقل از دیالوگ؛ خروجی در تبِ نو باز می‌شود و اندازه کاغذ را رعایت
+   * می‌کند، برخلاف چاپِ داخلِ ادمین که کاربر لیبلِ کوچک می‌گرفت.
+   */
+  async halfSheetLocationLabelsPdf(
+    ids: string[],
+    opts: HalfSheetLocationOptions = {},
+  ): Promise<string> {
+    if (!ids || ids.length === 0) {
+      throw new BadRequestException('هیچ موقعیتی انتخاب نشده است');
+    }
+    const labels = await this.bulkLocationLabels(ids);
+    return buildHalfSheetLocationHtml(labels, opts);
+  }
 
   // چاپ کل زیرمجموعه یک موقعیت
   async treeLocationLabelsPdf(
@@ -224,287 +252,185 @@ export class LabelsService {
     columns?: number,
     paper: LabelPaper = 'A4',
   ): Promise<string> {
-
-    const root =
-      await this.prisma.location.findUnique({
-        where: {
-          id: rootId,
-        },
-      });
-
+    const root = await this.prisma.location.findUnique({
+      where: {
+        id: rootId,
+      },
+    });
 
     if (!root) {
-      throw new NotFoundException(
-        'موقعیت پیدا نشد',
-      );
+      throw new NotFoundException('موقعیت پیدا نشد');
     }
 
-
-    const locations =
-      await this.prisma.location.findMany({
-
-        where: {
-          OR: [
-            {
-              id: root.id,
+    const locations = await this.prisma.location.findMany({
+      where: {
+        OR: [
+          {
+            id: root.id,
+          },
+          {
+            path: {
+              startsWith: root.path + ' > ',
             },
-            {
-              path: {
-                startsWith:
-                  root.path + ' > ',
-              },
-            },
-          ],
-
-          isActive: true,
-        },
-
-
-        orderBy: [
-
-          {
-            depth: 'asc',
           },
-
-          {
-            sortOrder: 'asc',
-          },
-
-          {
-            name: 'asc',
-          },
-
         ],
 
-      });
+        isActive: true,
+      },
 
+      orderBy: [
+        {
+          depth: 'asc',
+        },
 
+        {
+          sortOrder: 'asc',
+        },
 
-    const labels =
-      await Promise.all(
-        locations.map((l) =>
-          this.locationLabel(l.id),
-        ),
-      );
+        {
+          name: 'asc',
+        },
+      ],
+    });
 
+    const labels = await Promise.all(
+      locations.map((l) => this.locationLabel(l.id)),
+    );
 
-
-    const html =
-      buildSheetLabelHtml(
-        labels,
-        columns,
-        paper,
-      );
-
+    const html = buildSheetLabelHtml(labels, columns, paper);
 
     return html;
   }
-    async childrenLocationLabelsPdf(
+  async childrenLocationLabelsPdf(
     parentId: string,
     columns?: number,
     paper: LabelPaper = 'A4',
   ): Promise<string> {
-
-    const parent =
-      await this.prisma.location.findUnique({
-        where: {
-          id: parentId,
-        },
-      });
-
+    const parent = await this.prisma.location.findUnique({
+      where: {
+        id: parentId,
+      },
+    });
 
     if (!parent) {
-      throw new NotFoundException(
-        'موقعیت پیدا نشد',
-      );
+      throw new NotFoundException('موقعیت پیدا نشد');
     }
 
+    const children = await this.prisma.location.findMany({
+      where: {
+        parentId: parent.id,
+        isActive: true,
+      },
 
-    const children =
-      await this.prisma.location.findMany({
-        where: {
-          parentId: parent.id,
-          isActive: true,
+      orderBy: [
+        {
+          sortOrder: 'asc',
         },
-
-        orderBy: [
-          {
-            sortOrder: 'asc',
-          },
-          {
-            name: 'asc',
-          },
-        ],
-      });
-
+        {
+          name: 'asc',
+        },
+      ],
+    });
 
     if (children.length === 0) {
-      throw new NotFoundException(
-        'زیرمجموعه‌ای برای چاپ وجود ندارد',
-      );
+      throw new NotFoundException('زیرمجموعه‌ای برای چاپ وجود ندارد');
     }
 
+    const labels = await Promise.all(
+      children.map((location) => this.locationLabel(location.id)),
+    );
 
-    const labels =
-      await Promise.all(
-        children.map((location) =>
-          this.locationLabel(location.id),
-        ),
-      );
-
-
-    const html =
-      buildSheetLabelHtml(
-        labels,
-        columns,
-        paper,
-      );
-
+    const html = buildSheetLabelHtml(labels, columns, paper);
 
     return html;
   }
   async rowShelvesLabelsPdf(
-  rowId: string,
-  columns?: number,
-  paper: LabelPaper = 'A4',
-): Promise<string> {
-
-  const row =
-    await this.prisma.location.findUnique({
+    rowId: string,
+    columns?: number,
+    paper: LabelPaper = 'A4',
+  ): Promise<string> {
+    const row = await this.prisma.location.findUnique({
       where: {
         id: rowId,
       },
     });
 
+    if (!row) {
+      throw new NotFoundException('ردیف پیدا نشد');
+    }
 
-  if (!row) {
-    throw new NotFoundException(
-      'ردیف پیدا نشد',
-    );
-  }
-
-
-  const shelves =
-    await this.prisma.location.findMany({
-
+    const shelves = await this.prisma.location.findMany({
       where: {
-
         parentId: row.id,
 
         type: {
           name: 'قفسه',
         },
-
       },
 
       orderBy: {
         code: 'asc',
       },
-
     });
 
+    if (!shelves.length) {
+      throw new NotFoundException('برای این ردیف قفسه‌ای وجود ندارد');
+    }
 
-
-  if (!shelves.length) {
-
-    throw new NotFoundException(
-      'برای این ردیف قفسه‌ای وجود ندارد',
+    const labels = await Promise.all(
+      shelves.map((s) => this.locationLabel(s.id)),
     );
 
+    const html = buildSheetLabelHtml(labels, columns, paper);
+
+    return html;
   }
-
-
-
-  const labels =
-    await Promise.all(
-      shelves.map((s) =>
-        this.locationLabel(s.id),
-      ),
-    );
-
-
-
-  const html =
-    buildSheetLabelHtml(
-      labels,
-      columns,
-      paper,
-    );
-
-
-
-  return html;
-}
   async filteredChildrenLabelsPdf(
     parentId: string,
     typeName: string,
     columns?: number,
     paper: LabelPaper = 'A4',
   ): Promise<string> {
-
-    const parent =
-      await this.prisma.location.findUnique({
-        where: {
-          id: parentId,
-        },
-      });
-
+    const parent = await this.prisma.location.findUnique({
+      where: {
+        id: parentId,
+      },
+    });
 
     if (!parent) {
-      throw new NotFoundException(
-        'موقعیت پیدا نشد',
-      );
+      throw new NotFoundException('موقعیت پیدا نشد');
     }
 
+    const locations = await this.prisma.location.findMany({
+      where: {
+        parentId: parent.id,
 
-    const locations =
-      await this.prisma.location.findMany({
+        isActive: true,
 
-        where: {
-          parentId: parent.id,
-
-          isActive: true,
-
-          type: {
-            name: typeName,
-          },
+        type: {
+          name: typeName,
         },
+      },
 
-
-        orderBy: [
-          {
-            sortOrder: 'asc',
-          },
-          {
-            code: 'asc',
-          },
-        ],
-
-      });
-
+      orderBy: [
+        {
+          sortOrder: 'asc',
+        },
+        {
+          code: 'asc',
+        },
+      ],
+    });
 
     if (!locations.length) {
-      throw new NotFoundException(
-        `موردی با نوع ${typeName} پیدا نشد`,
-      );
+      throw new NotFoundException(`موردی با نوع ${typeName} پیدا نشد`);
     }
 
+    const labels = await Promise.all(
+      locations.map((location) => this.locationLabel(location.id)),
+    );
 
-    const labels =
-      await Promise.all(
-        locations.map((location) =>
-          this.locationLabel(location.id),
-        ),
-      );
-
-
-    const html =
-      buildSheetLabelHtml(
-        labels,
-        columns,
-        paper,
-      );
-
+    const html = buildSheetLabelHtml(labels, columns, paper);
 
     return html;
   }
@@ -537,7 +463,11 @@ export class LabelsService {
       throw new NotFoundException('محصولی برای چاپ لیبل پیدا نشد');
     }
 
-    const html = buildProductSheetLabelHtml(labels, { ...opts, copies: 1 });
+    const html = buildProductSheetLabelHtml(labels, {
+      ...opts,
+      copies: 1,
+      footerText: opts.footerText,
+    });
     return html;
   }
 
@@ -554,5 +484,65 @@ export class LabelsService {
       quantity: g._sum.quantity ?? 0,
     }));
     return this.productLabelsPdf(items, opts);
+  }
+
+  /*
+   * PDF رول حرارتی: هر صفحه = یک تکه‌ی رول (عرض رول × ارتفاع لیبل) با چند
+   * لیبل کنار هم — دقیقاً همان چیزی که پرینتر حرارتی باید ببیند. پرینت با
+   * Scale=100% و بدون هدر/فوتر.
+   *
+   * items خالی = «کل موجودیِ واردشده» (هر کالا به تعداد مجموع موجودی‌اش).
+   */
+  async rollLabelsPdf(
+    items: { productId: string; quantity: number }[] | null,
+    opts: RollSheetOptions,
+  ): Promise<string> {
+    let resolved = items;
+    if (!resolved || resolved.length === 0) {
+      const grouped = await this.prisma.inventory.groupBy({
+        by: ['productId'],
+        where: { quantity: { gt: 0 } },
+        _sum: { quantity: true },
+      });
+      resolved = grouped.map((g) => ({
+        productId: g.productId,
+        quantity: g._sum.quantity ?? 0,
+      }));
+    }
+
+    const ids = resolved.map((i) => i.productId);
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true, sku: true },
+    });
+    const byId = new Map(products.map((p) => [p.id, p]));
+
+    const labels: ProductLabelData[] = [];
+    for (const item of resolved) {
+      const p = byId.get(item.productId);
+      if (!p) continue;
+      const label: ProductLabelData = { name: p.name, barcode: p.sku };
+      const copies = Math.max(1, Math.min(500, Math.floor(item.quantity) || 1));
+      for (let i = 0; i < copies; i++) labels.push(label);
+    }
+
+    if (labels.length === 0) {
+      throw new NotFoundException('محصولی برای چاپ لیبل پیدا نشد');
+    }
+
+    return buildRollLabelHtml(labels, opts);
+  }
+
+  /*
+   * PDF رول حرارتیِ لیبلِ **موقعیت** (قفسه/ردیف/طبقه): هر صفحه = یک تکه‌ی رول
+   * با چند لیبلِ کیوآر-محور کنار هم. هر لیبل: کیوآرِ بزرگ یک طرف (با موبایل
+   * اسکن می‌شود و مستقیم روی همان قفسه می‌رود)، کدِ درشت و آدرسِ کامل طرفِ دیگر.
+   */
+  async rollLocationLabelsPdf(
+    ids: string[],
+    opts: RollLocationOptions,
+  ): Promise<string> {
+    const labels = await this.bulkLocationLabels(ids);
+    return buildRollLocationHtml(labels, opts);
   }
 }

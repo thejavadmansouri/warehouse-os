@@ -1,7 +1,6 @@
 import { IsString, IsOptional, IsNumber, IsBoolean } from 'class-validator';
 
 export class CreateProductDto {
-
   @IsString()
   name: string;
 
@@ -66,6 +65,11 @@ export class CreateProductDto {
   @IsNumber()
   wholesalePrice?: number;
 
+  /** قیمتِ چهارم — عددِ آزادِ مدیر (چانه‌زنی/مشتری خاص). */
+  @IsOptional()
+  @IsNumber()
+  managerPrice?: number;
+
   @IsOptional()
   @IsNumber()
   minStock?: number;
@@ -73,7 +77,6 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
-
 
   /**
    * روی سایت عمومی دیده شود؟
@@ -85,7 +88,6 @@ export class CreateProductDto {
   @IsOptional()
   @IsBoolean()
   showOnline?: boolean;
-
 
   /** قیمت پیش از تخفیف. باید از `salePrice` بیشتر باشد وگرنه بی‌اثر است. */
   @IsOptional()

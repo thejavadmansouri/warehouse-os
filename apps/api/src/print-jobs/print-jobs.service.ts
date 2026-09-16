@@ -27,9 +27,7 @@ export class PrintJobsService {
     });
   }
 
-
   async runJob(jobId: string) {
-
     const job = await this.prisma.printJob.findUnique({
       where: {
         id: jobId,
@@ -43,20 +41,14 @@ export class PrintJobsService {
       },
     });
 
-
     if (!job) {
-      throw new NotFoundException({ error:'PRINT_JOB_NOT_FOUND', message:'کار چاپ پیدا نشد' });
+      throw new NotFoundException({
+        error: 'PRINT_JOB_NOT_FOUND',
+        message: 'کار چاپ پیدا نشد',
+      });
     }
 
-
-    const jobFolder = join(
-      process.cwd(),
-      'storage',
-      'labels',
-      'jobs',
-      job.id,
-    );
-
+    const jobFolder = join(process.cwd(), 'storage', 'labels', 'jobs', job.id);
 
     if (!existsSync(jobFolder)) {
       mkdirSync(jobFolder, {
@@ -64,109 +56,80 @@ export class PrintJobsService {
       });
     }
 
-
     await this.prisma.printJob.update({
-      where:{
-        id:jobId,
+      where: {
+        id: jobId,
       },
-      data:{
-        status:'PROCESSING',
+      data: {
+        status: 'PROCESSING',
       },
     });
 
-
     let printed = 0;
 
-
     for (const item of job.items) {
-
       if (!item.location) {
         continue;
       }
 
-
       try {
-
         // خروجی HTML است نه PNG: رندر تصویری Puppeteer می‌خواست و Puppeteer از
         // پروژه حذف شد (۳۰۰ مگابایت Chromium داخل نصب‌کننده‌ی ویندوز). لیبل
         // قفسه روی کاغذ A6 و از مرورگر چاپ می‌شود.
         const label = await this.labelsService.locationLabel(item.location.id);
         const png = Buffer.from(buildThermalLabelHtml(label, 384), 'utf8');
 
+        const filename = `${String(printed + 1).padStart(4, '0')}-${item.location.code}.html`;
 
-        const filename =
-          `${String(printed + 1).padStart(4,'0')}-${item.location.code}.html`;
+        const filepath = join(jobFolder, filename);
 
-
-        const filepath =
-          join(
-            jobFolder,
-            filename,
-          );
-
-
-        writeFileSync(
-          filepath,
-          png,
-        );
-
+        writeFileSync(filepath, png);
 
         await this.prisma.printJobItem.update({
-          where:{
-            id:item.id,
+          where: {
+            id: item.id,
           },
-          data:{
-            status:'PRINTED',
+          data: {
+            status: 'PRINTED',
           },
         });
-
 
         printed++;
 
-
         await this.prisma.printJob.update({
-          where:{
-            id:jobId,
+          where: {
+            id: jobId,
           },
-          data:{
-            printedItems:printed,
+          data: {
+            printedItems: printed,
           },
         });
-
-
-      } catch(error) {
-
-
+      } catch (error) {
         await this.prisma.printJobItem.update({
-          where:{
-            id:item.id,
+          where: {
+            id: item.id,
           },
-          data:{
-            status:'FAILED',
+          data: {
+            status: 'FAILED',
           },
         });
-
-
       }
-
     }
 
-
     await this.prisma.printJob.update({
-      where:{
-        id:jobId,
+      where: {
+        id: jobId,
       },
-      data:{
-        status:'COMPLETED',
+      data: {
+        status: 'COMPLETED',
       },
     });
-
 
     return {
       jobId,
       printed,
-      folder:jobFolder,
-      status:'COMPLETED',
+      folder: jobFolder,
+      status: 'COMPLETED',
     };
   }
 }

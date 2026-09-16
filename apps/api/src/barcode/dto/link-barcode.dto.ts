@@ -2,15 +2,12 @@ import { IsIn, IsOptional, IsString, MinLength } from 'class-validator';
 
 /** چسباندنِ یک بارکدِ بیرونی (کارخانه/تأمین‌کننده) به کالای موجود. */
 export class LinkBarcodeDto {
-
   @IsString()
-  productId:string;
-
+  productId: string;
 
   @IsString()
   @MinLength(3)
-  barcode:string;
-
+  barcode: string;
 
   /**
    * `INTERNAL` عمداً پذیرفته نمی‌شود: بارکد داخلی را سیستم موقع ساختِ کالا خودش
