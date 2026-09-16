@@ -12,8 +12,8 @@ import { readBuildStamp } from './build-info';
  * بدتر از سلامت‌سنجی است که نسخه را نمی‌داند.
  */
 describe('readBuildStamp', () => {
-  let dir: string;
   let file: string;
+  let dir: string;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'wos-stamp-'));
@@ -24,17 +24,15 @@ describe('readBuildStamp', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('مهرِ کامل را می‌خواند (بیلد + کیت)', () => {
-    writeFileSync(
-      file,
-      JSON.stringify({
-        version: '0.5.0',
-        builtAt: '2026-09-15T20:22:10.000Z',
-        node: 'v24.19.0',
-        kit: 'kardo-update-2026-09-15',
-        packagedAt: '2026-09-15T20:31:02.000Z',
-      }),
-    );
+  const write = (value: unknown) => writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value));
+
+  it('مهرِ کاملِ کیت را می‌خواند (نسخه، زمان بیلد، نام بسته)', () => {
+    write({
+      version: '0.5.0',
+      builtAt: '2026-09-15T20:22:10.000Z',
+      kit: 'kardo-update-2026-09-15',
+      packagedAt: '2026-09-15T20:31:02.000Z',
+    });
 
     expect(readBuildStamp(file)).toEqual({
       version: '0.5.0',
@@ -44,60 +42,42 @@ describe('readBuildStamp', () => {
     });
   });
 
-  it('مهرِ بیلدِ سادهٔ بدون کیت: kit و packagedAt تهی‌اند', () => {
-    writeFileSync(file, JSON.stringify({ version: '0.5.0', builtAt: '2026-09-15T20:22:10.000Z' }));
+  it('بیلدِ سادهٔ بدون کیت: kit و packagedAt تهی‌اند', () => {
+    write({ version: '0.5.0', builtAt: '2026-09-15T20:22:10.000Z' });
 
-    const stamp = readBuildStamp(file);
-
-    expect(stamp.version).toBe('0.5.0');
-    expect(stamp.builtAt).toBe('2026-09-15T20:22:10.000Z');
-    expect(stamp.kit).toBeNull();
-    expect(stamp.packagedAt).toBeNull();
+    expect(readBuildStamp(file)).toEqual({
+      version: '0.5.0',
+      builtAt: '2026-09-15T20:22:10.000Z',
+      kit: null,
+      packagedAt: null,
+    });
   });
 
-  it('فایلِ نبوده: نسخه از package.json، بدون builtAt', () => {
-    const stamp = readBuildStamp(join(dir, 'nope.json'));
+  it('مقدارهای خالی تهی حساب می‌شوند و فاصلهٔ اضافه پاک می‌شود', () => {
+    write({ version: '  0.5.0\n', builtAt: '', kit: '  ', packagedAt: '' });
 
-    expect(stamp.version).not.toBe('');
-    expect(stamp.version).not.toBe('unknown');
-    expect(stamp.builtAt).toBeNull();
-    expect(stamp.kit).toBeNull();
-    expect(stamp.packagedAt).toBeNull();
+    expect(readBuildStamp(file)).toEqual({
+      version: '0.5.0',
+      builtAt: null,
+      kit: null,
+      packagedAt: null,
+    });
   });
 
-  it('فایلِ خراب: همان پشتیبان، بدون استثنا', () => {
-    writeFileSync(file, '{ this is not json');
-
-    const stamp = readBuildStamp(file);
-
-    expect(stamp.version).not.toBe('unknown');
-    expect(stamp.builtAt).toBeNull();
+  it('فایلِ نبوده: نسخه unknown، بدون استثنا', () => {
+    expect(readBuildStamp(join(dir, 'nope.json'))).toEqual({
+      version: 'unknown',
+      builtAt: null,
+      kit: null,
+      packagedAt: null,
+    });
   });
 
-  it('رشته‌های خالی به‌جای مقدار، تهی حساب می‌شوند و نسخه به پشتیبان برمی‌گردد', () => {
-    writeFileSync(file, JSON.stringify({ version: '   ', builtAt: '', kit: '', packagedAt: '' }));
+  it('فایلِ خراب یا بی‌شکل: همان unknown، بدون استثنا', () => {
+    write('{ this is not json');
+    expect(readBuildStamp(file).version).toBe('unknown');
 
-    const stamp = readBuildStamp(file);
-
-    expect(stamp.version).not.toBe('');
-    expect(stamp.version).not.toBe('   ');
-    expect(stamp.builtAt).toBeNull();
-    expect(stamp.kit).toBeNull();
-    expect(stamp.packagedAt).toBeNull();
-  });
-
-  it('فایلِ آرایه‌ای (JSONِ معتبر ولی بی‌شکل) مهر نیست', () => {
-    writeFileSync(file, '[1,2,3]');
-
-    const stamp = readBuildStamp(file);
-
-    expect(stamp.builtAt).toBeNull();
-    expect(stamp.version).not.toBe('unknown');
-  });
-
-  it('نسخه با فاصلهٔ اضافه، پاک‌شده برمی‌گردد', () => {
-    writeFileSync(file, JSON.stringify({ version: ' 0.5.0\n' }));
-
-    expect(readBuildStamp(file).version).toBe('0.5.0');
+    write('[1,2,3]');
+    expect(readBuildStamp(file).version).toBe('unknown');
   });
 });

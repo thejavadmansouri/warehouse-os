@@ -182,12 +182,15 @@ but the tree holds no record of it being pushed to the shop.
   bumped together at the next installer build.
 - `apps/api/scripts/write-build-info.cjs` (new) + the `build` script in
   `apps/api/package.json` — `nest build` now ends by writing
-  `dist/build-info.json` (`version`, `builtAt`, `node`). It refuses to write into a
-  missing `dist`, so a build that never happened cannot leave a stamp behind.
+  `dist/build-info.json` (`version`, `builtAt`). It refuses to write into a missing
+  `dist` — so a build that never happened cannot leave a stamp behind — and it
+  refuses to stamp an empty `VERSION`, because a version number that looks
+  authoritative and is wrong sends people after the wrong cause.
 - `apps/api/src/common/build-info.ts` (new, with `build-info.spec.ts`) — reads that
-  stamp and always returns the same shape, falling back to the `package.json`
-  version when it is absent or malformed. The reader is deliberately unfussy: a
-  missing metadata file must never turn `/health` into a 500.
+  stamp and always returns the same shape, reporting `version: "unknown"` when it
+  is absent or malformed. It does *not* fall back to `package.json`'s `0.0.1`,
+  which is not a version anybody ever shipped. The reader is deliberately
+  unfussy: a missing metadata file must never turn `/health` into a 500.
 - `apps/api/src/app.service.ts` — `/health` reports `version`, `builtAt`, `kit` and
   `packagedAt` instead of the meaningless `0.0.1` from `package.json`. Reason: after
   an update, `{"status":"ok"}` cannot distinguish a half-applied update, a file
