@@ -17,6 +17,7 @@ import { SCALE_LABELS, useUiScale } from "@/lib/ui-scale";
 export function UiScaleProvider() {
   const scale = useUiScale((s) => s.scale);
   const highContrast = useUiScale((s) => s.highContrast);
+  const posDensity = useUiScale((s) => s.posDensity);
   const bigger = useUiScale((s) => s.bigger);
   const smaller = useUiScale((s) => s.smaller);
   const reset = useUiScale((s) => s.reset);
@@ -30,6 +31,12 @@ export function UiScaleProvider() {
     if (highContrast) document.documentElement.setAttribute("data-contrast", "high");
     else document.documentElement.removeAttribute("data-contrast");
   }, [highContrast]);
+
+  /* تراکم جدول صندوق — CSS در globals.css از روی همین نشانه می‌خواند.
+     حالتِ خیلی فشرده هم خاصیتِ فشرده را دارد (ترتیبِ قواعد در CSS). */
+  React.useEffect(() => {
+    document.documentElement.setAttribute("data-pos-density", posDensity);
+  }, [posDensity]);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

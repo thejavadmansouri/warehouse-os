@@ -1,4 +1,9 @@
+"use client";
+
+import * as React from "react";
 import Link from "next/link";
+
+import { AssetLightbox, AssetThumb } from "@/components/asset-image";
 
 export type KardexRow = {
   id: string;
@@ -14,6 +19,8 @@ export type KardexRow = {
   outQty: number;
   balance: number;
   unitPrice: number | null;
+  /** عکس‌های گرفته‌شده با گوشی برای این حرکت. */
+  assets?: { assetId: string }[];
 };
 
 /** خلاصه‌ی بازه — نوار چهارکارتی بالای جدول. */
@@ -32,6 +39,9 @@ export interface Props {
   faDateTime: (d: string) => string;
   toFa: (v: string | number) => string;
   summary?: KardexSummary | null;
+  /** اگر داده شود، عکس‌های کاردکس دکمهٔ «استفاده به عنوان تصویر محصول» می‌گیرند. */
+  productId?: string;
+  canEdit?: boolean;
 }
 
 /** نقطه‌ی رنگیِ نوع حرکت — فقط از توکن‌های تم. */
@@ -55,7 +65,11 @@ export function KardexTable({
   faDateTime,
   toFa,
   summary,
+  productId,
+  canEdit,
 }: Props) {
+  const [viewAsset, setViewAsset] = React.useState<string | null>(null);
+  const hasPhotos = rows.some((r) => (r.assets?.length ?? 0) > 0);
   return (
     <div className="space-y-4">
       {summary ? (
@@ -83,13 +97,14 @@ export function KardexTable({
               <th className={thCls}>مانده</th>
               <th className={thCls}>قیمت واحد</th>
               <th className={thCls}>ارزش</th>
+              {hasPhotos ? <th className={thCls}>عکس</th> : null}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={9}
+                  colSpan={hasPhotos ? 10 : 9}
                   className="px-3 py-10 text-center text-muted-foreground"
                 >
                   حرکتی برای این کالا ثبت نشده است
@@ -151,6 +166,17 @@ export function KardexTable({
                     <td className={`${tdCls} tabular-nums text-muted-foreground`}>
                       {r.unitPrice != null ? money(r.unitPrice * baseQty) : "—"}
                     </td>
+                    {hasPhotos ? (
+                      <td className={`${tdCls} flex items-center gap-1`}>
+                        {(r.assets ?? []).map((a) => (
+                          <AssetThumb
+                            key={a.assetId}
+                            assetId={a.assetId}
+                            onOpen={() => setViewAsset(a.assetId)}
+                          />
+                        ))}
+                      </td>
+                    ) : null}
                   </tr>
                 );
               })
@@ -158,6 +184,15 @@ export function KardexTable({
           </tbody>
         </table>
       </div>
+      <AssetLightbox
+        assetId={viewAsset}
+        open={!!viewAsset}
+        onOpenChange={(o) => {
+          if (!o) setViewAsset(null);
+        }}
+        productId={productId}
+        canEdit={canEdit}
+      />
     </div>
   );
 }

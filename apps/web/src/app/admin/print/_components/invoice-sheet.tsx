@@ -16,6 +16,11 @@ export type { PaperSize };
  *
  * بدون کتابخانه‌ی PDF: همان قرارداد چاپ لیبل، یعنی HTML + window.print() و
  * انتخاب پرینتر با دیالوگ خود ویندوز.
+ *
+ * برگه فقط **وضعیتِ نهاییِ خالص** را می‌بیند: تعدادِ ماندهِ هر قلم، آخرین قیمتِ
+ * تصحیح‌شده، و مبلغِ نهایی پس از همه‌ی مرجوعی‌ها. ردیفی که کاملاً برگشته اصلاً
+ * روی کاغذ نمی‌آید و هیچ ردی از مرجوعی/اصلاحیه روی برگه چاپ نمی‌شود — سابقه
+ * در سیستم کامل می‌ماند، ولی چیزی که مشتری می‌بیند یک فاکتورِ تمیز است.
  */
 export function InvoiceSheet({
   invoice: inv,
@@ -24,19 +29,41 @@ export function InvoiceSheet({
   invoice: Invoice;
   size: PaperSize;
 }) {
-  const lines = inv.lines ?? [];
-  const linesGross = lines.reduce(
-    (s, l) => s + Math.abs(l.quantity) * (l.unitPrice ?? 0),
-    0
-  );
-  const storedLineDiscounts = lines.reduce((s, l) => s + (l.lineDiscount ?? 0), 0);
+  const refundTotal = inv.refundTotal ?? 0;
+  const hasReturns = refundTotal > 0;
+
+  /*
+   * وضعیتِ نهاییِ هر قلم:
+   *   • تعداد = ماندهِ قلم (netQuantity) — ردیفِ کاملاً برگشتی (ماندهِ صفر) حذف.
+   *   • قیمت = آخرین قیمتِ تصحیح‌شده.
+   *   • وقتی فاکتور مرجوعی دارد، قیمتِ چاپ‌شده «قیمتِ مؤثرِ هر واحد» است —
+   *     همان چیزی که واقعاً بابتِ هر عدد گرفته شده؛ جمعِ برگه این‌طوری با
+   *     مبلغِ نهایی دقیقاً می‌خواند و تخفیف‌ها داخلِ قیمتِ واحد می‌نشینند.
+   */
+  const netLines = (inv.lines ?? [])
+    .map((l) => {
+      const q = l.netQuantity ?? Math.abs(l.quantity);
+      const unit =
+        hasReturns && l.effectiveUnitPrice != null
+          ? l.effectiveUnitPrice
+          : (l.currentUnitPrice ?? l.unitPrice ?? 0);
+      const disc = hasReturns ? 0 : (l.netLineDiscount ?? l.lineDiscount ?? 0);
+      return { ...l, q, unit, disc };
+    })
+    .filter((l) => l.q > 0);
+
+  const linesGross = netLines.reduce((s, l) => s + l.q * l.unit, 0);
   /*
    * فاکتورهای پیش از افزوده‌شدن ستون تخفیفِ ردیف، مقدارشان null است. آنجا تخفیف
    * ردیفی را از اختلافِ جمع ردیف‌ها با subtotal درمی‌آوریم تا جمع‌های پایینِ برگه
    * همیشه درست بخوانند، حتی اگر نشود گفت روی کدام قلم بوده.
    */
-  const lineDiscounts = storedLineDiscounts || Math.max(0, linesGross - inv.subtotal);
-  const perLineKnown = storedLineDiscounts > 0;
+  const lineDiscounts =
+    netLines.reduce((s, l) => s + (l.netLineDiscount ?? l.lineDiscount ?? 0), 0) ||
+    (hasReturns ? 0 : Math.max(0, linesGross - inv.subtotal));
+  const perLineKnown = !hasReturns && lineDiscounts > 0;
+  /** مبلغِ نهایی: جمعِ فاکتور منهم همه‌ی وجهِ برگشتی — وضعیتِ واقعیِ حسابِ همین برگه. */
+  const payable = Math.max(0, inv.total - refundTotal);
   const cancelled = inv.status === "CANCELLED";
 
   return (
@@ -87,30 +114,25 @@ export function InvoiceSheet({
             </tr>
           </thead>
           <tbody>
-            {lines.map((l, i) => {
-              const q = Math.abs(l.quantity);
-              const unit = l.unitPrice ?? 0;
-              const disc = l.lineDiscount ?? 0;
-              return (
-                <tr key={l.id ?? i}>
-                  <td className="num center">{toFa(i + 1)}</td>
-                  <td>
-                    {l.product?.name ?? "—"}
-                    {l.product?.sku && (
-                      <span className="muted sku"> · کد {toFa(l.product.sku)}</span>
-                    )}
-                    {/* توضیحِ دستیِ فروشنده — خطِ دوم، ریزتر. */}
-                    {l.lineNote && <div className="line-note">{l.lineNote}</div>}
-                  </td>
-                  <td className="num center">
-                    {qty(q)} {l.product?.unit ?? ""}
-                  </td>
-                  <td className="num">{money(unit)}</td>
-                  {perLineKnown && <td className="num">{disc ? money(disc) : "—"}</td>}
-                  <td className="num strong">{money(q * unit - disc)}</td>
-                </tr>
-              );
-            })}
+            {netLines.map((l, i) => (
+              <tr key={l.id ?? i}>
+                <td className="num center">{toFa(i + 1)}</td>
+                <td>
+                  {l.product?.name ?? "—"}
+                  {l.product?.sku && (
+                    <span className="muted sku"> · کد {toFa(l.product.sku)}</span>
+                  )}
+                  {/* توضیحِ دستیِ فروشنده — خطِ دوم، ریزتر. */}
+                  {l.lineNote && <div className="line-note">{l.lineNote}</div>}
+                </td>
+                <td className="num center">
+                  {qty(l.q)} {l.product?.unit ?? ""}
+                </td>
+                <td className="num">{money(l.unit)}</td>
+                {perLineKnown && <td className="num">{l.disc ? money(l.disc) : "—"}</td>}
+                <td className="num strong">{money(l.q * l.unit - l.disc)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
 
@@ -121,13 +143,17 @@ export function InvoiceSheet({
                 <td>جمع اقلام</td>
                 <td className="num">{money(linesGross)}</td>
               </tr>
-              {lineDiscounts > 0 && (
+              {/*
+                وقتی فاکتور مرجوعی دارد، تخفیف‌ها داخلِ قیمتِ مؤثرِ هر واحد
+                نشسته‌اند — ردیفِ جداگانه‌ی تخفیف دوبارِ حساب‌شدن می‌شد.
+              */}
+              {!hasReturns && lineDiscounts > 0 && (
                 <tr>
                   <td>تخفیف اقلام</td>
                   <td className="num">− {money(lineDiscounts)}</td>
                 </tr>
               )}
-              {inv.discount > 0 && (
+              {!hasReturns && inv.discount > 0 && (
                 <tr>
                   <td>تخفیف فاکتور</td>
                   <td className="num">− {money(inv.discount)}</td>
@@ -146,7 +172,7 @@ export function InvoiceSheet({
               )}
               <tr className="grand">
                 <td>مبلغ قابل پرداخت</td>
-                <td className="num">{amount(inv.total)}</td>
+                <td className="num">{amount(payable)}</td>
               </tr>
               {inv.dueAmount > 0 && (
                 <tr className="due">
@@ -169,7 +195,14 @@ export function InvoiceSheet({
               <div className="muted">
                 پرداخت:{" "}
                 {inv.payments!
-                  .map((p) => `${PAYMENT_LABELS[p.method] ?? p.method} ${money(p.amount)}`)
+                  .map((p) =>
+                    // مبلغِ منفی = ردیفِ «اصلاح نحوهٔ پرداخت» که سهمِ قبلی را
+                    // برمی‌دارد؛ روی کاغذ با کلمهٔ «برداشت» خوانده می‌شود تا
+                    // جهتِ پول اشتباه فهمیده نشود.
+                    p.amount < 0
+                      ? `${PAYMENT_LABELS[p.method] ?? p.method} ${money(-p.amount)} (برداشت)`
+                      : `${PAYMENT_LABELS[p.method] ?? p.method} ${money(p.amount)}`,
+                  )
                   .join(" · ")}
               </div>
             )}

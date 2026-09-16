@@ -421,6 +421,51 @@
 }
 
 /*
+ * تراکم جدولِ صندوق — کلیدِ «ردیف‌های صندوق» در منوی خوانایی.
+ *
+ * فاکتورهای لوازم یدکی بلندند؛ با ردیفِ عادی (ورودی‌های ۳۲px) روی لپ‌تاپ فقط
+ * ~۱۳ قلم در صفحه جا می‌شد و فروشنده مدام اسکرول می‌کرد. فشرده یعنی ورودی‌ها
+ * ۲۴px، فونتِ نام یک پله کوچک‌تر و پدینگِ خانه‌ها صفر — با این‌ها ۲۰+ قلم در
+ * همان صفحه جا می‌شود. چون فقط کلاسِ .pos-lines را می‌گیرد، بقیه‌ی برنامه
+ * دست‌نخورده می‌ماند.
+ */
+/* فشرده — ۲۰+ قلم در صفحه (خیلی‌فشرده هم این قواعد را دارد). */
+html[data-pos-density="compact"] .pos-lines tbody td,
+html[data-pos-density="ultra"] .pos-lines tbody td {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+html[data-pos-density="compact"] .pos-lines tbody td [class*="h-8"],
+html[data-pos-density="ultra"] .pos-lines tbody td [class*="h-8"] {
+  height: 1.5rem !important;
+}
+html[data-pos-density="compact"] .pos-lines .text-base,
+html[data-pos-density="ultra"] .pos-lines .text-base {
+  font-size: 0.8rem !important;
+  line-height: 1.15 !important;
+}
+html[data-pos-density="compact"] .pos-lines .mt-0\.5,
+html[data-pos-density="ultra"] .pos-lines .mt-0\.5 {
+  margin-top: 0 !important;
+}
+
+/*
+ * خیلی‌فشرده — ردیفِ ~۲۲px برای ۲۵+ قلم.
+ * ورودی‌ها یک پله کوچک‌تر از فشرده (۲۰px)؛ خوانایی با فونتِ ۰٫۷۲rem هنوز
+ * سرِ جایش است چون اعدادِ قیمت با ارقام فارسی و درشت‌نویسیِ پیش‌فرض می‌آیند.
+ */
+html[data-pos-density="ultra"] .pos-lines tbody td [class*="h-8"] {
+  height: 1.25rem !important;
+}
+html[data-pos-density="ultra"] .pos-lines .text-base {
+  font-size: 0.72rem !important;
+}
+html[data-pos-density="ultra"] .pos-lines tbody td .gap-1,
+html[data-pos-density="ultra"] .pos-lines tbody td .gap-2 {
+  gap: 0.25rem !important;
+}
+
+/*
  * ستون‌های جدولِ سند.
  *
  * فقط جدولِ اقلامِ فاکتور این ته‌رنگ‌ها را می‌گیرد. فهرست‌ها و ریزگردشِ حساب

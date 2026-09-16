@@ -73,6 +73,7 @@ export function ProductPrices({ productId }: { productId: string }) {
                   <TableHead className="text-center">خرید</TableHead>
                   <TableHead className="text-center">فروش</TableHead>
                   <TableHead className="text-center">عمده</TableHead>
+                  <TableHead className="text-center">مدیر</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -106,6 +107,9 @@ export function ProductPrices({ productId }: { productId: string }) {
                       </TableCell>
                       <TableCell className="text-center tabular-nums text-muted-foreground">
                         {formatPrice(r.wholesalePrice)}
+                      </TableCell>
+                      <TableCell className="text-center tabular-nums text-violet-600 dark:text-violet-400">
+                        {formatPrice(r.managerPrice ?? null)}
                       </TableCell>
                     </TableRow>
                   );

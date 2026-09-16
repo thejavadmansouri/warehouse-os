@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>نمونه: تیک حافظه فاکتور</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Vazirmatn", Tahoma, "Segoe UI", sans-serif;
+    background: #f4f4f5; color: #18181b; padding: 24px; font-size: 14px;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+  .card { background: #fff; border: 1px solid #e4e4e7; border-radius: 12px; overflow: hidden; }
+  .card-head { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e4e4e7; }
+  .card-head h2 { font-size: 15px; font-weight: 700; }
+  .card-head .sub { color: #71717a; font-size: 12px; margin-top: 2px; }
+  .toggle { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; user-select: none; cursor: pointer; }
+  .toggle input { display: none; }
+  .track { width: 42px; height: 24px; border-radius: 999px; background: #d4d4d8; position: relative; transition: background .15s; }
+  .track::after { content: ""; position: absolute; top: 3px; inset-inline-start: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 2px rgba(0,0,0,.25); }
+  .toggle input:checked + .track { background: #7c3aed; }
+  .toggle input:checked + .track::after { transform: translateX(-18px); }
+  .toggle .label { font-size: 13px; font-weight: 600; color: #3f3f46; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: start; color: #71717a; font-weight: 500; font-size: 11px; padding: 8px 12px; background: #fafafa; }
+  th.num, td.num { text-align: end; }
+  td { padding: 8px 12px; border-top: 1px solid #f0f0f1; }
+  tr.dim { opacity: .5; }
+  .name { font-weight: 700; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 600; border-radius: 6px; padding: 2px 8px; margin-inline-start: 6px; vertical-align: middle; }
+  .badge.ret { background: rgba(217,119,6,.15); color: #b45309; }
+  .badge.add { background: rgba(2,132,199,.15); color: #0369a1; }
+  .badge.bad { background: rgba(220,38,38,.1); color: #b91c1c; }
+  .hist { font-size: 11px; color: #71717a; margin-top: 3px; }
+  .hist b { color: #18181b; }
+  .qty-cell { width: 90px; }
+  .qty-input { width: 100%; padding: 6px 8px; border: 1px solid #d4d4d8; border-radius: 8px; font: inherit; text-align: center; direction: ltr; }
+  .qty-input:disabled { background: #f4f4f5; color: #a1a1aa; }
+  .price { font-variant-numeric: tabular-nums; }
+
+  .foot { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px 16px; border-top: 1px solid #e4e4e7; background: #fafafa; }
+  .kv { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; }
+  .kv .k { color: #71717a; }
+  .kv.total { font-weight: 700; font-size: 14px; border-top: 1px dashed #d4d4d8; margin-top: 4px; padding-top: 8px; }
+  .diff-neg { color: #059669; font-weight: 700; }
+
+  .print-box { border: 2px dashed #a1a1aa; border-radius: 8px; padding: 12px; background: #fff; }
+  .print-box h3 { font-size: 12px; color: #52525b; margin-bottom: 8px; }
+  .print-row { display: flex; justify-content: space-between; font-size: 12px; padding: 2px 0; }
+  .print-note { font-size: 11px; color: #a1a1aa; margin-top: 6px; }
+  .hint { font-size: 12px; color: #52525b; background: #f0e9ff; border: 1px solid #ddd6fe; border-radius: 8px; padding: 8px 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="hint">
+    سناریو: مشتری <b>۱۰ لنت</b>، <b>۱ روغن</b> و <b>۵ چراغ</b> خریده. بعداً <b>۳ لنت</b> و <b>۳ چراغ</b> را پس آورده و <b>۲ کاسهنمد</b> + <b>۱ سرسیلندر</b> تازه گرفته.
+    تیک را روشن/خاموش کن تا تفاوتِ «نمایش تمیز» و «نمایش حافظه» را ببینی.
+  </div>
+
+  <!-- ======= نمای ویرایش ======= -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>ویرایش فاکتور ۱۰۲۴ — مشتری: رضا نوری</h2>
+        <div class="sub">در حال ویرایش · قیمت و تعداد قابل تغییر</div>
+      </div>
+      <label class="toggle">
+        <span class="label">دیدن حافظهی این فاکتور</span>
+        <input type="checkbox" id="hist" />
+        <span class="track"></span>
+      </label>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th></th><th>کالا</th>
+          <th class="num">مقدار</th>
+          <th class="num">قیمت واحد (ریال)</th>
+          <th class="num">مبلغ</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+
+    <div class="foot">
+      <div>
+        <div class="kv"><span class="k">جمع اقلام</span><span class="num">۱٬۸۶۰٬۰۰۰</span></div>
+        <div class="kv total"><span>مبلغ قابل پرداخت</span><span class="num">۱٬۸۶۰٬۰۰۰</span></div>
+      </div>
+      <div id="diff-panel" style="display:none">
+        <div class="kv"><span class="k">ارزش مرجوعی (۳ لنت + ۳ چراغ)</span><span class="num">۴۵۰٬۰۰۰</span></div>
+        <div class="kv"><span class="k">ارزش قلمهای تازه (کاسهنمد + سرسیلندر)</span><span class="num">۲۶۰٬۰۰۰</span></div>
+        <div class="kv total"><span>اختلاف نهایی (به نفع مشتری)</span><span class="num diff-neg">−۱۹۰٬۰۰۰</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======= نمای چاپ ======= -->
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>برگهی چاپِ فاکتور (همیشه یکسان — هیچ حافظهای چاپ نمیشود)</h2>
+        <div class="sub">فقط وضعیت نهایی؛ مرجوعیهای قبلی و برچسبها روی برگه نیستند</div>
+      </div>
+    </div>
+    <div class="print-box">
+      <h3>فاکتور فروش ۱۰۲۴ — رضا نوری</h3>
+      <div class="print-row"><span>۱ · لنت</span><span>۷ عدد × ۱۰۰٬۰۰۰</span></div>
+      <div class="print-row"><span>۲ · روغن موتور</span><span>۱ عدد × ۲۰۰٬۰۰۰</span></div>
+      <div class="print-row"><span>۳ · چراغ</span><span>۲ عدد × ۵۰٬۰۰۰</span></div>
+      <div class="print-row"><span>۴ · کاسهنمد</span><span>۲ عدد × ۸۰٬۰۰۰</span></div>
+      <div class="print-row"><span>۵ · سرسیلندر</span><span>۱ عدد × ۱۰۰٬۰۰۰</span></div>
+      <div class="print-note">جمع: ۱٬۸۶۰٬۰۰۰ ریال — بدون هیچ اشارهیی به مرجوعی یا قیمت قبلی.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // داده: هر ردیف = { name, sold, returned, remaining, price, added? }
+  const DATA = [
+    { name: "لنت",      sold: 10, returned: 3, price: 100000 },
+    { name: "روغن موتور", sold: 1,  returned: 0, price: 200000 },
+    { name: "چراغ",     sold: 5,  returned: 3, price: 50000  },
+    { name: "کاسهنمد",  sold: 2,  returned: 0, price: 80000,  added: true },
+    { name: "سرسیلندر", sold: 1,  returned: 0, price: 100000, added: true },
+  ];
+  const fmt = (n) => n.toLocaleString("fa-IR").replace(/٬/g, "٬");
+
+  function render() {
+    const on = document.getElementById("hist").checked;
+    const tbody = document.getElementById("rows");
+    tbody.innerHTML = "";
+
+    for (const l of DATA) {
+      const remaining = l.sold - l.returned;
+      const isFullyReturned = remaining <= 0;
+      // خاموش: ردیفِ کاملاً مرجوع‌شده اصلاً دیده نمی‌شود.
+      if (!on && isFullyReturned) continue;
+
+      const tr = document.createElement("tr");
+      const dim = on && l.returned > 0;
+      if (dim) tr.className = "dim";
+
+      const badges = [];
+      if (on && l.returned > 0) badges.push(`<span class="badge ret">مرجوعی ${fmt(l.returned)}</span>`);
+      if (on && l.added) badges.push(`<span class="badge add">اضافهشده</span>`);
+
+      const hist = on
+        ? `<div class="hist">فروخته <b>${fmt(l.sold)}</b> · برگشتخورده <b>${fmt(l.returned)}</b> · مانده <b>${fmt(remaining)}</b></div>`
+        : "";
+
+      const qty = on
+        ? `<input class="qty-input" value="0" placeholder="برگشتی جدید" title="مرجوعِ جدید (فقط با تیک روشن)" />`
+        : `<input class="qty-input" value="${fmt(remaining)}" />`;
+
+      // خاموش: مبلغِ ردیف = مانده × قیمت. روشن: مبلغِ ردیف = برگشتیِ جدید × قیمت (فعلاً صفر).
+      const lineTotal = (on ? 0 : remaining) * l.price;
+      tr.innerHTML = `
+        <td><input type="checkbox" ${on ? "disabled checked" : "checked"} style="accent-color:#7c3aed" /></td>
+        <td><span class="name">${l.name}</span>${badges.join("")}${hist}</td>
+        <td class="num qty-cell">${qty}</td>
+        <td class="num price">${fmt(l.price)}</td>
+        <td class="num price">${fmt(lineTotal)}</td>`;
+      tbody.appendChild(tr);
+    }
+
+    document.getElementById("diff-panel").style.display = on ? "block" : "none";
+  }
+
+  document.getElementById("hist").addEventListener("change", render);
+  render();
+</script>
+</body>
+</html>

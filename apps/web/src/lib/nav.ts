@@ -19,7 +19,9 @@ import {
   LibraryBig,
   Settings,
   PackagePlus,
+  PackageCheck,
   Image,
+  ScrollText,
 } from "lucide-react";
 
 export interface NavItem {
@@ -28,6 +30,11 @@ export interface NavItem {
   href?: string;
   icon: typeof LayoutDashboard;
   roles: Role[] | "ALL";
+  /**
+   * فقط برای صاحبانِ پرچمِ `canManageSite` — مستقل از نقش. صندوقِ مغازه
+   * (SALES بدون پرچم) هرگز این آیتم را نمی‌بیند.
+   */
+  site?: boolean;
   /** زیرمجموعه‌ها — اگر باشد، این آیتم یک هابِ جمع‌شونده است. */
   children?: NavItem[];
 }
@@ -182,6 +189,17 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         /*
+         * دفتر روزنامه — سندِ خودکارِ پشتِ هر اکشن مالی، فقط مدیر.
+         * UI صندوق‌دار هرگز به این‌جا نمی‌رسد؛ این صفحه برای کسی است که
+         * می‌خواهد «چی به چی» را ببیند.
+         */
+        title: "دفتر روزنامه",
+        href: "/admin/vouchers",
+        icon: ScrollText,
+        roles: ["ADMIN", "MANAGER"],
+      },
+      {
+        /*
          * کارتابل — هر چیزی که منتظرِ تصمیمِ مدیر است، یک‌جا و با شمارنده.
          * قبلاً سه صفحه‌ی جدا بود و صفِ هیچ‌کدام دیده نمی‌شد مگر بازش می‌کردی.
          * مسیرهای قدیمی هنوز کار می‌کنند، فقط از منو برداشته شده‌اند.
@@ -200,30 +218,64 @@ export const NAV_SECTIONS: NavSection[] = [
       },
     ],
   },
+
+  {
+    /*
+     * صفِ تحویلِ سفارش‌های سایت — کارِ انبار است، نه مدیریتِ محتوا.
+     *
+     * سفارشِ سایت روی سرورِ سایت ثبت می‌شود، ایجنتِ سینک آن را به دیتابیسِ
+     * انبار می‌کشد و همین‌جا فاکتورِ داخلی صادر می‌شود؛ پس «جلو بردنِ مرحله‌ی
+     * تحویل» (آماده‌سازی → ارسال → تحویل) وظیفه‌ی پنلِ مغازه است. مدیریتِ
+     * محتوای سایت (کوپن، بنر، …) به اپِ جداگانه‌ی `apps/site` منتقل شده.
+     * عنوانش عمداً «بیشتر» نیست: کنارِ بخشِ اصلیِ «بیشتر» دو گروهِ هم‌نام
+     * نقشِ یک‌سان بازی می‌کردند و کاربر نمی‌دانست کدام را باز کند.
+     */
+    title: "فروشگاه اینترنتی",
+    icon: Store,
+    items: [
+      {
+        title: "سفارش‌های آنلاین",
+        href: "/admin/online-orders",
+        icon: PackageCheck,
+        roles: ["ADMIN", "MANAGER"],
+        site: true,
+      },
+    ],
+  },
 ];
 
-/** یک آیتم را برای نقش فیلتر می‌کند؛ برای هاب، بازگشتی روی فرزندان. */
-function itemForRole(item: NavItem, role: Role): NavItem | null {
+/**
+ * یک آیتم را برای نقش و دسترسیِ سایت فیلتر می‌کند؛ برای هاب، بازگشتی روی فرزندان.
+ * `site: true` بدونِ پرچمِ `canManageSite` این آیتم (و در نتیجه کلِ هاب) را حذف می‌کند.
+ */
+function itemForRole(
+  item: NavItem,
+  role: Role,
+  canManageSite: boolean
+): NavItem | null {
   if (item.children) {
     const kids = item.children
-      .map((c) => itemForRole(c, role))
+      .map((c) => itemForRole(c, role, canManageSite))
       .filter((c): c is NavItem => c !== null);
     // هابِ بدون فرزندِ مجاز اصلاً نشان داده نمی‌شود.
     return kids.length ? { ...item, children: kids } : null;
   }
-  return item.roles === "ALL" || item.roles.includes(role) ? item : null;
+  if (item.roles !== "ALL" && !item.roles.includes(role)) return null;
+  if (item.site && !canManageSite) return null;
+  return item;
 }
 
 export function filterNavByRole(
   sections: NavSection[],
-  role: Role | undefined
+  role: Role | undefined,
+  canManageSite = false
 ): NavSection[] {
   if (!role) return [];
   return sections
     .map((s) => ({
       ...s,
       items: s.items
-        .map((i) => itemForRole(i, role))
+        .map((i) => itemForRole(i, role, canManageSite))
         .filter((i): i is NavItem => i !== null),
     }))
     .filter((s) => s.items.length > 0);

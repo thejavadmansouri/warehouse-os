@@ -10,6 +10,7 @@ import {
   createUser,
   updateUserRole,
   updateUserPassword,
+  setUserSiteAccess,
 } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { ApiException } from "@/lib/api-error-messages";
@@ -33,6 +34,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
   DialogContent,
@@ -88,6 +90,20 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
   // دیالوگ بازنشانی رمز
   const [pwdTarget, setPwdTarget] = React.useState<User | null>(null);
   const [pwdValue, setPwdValue] = React.useState("");
+
+  // ----- دسترسی به فروشگاه اینترنتی (مستقل از نقش) -----
+  const siteAccessMut = useMutation({
+    mutationFn: (u: User) => setUserSiteAccess(u.id, !u.canManageSite),
+    onSuccess: () => {
+      toast({ title: "دسترسی فروشگاه اینترنتی به‌روزرسانی شد" });
+      qc.invalidateQueries({ queryKey: ["users"] });
+    },
+    onError: (e: unknown) => {
+      const msg =
+        e instanceof ApiException ? e.message : "خطا در تغییر دسترسی";
+      toast({ variant: "destructive", title: "خطا", description: msg });
+    },
+  });
 
   // ----- mutations -----
 
@@ -199,6 +215,7 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
                   <TableHead>نام کامل</TableHead>
                   <TableHead>نام کاربری</TableHead>
                   <TableHead>نقش</TableHead>
+                  <TableHead>فروشگاه اینترنتی</TableHead>
                   <TableHead className="text-end">عملیات</TableHead>
                 </TableRow>
               </TableHeader>
@@ -213,6 +230,19 @@ export function UsersPanel({ embedded }: { embedded?: boolean } = {}) {
                       <Badge className={ROLE_BADGE_CLASS[u.role]}>
                         {ROLE_LABELS[u.role] ?? u.role}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={u.canManageSite === true}
+                          onCheckedChange={() => siteAccessMut.mutate(u)}
+                          disabled={siteAccessMut.isPending}
+                          title="دسترسی به بخش فروشگاه اینترنتی"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {u.canManageSite ? "فعال" : "غیرفعال"}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-end">
                       <div className="flex items-center justify-end gap-2">

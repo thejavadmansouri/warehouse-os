@@ -56,7 +56,14 @@ const DOC_LABELS: Record<"SALE" | "PURCHASE" | "RETURN" | "MANUAL", string> = {
  * پیش‌فرض «کل تاریخچه» است، نه «امروز»: مانده فقط وقتی معنا دارد که کل حرکت‌ها
  * دیده شود و مانده‌ی آخر با موجودی فعلی بخواند.
  */
-export function ProductKardex({ productId }: { productId: string }) {
+export function ProductKardex({
+  productId,
+  canEdit = false,
+}: {
+  productId: string;
+  /** آیا کاربر می‌تواند عکسِ کاردکس را تصویر محصول کند (ADMIN/MANAGER). */
+  canEdit?: boolean;
+}) {
   const [preset, setPreset] = React.useState<PresetRange | "all">("all");
   const [action, setAction] = React.useState<InventoryAction | "">("");
   const [page, setPage] = React.useState(1);
@@ -103,6 +110,7 @@ export function ProductKardex({ productId }: { productId: string }) {
         outQty: r.outQty,
         balance: r.balance,
         unitPrice: r.unitPrice,
+        assets: (r.assets ?? []).map((a) => ({ assetId: a.assetId })),
       })),
     [q.data],
   );
@@ -177,6 +185,8 @@ export function ProductKardex({ productId }: { productId: string }) {
               faDateTime={formatDateTime}
               toFa={toFa}
               summary={q.data?.summary}
+              productId={productId}
+              canEdit={canEdit}
             />
             <Pagination
               page={page}

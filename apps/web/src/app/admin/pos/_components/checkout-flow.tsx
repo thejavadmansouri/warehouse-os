@@ -51,6 +51,37 @@ export const CREDIT_TERMS = [0, 7, 15, 30, 45, 60, 90];
 
 type Step = "customer" | "payment";
 
+/*
+ * روشِ پیش‌فرضِ گام پرداخت — روشی که آخرین فروش با آن تمام شد.
+ *
+ * پیش‌فرضِ ثابتِ «کارت» یعنی فروشنده‌ای که بیشترش را نقد می‌فروشد هر بار یک
+ * کلید اضافه بزند، و برعکس. روشی که یک فروش را بست، دفعه‌ی بعد پیش‌فرض می‌شود —
+ * پس هر دو فروشنده به‌خودی‌خود به حالتِ یک‌کلیدی می‌رسند: Enter با همان روشِ
+ * پرتکرارِ خودش فاکتور را کامل می‌بندد.
+ */
+const FAST_METHOD_KEY = "warehouse-os.pos-fast-method";
+const FAST_METHODS_SET = new Set<PaymentMethod>(["CARD", "CASH", "CREDIT"]);
+
+function readFastMethod(): PaymentMethod {
+  try {
+    const raw =
+      typeof window !== "undefined" ? window.localStorage.getItem(FAST_METHOD_KEY) : null;
+    return raw && FAST_METHODS_SET.has(raw as PaymentMethod)
+      ? (raw as PaymentMethod)
+      : "CARD";
+  } catch {
+    return "CARD";
+  }
+}
+
+function writeFastMethod(m: PaymentMethod): void {
+  try {
+    if (typeof window !== "undefined") window.localStorage.setItem(FAST_METHOD_KEY, m);
+  } catch {
+    // حالت خصوصی مرورگر — پیش‌فرضِ ثابت می‌ماند؛ هیچ چیز نمی‌شکند.
+  }
+}
+
 export function CheckoutFlow({
   open,
   total,
@@ -99,28 +130,31 @@ export function CheckoutFlow({
    */
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // هر بار که باز می‌شود از گام اول و با حالت پیش‌فرضِ رایج شروع کن.
-  useEffect(() => {
-    if (!open) return;
-    /*
-     * مشتری از قبل روی فاکتور انتخاب شده ⇒ گام مشتری اصلاً نشان داده نمی‌شود.
-     *
-     * پرسیدن دوباره‌ی چیزی که کاربر همین الان جواب داده، هم یک Enter اضافه است
-     * هم این حس را می‌دهد که نرم‌افزار حرفش را نشنیده. با Esc باز هم می‌شود
-     * برگشت و عوضش کرد.
-     */
-    setStep(customer ? "payment" : "customer");
-    setFirstName("");
-    setLastName("");
-    setPhone("");
-    setDebounced("");
-    setHighlight(0);
-    setMethod("CARD");
-    setReceived(total);
-    // عمداً به `customer` وابسته نیست: اگر بود، انتخاب مشتری در گام اول
-    // بلافاصله همین افکت را دوباره اجرا می‌کرد و حالت را از نو می‌ریخت.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, total]);
+  /*
+   * هر بار که باز می‌شود از گام اول و با حالت پیش‌فرضِ رایج شروع کن — تطبیقِ
+   * state در رندر (به ازایِ open/total) به‌جای effect. عمداً به `customer`
+   * وابسته نیست: اگر بود، انتخاب مشتری در گام اول بلافاصله دوباره رندر را
+   * می‌ریخت و فرم را از نو شروع می‌کرد.
+   *
+   * مشتری از قبل روی فاکتور انتخاب شده ⇒ گام مشتری اصلاً نشان داده نمی‌شود؛
+   * پرسیدن دوباره‌ی چیزی که کاربر همین الان جواب داده، یک Enter اضافه است.
+   */
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevTotal, setPrevTotal] = useState(total);
+  if (open !== prevOpen || total !== prevTotal) {
+    setPrevOpen(open);
+    setPrevTotal(total);
+    if (open) {
+      setStep(customer ? "payment" : "customer");
+      setFirstName("");
+      setLastName("");
+      setPhone("");
+      setDebounced("");
+      setHighlight(0);
+      setMethod(readFastMethod());
+      setReceived(total);
+    }
+  }
 
   /**
    * کوئریِ جست‌وجو از هر سه فیلد ساخته می‌شود — جست‌وجوی سمت سرور روی نام،
@@ -148,7 +182,12 @@ export function CheckoutFlow({
 
   const list = useMemo(() => results.data ?? [], [results.data]);
 
-  useEffect(() => setHighlight(0), [debounced]);
+  /* با عوض‌شدنِ عبارت، هایلایت به اول برمی‌گردد — تطبیقِ state در رندر. */
+  const [prevDebounced, setPrevDebounced] = useState(debounced);
+  if (debounced !== prevDebounced) {
+    setPrevDebounced(debounced);
+    setHighlight(0);
+  }
 
   // فوکوس همیشه جایی باشد که تایپ بعدی باید برود.
   useEffect(() => {
@@ -236,7 +275,24 @@ export function CheckoutFlow({
    * سررسید دیگر از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ مشتری می‌نشیند و
    * سررسیدش در تسویه ساخته می‌شود.
    */
-  const submit = () => onSubmit(buildPayments());
+  const submit = () => {
+    // روشی که یک فروش واقعاً را بست، دفعه‌ی بعد پیش‌فرض می‌شود.
+    writeFastMethod(method);
+    onSubmit(buildPayments());
+  };
+
+  /**
+   * Space — ثبتِ فوریِ «نقدِ دقیقِ کل»، مستقل از روشِ انتخابی.
+   *
+   * فروشِ گذری تقریباً همیشه نقد است؛ حتی برای فروشنده‌ای که روزش کارتی است،
+   * یک کلید باید بتواند نقدِ دقیق را ببندد. مبلغِ ثبت‌شده خودِ مبلغِ فاکتور است
+   * (هرچه در خانه‌ی «دریافتی» باشد فقط برای حسابِ پولِ خرد است) — پس این کلید
+   * به عددِ دریافتی هم کاری ندارد.
+   */
+  const submitCashExact = () => {
+    writeFastMethod("CASH");
+    onSubmit([{ method: "CASH", amount: total }]);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     // Escape اینجا نیست: Radix آن را روی document می‌گیرد و preventDefaultِ
@@ -277,6 +333,24 @@ export function CheckoutFlow({
       e.preventDefault();
       if (canSubmit) submit();
       return;
+    }
+
+    /*
+     * Space = نقدِ دقیق، همه‌جا جز وقتی که Space معنیِ دیگری دارد:
+     *   • داخلِ خانه‌ی مبلغ → کاراکتر است، دست نمی‌زنیم.
+     *   • روی خودِ دکمه‌ی ثبت → خودِ دکمه Space را فعال می‌کند؛ اگر ما هم
+     *     submit کنیم دو مسیر می‌شوند.
+     */
+    if (e.key === " " || e.code === "Space") {
+      const t = e.target as HTMLElement | null;
+      const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+      const onButton = t?.tagName === "BUTTON";
+      if (!typing && !onButton) {
+        e.preventDefault();
+        // نقدِ دقیق به «دریافتی» کاری ندارد — shortPaid اینجا معنا ندارد.
+        if (!pending && lineCount > 0) submitCashExact();
+        return;
+      }
     }
 
     // جهت‌دارها همیشه روش پرداخت را عوض می‌کنند — با تایپِ مبلغ تداخل ندارند.
@@ -574,7 +648,8 @@ export function CheckoutFlow({
 
             <FooterHint
               hints={[
-                ["Enter", "ثبت فاکتور"],
+                ["Enter", `ثبت با ${FAST_METHODS.find((m) => m.method === method)?.label ?? "—"}`],
+                ["Space", "نقدِ دقیق — ثبت فوری"],
                 ["→ ←", "روش پرداخت"],
                 ["Esc", "بازگشت به مشتری"],
               ]}

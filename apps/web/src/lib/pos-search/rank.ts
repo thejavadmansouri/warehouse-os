@@ -35,6 +35,10 @@ export interface CatalogItem {
   /** Normalized barcodes for exact-code matching. */
   barcodes: string[];
   salePrice?: number | null;
+  /** فقط برای مدیر — بهای خرید و قیمتِ پیشنهادیِ ۱۵٪ و قیمتِ مدیر. */
+  purchasePrice?: number | null;
+  suggestedPrice?: number | null;
+  managerPrice?: number | null;
   unit?: string | null;
   brandName?: string | null;
   vehicleModelName?: string | null;

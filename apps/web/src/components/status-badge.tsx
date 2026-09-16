@@ -26,6 +26,7 @@ const MAPS: Record<string, Record<string, Entry>> = {
     // کلمه‌ی خامِ «OPEN» را نشان می‌داد.
     OPEN: ["حساب باز", "warning"],
     CONFIRMED: ["تأیید شده", "success"],
+    RETURNED: ["مرجوع‌شده", "info"],
     CANCELLED: ["باطل شده", "danger"],
   },
   quotation: {

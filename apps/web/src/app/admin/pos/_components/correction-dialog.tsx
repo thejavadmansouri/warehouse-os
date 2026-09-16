@@ -39,14 +39,20 @@ export function CorrectionDialog({
   // «ویرایش» یا مرحله‌ی تأییدِ قبل‌از-ثبت («قبل ← بعد»).
   const [step, setStep] = useState<"edit" | "confirm">("edit");
 
-  // هر بار سند عوض شد، فرم قبلی نباید به فاکتور جدید نشت کند.
-  useEffect(() => {
+  /*
+   * هر بار سند عوض شد، فرمِ قبلی نباید به فاکتورِ جدید نشت کند — تطبیقِ state
+   * در رندر به‌جای effect. مقدارِ اولیه هم همان پیش‌فرضِ خالی است، پس رندرِ
+   * اول هیچ کاری نمی‌کند.
+   */
+  const [prevInvoiceId, setPrevInvoiceId] = useState(invoiceId);
+  if (invoiceId !== prevInvoiceId) {
+    setPrevInvoiceId(invoiceId);
     setQtyById({});
     setPriceById({});
     setReason("");
     setNote("");
     setStep("edit");
-  }, [invoiceId]);
+  }
 
   const data = useQuery({
     queryKey: ["correctable", invoiceId],
@@ -126,8 +132,8 @@ export function CorrectionDialog({
     },
   });
 
-  const canSubmit =
-    changedLines.length > 0 && reason.trim().length > 0 && !submit.isPending;
+  /* دلیل اختیاری است — اصلاحیه نباید به تایپِ دلیل گره بخورد. */
+  const canSubmit = changedLines.length > 0 && !submit.isPending;
 
   return (
     <Dialog open={!!invoiceId} onOpenChange={(v) => !v && onClose()}>
@@ -252,7 +258,7 @@ export function CorrectionDialog({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-muted-foreground">
-                      دلیل اصلاحیه (اجباری)
+                      دلیل اصلاحیه (اختیاری)
                     </label>
                     <Input
                       value={reason}

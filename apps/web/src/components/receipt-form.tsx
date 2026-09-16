@@ -114,19 +114,6 @@ export function ReceiptForm({
   const canSubmit =
     paid > 0 && !chequeIncomplete && !submit.isPending && (overpayment === 0 || allowOver);
 
-  if (totalDue <= 0) {
-    return (
-      <Card className="p-4">
-        <h2 className="mb-1 flex items-center gap-2 font-semibold">
-          <HandCoins className="size-4" /> دریافت وجه
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          این مشتری بدهی ندارد. دریافت وجه فقط بابت بدهی ثبت‌شده ممکن است.
-        </p>
-      </Card>
-    );
-  }
-
   return (
     <Card className="p-4">
       <h2 className="mb-3 flex items-center gap-2 font-semibold">
@@ -192,9 +179,7 @@ export function ReceiptForm({
           }
         >
           افزودن سطر دریافت
-        </Button>
-
-        <div className="rounded-lg bg-muted p-3 text-sm">
+        </Button>        <div className="rounded-lg bg-muted p-3 text-sm">
           <div className="flex justify-between">
             <span>جمع دریافتی</span>
             <span className="tabular-nums">{amount(paid)}</span>
@@ -223,8 +208,8 @@ export function ReceiptForm({
                 {amount(overpayment)} بیشتر از بدهی است
               </b>
               <span className="text-muted-foreground">
-                به‌عنوان پیش‌دریافت ثبت شود و مشتری بستانکار شود؟ فروش بعدی
-                خودکار از همین کم می‌کند.
+                به‌عنوان پیش‌دریافت ثبت شود و مشتری طلبکار شود؟ مبلغ در حساب او
+                می‌ماند و در فروش بعدی قابل استفاده است.
               </span>
             </span>
           </label>
@@ -253,8 +238,9 @@ export function ReceiptForm({
         </div>
 
         <p className="text-xs leading-6 text-muted-foreground">
-          مبلغ به‌طور خودکار به <b>قدیمی‌ترین فاکتور بدهکار</b> تخصیص داده می‌شود
-          و تا جایی که برسد جلو می‌رود. چک‌ها تا وصول در «در جریان وصول» می‌مانند.
+          مبلغ به‌طور خودکار به <b>قدیمی‌ترین فاکتور بدهکار</b> تخصیص داده می‌شود.
+          اگر بدهی وجود نداشته باشد یا مبلغ اضافه باشد، مازاد به‌عنوان طلبکاری
+          مشتری ثبت می‌شود. چک‌ها تا وصول در «در جریان وصول» می‌مانند.
         </p>
       </div>
     </Card>

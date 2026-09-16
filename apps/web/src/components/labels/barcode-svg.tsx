@@ -21,10 +21,14 @@ export function BarcodeSvg({
   value,
   /** ارتفاعِ خودِ میله‌ها به پیکسل — متن زیرش جدا حساب می‌شود. */
   height = 28,
+  /** پهنای هر میله به پیکسل. برای مقادیر بلند (بارکد قفسه) باید باریک‌تر شود
+   *  تا در عرضِ کارت جا بگیرد؛ برای کالا همان ۱٫۴ پیش‌فرض می‌ماند. */
+  moduleWidth = 1.4,
   className,
 }: {
   value: string;
   height?: number;
+  moduleWidth?: number;
   className?: string;
 }) {
   const ref = React.useRef<SVGSVGElement | null>(null);
@@ -36,7 +40,7 @@ export function BarcodeSvg({
         format: "CODE128",
         height,
         // باریک‌ترین میله. کمتر از این روی چاپگر حرارتی به‌هم می‌چسبد.
-        width: 1.4,
+        width: moduleWidth,
         margin: 0,
         // متنِ بارکد جداگانه زیر کارت چاپ می‌شود؛ اینجا تکراری می‌شد.
         displayValue: false,
@@ -44,7 +48,7 @@ export function BarcodeSvg({
     } catch {
       // مقدارِ غیرقابل‌کدشدن — کارت بدون بارکد می‌ماند، ولی صفحه نمی‌شکند.
     }
-  }, [value, height]);
+  }, [value, height, moduleWidth]);
 
   return <svg ref={ref} className={className} />;
 }

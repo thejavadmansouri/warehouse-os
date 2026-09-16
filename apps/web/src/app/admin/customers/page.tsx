@@ -19,6 +19,7 @@ import {
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import { money, toFa } from "@/lib/format";
+import { balanceTextClass } from "@/components/finance-badges";
 import { useAuthStore } from "@/lib/auth-store";
 import type { Customer } from "@/lib/types";
 import { CreateCustomerDialog } from "./_components/create-customer-dialog";
@@ -85,10 +86,20 @@ export default function CustomersPage() {
     return () => clearTimeout(t);
   }, [q]);
 
-  React.useEffect(() => {
+  /*
+   * تغییرِ فیلتر، صفحه و ردیفِ فعال را به اول برمی‌گرداند.
+   *
+   * همان الگوی «تطبیق state در رندر» که در صندوق استفاده می‌شود: تغییر را با
+   * stateِ قبلی مقایسه می‌کنیم و در خودِ رندر اصلاحش می‌کنیم — نه setStateِ
+   * همزمان داخل effect (قانونِ lint).
+   */
+  const [filterKey, setFilterKey] = React.useState("");
+  const nextFilterKey = `${debounced}|${sortBy}|${categoryId}|${onlyDebtors}`;
+  if (filterKey !== nextFilterKey) {
+    setFilterKey(nextFilterKey);
     setPage(1);
     setRow(0);
-  }, [debounced, sortBy, categoryId, onlyDebtors]);
+  }
 
   const list = useQuery({
     queryKey: ["customers", debounced, sortBy, categoryId, onlyDebtors, page],
@@ -261,10 +272,25 @@ export default function CustomersPage() {
                   </td>
                   <td
                     className={`${TD} text-end font-bold tabular-nums ${
-                      c.summary?.totalDue ? "text-warning" : "text-muted-foreground"
+                      c.summary?.totalDue
+                        ? balanceTextClass(c.summary.totalDue)
+                        : "text-muted-foreground"
                     }`}
                   >
-                    {c.summary?.totalDue ? money(c.summary.totalDue) : "۰"}
+                    {c.summary?.totalDue ? (
+                      <span className="inline-flex items-center gap-1">
+                        {/* منفی فقط عدد بود (علامتِ انگلیسی جلوی ارقام فارسی) — حالا
+                            برچسبِ جهت دارد و عدد همیشه مثبت نمایش داده می‌شود. */}
+                        {c.summary.totalDue < 0 && (
+                          <span className="text-[10px] font-semibold text-emerald-600">
+                            بستانکار
+                          </span>
+                        )}
+                        {money(Math.abs(c.summary.totalDue))}
+                      </span>
+                    ) : (
+                      "۰"
+                    )}
                   </td>
                 </tr>
               ))}

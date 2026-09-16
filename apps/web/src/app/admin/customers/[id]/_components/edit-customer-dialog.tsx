@@ -41,15 +41,24 @@ const PHONE_LABELS = ["موبایل", "ثابت", "محل کار"] as const;
 export function EditCustomerDialog({
   customer,
   onDone,
+  open,
+  onOpenChange,
 }: {
   customer: Customer;
   onDone: () => void;
+  /** حالتِ کنترل‌شده — وقتی داده شد، دکمه‌ی خودش را نشان نمی‌دهد. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const role = useAuthStore((s) => s.user?.role);
   /** مدیریت دسته‌ها فقط برای مدیر — همان گاردِ سمت سرور. */
   const isManager = role === "ADMIN" || role === "MANAGER";
 
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? !!open : internalOpen;
+  const setIsOpen = (v: boolean) =>
+    isControlled ? onOpenChange?.(v) : setInternalOpen(v);
   const [showCategories, setShowCategories] = React.useState(false);
   const [firstName, setFirstName] = React.useState(customer.firstName);
   const [lastName, setLastName] = React.useState(customer.lastName ?? "");
@@ -66,12 +75,29 @@ export function EditCustomerDialog({
   const categories = useQuery({
     queryKey: ["customer-categories", "active"],
     queryFn: getActiveCustomerCategories,
-    enabled: open,
+    enabled: isOpen,
   });
 
-  // با هر بار بازشدن، از مقادیرِ فعلیِ مشتری تازه شود (اگر بین‌بار عوض شده باشد).
-  React.useEffect(() => {
-    if (open) {
+  /*
+   * تطبیقِ state در رندر به‌جای effect (قانونِ set-state-in-effect): وقتی
+   * دیالوگ باز می‌شود یا مشخصاتِ مشتری عوض شده، فیلدها از نو پر می‌شوند.
+   * مقایسه با کلیدِ رشته‌ایِ همان فیلدهاست تا رفتارِ effectِ قبلی عیناً بماند
+   * — یک refetchِ بی‌تغییر، فرمِ در حالِ ویرایش را پاک نکند.
+   */
+  const customerKey = [
+    customer.firstName,
+    customer.lastName ?? "",
+    customer.address ?? "",
+    customer.nationalId ?? "",
+    customer.categoryId ?? "",
+    customer.note ?? "",
+  ].join("\u0001");
+  const [prevOpen, setPrevOpen] = React.useState(isOpen);
+  const [prevCustomerKey, setPrevCustomerKey] = React.useState(customerKey);
+  if (isOpen !== prevOpen || customerKey !== prevCustomerKey) {
+    setPrevOpen(isOpen);
+    setPrevCustomerKey(customerKey);
+    if (isOpen) {
       setFirstName(customer.firstName);
       setLastName(customer.lastName ?? "");
       setAddress(customer.address ?? "");
@@ -81,7 +107,7 @@ export function EditCustomerDialog({
       setNewPhone("");
       setNewPhoneLabel("موبایل");
     }
-  }, [open, customer.firstName, customer.lastName, customer.address, customer.nationalId, customer.categoryId, customer.note]);
+  }
 
   const save = useMutation({
     mutationFn: () =>
@@ -98,7 +124,7 @@ export function EditCustomerDialog({
       }),
     onSuccess: () => {
       toast.success("مشخصات مشتری ذخیره شد");
-      setOpen(false);
+      setIsOpen(false);
       onDone();
     },
     onError: (e: unknown) =>
@@ -158,11 +184,13 @@ export function EditCustomerDialog({
 
   return (
     <>
-      <Button variant="outline" onClick={() => setOpen(true)}>
-        <Pencil className="size-4" /> ویرایش مشخصات
-      </Button>
+      {!isControlled && (
+        <Button variant="outline" onClick={() => setIsOpen(true)}>
+          <Pencil className="size-4" /> ویرایش مشخصات
+        </Button>
+      )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">ویرایش مشخصات مشتری</DialogTitle>
@@ -358,7 +386,7 @@ export function EditCustomerDialog({
           </div>
 
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button variant="ghost" onClick={() => setIsOpen(false)}>
               انصراف
             </Button>
             <Button

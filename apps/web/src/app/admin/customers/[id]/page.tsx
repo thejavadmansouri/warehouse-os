@@ -6,6 +6,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { toast } from "sonner";
 import {
   Wallet,
+  HandCoins,
   ArrowRight,
   ShoppingCart,
   Percent,
@@ -18,7 +19,11 @@ import {
   UserX,
   ReceiptText,
   BarChart3,
+  MoreHorizontal,
+  MessageSquare,
+  Pencil,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import { LoadingState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
@@ -43,11 +48,15 @@ import { ApiException } from "@/lib/api-error-messages";
 import { amount, faDate, faToEn, money, parseNum, toFa } from "@/lib/format";
 import { bpToPercent, percentToBp } from "@/lib/cheque-charge";
 import { useAuthStore } from "@/lib/auth-store";
+import { CustomerChequesTab } from "./_components/customer-cheques-tab";
+import { balanceTextClass } from "@/components/finance-badges";
 import { TakePayment } from "./_components/take-payment";
+import { PayoutForm } from "@/components/payout-form";
 import { EditCustomerDialog } from "./_components/edit-customer-dialog";
 import { SmsDialog } from "./_components/sms-dialog";
 import { StatementTable } from "./_components/statement-table";
-import { IconBar, OverlayPanel, type IconAction } from "@/components/document/icon-bar";
+import { OverlayPanel } from "@/components/document/icon-bar";
+import { cn } from "@/lib/utils";
 import type { Customer, Invoice } from "@/lib/types";
 
 import { unitLabel } from "@/lib/currency";
@@ -89,12 +98,118 @@ export default function CustomerPage() {
   const isManager = role === "ADMIN" || role === "MANAGER";
 
   /**
-   * پنلی که روی بدنه باز است.
-   *
-   * null یعنی همان چیزی دیده می‌شود که هر روز لازم است: گردش حساب. بقیه —
-   * اقلامِ فاکتورها، آمار، دریافت وجه، شرایط اعتبار — پشتِ آیکن‌اند.
+   * پنل‌های آیکنی که روی بدنه باز می‌شوند — دریافت/شرایط اعتبار و گزارش‌ها.
+   * فاکتورها دیگر پنل نیستند: تبِ پیش‌فرضِ صفحه‌اند (طرحِ تأییدشده).
    */
-  const [panel, setPanel] = React.useState<"invoices" | "reports" | "money" | null>(null);
+  const [panel, setPanel] = React.useState<"money" | "reports" | null>(null);
+
+  /**
+   * بازکردنِ پنلِ پول با فوکوس روی همان بخش — دکمه/کلیدِ «دریافت» (F6) بخشِ
+   * دریافت را جلو می‌آورد و «پرداخت» (F7) بخشِ پرداخت را.
+   */
+  const [moneyFocus, setMoneyFocus] = React.useState<"receive" | "pay" | null>(null);
+  const receiveSectionRef = React.useRef<HTMLDivElement>(null);
+  const paySectionRef = React.useRef<HTMLDivElement>(null);
+  const openMoney = (focus: "receive" | "pay") => {
+    setMoneyFocus(focus);
+    setPanel("money");
+  };
+
+  // بازشدنِ پنلِ پول با هدفِ مشخص: همان بخش (دریافت/پرداخت) را جلوی چشم می‌آورد
+  // و وقتی «پرداخت» هدف است، فوکوس به ورودیِ مبلغِ همان بخش می‌رود (تا تایپِ
+  // فروشنده به فرمِ دریافتِ بالای صفحه نخورد).
+  React.useEffect(() => {
+    if (panel !== "money" || !moneyFocus) return;
+    const el =
+      moneyFocus === "pay" ? paySectionRef.current : receiveSectionRef.current;
+    el?.scrollIntoView({ block: "start" });
+    if (moneyFocus === "pay") {
+      el?.querySelector<HTMLInputElement>("input")?.focus();
+    }
+  }, [panel, moneyFocus]);
+
+  /*
+   * سه تبِ پرونده — مطابق طرحِ تأییدشده: فاکتورها، دفتر (کارت حساب)، چک‌ها.
+   * قاعده‌ی «یک حقیقت، یک نمایش»: این صفحه تنها جای نمایشِ کاملِ پرونده است
+   * و از همه‌جا با همین شکل باز می‌شود.
+   */
+  const [tab, setTab] = React.useState<"invoices" | "ledger" | "cheques">("invoices");
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  /** پیامک و ویرایش از منوی «امکانات بیشتر» باز می‌شوند — دیالوگ‌ها کنترل‌شده‌اند. */
+  const [smsOpen, setSmsOpen] = React.useState(false);
+  const [editOpen, setEditOpen] = React.useState(false);
+
+  /** فوکوسِ منوی «امکانات بیشتر» — دکمه‌ی بازکننده و بدنه‌ی منو. */
+  const moreBtnRef = React.useRef<HTMLButtonElement>(null);
+  const moreMenuRef = React.useRef<HTMLDivElement>(null);
+
+  /**
+   * باز/بسته‌کردن منو. با بازشدن، فوکوس به اولین آیتم می‌رود تا کلیدهای
+   * جهت بلافاصله کار کنند؛ با بسته‌شدن، فوکوس به دکمه‌ی «…» برمی‌گردد.
+   */
+  const toggleMore = () => {
+    if (moreOpen) {
+      setMoreOpen(false);
+      moreBtnRef.current?.focus();
+    } else {
+      setMoreOpen(true);
+      requestAnimationFrame(() => {
+        moreMenuRef.current
+          ?.querySelector<HTMLButtonElement>("button")
+          ?.focus();
+      });
+    }
+  };
+
+  /**
+   * ناوبریِ تمام‌کیبوردیِ منو: جهت‌ها آیتم‌به‌آیتم حرکت می‌کنند (Home/End به
+   * اول/آخر)، Enter آیتمِ متمرکز را اجرا می‌کند، عددِ روی هر آیتم همان آیتم
+   * را مستقیم اجرا می‌کند، و Esc می‌بندد و فوکوس را به دکمه‌ی «…»
+   * برمی‌گرداند. Space را خودِ button اجرا می‌کند.
+   */
+  const onMoreMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      moreMenuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []
+    );
+    if (!items.length) return;
+    const idx = items.indexOf(document.activeElement as HTMLButtonElement);
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      e.stopPropagation();
+      items[(idx + 1) % items.length].focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      e.stopPropagation();
+      items[(idx - 1 + items.length) % items.length].focus();
+    } else if (e.key === "Home") {
+      e.preventDefault();
+      e.stopPropagation();
+      items[0].focus();
+    } else if (e.key === "End") {
+      e.preventDefault();
+      e.stopPropagation();
+      items[items.length - 1].focus();
+    } else if (e.key === "Enter") {
+      // صریح اجرا می‌کنیم تا رفتارِ منو به مرورگر وابسته نباشد.
+      e.preventDefault();
+      e.stopPropagation();
+      items[idx]?.click();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setMoreOpen(false);
+      moreBtnRef.current?.focus();
+    } else {
+      // عددِ روی آیتم — ارقامِ فارسی و انگلیسی هر دو پذیرفته می‌شود.
+      const n = "123456789۱۲۳۴۵۶۷۸۹".indexOf(e.key);
+      if (n >= 0 && n < items.length) {
+        e.preventDefault();
+        e.stopPropagation();
+        items[n].click();
+      }
+    }
+  };
 
   /** مشتریِ در حال غیرفعال‌سازی — تا تأییدِ مدیر، این‌جا می‌ماند. */
   const [deactivating, setDeactivating] = React.useState(false);
@@ -193,7 +308,11 @@ export default function CustomerPage() {
    * خودِ صندوق `?edit=` را می‌خواند و فاکتور را داخل همان صفحه‌ی فروش باز
    * می‌کند — همان‌جایی که فروشنده بلد است کار کند.
    */
-  const openInPos = (invoiceId: string) => router.push(`/admin/pos?edit=${invoiceId}`);
+  const openInPos = (invoiceId: string) => {
+    // فاکتور در همان پنجرهٔ پرونده باز نمی‌شود تا مشتری انتخاب‌شدهٔ POS
+    // با مشتری پرونده قاطی نشود؛ تب مستقل همان رفتار آشنای نرم‌افزارهای حسابداری است.
+    window.open(`/admin/pos?edit=${encodeURIComponent(invoiceId)}`, "_blank", "noopener,noreferrer");
+  };
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["customer", id] });
@@ -209,99 +328,217 @@ export default function CustomerPage() {
     .filter((r) => r.status !== "CANCELLED")
     .reduce((s, r) => s + r.total, 0);
 
-  /**
-   * همه‌ی کارهای این صفحه، به‌صورت آیکن.
-   *
-   * قبلاً هشت دکمه‌ی برچسب‌دار در سربرگ بودند و چهار بخشِ همیشه‌باز زیرشان.
-   * چیزی که هر روز لازم است گردش حساب است؛ بقیه یک کلیک فاصله دارند.
-   */
-  const actions: IconAction[] = [
-    { id: "back", icon: ArrowRight, label: "برگشت به فهرست", keyLabel: "Esc",
-      run: () => router.push("/admin/customers") },
-
-    { id: "invoices", icon: ReceiptText, label: "فاکتورها و اقلام", separated: true,
-      active: panel === "invoices",
-      run: () => setPanel((p) => (p === "invoices" ? null : "invoices")) },
-    { id: "money", icon: Wallet, label: "دریافت وجه و شرایط اعتبار",
-      active: panel === "money",
-      run: () => setPanel((p) => (p === "money" ? null : "money")) },
-    { id: "reports", icon: BarChart3, label: "گزارش‌ها و آمار",
-      active: panel === "reports",
-      run: () => setPanel((p) => (p === "reports" ? null : "reports")) },
-
-    { id: "sell", icon: ShoppingCart, label: "فروش به این مشتری", separated: true,
-      primary: true, run: () => router.push(`/admin/pos?customer=${id}`) },
-    { id: "print", icon: Printer, label: "چاپ صورت‌حساب",
-      run: () => window.open(`/admin/print/statement/${id}`, "_blank") },
-  ];
-
   return (
     <div
       tabIndex={-1}
       className="relative flex h-[calc(100vh-2.5rem)] flex-col outline-none"
       onKeyDown={(e) => {
         if (panel || deactivating) return;
-        if (e.key === "Escape") { e.preventDefault(); router.push("/admin/customers"); }
+        // دریافت (F6) و پرداخت (F7) — میان‌برِ واقعیِ همان دکمه‌های سربرگ.
+        if (!moreOpen && (e.key === "F6" || e.key === "F7")) {
+          e.preventDefault();
+          openMoney(e.key === "F6" ? "receive" : "pay");
+          return;
+        }
+        if (e.key === "Escape") {
+          e.preventDefault();
+          // اول منوی باز را می‌بندد؛ دوباره زدنِ Esc برمی‌گرداند به فهرست.
+          if (moreOpen) setMoreOpen(false);
+          else router.push("/admin/customers");
+        }
       }}
     >
       {/*
-        یک سطر: نام، شماره، دسته، و مانده‌ی حساب.
+        نوارِ پرونده — یک سطر، همه‌چیز.
 
-        سربرگِ قبلی سه خط بود و هشت دکمه‌ی برچسب‌دار داشت. آن‌ها حالا آیکنِ
-        نوارِ زیرش هستند و این خط فقط می‌گوید «این پرونده‌ی کیست و چقدر
-        بدهکار است» — دو چیزی که همیشه لازم است.
+        نام و تلفن و معوقِ مشتری سمتِ راست، سه کارِ اصلی (فروش/دریافت/پرداخت)
+        کنارشان — برای همه‌ی مشتری‌ها، بدونِ قیدِ مانده؛ پرداختِ آزاد بدهی را
+        بیشتر می‌کند و خودِ فرم تأیید می‌گیرد. مانده‌ی حساب رنگی در انتهای نوار،
+        و باقیِ کارها (پیامک، ویرایش، چاپ، گزارش، دفتر، چک، غیرفعال‌سازی) پشتِ
+        دکمه‌ی «…». هیچ سربرگِ اضافه‌ای نیست تا بدنه‌ی صفحه — فاکتورهای مشتری
+        — بیشترین ارتفاع را بگیرد.
       */}
-      <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-1 border-b px-3 py-2">
-        <h1 className="text-lg font-bold">{c.fullName}</h1>
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
+        <h1 className="text-base font-bold">{c.fullName}</h1>
         <span dir="ltr" className="text-sm text-muted-foreground">
           {c.phones?.[0]?.phone ? toFa(c.phones[0].phone) : "بدون شماره"}
         </span>
         {c.category && <CustomerCategoryBadge category={c.category} />}
-        <span className="ms-auto text-sm">
-          مانده:{" "}
-          <b
-            className={`text-lg tabular-nums ${
-              totalDue > 0 ? "text-warning" : totalDue < 0 ? "text-success" : ""
+        {(s?.overdue ?? 0) > 0 && (
+          <span
+            className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive"
+            title="بخشی از بدهی از سررسید گذشته است"
+          >
+            معوق
+          </span>
+        )}
+
+        <span className="mx-2 h-5 w-px bg-border" />
+
+        <Button className="h-8 bg-primary px-3 text-sm text-primary-foreground" onClick={() => router.push(`/admin/pos?customer=${encodeURIComponent(id)}`)}>
+          <ShoppingCart className="me-1.5 size-4" /> فروش <kbd className="ms-1 rounded border border-primary-foreground/40 px-1 text-[11px]">F2</kbd>
+        </Button>
+        <Button variant="outline" className="h-8 px-3 text-sm" onClick={() => openMoney("receive")}>
+          <Wallet className="me-1.5 size-4" /> دریافت <kbd className="ms-1 rounded border px-1 text-[11px]">F6</kbd>
+        </Button>
+        <Button variant="outline" className="h-8 px-3 text-sm" onClick={() => openMoney("pay")}>
+          <HandCoins className="me-1.5 size-4" /> پرداخت <kbd className="ms-1 rounded border px-1 text-[11px]">F7</kbd>
+        </Button>
+
+        <span className="ms-auto flex items-center gap-2 text-sm">
+          <span className="text-xs text-muted-foreground">مانده:</span>
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${totalDue > 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : totalDue < 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+            {totalDue > 0 ? "بدهکار" : totalDue < 0 ? "طلبکار" : "تسویه"}
+          </span>
+          <b className={`text-lg tabular-nums ${balanceTextClass(totalDue)}`}>
+            {money(Math.abs(totalDue))}
+          </b>
+        </span>
+
+        {/* امکانات بیشتر — باقیِ کارهای پرونده پشتِ این دکمه. */}
+        <div className="relative">
+          <button
+            ref={moreBtnRef}
+            type="button"
+            title="امکانات بیشتر"
+            aria-label="امکانات بیشتر"
+            aria-expanded={moreOpen}
+            onClick={toggleMore}
+            className={cn(
+              "flex size-7 items-center justify-center rounded transition-colors",
+              moreOpen
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
+          >
+            <MoreHorizontal className="size-4" />
+          </button>
+
+          {moreOpen && (
+            <>
+              {/* لایه‌ی شفافِ پشتِ منو — با کلیک بیرون، منو بسته می‌شود و فوکوس برمی‌گردد. */}
+              <div
+                className="fixed inset-0 z-20"
+                onClick={() => {
+                  setMoreOpen(false);
+                  moreBtnRef.current?.focus();
+                }}
+              />
+              <div
+                ref={moreMenuRef}
+                role="menu"
+                onKeyDown={onMoreMenuKeyDown}
+                className="absolute end-0 top-9 z-30 w-64 rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
+              >
+                <MoreMenuItem
+                  icon={ArrowRight}
+                  kbd="۱"
+                  onClick={() => { router.push("/admin/customers"); }}
+                >
+                  برگشت به فهرست
+                </MoreMenuItem>
+
+                <div className="my-1 h-px bg-border" />
+
+                <MoreMenuItem
+                  icon={BarChart3}
+                  kbd="۲"
+                  onClick={() => { setPanel("reports"); setMoreOpen(false); }}
+                >
+                  گزارش‌ها و آمار
+                </MoreMenuItem>
+                <MoreMenuItem
+                  icon={MessageSquare}
+                  kbd="۳"
+                  onClick={() => { setSmsOpen(true); setMoreOpen(false); }}
+                >
+                  پیامک
+                </MoreMenuItem>
+                <MoreMenuItem
+                  icon={Pencil}
+                  kbd="۴"
+                  onClick={() => { setEditOpen(true); setMoreOpen(false); }}
+                >
+                  ویرایش مشخصات
+                </MoreMenuItem>
+
+                <div className="my-1 h-px bg-border" />
+
+                <MoreMenuItem
+                  icon={Printer}
+                  kbd="۵"
+                  onClick={() => { window.open(`/admin/print/statement/${id}`, "_blank"); setMoreOpen(false); }}
+                >
+                  چاپ کارت حساب
+                </MoreMenuItem>
+                <MoreMenuItem
+                  icon={ReceiptText}
+                  kbd="۶"
+                  onClick={() => { setTab("ledger"); setMoreOpen(false); }}
+                >
+                  مشاهده دفتر حساب
+                </MoreMenuItem>
+                <MoreMenuItem
+                  icon={ReceiptText}
+                  kbd="۷"
+                  onClick={() => { setTab("cheques"); setMoreOpen(false); }}
+                >
+                  مشاهده چک‌ها
+                </MoreMenuItem>
+
+                {isManager && (
+                  <>
+                    <div className="my-1 h-px bg-border" />
+                    <MoreMenuItem
+                      icon={UserX}
+                      destructive
+                      kbd="۸"
+                      onClick={() => { setDeactivating(true); setMoreOpen(false); }}
+                    >
+                      غیرفعال‌سازی مشتری
+                    </MoreMenuItem>
+                  </>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* سه تبِ پرونده — فاکتورها پیش‌فرض؛ دفتر و چک‌ها یک کلیک فاصله دارند. */}
+      <div className="flex shrink-0 items-center gap-1 border-b bg-muted/30 px-3 py-1.5">
+        {(
+          [
+            ["invoices", "فاکتورها"],
+            ["ledger", "دفتر (کارت حساب)"],
+            ["cheques", "چک‌ها"],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            className={`h-8 rounded-md px-4 text-sm font-medium transition-colors ${
+              tab === key
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-primary/5 hover:text-foreground"
             }`}
           >
-            {money(Math.abs(totalDue))}
-          </b>{" "}
-          <span className="text-xs text-muted-foreground">
-            {totalDue > 0 ? "بدهکار" : totalDue < 0 ? "بستانکار" : "تسویه"}
-          </span>
-        </span>
+            {label}
+          </button>
+        ))}
       </div>
 
       {/*
-        پیامک و ویرایش هنوز پنجره‌ی خودشان را دارند و کامپوننتشان دکمه‌اش را
-        خودش می‌سازد؛ کنارِ آیکن‌ها می‌نشینند تا همه‌ی کارها یک‌جا باشند.
-      */}
-      <IconBar actions={actions}>
-        <SmsDialog customer={c} />
-        <EditCustomerDialog customer={c} onDone={refresh} />
-        {isManager && (
-          <button
-            type="button"
-            title="غیرفعال‌سازی مشتری"
-            aria-label="غیرفعال‌سازی مشتری"
-            onClick={() => setDeactivating(true)}
-            className="flex size-7 items-center justify-center rounded text-muted-foreground
-                       hover:bg-destructive/10 hover:text-destructive"
-          >
-            <UserX className="size-4" />
-          </button>
-        )}
-      </IconBar>
+        بدنه — محتوای تبِ فعال.
 
-      {/*
-        بدنه‌ی همیشگی: گردش حساب.
-
-        فاکتورها، تسویه‌ها و پرداخت‌ها همه در همین یک جدول‌اند با مانده‌ی
-        متحرک — یعنی دقیقاً همان سه چیزی که هر روز لازم است. آمار و
-        شرایط اعتبار پشتِ آیکن رفتند: سالی چند بار باز می‌شوند و جایشان
+        فاکتورها، تسویه‌ها و پرداخت‌ها در تبِ فاکتور و دفتراند؛ آمار و
+        شرایط اعتبار پشتِ آیکن‌اند: سالی چند بار باز می‌شوند و جایشان
         بالای صفحه نبود.
       */}
       <div className="min-h-0 flex-1 overflow-auto p-3">
+        {tab === "ledger" && (
+        <>
         {/* گردش حساب — صورتحساب با مانده‌ی متحرک، بازه و خروجی اکسل */}
         <Card className="p-0">
           <div className="border-b px-4 py-3">
@@ -349,12 +586,11 @@ export default function CustomerPage() {
             )}
           </div>
         </Card>
+        </>
+        )}
 
-
-      </div>
-
-      {panel === "invoices" && (
-        <OverlayPanel title="فاکتورها و اقلام" onClose={() => setPanel(null)}>
+        {tab === "invoices" && (
+          <>
           {/* فاکتورها و اقلام — همه‌ی خریدهای مشتری، فیلتر «امروز/کلی/بازه» */}
           <Card className="p-0">
             <div className="border-b px-4 py-3">
@@ -488,10 +724,11 @@ export default function CustomerPage() {
               </ul>
             </Card>
           )}
+          </>
+        )}
 
-
-        </OverlayPanel>
-      )}
+        {tab === "cheques" && <CustomerChequesTab customerId={id} />}
+      </div>
 
       {panel === "reports" && (
         <OverlayPanel title="گزارش‌ها" onClose={() => setPanel(null)}>
@@ -578,15 +815,34 @@ export default function CustomerPage() {
       )}
 
       {panel === "money" && (
-        <OverlayPanel title="دریافت وجه و شرایط اعتبار" onClose={() => setPanel(null)}>
+        <OverlayPanel
+          title="دریافت و پرداخت و شرایط اعتبار"
+          onClose={() => setPanel(null)}
+        >
           <div className="space-y-4">
-            <TakePayment
-              customerId={id}
-              totalDue={totalDue}
-              chequeRateBp={c.chequeRateBp}
-              chequeRateMode={c.chequeRateMode}
-              onDone={refresh}
-            />
+            <div ref={receiveSectionRef} className="scroll-mt-2">
+              <TakePayment
+                customerId={id}
+                totalDue={Math.max(0, totalDue)}
+                chequeRateBp={c.chequeRateBp}
+                chequeRateMode={c.chequeRateMode}
+                onDone={refresh}
+              />
+            </div>
+
+            {/**
+             * پرداخت برای همه‌ی مشتری‌ها در دسترس است — با `allowBeyondCredit`
+             * حتی بدهکار/تسویه هم می‌تواند وجه بگیرد (مازاد به بدهی اضافه می‌شود)
+             * ولی فرم تأییدِ صریح می‌گیرد تا صفرِ اضافه بی‌سروصدا بدهی نسازد.
+             */}
+            <div ref={paySectionRef} className="scroll-mt-2">
+              <PayoutForm
+                customerId={id}
+                creditBalance={Math.max(0, -totalDue)}
+                allowBeyondCredit
+                onDone={refresh}
+              />
+            </div>
 
             {isManager && (
               <CreditSettings customer={c} onDone={refresh} />
@@ -603,6 +859,10 @@ export default function CustomerPage() {
           </div>
         </OverlayPanel>
       )}
+
+      {/* دیالوگ‌هایی که از منوی «امکانات بیشتر» باز می‌شوند — کنترل‌شده، بدون دکمه‌ی خودشان. */}
+      <SmsDialog customer={c} open={smsOpen} onOpenChange={setSmsOpen} />
+      <EditCustomerDialog customer={c} onDone={refresh} open={editOpen} onOpenChange={setEditOpen} />
 
       {/* تأیید غیرفعال‌سازی — soft delete؛ سابقه‌ی فاکتورها و دفتر پاک نمی‌شود. */}
       <ConfirmDialog
@@ -622,6 +882,49 @@ export default function CustomerPage() {
         onConfirm={() => doDeactivate.mutate()}
       />
     </div>
+  );
+}
+
+
+/**
+ * یک ردیفِ منوی «امکانات بیشتر» — آیکن + برچسب + میانبرِ عددی.
+ * `destructive` یعنی کارِ برگشت‌ناپذیر (غیرفعال‌سازی) — فقط برای مدیر.
+ *
+ * کیبورد: جهت‌ها فوکوس را جابه‌جا می‌کنند، Enter/Space اجرا می‌کند، و عددِ
+ * نمایش‌داده‌شده همان آیتم را مستقیم اجرا می‌کند (توسط onMoreMenuKeyDown).
+ */
+function MoreMenuItem({
+  icon: Icon,
+  onClick,
+  kbd,
+  destructive,
+  children,
+}: {
+  icon: LucideIcon;
+  onClick: () => void;
+  /** عددِ میانبرِ همین آیتم — نمایش و اجرا با همان عدد. */
+  kbd?: string;
+  destructive?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={cn(
+        "flex w-full items-center gap-2 rounded px-3 py-2 text-start text-sm transition-colors hover:bg-muted",
+        destructive && "text-destructive hover:bg-destructive/10"
+      )}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="min-w-0 flex-1">{children}</span>
+      {kbd && (
+        <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] tabular-nums text-muted-foreground">
+          {kbd}
+        </kbd>
+      )}
+    </button>
   );
 }
 

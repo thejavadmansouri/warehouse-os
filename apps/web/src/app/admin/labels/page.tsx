@@ -30,6 +30,13 @@ import {
 import { ApiException } from "@/lib/api-error-messages";
 import { faDate, qty, toFa } from "@/lib/format";
 import type { LabelSettings } from "@/lib/types";
+import {
+  getDesktopConfig,
+  isDesktop,
+  listDesktopPrinters,
+  saveDesktopLabelPrinter,
+  type DesktopPrinter,
+} from "@/lib/desktop";
 
 type Period = "today" | "week" | "all";
 
@@ -45,6 +52,80 @@ function sinceOf(p: Period): string | undefined {
   d.setHours(0, 0, 0, 0);
   if (p === "week") d.setDate(d.getDate() - 7);
   return d.toISOString();
+}
+
+/**
+ * انتخاب پرینتر لیبل (حرارتی) — فقط داخل اپ فروشنده معنا دارد، چون چاپ مستقیم
+ * TSPL با پل دسکتاپ به پرینترِ همان سیستم می‌رود. انتخاب در کانفیگِ خودِ اپ
+ * فروشنده ذخیره می‌شود (جدا از پرینتر فیش).
+ */
+function LabelPrinterField() {
+  const [printers, setPrinters] = React.useState<DesktopPrinter[]>([]);
+  const [current, setCurrent] = React.useState("");
+  const [saving, setSaving] = React.useState(false);
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const [list, cfg] = await Promise.all([
+          listDesktopPrinters(),
+          getDesktopConfig(),
+        ]);
+        if (!alive) return;
+        setPrinters(list);
+        setCurrent(cfg.labelPrinterName);
+      } catch {
+        if (alive) setPrinters([]);
+      } finally {
+        if (alive) setLoaded(true);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const change = async (name: string) => {
+    setCurrent(name);
+    setSaving(true);
+    try {
+      await saveDesktopLabelPrinter(name);
+      toast.success("پرینتر لیبل ذخیره شد");
+    } catch (e) {
+      toast.error(String(e instanceof Error ? e.message : e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium">
+        پرینتر لیبل (حرارتی)
+      </label>
+      <select
+        dir="rtl"
+        className="h-9 w-full rounded-md border bg-white px-2 text-sm"
+        value={current}
+        onChange={(e) => change(e.target.value)}
+        disabled={saving || !loaded}
+      >
+        <option value="">پرینتر پیش‌فرض ویندوز</option>
+        {printers.map((p) => (
+          <option key={p.name} value={p.name}>
+            {p.name}
+            {p.isDefault ? "  (پیش‌فرض)" : ""}
+          </option>
+        ))}
+      </select>
+      <p className="mt-1 text-xs text-muted-foreground">
+        پرینتری که لیبل‌ها با «چاپ مستقیم (حرارتی)» روی آن می‌رود؛ خالی =
+        پرینتر پیش‌فرض ویندوز.
+      </p>
+    </div>
+  );
 }
 
 /**
@@ -188,6 +269,32 @@ export function LabelsPanel({ embedded }: { embedded?: boolean } = {}) {
             ))}
           </div>
 
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium">
+                عرض رول (میلی‌متر)
+              </label>
+              <Input
+                dir="ltr"
+                className="h-10 text-center tabular-nums"
+                placeholder="خالی = همان عرض لیبل"
+                value={draft.mediaWidthMm ?? ""}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    mediaWidthMm: e.target.value.replace(/\D/g, "")
+                      ? Math.max(1, Number(e.target.value.replace(/\D/g, "")))
+                      : null,
+                  })
+                }
+              />
+              <p className="mt-1 text-xs text-muted-foreground">
+                رول دوستونه: عرضِ فیزیکی رول (مثلاً ۱۰۵ با لیبل ۵۱ → دو لیبل کنار
+                هم)؛ خالی = تک‌ستونه.
+              </p>
+            </div>
+          </div>
+
           <div className="flex flex-wrap gap-6">
             {([
               ["showName", "نام کالا روی لیبل"],
@@ -203,6 +310,22 @@ export function LabelsPanel({ embedded }: { embedded?: boolean } = {}) {
               </label>
             ))}
           </div>
+
+          <div>
+            <label className="mb-1 block text-xs font-medium">متن زیر هر لیبل (اختیاری)</label>
+            <Input
+              dir="rtl"
+              className="h-9"
+              placeholder="مثلاً: انبار مرکزی — طبقه ۲"
+              value={draft.footerText ?? ""}
+              onChange={(e) => setDraft({ ...draft, footerText: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              این متن زیر بارکدِ هر لیبل چاپ می‌شود؛ خالی بگذارید تا چیزی چاپ نشود.
+            </p>
+          </div>
+
+          {isDesktop() ? <LabelPrinterField /> : null}
 
           <div className="flex items-center gap-3">
             <Button size="sm" disabled={saveSettings.isPending} onClick={() => saveSettings.mutate()}>

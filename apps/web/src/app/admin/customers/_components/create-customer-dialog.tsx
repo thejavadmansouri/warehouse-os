@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -33,14 +33,20 @@ export function CreateCustomerDialog({
   const [categoryId, setCategoryId] = useState("");
   const [showCategories, setShowCategories] = useState(false);
 
-  useEffect(() => {
+  /*
+   * تطبیقِ state در رندر به‌جای effect (قانونِ set-state-in-effect): با
+   * بسته‌شدنِ دیالوگ، فرم برای مشتریِ بعدی خالی می‌شود.
+   */
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) {
       setFirstName("");
       setLastName("");
       setPhone("");
       setCategoryId("");
     }
-  }, [open]);
+  }
 
   /** دسته‌های فعال برای dropdown. */
   const categories = useQuery({

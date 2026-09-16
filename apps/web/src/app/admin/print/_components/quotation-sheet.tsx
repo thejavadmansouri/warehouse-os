@@ -86,7 +86,8 @@ export function QuotationSheet({
               <tr key={l.id}>
                 <td>{toFa(i + 1)}</td>
                 <td>
-                  {l.product.name}
+                  {/* نامِ نمایشیِ ویرایش‌شده اگر هست، وگرنه نامِ خودِ کالا. */}
+                  {l.label?.trim() || l.product.name}
                   {l.product.sku && (
                     <div className="muted">کد {toFa(l.product.sku)}</div>
                   )}

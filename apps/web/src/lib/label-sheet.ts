@@ -58,3 +58,21 @@ export function labelsPerSheet(
   );
   return cols * rows;
 }
+
+/*
+ * حالتِ «نیم‌برگ» — لیبلِ تمامِ نیمِ کاغذ.
+ *
+ * کاغذِ A5 را تا کنی، دو لیبلِ A6 می‌شود؛ انباردارِ مغازه دقیقاً همین را
+ * می‌خواهد: بارکدِ هر قفسه بزرگِ خوانا، دو تا در هر برگه، بدونِ چاپِ لیبل.
+ * در این حالت حاشیه و فاصله صفر است و هر لیبل دقیقاً نیمی از کاغذ می‌شود.
+ */
+
+/** عرضِ لیبلِ نیم‌برگ = عرضِ کاغذ (بدون حاشیه). */
+export function halfSheetWidthMm(paper: LabelPaper): number {
+  return PAPERS[paper].widthMm;
+}
+
+/** ارتفاعِ لیبلِ نیم‌برگ = دقیقاً نصفِ ارتفاعِ کاغذ. */
+export function halfSheetHeightMm(paper: LabelPaper): number {
+  return Math.floor(PAPERS[paper].heightMm / 2);
+}

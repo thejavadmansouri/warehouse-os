@@ -43,6 +43,15 @@ export interface PosLine {
    * می‌ماند — پس هر جا خوانده می‌شود باید `!== false` باشد نه `=== true`.
    */
   restock?: boolean;
+  /**
+   * فقط در حالتِ adjust — اطلاعاتِ نمایشیِ ردیفِ **موجودِ** فاکتور.
+   * ردیفِ تازه‌ای که با اسکن اضافه شده هیچ‌کدام را ندارد (`undefined` می‌ماند).
+   */
+  sold?: number;
+  alreadyReturned?: number;
+  outstanding?: number;
+  /** قیمتِ مؤثرِ هر واحد برای برگشت (پس از سهمِ تخفیفِ فاکتور). */
+  effectiveUnitPrice?: number;
 }
 
 /**
@@ -155,9 +164,11 @@ export function LineItems({
   activeRow,
   errorLine,
   mode = "sale",
+  memory = true,
   onActivate,
   onPatch,
   onRemove,
+  onQtyOverflow,
 }: {
   lines: PosLine[];
   activeRow: number;
@@ -166,13 +177,33 @@ export function LineItems({
    * مرجوعی همان جدول است با دو تفاوت: قیمت دستِ فروشنده نیست (قیمتِ مؤثرِ
    * فاکتور است) و به‌جای تخفیف، «سالم/معیوب» را می‌پرسد. ستون‌ها جابه‌جا
    * نمی‌شوند تا حرکتِ کیبورد همان بماند.
+   *
+   * adjust همان جدول است با سه توانایی: برگشتی (تعداد + سالم/معیوب)، تصحیحِ
+   * قیمتِ ردیفِ موجود، و قلمِ تازه‌ی «اضافه‌شده».
    */
-  mode?: "sale" | "return";
+  mode?: "sale" | "return" | "adjust";
+  /**
+   * تیکِ «دیدن حافظه» — فقط در adjust معنا دارد.
+   *
+   * روشن: سابقه با برچسب و کم‌رنگی دیده می‌شود (فروخته/برگشت‌خورده/مانده،
+   * «مرجوعی»، «اضافه‌شده»). خاموش: جدول مثل فاکتورِ عادی — تعدادِ خالصِ هر
+   * قلم، بدونِ برچسبِ گذشته؛ ردیفِ کاملاً برگشتی اصلاً نمی‌آید (صفحه‌ی
+   * والدش فیلتر می‌کند) و حذفِ ردیف = برگشتِ کاملِ همان قلم.
+   */
+  memory?: boolean;
   onActivate: (i: number) => void;
   onPatch: (i: number, patch: Partial<PosLine>) => void;
   onRemove: (i: number) => void;
+  /**
+   * زیادکردنِ تعدادِ قلمِ موجود فراتر از مانده‌اش — فقط در حالتِ عادی.
+   * صفحه والد مابه‌التفاوت را به‌عنوان قلمِ تازه اضافه می‌کند.
+   */
+  onQtyOverflow?: (i: number, overflow: number) => void;
 }) {
   const isReturn = mode === "return";
+  const isAdjust = mode === "adjust";
+  const showMemory = isAdjust && memory;
+  const plainView = isAdjust && !memory;
   if (lines.length === 0) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center p-6">
@@ -181,7 +212,11 @@ export function LineItems({
         </div>
         <div>
           <p className="text-lg font-medium text-foreground">
-            {isReturn ? "این فاکتور قلمِ قابل‌برگشتی ندارد" : "فاکتور جدید"}
+            {isReturn
+              ? "این فاکتور قلمِ قابل‌برگشتی ندارد"
+              : isAdjust
+                ? "این فاکتور قلمی برای ویرایش ندارد"
+                : "فاکتور جدید"}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">
             برای شروع:
@@ -204,24 +239,25 @@ export function LineItems({
     // نام کالا truncate می‌شود. min-w هم هست تا در پنجره‌ی باریک به‌جای له‌شدن,
     // جدول افقی اسکرول شود.
     <div className="min-h-0 flex-1 overflow-auto">
-      <table className="w-full min-w-[700px] table-fixed text-sm">
+      {/* pos-lines — لنگرِ CSSِ تراکم؛ تنظیمِ «ردیف‌های صندوق» در منوی خوانایی از همین می‌خواند. */}
+      <table className="pos-lines w-full min-w-[700px] table-fixed text-sm">
         <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
           <tr className="text-muted-foreground">
             <th className="w-8 px-1.5 py-1" />
             <th className="px-2 py-1 text-start text-xs font-medium">کالا</th>
             <th className="w-20 px-2 py-1 text-start text-xs font-medium">
-              {isReturn ? "برگشتی" : "تعداد"}
+              {isReturn ? "برگشتی" : plainView ? "تعداد" : isAdjust ? "مقدار" : "تعداد"}
             </th>
             <th className="w-32 px-2 py-1 text-start text-xs font-medium whitespace-nowrap">
               قیمت واحد <span className="font-normal opacity-70">(ریال)</span>
             </th>
             <th className="w-28 px-2 py-1 text-start text-xs font-medium">
-              {isReturn ? "وضعیت جنس" : "تخفیف"}
+              {isReturn || isAdjust ? "وضعیت جنس" : "تخفیف"}
             </th>
             {/* جمع آخرین ستون قبل از حذف است؛ در چیدمان راست‌به‌چپ اولین چیزی
                 است که با سرریز افقی بریده می‌شود، پس عرض کل باید جا شود. */}
             <th className="w-32 px-2 py-1 text-end text-xs font-medium">
-              {isReturn ? "مبلغ برگشت" : "جمع"}
+              {isReturn || isAdjust ? "مبلغ" : "جمع"}
             </th>
             <th className="w-8 px-1.5 py-1" />
           </tr>
@@ -232,6 +268,14 @@ export function LineItems({
             const disc = lineDiscount(l);
             const isLowStock = l.available > 0 && l.available <= 5;
             const isOutOfStock = l.available === 0 && l.locationId;
+
+            const isAdded = isAdjust && l.sold === undefined;
+            const isExisting = isAdjust && l.sold !== undefined;
+            /* ردیفِ موجودِ فاکتور که مقدارِ برگشتی‌اش پر شده — در حالتِ حافظه
+               کم‌رنگ می‌شود؛ در حالتِ عادی فقط تعدادِ خالص دیده می‌شود. */
+            const returningNow = isExisting && l.quantity > 0;
+            /** تعدادِ خالصِ قلم در حالتِ عادی — مانده منهای برگشتیِ همین جلسه. */
+            const netQty = isExisting ? Math.max(0, (l.outstanding ?? 0) - l.quantity) : l.quantity;
 
             return (
               <tr
@@ -246,20 +290,35 @@ export function LineItems({
                       : "border-e-transparent"
                 } ${
                   // ردیفِ کنارگذاشته کم‌رنگ می‌شود، ولی خوانا می‌ماند — باید
-                  // بشود بدون تیک‌زدن دوباره فهمید چه بوده.
-                  l.included ? "" : "opacity-45"
+                  // بشود بدون تیک‌زدن دوباره فهمید چه بوده. در حالتِ حافظه،
+                  // ردیفِ برگشتی هم همان‌طور کم‌رنگ می‌شود تا از دور معلوم باشد
+                  // «این قلم دیگر جزو فاکتورِ فعال نیست». در حالتِ عادی کم‌رنگی
+                  // حافظه‌ای نداریم — جدول باید مثل فاکتورِ عادی بماند.
+                  !l.included || (showMemory && returningNow) ? "opacity-50" : ""
                 }`}
               >
                 <td className="col-cream px-1.5 py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={l.included}
-                    onChange={(e) => onPatch(i, { included: e.target.checked })}
-                    /* کلیک روی چک‌باکس نباید ردیف را هم فعال کند. */
-                    onClick={(e) => e.stopPropagation()}
-                    className="size-4 cursor-pointer accent-primary"
-                    aria-label={`${l.productName} در فاکتور`}
-                  />
+                  {isExisting ? (
+                    /* ردیفِ موجودِ فاکتور همیشه داخلِ سند است — تیک معنی ندارد؛
+                       برگشتی‌بودن از برچسبِ کنارِ نام و کم‌رنگ‌شدنِ ردیف خوانده
+                       می‌شود، نه فقط از رنگ. */
+                    <div
+                      className="flex size-4 items-center justify-center"
+                      title="قلمِ موجودِ فاکتور"
+                    >
+                      <span className="size-2 rounded-full bg-primary/40" />
+                    </div>
+                  ) : (
+                    <input
+                      type="checkbox"
+                      checked={l.included}
+                      onChange={(e) => onPatch(i, { included: e.target.checked })}
+                      /* کلیک روی چک‌باکس نباید ردیف را هم فعال کند. */
+                      onClick={(e) => e.stopPropagation()}
+                      className="size-4 cursor-pointer accent-primary"
+                      aria-label={`${l.productName} در فاکتور`}
+                    />
+                  )}
                 </td>
 
                 {/*
@@ -271,18 +330,46 @@ export function LineItems({
                   هشدارها) کنارش می‌نشیند — همان اطلاعات، نصفِ ارتفاع.
                 */}
                 <td className="col-mint px-2 py-0.5">
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
                     {/*
                       نامِ کالا تنها چیزی است که فروشنده از فاصله می‌خواند —
                       یک پله بزرگ‌تر و یک وزن سنگین‌تر از بقیه‌ی ردیف.
                     */}
-                    <span className="truncate text-base font-bold leading-snug">
+                    <span className="min-w-0 flex-1 truncate text-base font-bold leading-snug">
                       {l.productName}
                     </span>
-                    <div className="flex shrink-0 items-center gap-1 text-xs leading-tight">
-                      {l.locationId ? (
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs leading-tight">
+                      {/* برچسبِ «مرجوعی» و «اضافه‌شده» فقط در حالتِ حافظه — در
+                          حالتِ عادی جدول باید مثل فاکتورِ عادی بماند و هیچ
+                          ردی از گذشته کنارِ نام دیده نشود. برچسبِ «معیوب» می‌ماند
+                          چون وضعیتِ همین جلسه است، نه سابقه. */}
+                      {showMemory && returningNow && (
+                        <span className="rounded bg-amber-600/15 px-1.5 py-0.5 font-semibold text-amber-700 dark:bg-amber-600/15 dark:text-amber-400">
+                          برگشتی {toFa(l.quantity)}
+                        </span>
+                      )}
+                      {showMemory && isAdded && (
+                        <span className="rounded bg-sky-600/15 px-1.5 py-0.5 font-semibold text-sky-700 dark:bg-sky-600/15 dark:text-sky-400">
+                          اضافه‌شده
+                        </span>
+                      )}
+                      {returningNow && l.restock === false && (
+                        <span
+                          title="جنسِ معیوب — به موجودی برنمی‌گردد، اثر مالی‌اش ثبت می‌شود"
+                          className="rounded bg-destructive/10 px-1.5 py-0.5 text-[0.7rem] font-medium text-destructive"
+                        >
+                          معیوب
+                        </span>
+                      )}
+                      {/* ردیفِ موجودِ adjust، وضعیتش زیرِ نام آمده — اینجا جای
+                          نمایشِ موجودیِ انبار نیست. قلمِ تازه اما مثل فروش،
+                          موجودیِ زنده‌اش را نشان می‌دهد. */}
+                      {!isExisting && l.locationId ? (
                         <>
-                          <span className="max-w-[10rem] truncate text-sky-700 dark:text-sky-400">
+                          <span
+                            className="min-w-0 max-w-full break-words text-sky-700 dark:text-sky-400"
+                            title={l.locationPath}
+                          >
                             {l.locationPath}
                           </span>
                           <span className="text-muted-foreground">·</span>
@@ -321,16 +408,39 @@ export function LineItems({
                       )}
                       {errorLine === i && (
                         <span className="ms-1 rounded bg-destructive px-1.5 py-0.5 font-medium text-white">
-                          موجودی کافی نیست
+                          {isAdjust ? "نامعتبر" : "موجودی کافی نیست"}
                         </span>
                       )}
                     </div>
                   </div>
 
                   {/*
+                    ردیفِ موجود در adjust: خلاصه‌ی وضعیتِ قلم — فروخته، برگشت‌خورده‌ی
+                    قبلی و مانده — تا «مقدارِ برگشتیِ جدید» با چشم دیده شود، نه فقط
+                    با عددِ داخلِ خانه. کم‌رنگ‌کردن به‌تنهایی برای دسترسی‌پذیری کافی
+                    نیست؛ متنِ وضعیت هم همین‌جاست.
+                  */}
+                  {/* خلاصه‌ی سابقه — فقط در حالتِ حافظه. در حالتِ عادی چیزی از
+                      گذشته زیرِ نام دیده نمی‌شود. */}
+                  {isExisting && showMemory && (
+                    <div className="mt-0.5 text-[0.7rem] leading-tight text-muted-foreground">
+                      فروخته <b className="tabular-nums text-foreground">{toFa(l.sold ?? 0)}</b>
+                      {" "}· برگشت‌خورده {" "}
+                      <b className="tabular-nums text-foreground">{toFa(l.alreadyReturned ?? 0)}</b>
+                      {" "}· مانده {" "}
+                      <b className="tabular-nums text-foreground">{toFa(l.outstanding ?? 0)}</b>
+                      <span className="ms-1.5 text-emerald-600 dark:text-emerald-400">
+                        قابل‌برگشت {toFa(l.available)}
+                      </span>
+                    </div>
+                  )}
+
+                  {/*
                     توضیحِ قلم — خطِ دومِ همین خانه، نه ستونِ جدا.
                     فقط وقتی می‌آید که چیزی نوشته شده باشد یا فروشنده با Alt+T
                     بازش کرده باشد، پس ردیف‌های بی‌توضیح ارتفاعِ اضافه نمی‌گیرند.
+                    در adjust جای ویرایشِ توضیح نیست (سندِ عملیات توضیحِ ردیف
+                    نمی‌گیرد) پس همان‌جا خاموش می‌شود.
                   */}
                   {(l.note !== undefined || activeRow === i) && !isReturn && (
                     <input
@@ -364,7 +474,12 @@ export function LineItems({
                     dir="ltr"
                     inputMode="numeric"
                     className="h-8 text-center text-base font-semibold tabular-nums"
-                    value={toFa(l.quantity)}
+                    /*
+                     * در حالتِ عادی، خانه‌ی تعدادِ قلمِ موجود «تعدادِ خالص» را
+                     * نشان می‌دهد — مثل فاکتورِ عادی. در حالتِ حافظه همان
+                     * «مقدارِ برگشتی» است. قلمِ تازه و فروش همیشه تعدادِ خودش.
+                     */
+                    value={toFa(plainView && isExisting ? netQty : l.quantity)}
                     /*
                       با فوکوس، کل محتوا انتخاب می‌شود.
 
@@ -377,14 +492,37 @@ export function LineItems({
                     data-cell={`${i}:0`}
                     onChange={(e) => {
                       const n = parseNum(e.target.value);
+
                       /*
-                       * در مرجوعی صفر مجاز است (یعنی «این قلم برنمی‌گردد») و
-                       * سقف، قابل‌برگشتِ همان ردیف است. در فروش کف ۱ می‌ماند.
+                       * حالتِ عادی روی قلمِ موجود: عدد = تعدادِ خالص.
+                       *   کمتر از مانده ⇒ برگشتِ همان اختلاف (سالم/معیوب کنارش
+                       *   می‌آید)؛ صفر ⇒ برگشتِ کامل (ردیف از دیدِ عادی پنهان
+                       *   می‌شود، در حافظه دوباره دیده می‌شود).
+                       *   بیشتر از مانده ⇒ مابه‌التفاوت قلمِ تازه می‌شود (مثل
+                       *   اسکنِ دوباره) — صفحه والد ردیف می‌سازد.
+                       */
+                      if (plainView && isExisting) {
+                        const outstanding = l.outstanding ?? 0;
+                        if (n > outstanding) {
+                          onQtyOverflow?.(i, n - outstanding);
+                          return;
+                        }
+                        onPatch(i, {
+                          quantity: outstanding - Math.max(0, Math.min(n, outstanding)),
+                        });
+                        return;
+                      }
+
+                      /*
+                       * در مرجوعی و در حالتِ حافظه صفر مجاز است (یعنی «این قلم
+                       * برنمی‌گردد») و سقف، قابل‌برگشتِ همان ردیف است. در فروش
+                       * و قلمِ تازه‌ی adjust کف ۱ می‌ماند.
                        */
                       onPatch(i, {
-                        quantity: isReturn
-                          ? Math.min(Math.max(0, n), l.available)
-                          : Math.max(1, n),
+                        quantity:
+                          isReturn || isExisting
+                            ? Math.min(Math.max(0, n), l.available)
+                            : Math.max(1, n),
                       });
                     }}
                   />
@@ -424,11 +562,21 @@ export function LineItems({
                 </td>
 
                 <td className="col-cream px-2 py-0.5">
-                  {isReturn ? (
-                    <SoundToggle
-                      value={l.restock !== false}
-                      onChange={(v) => onPatch(i, { restock: v })}
-                    />
+                  {isReturn || isExisting ? (
+                    /*
+                     * سالم/معیوب در هر دو حالتِ ویرایش در دسترس است — هر وقت
+                     * برگشتیِ همین جلسه برای قلم وجود دارد. در حالتِ عادی وقتی
+                     * برگشتی صفر است، خانه خالی می‌ماند تا جدول مثل فاکتورِ
+                     * عادی بماند.
+                     */
+                    plainView && isExisting && !returningNow ? (
+                      <div className="flex h-8 items-center justify-center text-muted-foreground/50">—</div>
+                    ) : (
+                      <SoundToggle
+                        value={l.restock !== false}
+                        onChange={(v) => onPatch(i, { restock: v })}
+                      />
+                    )
                   ) : (
                     <DiscountField
                       compact
@@ -440,28 +588,63 @@ export function LineItems({
                 </td>
 
                 <td className="col-cream px-2 py-0.5 text-end">
-                  <div className="text-base font-bold tabular-nums text-primary">
-                    {money(lineNet(l))}
-                  </div>
-                  {disc > 0 && (
-                    <div className="text-[0.7rem] leading-tight tabular-nums text-emerald-600 dark:text-emerald-400">
-                      <span className="text-muted-foreground line-through">{money(gross)}</span>
-                      {" "}− {money(disc)}
+                  {plainView && isExisting ? (
+                    /*
+                     * حالتِ عادی: مبلغِ فعلیِ قلم — تعدادِ خالص × قیمتِ فعلی.
+                     * همان چیزی که روی فاکتورِ عادی برای این قلم می‌دیدید.
+                     */
+                    <div className="text-base font-bold tabular-nums text-primary">
+                      {money(netQty * l.unitPrice)}
                     </div>
+                  ) : returningNow ? (
+                    /* مبلغِ برگشتِ همین قلم — از قیمتِ مؤثرِ فاکتور، نه قیمتِ
+                       دست‌خورده‌ی این فرم. عددی که اینجا می‌بینید همانی است که
+                       در «ارزش مرجوعی» جمع می‌شود. */
+                    <div className="text-base font-bold tabular-nums text-amber-600 dark:text-amber-400">
+                      − {money(l.quantity * (l.effectiveUnitPrice ?? 0))}
+                    </div>
+                  ) : isExisting ? (
+                    <div className="text-base font-bold tabular-nums text-muted-foreground">—</div>
+                  ) : (
+                    <>
+                      <div className="text-base font-bold tabular-nums text-primary">
+                        {money(lineNet(l))}
+                      </div>
+                      {disc > 0 && (
+                        <div className="text-[0.7rem] leading-tight tabular-nums text-emerald-600 dark:text-emerald-400">
+                          <span className="text-muted-foreground line-through">{money(gross)}</span>
+                          {" "}− {money(disc)}
+                        </div>
+                      )}
+                    </>
                   )}
                 </td>
 
                 <td className="col-cream px-1.5 py-0.5">
-                  <button
-                    type="button"
-                    onClick={() => onRemove(i)}
-                    className="flex size-6 items-center justify-center rounded text-destructive/70
-                               hover:bg-destructive/10 hover:text-destructive
-                               focus:outline-none focus:ring-1 focus:ring-destructive"
-                    aria-label="حذف ردیف"
-                  >
-                    <Trash2 className="size-3.5" />
-                  </button>
+                  {isExisting && showMemory ? (
+                    /* قلمِ فاکتور حذف نمی‌شود؛ برای برگشتِ کامل، مقدارِ برگشتی
+                       را برابرِ «مانده» کنید. */
+                    <div
+                      className="size-6"
+                      title="قلمِ موجودِ فاکتور حذف نمی‌شود — برای برگشتِ کامل، مقدارِ برگشتی را برابرِ مانده کنید"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onRemove(i)}
+                      className="flex size-6 items-center justify-center rounded text-destructive/70
+                                 hover:bg-destructive/10 hover:text-destructive
+                                 focus:outline-none focus:ring-1 focus:ring-destructive"
+                      aria-label="حذف ردیف"
+                      title={
+                        isExisting
+                          ? "برگشتِ کامل این قلم — در حالتِ حافظه دوباره دیده می‌شود"
+                          : undefined
+                      }
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
                 </td>
               </tr>
             );

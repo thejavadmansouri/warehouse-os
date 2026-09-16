@@ -3,6 +3,7 @@
 import * as React from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "./auth-store";
+import { useRealtimeStore } from "./realtime-store";
 
 /**
  * پورت API — همان قرارداد src/lib/api.ts. میزبان در زمان اجرا از خودِ مرورگر
@@ -26,7 +27,45 @@ function eventsSocketUrl(token: string): string {
  * React Query پیشوندی مطابقت می‌دهد: ["rep"] با ["rep","sales",...] هم می‌خورد.
  * رویدادِ ناشناس → fallbackِ امن: همه.
  */
-const KEYS_BY_EVENT: Record<string, string[][]> = {
+// ───────── تعاملِ جانبی با رویدادها (توست، زنگ، …) ─────────
+//
+// `useLiveEvents` خودش فقط invalidate می‌کند؛ هر کسی هم که می‌خواهد روی یک
+// رویداد *_work کند (مثلاً زنگِ سفارشِ آنلاین) با `subscribeLiveEvent` ثبت‌نام
+// می‌کند و در همان `onmessage` صدا زده می‌شود. معطلِ invalidate نیست و با آن
+// تداخل ندارد.
+type LiveEventHandler = (payload: unknown) => void;
+const EVENT_HANDLERS: { type: string; fn: LiveEventHandler }[] = [];
+
+/** ثبت‌نامِ موقت روی یک نوعِ رویداد؛ unsub را برمی‌گرداند. */
+export function subscribeLiveEvent(
+  type: string,
+  fn: LiveEventHandler,
+): () => void {
+  const h = { type, fn };
+  EVENT_HANDLERS.push(h);
+  return () => {
+    const i = EVENT_HANDLERS.indexOf(h);
+    if (i >= 0) EVENT_HANDLERS.splice(i, 1);
+  };
+}
+
+function dispatchLiveEvent(type: string | undefined, payload: unknown) {
+  if (!type) return;
+  for (const h of EVENT_HANDLERS) {
+    if (h.type !== type) continue;
+    try {
+      h.fn(payload);
+    } catch {
+      // یک هندلرِ خراب نباید بقیه را و خودِ realtime را زمین بزند.
+    }
+  }
+}
+
+/**
+ * اکسپورت برای تستِ «همه‌ی رویدادهای بک‌اند نگاشت‌شده‌اند» — افزودنِ نوعِ
+ * جدید در بک‌اند باید یا اینجا ثبت شود یا آگاهانه به fallbackِ سنگین واگذار.
+ */
+export const KEYS_BY_EVENT: Record<string, string[][]> = {
   "sale.created": [
     ["pos-recent-invoices"],
     ["invoice"],
@@ -35,6 +74,7 @@ const KEYS_BY_EVENT: Record<string, string[][]> = {
     ["customer-today-count"],
     ["customer-today-invoices"],
     ["open-accounts"],
+    ["pos-customer-balances"],
     ["products"],
   ],
   "sale.canceled": [
@@ -43,10 +83,71 @@ const KEYS_BY_EVENT: Record<string, string[][]> = {
     ["rep"],
     ["customer"],
     ["open-accounts"],
+    ["pos-customer-balances"],
     ["products"],
   ],
   "stock.changed": [["products"]],
-  "receipt.created": [["receipts"], ["customer"], ["open-accounts"], ["rep"]],
+  /*
+   * رسید ثبت شد → مانده‌ی فاکتورها و خلاصه‌ی مشتری عوض شد. جدول‌های ریزگردش
+   * (پنل مشتری F4 و پرونده‌ی دفتری F3) و چیپِ «مانده کل» همان لحظه تازه می‌شوند
+   * — پنل باز می‌ماند و اعداد عوض می‌شوند، بدون هیچ رفرشِ دستی.
+   */
+  "receipt.created": [
+    ["receipts"],
+    ["customer"],
+    ["open-accounts"],
+    ["rep"],
+    ["pos-customer-invoices"],
+    ["pos-customer-balances"],
+    ["open-plain-invoices"],
+    ["open-plain-customer"],
+    ["open-account-customer"],
+  ],
+  /*
+   * پرداخت به مشتری بستانکار — مانده‌اش عوض شد؛ فهرستِ حساب‌بازها (F3) که
+   * طلبکارها را هم نشان می‌دهد همان لحظه تازه می‌شود، بدون بستن پنل.
+   */
+  /*
+   * برگشتِ پرداخت (کارتخوان برگشت زد / بانک رد کرد) — مانده‌ی فاکتور و دفترِ
+   * مشتری عوض شد؛ همان تازه‌سازی‌های رسید، چون اثرش روی همین‌هاست.
+   */
+  "payment.reversed": [
+    ["receipts"],
+    ["invoice"],
+    ["customer"],
+    ["open-accounts"],
+    ["rep"],
+    ["pos-customer-invoices"],
+    ["pos-customer-balances"],
+    ["open-plain-invoices"],
+    ["open-plain-customer"],
+    ["open-account-customer"],
+  ],
+  /*
+   * اصلاح نحوهٔ پرداخت — تقسیمِ پرداختِ فاکتور عوض شد، پس هم خودِ فاکتور و هم
+   * مانده‌ی مشتری و هم گزارش‌ها تازه می‌شوند؛ دقیقاً همان مجموعهٔ برگشتِ پرداخت.
+   */
+  "payment.recomposed": [
+    ["receipts"],
+    ["invoice"],
+    ["customer"],
+    ["open-accounts"],
+    ["rep"],
+    ["pos-customer-invoices"],
+    ["pos-customer-balances"],
+    ["open-plain-invoices"],
+    ["open-plain-customer"],
+    ["open-account-customer"],
+  ],
+  "payout.created": [
+    ["payouts"],
+    ["customer"],
+    ["open-accounts"],
+    ["rep"],
+    ["pos-customer-balances"],
+    ["open-plain-customer"],
+    ["open-account-customer"],
+  ],
   "return.created": [
     ["pos-recent-invoices"],
     ["returns"],
@@ -56,9 +157,69 @@ const KEYS_BY_EVENT: Record<string, string[][]> = {
     ["open-accounts"],
     ["rep"],
     ["products"],
+    // مانده‌ی فاکتورها و اثر روی ردیف‌های حسابِ کلی هم عوض می‌شود.
+    ["pos-customer-invoices"],
+    ["pos-customer-balances"],
+    ["open-plain-invoices"],
+    ["open-account"],
   ],
+  /*
+   * اصلاحیه — قراردادِ همان برگشت: جمع و مانده و ردیف‌های حسابِ کلی.
+   * قبلاً به fallbackِ «همه را تازه کن» می‌افتاد؛ حالا هدفمند است.
+   */
+  "correction.created": [
+    ["corrections"],
+    ["correction"],
+    ["invoice"],
+    ["customer"],
+    ["open-accounts"],
+    ["rep"],
+    ["products"],
+    ["pos-customer-invoices"],
+    ["pos-customer-balances"],
+    ["open-plain-invoices"],
+    ["open-account"],
+  ],
+  // حسابِ کلی ساخته شد → فهرستِ حساب‌بازها و رجیستری تازه شوند.
+  "open-account.created": [["open-accounts"], ["open-accounts-registry"]],
+  /*
+   * تسویه — نوبت‌ها CONFIRMED می‌شوند و در ریزگردش‌ها (F4 و F3) ظاهر می‌شوند؛
+   * سطل‌های بدهیِ مشتری هم عوض می‌شود.
+   */
+  "open-account.settled": [
+    ["open-accounts"],
+    ["open-accounts-registry"],
+    ["customer"],
+    ["rep"],
+    ["invoice"],
+    ["pos-customer-invoices"],
+    ["pos-customer-balances"],
+    ["open-plain-invoices"],
+    ["open-plain-customer"],
+    ["open-account-customer"],
+  ],
+  /* وصول/برگشتِ چک — مانده‌ی مشتری و فهرستِ حساب‌بازها عوض می‌شود. */
+  "cheque.updated": [
+    ["cheques"],
+    ["customer"],
+    ["rep"],
+    ["open-accounts"],
+    ["pos-customer-balances"],
+    ["open-plain-customer"],
+    ["open-account-customer"],
+  ],
+  "shortage.created": [["shortages"]],
+  "shortage.updated": [["shortages"]],
   // تیکِ کارگر → پنل «کارهای انبار» و چیپِ پیشرفت روی فاکتورها تازه شوند.
   "work-task.progress": [["work-tasks"], ["pos-recent-invoices"]],
+  // سفارشِ جدیدِ سایت آمد، یا وضعیتش تغییر کرد → صفِ تحویل، جزئیات و شمارِ
+  // زنگوله (سفارش‌های منتظرِ برداشت) تازه شوند.
+  "online-order.created": [["online-orders"], ["online-order-pending"]],
+  "online-order.decided": [
+    ["online-orders"],
+    ["online-order"],
+    ["online-order-pending"],
+  ],
 };
 
 /**
@@ -119,24 +280,38 @@ export function useLiveEvents(): void {
 
     const connect = () => {
       if (closedByUs) return;
+      useRealtimeStore.getState().setStatus("connecting");
       ws = new WebSocket(eventsSocketUrl(token));
 
       ws.onopen = () => {
+        /*
+         * بازگشتِ اتصال یعنی رویدادهایِ وسطِ قطعی گم شده‌اند — دفترِ رسیدها،
+         * فهرستِ حساب‌بازها و… ممکن است کهنه باشند. یک invalidateِ کامل همان
+         * لحظه همه را از سرور تازه می‌کند؛ فقط روی reconnect، نه اولین اتصال.
+         */
+        if (attempt > 0) void queryClient.invalidateQueries();
         attempt = 0;
+        useRealtimeStore.getState().setStatus("up");
       };
 
       ws.onmessage = (ev) => {
-        let type: string | undefined;
+        let parsed: unknown;
         try {
-          type = (JSON.parse(ev.data as string) as { type?: string }).type;
+          parsed = JSON.parse(ev.data as string) as unknown;
         } catch {
-          type = undefined;
+          parsed = null;
         }
+        const type =
+          parsed && typeof parsed === "object" && "type" in parsed
+            ? String((parsed as { type?: unknown }).type ?? "")
+            : undefined;
         enqueue(type);
+        dispatchLiveEvent(type, parsed);
       };
 
       ws.onclose = () => {
         if (closedByUs) return;
+        useRealtimeStore.getState().setStatus("down");
         // backoff نمایی با سقف ~15s تا شبکه‌ی قطع‌ووصلِ انبار سیل‌آسا reconnect نکند.
         const delay = Math.min(1000 * 2 ** attempt, 15000);
         attempt += 1;

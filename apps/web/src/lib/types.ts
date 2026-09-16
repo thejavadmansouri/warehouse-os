@@ -9,6 +9,8 @@ export interface User {
   username: string;
   fullName: string;
   role: Role;
+  /** دسترسی به بخش «فروشگاه اینترنتی» — مستقل از نقش. */
+  canManageSite?: boolean;
 }
 
 // طبق بخش ۴ — POST /auth/login
@@ -24,6 +26,7 @@ export interface AuthMeResponse {
   // فیلدهای احتمالی اضافی که /auth/me برمی‌گرداند (fullName و ...)
   fullName?: string;
   id?: string;
+  canManageSite?: boolean;
 }
 
 // طبق بخش ۵ — ساختار خطای یکسان
@@ -54,6 +57,8 @@ export interface Product {
   purchasePrice?: number | null;
   salePrice?: number | null;
   wholesalePrice?: number | null;
+  /** قیمتِ چهارم — عددِ آزادِ مدیر. */
+  managerPrice?: number | null;
   minStock?: number | null;
   isActive?: boolean;
   image?: string | null;
@@ -101,6 +106,8 @@ export interface CreateProductDto {
   purchasePrice?: number;
   salePrice?: number;
   wholesalePrice?: number;
+  /** قیمتِ چهارم — عددِ آزادِ مدیر. */
+  managerPrice?: number;
   /** قیمت پیش از تخفیف — روی سایت خط‌خورده نشان داده می‌شود. */
   compareAtPrice?: number;
   minStock?: number;
@@ -349,6 +356,14 @@ export interface InventoryLogsQuery {
 }
 
 // GET /inventory/kardex/:productId — گردش کالا با مانده‌ی متحرک
+export interface KardexAsset {
+  assetId: string;
+  /** مسیر ذخیره‌شده (مثل /storage/inventory-photos/...) — برای fetch با توکن نیست. */
+  url: string;
+  thumbUrl?: string | null;
+  mimeType?: string | null;
+}
+
 export interface KardexRow {
   id: string;
   createdAt: string;
@@ -362,6 +377,8 @@ export interface KardexRow {
   outQty: number;
   balance: number;
   unitPrice: number | null;
+  /** عکس‌هایی که موقعِ همین حرکت با گوشی گرفته شده‌اند (INVENTORY_IMAGE). */
+  assets?: KardexAsset[];
 }
 
 /** خلاصه‌ی بازه‌ی کاردکس — جمعِ وارد/خارج و فروش‌ها (بدون در نظر گرفتن فیلترِ action). */
@@ -524,6 +541,8 @@ export interface CreateUserDto {
   password: string;
   fullName: string;
   role: Role;
+  /** دسترسی به فروشگاه اینترنتی — مستقل از نقش. */
+  canManageSite?: boolean;
 }
 
 export interface UpdateRoleDto {
@@ -768,7 +787,11 @@ export interface PosCatalogRow {
   barcodes: string[];
   brand: string | null;
   vehicleModel: string | null;
-  salePrice: number | null;
+  salePrice?: number | null;
+  /** فقط برای مدیر می‌آید — بهای خرید و قیمتِ پیشنهادیِ ۱۵٪ و قیمتِ مدیر (فروشنده نمی‌بیند). */
+  purchasePrice?: number | null;
+  suggestedPrice?: number | null;
+  managerPrice?: number | null;
   updatedAt: string;
   deleted: boolean;
 }
@@ -789,6 +812,10 @@ export interface LocateResult {
   unit: string | null;
   partNumber: string | null;
   salePrice: number | null;
+  /** فقط برای مدیر — بهای خرید و قیمتِ پیشنهادیِ ۱۵٪ و قیمتِ مدیر (فروشنده نمی‌بیند). */
+  purchasePrice?: number | null;
+  suggestedPrice?: number | null;
+  managerPrice?: number | null;
   brandName: string | null;
   vehicleModelName: string | null;
   totalStock: number;
@@ -922,7 +949,10 @@ export type LedgerEntryType =
   | "CHEQUE_BOUNCED"
   | "CHEQUE_CASHED"
   | "FINANCE_CHARGE"
-  | "ADJUSTMENT";
+  | "ADJUSTMENT"
+  | "PAYOUT"
+  | "PAYMENT_REVERSED"
+  | "RECOMPOSE";
 
 export interface LedgerEntry {
   id: string;
@@ -933,6 +963,8 @@ export interface LedgerEntry {
   createdAt: string;
   invoice?: { id: string; number: number } | null;
   receipt?: { id: string; number: number } | null;
+  /** سندِ پرداخت به مشتری — فقط برای ردیف‌های PAYOUT. */
+  payout?: { id: string; number: number } | null;
   user?: { id: string; fullName: string } | null;
 }
 
@@ -1129,6 +1161,33 @@ export interface OpenAccountInvoice {
   note: string | null;
   createdAt: string;
   lines: OpenAccountLine[];
+}
+
+/**
+ * مشتری با مانده‌ی غیرصفر — بدهکار یا طلبکار.
+ *
+ * خوراکِ «حساب باز» صندوق و فیلترِ «حساب‌بازها» در پنل مشتری: مانده از خودِ
+ * دفتر می‌آید، پس نسیه‌های معمولی هم که «حسابِ کلی» ندارند اینجا دیده می‌شوند.
+ */
+export interface CustomerBalanceRow {
+  id: string;
+  fullName: string;
+  phone: string | null;
+  creditLimit?: number | null;
+  creditDays?: number | null;
+  /** مثبت = بدهکار (به ما بدهکار است)، منفی = طلبکار (ما به او بدهکاریم). */
+  balance: number;
+  kind: "debtor" | "creditor";
+  /** تفکیک سنی — فقط برای بدهکار معنا دارد. */
+  current: number;
+  dueToday: number;
+  overdue: number;
+  /** نزدیک‌ترین سررسیدِ باز (بدهکارها). */
+  nextDueDate: string | null;
+  /** مانده‌ی سقف اعتبار — سقفِ تعیین‌نشده null است. */
+  available?: number | null;
+  /** تعداد فاکتورهای مانده‌دار — همان «۲ نوبت» که صندوق نشان می‌دهد. */
+  invoiceCount: number;
 }
 
 /** ردیفِ فهرستِ حساب‌های باز — صندوق و گزارش. */
@@ -1391,7 +1450,56 @@ export interface Invoice {
     lineNote?: string | null;
     product: { id: string; name: string; sku?: string | null; unit?: string | null };
     location: { id: string; name: string; code: string; path: string };
+    /*
+     * وضعیتِ «الان»ِ قلم — خوراکِ برگه‌ی چاپ. سرور برای برگه‌ی نهایی می‌فرستد:
+     * تعدادِ خالص، آخرین قیمتِ تصحیح‌شده، سهمِ تخفیفِ باقی‌مانده و قیمتِ مؤثرِ
+     * هر واحد. ردیفی که کاملاً برگشته با مانده‌ی صفر می‌آید و برگه آن را
+     * چاپ نمی‌کند — سابقه در سیستم کامل می‌ماند، روی کاغذ نمی‌آید.
+     */
+    netQuantity?: number;
+    currentUnitPrice?: number;
+    netLineDiscount?: number;
+    effectiveUnitPrice?: number;
   }[];
+  /** جمعِ وجهِ برگشتیِ همه‌ی مرجوعی‌های این فاکتور. */
+  refundTotal?: number;
+}
+
+/** برگشت از یک فاکتورِ قبلی، داخلِ سبدِ خالص (تعویض). */
+export interface NetReturnGroupDto {
+  /** فاکتورِ قبلیِ همین مشتری که کالا از آن برمی‌گردد. */
+  invoiceId: string;
+  lines: { saleLogId: string; quantity: number; restock?: boolean }[];
+}
+
+/**
+ * سبدِ خالص — «جنسِ قبلی پس داده می‌شود + جنسِ نو برده می‌شود» در یک
+ * درخواستِ اتمیک. سرور همه را در یک تراکنش ثبت می‌کند: فاکتورِ فروشِ نو +
+ * سند(های) مرجوعیِ ردیف‌هایِ برگشتی — یا همه یا هیچ‌کدام.
+ */
+export interface CreateNetSaleDto {
+  idempotencyKey: string;
+  warehouseId: string;
+  /** اجباری: برگشت فقط برای فاکتورهایِ قبلیِ همین مشتری معنا دارد. */
+  customerId: string;
+  /** وجهِ برگشتی — در این نسخه فقط نقد/کارت. */
+  refundMethod: PaymentMethod;
+  /** دلیلِ مرجوعی — اجباری، روی هر سندِ مرجوعی می‌نشیند. */
+  reason: string;
+  note?: string;
+  dueDate?: string;
+  discount?: number;
+  /** مرجوعی از چند فاکتورِ قبلیِ همین مشتری. */
+  returns: NetReturnGroupDto[];
+  /** ردیف‌هایِ فروشِ نو. */
+  lines: InvoiceLineInput[];
+  payments?: PaymentInput[];
+}
+
+/** پاسخِ یک سبدِ خالصِ ثبت‌شده — فاکتورِ نو + مرجوعی‌هایِ همراهش. */
+export interface NetSaleResult {
+  invoice: Invoice;
+  returns: SaleReturn[];
 }
 
 export interface InvoiceListRow {
@@ -1591,6 +1699,22 @@ export interface DebtorsReport {
     }[];
     meta: ReportMeta;
   };
+}
+
+/**
+ * یک چک در پرونده‌ی مشتری — با مسیرِ مالیش: چک یا با فاکتور گرفته شده (SALE)
+ * یا بابتِ تسویه‌ی بدهی آمده (RECEIPT). مبلغ از مسیر می‌آید، نه از خودِ چک.
+ */
+export interface CustomerChequeRow {
+  id: string;
+  number: string;
+  bankName: string | null;
+  dueDate: string;
+  status: "IN_HAND" | "DEPOSITED" | "CASHED" | "BOUNCED";
+  settledAt: string | null;
+  amount: number;
+  source: "SALE" | "RECEIPT";
+  docNumber: number | null;
 }
 
 export interface ChequesReport {
@@ -1809,6 +1933,35 @@ export interface Receipt {
 }
 
 // =====================================================
+// پرداخت به مشتری بستانکار (تسویه بستانکاری)
+// =====================================================
+
+/**
+ * قرینه‌ی Receipt با جهتِ معکوس: فروشگاه پول می‌دهد.
+ *
+ * اعتبارِ مشتری (از مرجوعی/اصلاحیه/اصلاحِ دستی) جدا از «پرداختِ واقعی» است؛
+ * این سند آن اعتبار را مصرف می‌کند — همان تفکیکِ Credit Note و Refund
+ * Payment در QuickBooks/Odoo. چکِ پرداختی سود/نرخ ندارد؛ مبلغِ روی کاغذِ چک
+ * همان مبلغِ سند است.
+ */
+export interface CustomerPayout {
+  id: string;
+  number: number;
+  amount: number;
+  method: Exclude<PaymentMethod, "CREDIT">;
+  /** دلیلِ اجباری — قابلِ دفاع برای بعد. */
+  reason: string;
+  note?: string | null;
+  chequeNumber?: string | null;
+  bankName?: string | null;
+  chequeDueDate?: string | null;
+  createdAt: string;
+  customerName: string;
+  customer?: { id: string; firstName: string; lastName?: string | null };
+  user?: { fullName: string } | null;
+}
+
+// =====================================================
 // برگشت از فروش (مرجوعی)
 // =====================================================
 
@@ -1885,6 +2038,8 @@ export interface SaleReturnListRow {
   refundAmount: number;
   reason: string;
   createdAt: string;
+  /** وقتی این مرجوعی نیمی از «عملیات یکپارچه» (adjust) است، کلیدِ گروه‌بندیِ مشترک. */
+  operationKey?: string | null;
   invoice?: { id: string; number: number } | null;
   customer?: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
   user?: { id: string; fullName: string } | null;
@@ -1982,10 +2137,158 @@ export interface SaleCorrectionListRow {
   amountAdjust: number;
   reason: string;
   createdAt: string;
+  /** وقتی این اصلاحیه نیمی از «عملیات یکپارچه» (adjust) است، کلیدِ گروه‌بندیِ مشترک. */
+  operationKey?: string | null;
   invoice?: { id: string; number: number } | null;
   customer?: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
   user?: { id: string; fullName: string } | null;
   _count?: { lines: number };
+}
+
+// =====================================================
+// عملیاتِ یکپارچه (adjust) — مرجوعی + افزودن + تصحیح در یک تراکنش
+// =====================================================
+
+/** یک ردیفِ قابلِ ویرایش برای حالتِ یکپارچه — تلفیقِ returnable و correctable. */
+export interface AdjustableLine {
+  saleLogId: string;
+  /** توضیحِ فعلیِ همین قلم. */
+  lineNote?: string | null;
+  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  location: { id: string; name: string; code: string; path: string };
+  sold: number;
+  alreadyReturned: number;
+  correctedBy: number;
+  /** مانده‌ی قابل‌برگشت = فروش + اثر اصلاحیه‌ها − مرجوعی‌های قبلی. */
+  returnable: number;
+  /** همان مانده — «تعداد فعلی» برای تصحیح. */
+  oldQuantity: number;
+  /** قیمتِ واحدِ فعلی (آخرین تصحیح‌شده). */
+  oldUnitPrice: number;
+  /** قیمتِ مؤثرِ هر واحد برای برگشت (پس از سهمِ تخفیفِ فاکتور). */
+  effectiveUnitPrice: number;
+}
+
+export interface AdjustableInvoice {
+  invoice: {
+    id: string;
+    number: number;
+    status: InvoiceStatus;
+    total: number;
+    paidAmount: number;
+    dueAmount: number;
+    accountId?: string | null;
+    customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  };
+  lines: AdjustableLine[];
+  /** نهایی و حساب باز قابلِ ویرایش‌اند؛ باطل‌شده نه. */
+  adjustable: boolean;
+  isOpenAccount: boolean;
+}
+
+export interface CreateAdjustDto {
+  idempotencyKey: string;
+  reason: string;
+  note?: string;
+  returns?: { saleLogId: string; quantity: number; restock?: boolean }[];
+  changes?: { saleLogId: string; newQuantity: number; newUnitPrice: number }[];
+  additions?: {
+    productId: string;
+    /** خالی = مکان سیستمی، مثل خودِ فروش. */
+    locationId?: string;
+    quantity: number;
+    unitPrice: number;
+  }[];
+  /** تسویه‌ی اختلاف. برای اختلاف صفر لازم نیست. */
+  settlement?: {
+    method: "CASH" | "CARD" | "CHEQUE" | "CREDIT";
+    amount?: number;
+    cheque?: {
+      number: string;
+      bankName?: string;
+      branch?: string;
+      holderName?: string;
+      dueDate: string;
+      rateBp?: number;
+      months?: number;
+      rateMode?: "FLAT" | "MONTHLY";
+      charge?: number;
+    };
+  };
+  /** تعدیلِ دستیِ مدیر روی اختلاف نهایی (ریال) — مثبت بیشتر بگیر، منفی کمتر. */
+  manualAdjustment?: number;
+}
+
+/**
+ * برگشتِ پرداخت — خنثی‌سازیِ یک پرداختِ ثبت‌شده (کارتخوان برگشت زد / بانک رد کرد).
+ * فاکتور سرِ جایش می‌ماند؛ مانده‌اش به بدهی برمی‌گردد و دفترِ مشتری بدهکار می‌شود.
+ */
+export interface ReversePaymentDto {
+  idempotencyKey?: string;
+  /** ریال — سقفش پرداخت‌شده‌ی فاکتور است؛ سرور رد می‌کند اگر بیشتر باشد. */
+  amount: number;
+  method: "CASH" | "CARD" | "CHEQUE";
+  /** اختیاری — اگر خالی باشد سند همچنان ثبت می‌شود. */
+  reason?: string;
+}
+
+export interface PaymentReversalRow {
+  id: string;
+  invoiceId: string;
+  method: "CASH" | "CARD" | "CHEQUE";
+  amount: number;
+  reason: string;
+  createdAt: string;
+  user?: { username: string } | null;
+}
+
+/** وضعیتِ نمایشیِ هر ردیف پس از عملیات. */
+export type AdjustLineStatus =
+  | "ACTIVE"
+  | "PARTIALLY_RETURNED"
+  | "RETURNED"
+  | "ADDED_LATER";
+
+export interface AdjustResultLine {
+  saleLogId: string;
+  productId: string;
+  productName: string;
+  unit: string;
+  /** برای قلمِ افزوده‌شده صفر است. */
+  originalQuantity: number;
+  returnedQuantity: number;
+  /** برای ردیف‌های اصلی صفر است. */
+  addedQuantity: number;
+  currentQuantity: number;
+  unitPrice: number;
+  lineStatus: AdjustLineStatus;
+}
+
+/** پاسخِ کاملِ یک عملیاتِ یکپارچه — هم برای ثبتِ تازه هم برای retry با همان کلید. */
+export interface AdjustResult {
+  operationKey: string;
+  returnId: string | null;
+  correctionId: string | null;
+  invoice: {
+    id: string;
+    number: number;
+    status: InvoiceStatus;
+    totalBefore: number;
+    totalAfter: number;
+    refundAmount: number;
+    additionsAmount: number;
+    changesAdjust: number;
+    difference: number;
+    paidAmount: number;
+    dueAmount: number;
+    customer: { id: string; fullName: string } | null;
+  };
+  lines: AdjustResultLine[];
+  settlement: {
+    direction: "COLLECT" | "PAY" | "NONE";
+    amount: number;
+    method: "CASH" | "CARD" | "CHEQUE" | "CREDIT" | null;
+  };
 }
 
 export type QuotationStatus = "ACTIVE" | "CONVERTED" | "CANCELLED";
@@ -2013,11 +2316,78 @@ export interface Quotation {
     id: string;
     /** مکان اختیاری است — هنگام قیمت‌دادن هنوز لزومی ندارد قفسه مشخص باشد. */
     locationId?: string | null;
+    /** نامِ نمایشیِ قابل‌ویرایش — خالی یعنی نامِ خودِ کالا چاپ شود. */
+    label?: string | null;
     quantity: number;
     unitPrice: number;
     discount: number;
     product: { id: string; name: string; sku?: string | null; unit?: string | null };
   }[];
+}
+
+// طبق بخش ۱۱.۵ — پیش‌فاکتور سفید (برگه‌ی قیمت)
+export type BlankQuotationStatus = "OPEN" | "PRICED" | "CANCELLED" | "CONVERTED";
+
+/**
+ * یک قلمِ متنیِ برگه‌ی سفید.
+ *
+ * `text` جای نامِ کالا می‌نشیند و `product` تا لحظه‌ی وصل‌کردن نال است. `finalPrice`
+ * را مدیر می‌گذارد و `suggestedPrice` فقط پیشنهادِ گوشی است — در هیچ جمعی نمی‌آید.
+ */
+export interface BlankQuotationLine {
+  id: string;
+  text: string;
+  quantity: number;
+  suggestedPrice: number | null;
+  finalPrice: number | null;
+  /** نال یعنی «قیمت نخورده» — قفلِ اولِ تبدیل. */
+  pricedAt: string | null;
+  product: { id: string; name: string; sku?: string | null; unit?: string | null } | null;
+  locationId: string | null;
+  locationPath: string | null;
+  lineTotal: number;
+}
+
+export interface BlankQuotation {
+  id: string;
+  number: number;
+  status: BlankQuotationStatus;
+  /** «منقضی» وضعیت ذخیره‌شده نیست؛ سرور آن را از تاریخ حساب می‌کند. */
+  displayStatus: BlankQuotationStatus | "EXPIRED";
+  customerName: string | null;
+  note: string | null;
+  validUntil: string | null;
+  convertedInvoiceId: string | null;
+  createdAt: string;
+  user?: { id: string; fullName: string } | null;
+  lineCount: number;
+  /** تعداد ردیف‌های قیمت‌نخورده. */
+  unpricedCount: number;
+  /** تعداد ردیف‌هایی که به کالای واقعی وصل نشده‌اند. */
+  unlinkedCount: number;
+  total: number;
+  lines: BlankQuotationLine[];
+}
+
+/** یک کاندیدِ پیشنهادی برای وصل‌کردن قلمِ متنی به کالای واقعی. */
+export interface BlankSuggestionCandidate {
+  productId: string;
+  name: string;
+  sku: string | null;
+  unit: string | null;
+  salePrice: number | null;
+  totalStock: number;
+  locationId: string | null;
+  locationPath: string | null;
+}
+
+export interface BlankLineSuggestion {
+  lineId: string;
+  lineIndex: number;
+  text: string;
+  status: "LINKED" | "SUGGEST" | "NONE";
+  best: BlankSuggestionCandidate | null;
+  candidates: BlankSuggestionCandidate[];
 }
 
 export interface BackupConfig {
@@ -2113,6 +2483,9 @@ export interface LabelSettings {
   showName: boolean;
   showBarcodeText: boolean;
   cropMarks: boolean;
+  footerText: string | null;
+  /** عرض فیزیکی رول؛ بزرگ‌تر از widthMm = چند لیبل کنار هم (رول دوستونه). */
+  mediaWidthMm: number | null;
 }
 
 
@@ -2133,6 +2506,8 @@ export interface ProductPrice {
   purchasePrice: number | null;
   salePrice: number | null;
   wholesalePrice: number | null;
+  /** قیمتِ چهارم — عددِ آزادِ مدیر (چانه‌زنی/مشتری خاص). */
+  managerPrice?: number | null;
   createdAt: string;
 }
 
@@ -2275,3 +2650,195 @@ export interface BulkOnlineResult {
   affected: number;
   applied: boolean;
 }
+
+// =====================================================
+// سفارش‌های آنلاین (فروشگاه اینترنتی) — صفِ تحویلِ پنل
+// =====================================================
+
+export type OnlineOrderStatus =
+  | "PLACED"
+  | "PREPARING"
+  | "SHIPPED"
+  | "DELIVERED"
+  | "CANCELLED";
+
+export type OnlinePayMethod = "ON_DELIVERY" | "TRANSFER" | "GATEWAY";
+
+/** ردیفِ صف — GET /online-orders. */
+export interface OnlineOrderSummary {
+  id: string;
+  number: number;
+  status: OnlineOrderStatus;
+  total: number;
+  payMethod: OnlinePayMethod;
+  receiverName: string;
+  receiverPhone: string;
+  address: string;
+  createdAt: string;
+  invoiceId: string | null;
+  lineCount: number;
+}
+
+/** یک قلم سفارش. */
+export interface OnlineOrderLine {
+  productId: string;
+  productName: string;
+  unit: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+/** جزئیات — GET /online-orders/:id. */
+export interface OnlineOrderDetail {
+  id: string;
+  number: number;
+  status: OnlineOrderStatus;
+  subtotal: number;
+  shippingFee: number;
+  total: number;
+  payMethod: OnlinePayMethod;
+  receiverName: string;
+  receiverPhone: string;
+  address: string;
+  note: string | null;
+  rejectReason: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+  invoiceId: string | null;
+  warehouseId: string | null;
+  customerId: string | null;
+  lines: OnlineOrderLine[];
+}
+
+/** پاسخِ لغو — جزئیات + فاکتوری که باید دستی باطل شود. */
+export interface CancelOnlineOrderResult extends OnlineOrderDetail {
+  /** اگر پر باشد، این فاکتورِ داخلی هنوز باز است و باید جدا باطل شود. */
+  invoiceToCancel: string | null;
+}
+
+// =====================================================
+// دفتر روزنامه (Voucher) — سندِ خودکارِ پشتِ هر اکشن مالی
+// =====================================================
+
+export type VoucherSourceType =
+  | "SALE_INVOICE"
+  | "SALE_CANCEL"
+  | "RECEIPT"
+  | "SALE_RETURN"
+  | "SALE_CORRECTION"
+  | "PURCHASE_INVOICE"
+  | "PURCHASE_CANCEL"
+  | "CHEQUE_DEPOSIT"
+  | "CHEQUE_BOUNCED"
+  | "CHEQUE_CASHED"
+  | "CUSTOMER_PAYOUT"
+  | "PAYMENT_REVERSAL"
+  | "PAYMENT_RECOMPOSE";
+
+/** خطِ یک سند — مثبت = بدهکار، منفی = بستانکار. */
+export interface VoucherLineRow {
+  account: string;
+  /** برچسب فارسیِ حساب — از سرور می‌آید. */
+  accountLabel: string;
+  amount: number;
+  debit: number;
+  credit: number;
+  customerId: string | null;
+  note: string | null;
+}
+
+/** ردیفِ دفتر روزنامه — سرصفحه‌ی سند + خطوطش. */
+export interface VoucherRow {
+  id: string;
+  number: number;
+  sourceType: VoucherSourceType;
+  sourceId: string;
+  /** برچسب فارسیِ نوع سند — از سرور می‌آید. */
+  sourceLabel: string;
+  note: string | null;
+  userId: string | null;
+  createdAt: string;
+  /** پر = این سند معکوسِ سندِ دیگری است (ابطال). */
+  reversesVoucherId: string | null;
+  /**
+   * فاکتوری که این سند به آن برمی‌گردد — برای مرجوعی/اصلاحیه از سندِ خودشان
+   * حل شده (sourceId خودِ سندِ مرجوعی است نه فاکتور). برای فروش/ابطال = خودِ
+   * فاکتور؛ برای رسید/خرید null می‌ماند.
+   */
+  invoiceId: string | null;
+  lines: VoucherLineRow[];
+}
+
+/** پاسخِ GET /vouchers — صفحه‌بندی‌شده. */
+export interface VouchersResponse {
+  data: VoucherRow[];
+  meta: { total: number; page: number; limit: number };
+}
+
+/** پاسخِ GET /vouchers/by-invoice/:id — سندهایِ یک فاکتور به ترتیبِ زمان. */
+export type InvoiceVouchers = VoucherRow[];
+
+// =====================================================
+// اصلاح نحوهٔ پرداخت (تسویهٔ از نو)
+// =====================================================
+
+/**
+ * یک ردیفِ پرداختِ فاکتور.
+ *
+ * مبلغ می‌تواند **منفی** باشد: ردیفِ منفی یعنی تقسیمِ اشتباهِ قبلی خنثی شده.
+ * تاریخچه حذف نمی‌شود؛ فقط ردیفِ معکوس به آن اضافه می‌شود.
+ */
+export interface InvoicePaymentRow {
+  id: string;
+  method: PaymentMethod;
+  amount: number;
+  note: string | null;
+  createdAt: string;
+}
+
+/**
+ * وضعیتِ تسویهٔ فاکتور — خوراکِ پنلِ «اصلاح نحوهٔ پرداخت».
+ *
+ * `blockedReason` پیامِ آمادهٔ فارسی است: چرا نمی‌شود اصلاح کرد. پنل همان را
+ * نشان می‌دهد، پس کاربر هیچ‌وقت با یک دکمهٔ خاموشِ بی‌توضیح روبه‌رو نمی‌شود.
+ */
+export interface InvoiceSettlement {
+  invoice: {
+    id: string;
+    number: number;
+    status: InvoiceStatus;
+    total: number;
+    paidAmount: number;
+    dueAmount: number;
+    dueDate: string | null;
+    customerId: string | null;
+    customer: {
+      id: string;
+      firstName: string;
+      lastName: string | null;
+      fullName: string;
+    } | null;
+  };
+  payments: InvoicePaymentRow[];
+  /** جمعِ خالصِ هر روش — نقد/کارت/نسیه. */
+  byMethod: { method: PaymentMethod; amount: number }[];
+  /** نقدی که واقعاً گرفته شده (نقد + کارت). */
+  received: number;
+  credit: number;
+  canRecompose: boolean;
+  blockedReason: string | null;
+  /** فاکتور مشتری ندارد؛ برای نسیه‌کردن باید مشتری انتخاب شود. */
+  needsCustomer: boolean;
+  editableMethods: PaymentMethod[];
+}
+
+/** تقسیمِ نهاییِ پرداخت — همان چیزی که پنل می‌فرستد. */
+export interface RecomposePaymentsDto {
+  idempotencyKey: string;
+  reason?: string;
+  customerId?: string;
+  payments: { method: PaymentMethod; amount: number }[];
+}
+
+// =====================================================

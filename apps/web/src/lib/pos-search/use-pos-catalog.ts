@@ -23,6 +23,11 @@ export interface PosCatalog {
   count: number;
   /** Instant local search. Empty array until [ready]. */
   search: (query: string) => CatalogItem[];
+  /** Update a product's prices in the in-memory cache (after a POS save). */
+  updateProductPrices: (
+    productId: string,
+    patch: { salePrice?: number | null; managerPrice?: number | null },
+  ) => void;
 }
 
 /**
@@ -140,5 +145,27 @@ export function usePosCatalog(): PosCatalog {
     [ready, index],
   );
 
-  return { ready, count: state.byId.size, search };
+  /**
+   * به‌روزرسانیِ قیمت‌های یک کالا در کشِ محلی، بدونِ انتظارِ refresh.
+   *
+   * وقتی مدیر قیمتِ فروش یا قیمتِ مدیر را مستقیم در نتیجه‌ی جستجو عوض و ذخیره
+   * می‌کند، این همان لحظه عددِ ردیف را اصلاح می‌کند تا سرچِ محلی هم قیمتِ تازه
+   * را نشان دهد (وگرنه تا refresh بعدی یا ریلود، عددِ کهنه می‌ماند). cursor
+   * دست نمی‌خورد — چون این یک ویرایشِ محلی است، نه یک ردیفِ تازه‌ی sync؛ تغییرِ
+   * واقعی سرور هم در refresh بعدی از راهِ updatedAt می‌آید.
+   */
+  const updateProductPrices = useCallback(
+    (productId: string, patch: { salePrice?: number | null; managerPrice?: number | null }) => {
+      setState((prev) => {
+        const cur = prev.byId.get(productId);
+        if (!cur) return prev;
+        const byId = new Map(prev.byId);
+        byId.set(productId, { ...cur, ...patch });
+        return { byId, cursor: prev.cursor };
+      });
+    },
+    [],
+  );
+
+  return { ready, count: state.byId.size, search, updateProductPrices };
 }

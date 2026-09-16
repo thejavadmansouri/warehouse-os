@@ -79,6 +79,7 @@ const productSchema = z.object({
   purchasePrice: optionalNumber,
   salePrice: optionalNumber,
   wholesalePrice: optionalNumber,
+  managerPrice: optionalNumber,
   compareAtPrice: optionalNumber,
   minStock: optionalNumber,
   isActive: z.boolean(),
@@ -145,6 +146,7 @@ export function ProductFormDialog({
       purchasePrice: undefined,
       salePrice: undefined,
       wholesalePrice: undefined,
+      managerPrice: undefined,
       compareAtPrice: undefined,
       minStock: undefined,
       isActive: true,
@@ -173,6 +175,7 @@ export function ProductFormDialog({
             purchasePrice: initial.purchasePrice ?? undefined,
             salePrice: initial.salePrice ?? undefined,
             wholesalePrice: initial.wholesalePrice ?? undefined,
+            managerPrice: initial.managerPrice ?? undefined,
             compareAtPrice: initial.compareAtPrice ?? undefined,
             minStock: initial.minStock ?? undefined,
             isActive: initial.isActive ?? true,
@@ -300,6 +303,7 @@ export function ProductFormDialog({
       purchasePrice: values.purchasePrice ?? undefined,
       salePrice: values.salePrice ?? undefined,
       wholesalePrice: values.wholesalePrice ?? undefined,
+      managerPrice: values.managerPrice ?? undefined,
       compareAtPrice: values.compareAtPrice ?? undefined,
       minStock: values.minStock ?? undefined,
       isActive: values.isActive,
@@ -661,6 +665,25 @@ export function ProductFormDialog({
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>قیمت فروش ({unitLabel()})</FormLabel>
+                      <FormControl>
+                        <Input
+                          placeholder="0"
+                          min="0"
+                          {...numberFieldProps(field)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* قیمت مدیر — عددِ آزادِ مدیر (چانه‌زنی/مشتری خاص) */}
+                <FormField
+                  control={form.control}
+                  name="managerPrice"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>قیمت مدیر ({unitLabel()})</FormLabel>
                       <FormControl>
                         <Input
                           placeholder="0"

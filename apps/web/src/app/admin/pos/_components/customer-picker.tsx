@@ -45,7 +45,11 @@ export function CustomerPicker({
     return () => clearTimeout(t);
   }, [q]);
 
-  useEffect(() => {
+  /* با بسته‌شدنِ پنل، فرمِ «مشتری جدید» و جست‌وجو پاک می‌شود — تطبیقِ state
+     در رندر (به‌جای effect). */
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) {
       setQ("");
       setCreating(false);
@@ -54,7 +58,7 @@ export function CustomerPicker({
       setPhone("");
       setCategoryId("");
     }
-  }, [open]);
+  }
 
   /** دسته‌های فعال برای فرم «مشتری جدید». */
   const categories = useQuery({
@@ -69,8 +73,15 @@ export function CustomerPicker({
     enabled: open,
   });
 
-  // با تغییرِ نتایج، هایلایت به بالای لیست برگردد تا روی ردیفِ ناموجود نماند.
-  useEffect(() => setActive(0), [debounced, results.data]);
+  /* با تغییرِ عبارت یا نتایج، هایلایت به بالای لیست برگردد تا روی ردیفِ
+     ناموجود نماند — تطبیقِ state در رندر. */
+  const [prevDebounced, setPrevDebounced] = useState(debounced);
+  const [prevResults, setPrevResults] = useState(results.data);
+  if (debounced !== prevDebounced || results.data !== prevResults) {
+    setPrevDebounced(debounced);
+    setPrevResults(results.data);
+    setActive(0);
+  }
 
   const create = useMutation({
     mutationFn: () =>

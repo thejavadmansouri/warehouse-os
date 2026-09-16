@@ -24,6 +24,7 @@ export function OpenInvoices({
   warehouseId,
   onPick,
   onReturn,
+  onAdjust,
   onClose,
 }: {
   open: boolean;
@@ -32,6 +33,8 @@ export function OpenInvoices({
   onPick: (invoiceId: string) => void;
   /** همان فاکتور، به‌عنوان سندِ برگشت از فروش. */
   onReturn: (invoiceId: string) => void;
+  /** همان فاکتور در حالتِ یکپارچه: مرجوعی + قلم تازه + تصحیح قیمت. */
+  onAdjust: (invoiceId: string) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState("");
@@ -43,12 +46,21 @@ export function OpenInvoices({
     return () => clearTimeout(t);
   }, [q]);
 
-  useEffect(() => {
-    if (!open) return;
-    setQ("");
-    setDebounced("");
-    setRow(0);
-  }, [open]);
+  /*
+   * وقتی پنل دوباره باز می‌شود، از صفر شروع کن — نه اینکه آخرین جست‌وجو باقی
+   * بماند. این «تطبیقِ state در رندر» است (الگوی رسمیِ React برای همگام‌کردنِ
+   * state با تغییرِ prop)، نه یک effect: با effect، اولین رندرِ بازشده هنوز
+   * مقدارِ کهنه را می‌دید و یک رندرِ اضافه تولید می‌شد.
+   */
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
+    if (open) {
+      setQ("");
+      setDebounced("");
+      setRow(0);
+    }
+  }
 
   const list = useQuery({
     queryKey: ["pos-invoices-panel", warehouseId, debounced],
@@ -66,7 +78,13 @@ export function OpenInvoices({
 
   const rows = list.data?.data ?? [];
 
-  useEffect(() => setRow(0), [debounced]);
+  /* با عوض‌شدنِ عبارتِ جست‌وجو، ردیفِ انتخابی از نو شروع می‌شود — همان
+     الگویِ تطبیقِ state در رندر. */
+  const [prevDebounced, setPrevDebounced] = useState(debounced);
+  if (debounced !== prevDebounced) {
+    setPrevDebounced(debounced);
+    setRow(0);
+  }
 
   useEffect(() => {
     document
@@ -108,6 +126,7 @@ export function OpenInvoices({
             const inv = rows[row];
             if (!inv) return;
             if (e.altKey) onReturn(inv.id);
+            else if (e.ctrlKey || e.metaKey) onAdjust(inv.id);
             else onPick(inv.id);
             return;
           }
@@ -191,8 +210,9 @@ export function OpenInvoices({
         {(
           [
             ["↑↓", "حرکت"],
-            ["Enter", "ویرایش در همین صفحه"],
+            ["Enter", "ویرایش در همین صفحه (بدون حافظه)"],
             ["Alt+Enter", "برگشت از فروش"],
+            ["Ctrl+Enter", "ویرایش با حافظه — سابقه با برچسب دیده می‌شود"],
             ["Esc", "بستن"],
           ] as [string, string][]
         ).map(([k, label]) => (

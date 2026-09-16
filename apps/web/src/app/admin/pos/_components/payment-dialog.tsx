@@ -47,14 +47,21 @@ export function PaymentDialog({
   /** سررسیدِ دستی (ISO) — وقتی پر باشد بر مهلتِ روزشمار می‌چربد. */
   const [customDue, setCustomDue] = useState("");
 
-  // هر بار که باز می‌شود، پیش‌فرض «کل مبلغ نقد» — رایج‌ترین حالت پیشخوان.
-  useEffect(() => {
+  /*
+   * هر بار که باز می‌شود، پیش‌فرض «کل مبلغ نقد» — رایج‌ترین حالت پیشخوان.
+   * تطبیقِ state در رندر (به ازایِ باز شدن یا عوض‌شدنِ مبلغ) به‌جای effect.
+   */
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevTotal, setPrevTotal] = useState(total);
+  if (open !== prevOpen || total !== prevTotal) {
+    setPrevOpen(open);
+    setPrevTotal(total);
     if (open) {
       setRows([{ method: "CASH", amount: total }]);
       setCreditDays(null);
       setCustomDue("");
     }
-  }, [open, total]);
+  }
 
   const paid = rows
     .filter((r) => r.method !== "CREDIT")

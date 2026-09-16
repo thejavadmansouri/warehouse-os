@@ -56,6 +56,12 @@ function CurrencyBridge({ onConversionActive }: { onConversionActive: () => void
 }
 
 export function QueryProvider({ children }: { children: React.ReactNode }) {
+  /*
+   * تنظیمِ واحدِ پولِ پنل همیشه لازم است: این اپ فقط پنلِ مغازه است و سایتِ
+   * عمومی (`/shop`) به اپِ جداگانه‌ی `apps/site` منتقل شده. آنجا واحدِ پول از
+   * `ShopSettingsProvider` (endpoint عمومیِ `/shop/settings`) می‌آید؛ اینجا
+   * از `/shop-settings` کارکنان که endpointِ انبار است.
+   */
   const [client] = React.useState(
     () =>
       new QueryClient({

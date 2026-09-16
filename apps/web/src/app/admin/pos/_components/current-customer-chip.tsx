@@ -4,6 +4,8 @@ import { History, Lock, LockOpen, User, X } from "lucide-react";
 
 import { money, toFa } from "@/lib/format";
 import type { CustomerCategory } from "@/lib/types";
+import { balanceKind, BALANCE } from "@/lib/finance";
+import { balanceTextClass } from "@/components/finance-badges";
 import { CustomerCategoryBadge } from "@/components/customer-category-badge";
 
 /**
@@ -22,6 +24,7 @@ export function CurrentCustomerChip({
   primaryPhone,
   category,
   totalDue,
+  overdue = 0,
   todayCount,
   loading,
   locked,
@@ -36,6 +39,8 @@ export function CurrentCustomerChip({
   /** دسته‌ی مشتری — badge رنگی. اختیاری. */
   category?: CustomerCategory | null;
   totalDue: number;
+  /** بخشِ معوقِ مانده — اگر بیشتر از صفر باشد نشانِ قرمز «معوق» می‌گیرد. */
+  overdue?: number;
   todayCount: number;
   loading: boolean;
   /** آیا مشتری به این تب قفل است (بعد از ثبت می‌ماند). */
@@ -104,7 +109,7 @@ export function CurrentCustomerChip({
         </div>
 
         {/* خط دوم: شماره + امروز + مانده — شماره همانی است که اول کوچک می‌شود تا
-            «امروز» و «مانده» تا آخرین لحظه دیده شوند. */}
+            «امروز» و «مانده» تا آخرین لحظه دیده شوند. واژه و رنگ از دیکشنری مالی. */}
         <div className="flex min-w-0 items-center gap-2 text-[11px] text-muted-foreground tabular-nums">
           {primaryPhone && (
             <span className="min-w-0 flex-1 truncate" dir="ltr">
@@ -114,15 +119,21 @@ export function CurrentCustomerChip({
           <span className="whitespace-nowrap">
             امروز: {loading ? "…" : toFa(todayCount)} فاکتور
           </span>
+          {overdue > 0 && (
+            <span
+              className="whitespace-nowrap rounded-full bg-destructive/10 px-1.5 font-semibold text-destructive"
+              title="بخشی از بدهی از سررسید گذشته است"
+            >
+              معوق
+            </span>
+          )}
           <span
-            className={`whitespace-nowrap font-semibold ${
-              totalDue > 0
-                ? "text-amber-600 dark:text-amber-400"
-                : "text-emerald-600 dark:text-emerald-400"
-            }`}
-            title={totalDue > 0 ? "مانده‌ی حساب" : "بستانکار"}
+            className={`whitespace-nowrap font-semibold ${balanceTextClass(totalDue)}`}
+            title="ماندهٔ حساب — بدهکار کهربایی، طلبکار سبز، تسویه خاکستری"
           >
-            {money(totalDue)}
+            {totalDue !== 0
+              ? `${BALANCE[balanceKind(totalDue)].label} ${money(totalDue)}`
+              : "تسویه"}
           </span>
         </div>
       </div>

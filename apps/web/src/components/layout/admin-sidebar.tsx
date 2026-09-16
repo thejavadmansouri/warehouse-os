@@ -60,11 +60,7 @@ function NavGroup({
   const Icon = item.icon;
   const children = item.children ?? [];
   const anyActive = children.some((c) => c.href && isActive(c.href));
-  const [open, setOpen] = React.useState(anyActive);
-
-  React.useEffect(() => {
-    if (anyActive) setOpen(true);
-  }, [anyActive]);
+  const [open, setOpen] = React.useState(() => anyActive);
 
   return (
     <div>
@@ -163,11 +159,7 @@ function SidebarSection({
       (it.href ? isActive(it.href) : false) ||
       (it.children?.some((c) => (c.href ? isActive(c.href) : false)) ?? false)
   );
-  const [open, setOpen] = React.useState(containsActive);
-
-  React.useEffect(() => {
-    if (containsActive) setOpen(true);
-  }, [containsActive]);
+  const [open, setOpen] = React.useState(() => containsActive);
 
   /*
    * بخشِ سنجاق‌شده سرتیتر ندارد و جمع نمی‌شود.
@@ -253,7 +245,7 @@ export function AdminSidebar({
 }) {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
-  const sections = filterNavByRole(NAV_SECTIONS, user?.role);
+  const sections = filterNavByRole(NAV_SECTIONS, user?.role, user?.canManageSite);
 
   const isActive = (href: string) =>
     href === "/admin"
@@ -289,9 +281,9 @@ export function AdminSidebar({
       {/* ناوبری */}
       <ScrollArea className="flex-1 px-2 py-3">
         <nav className="flex flex-col gap-3">
-          {sections.map((section) => (
+          {sections.map((section, index) => (
             <SidebarSection
-              key={section.title}
+              key={`${section.title || "pinned"}-${index}`}
               section={section}
               collapsed={collapsed}
               isActive={isActive}

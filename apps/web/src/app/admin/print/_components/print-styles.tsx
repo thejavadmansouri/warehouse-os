@@ -36,17 +36,22 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           font-weight: 500;
           box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12);
         }
+        /*
+          چیدمانِ فشرده: حاشیه و فونت جمع‌وجور شد تا ۲۰ تا ۳۰ قلم روی یک صفحه
+          بنشیند. هر ۰٫۵px فونت یا ۰٫۲mm پدینگ در ردیفِ جدول ضرب می‌شود — روی
+          فاکتورِ بلند، همین تفاوتِ کوچک یک صفحه‌ی کامل صرفه‌جویی می‌کند.
+        */
         .sheet.a4 {
           width: 210mm;
           min-height: 297mm;
-          padding: 14mm;
-          font-size: 13px;
+          padding: 8mm;
+          font-size: 11px;
         }
         .sheet.a5 {
           width: 148mm;
           min-height: 210mm;
-          padding: 10mm;
-          font-size: 11.5px;
+          padding: 7mm;
+          font-size: 10px;
         }
 
         .void {
@@ -71,29 +76,30 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           justify-content: space-between;
           align-items: flex-start;
           gap: 6mm;
-          border-bottom: 2px solid #000;
-          padding-bottom: 2.5mm;
+          border-bottom: 1.5px solid #000;
+          padding-bottom: 1.8mm;
         }
         .title {
-          font-size: 1.25em;
+          font-size: 1.05em;
           font-weight: 800;
         }
         .head-meta {
           text-align: end;
-          line-height: 1.9;
+          line-height: 1.45;
         }
 
         .items {
           width: 100%;
           border-collapse: collapse;
-          margin-top: 3mm;
+          margin-top: 2mm;
         }
         .items th,
         .items td {
           border: 1px solid #94a3b8;
-          padding: 1.6mm 2mm;
+          padding: 0.9mm 1.4mm;
           text-align: start;
           vertical-align: top;
+          line-height: 1.35;
         }
         .items th {
           background: #e2e8f0;
@@ -109,31 +115,32 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           width: 24mm;
         }
         .sku {
-          font-size: 0.85em;
+          font-size: 0.8em;
         }
         /* توضیحِ قلم — خطِ دوم، ریزتر و کم‌رنگ‌تر از نامِ کالا. */
         .line-note {
-          font-size: 0.85em;
+          font-size: 0.8em;
           color: #475569;
-          margin-top: 0.6mm;
+          margin-top: 0.3mm;
         }
 
         .totals {
           display: flex;
-          margin-top: 3mm;
+          margin-top: 2mm;
         }
         .totals table {
           border-collapse: collapse;
-          min-width: 70mm;
+          min-width: 62mm;
         }
         .totals td {
-          padding: 1.2mm 3mm;
+          padding: 0.7mm 2mm;
+          line-height: 1.35;
         }
         .grand td {
-          border-top: 2px solid #000;
-          font-size: 1.25em;
+          border-top: 1.5px solid #000;
+          font-size: 1.05em;
           font-weight: 800;
-          padding-top: 2mm;
+          padding-top: 1mm;
         }
         .due td {
           color: #b45309;
@@ -151,22 +158,22 @@ export function PrintStyles({ size }: { size: PaperSize }) {
           justify-content: space-between;
           align-items: flex-end;
           gap: 6mm;
-          margin-top: 4mm;
+          margin-top: 2.5mm;
         }
         .foot-col {
           flex: 1;
           min-width: 0;
-          line-height: 1.8;
+          line-height: 1.4;
         }
         .foot-sign {
           display: flex;
-          gap: 6mm;
+          gap: 5mm;
           flex-shrink: 0;
         }
         .foot-sign div {
-          width: 34mm;
+          width: 28mm;
           border-top: 1px dotted #64748b;
-          padding-top: 1.5mm;
+          padding-top: 1mm;
           text-align: center;
         }
 

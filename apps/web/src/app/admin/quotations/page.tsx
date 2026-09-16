@@ -42,6 +42,7 @@ import {
   getQuotations,
   updateQuotation,
 } from "@/lib/api";
+import { useAuthStore } from "@/lib/auth-store";
 import { ApiException } from "@/lib/api-error-messages";
 import { amount, faDate, faTime, money, parseNum, qty, toFa } from "@/lib/format";
 import { uuid } from "@/lib/uuid";
@@ -49,6 +50,7 @@ import type { Customer, LocateResult, PaymentInput, Quotation } from "@/lib/type
 import { CustomerPicker } from "../pos/_components/customer-picker";
 import { PaymentDialog } from "../pos/_components/payment-dialog";
 import { ProductSearch } from "../pos/_components/product-search";
+import { BlankQuotationsPanel } from "./_components/blank-quotations";
 
 const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
 const TD = "px-2 py-1.5 whitespace-nowrap";
@@ -71,6 +73,7 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
 type EditLine = {
   key: string;
   productId: string;
+  /** نامِ نمایشی — قابل‌ویرایش؛ خالی یعنی نامِ خودِ کالا چاپ شود. */
   productName: string;
   unit: string;
   quantity: number;
@@ -93,6 +96,15 @@ function remaining(minutes: number): string {
 export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const router = useRouter();
   const qc = useQueryClient();
+  /**
+   * دو سطلِ متفاوت در یک صفحه.
+   *
+   * «سفید» همان برگه‌ی قیمتی است که کارگر از گوشی با متنِ آزاد می‌سازد؛
+   * دیتای جدا دارد و جریانِ کاری جدا (قیمت‌گذاری مدیر)، پس تبِ وضعیت نمی‌تواند
+   * نشانش دهد و باید کل فهرست عوض شود.
+   */
+  const isManager = useAuthStore((s) => s.hasRole)("ADMIN", "MANAGER");
+  const [bucket, setBucket] = React.useState<"QUOTATION" | "BLANK">("QUOTATION");
   const [tab, setTab] = React.useState("ACTIVE");
   const [row, setRow] = React.useState(0);
   const [openId, setOpenId] = React.useState<string | null>(null);
@@ -114,6 +126,8 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
    * Customer = مشتریِ تازه انتخاب‌شده
    */
   const [editCustomer, setEditCustomer] = React.useState<Customer | null | undefined>(undefined);
+  /** نامِ آزادِ مشتری (تایپ مستقیم) — مثل محسن‌فاکتور. */
+  const [editCustomerName, setEditCustomerName] = React.useState("");
   const [editLines, setEditLines] = React.useState<EditLine[]>([]);
 
   const list = useQuery({
@@ -174,7 +188,8 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       q.lines?.map((l) => ({
         key: uuid(),
         productId: l.product.id,
-        productName: l.product.name,
+        // نامِ نمایشیِ ذخیره‌شده اگر هست، وگرنه نامِ خودِ کالا.
+        productName: l.label?.trim() || l.product.name,
         unit: l.product.unit ?? "عدد",
         quantity: l.quantity,
         unitPrice: l.unitPrice,
@@ -182,6 +197,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       })) ?? []
     );
     setEditCustomer(undefined);
+    setEditCustomerName("");
     setEditing(true);
   };
 
@@ -223,15 +239,29 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const saveEdit = useMutation({
     mutationFn: () =>
       updateQuotation(q!.id, {
+        /*
+         * مشتری: یا پیوندِ انتخاب‌شده، یا نامِ آزادِ تایپ‌شده. وقتی اسم را
+         * مستقیم تایپ کرده، پیوندی نمی‌فرستیم تا مشتریِ بی‌شماره ساخته نشود.
+         */
         customerId:
-          editCustomer === undefined ? q!.customerId ?? null : editCustomer?.id ?? null,
+          editCustomerName.trim()
+            ? null
+            : editCustomer === undefined
+              ? q!.customerId ?? null
+              : editCustomer?.id ?? null,
+        customerName: editCustomerName.trim() || undefined,
         discount: q!.discount,
-        lines: editLines.map((l) => ({
-          productId: l.productId,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          discount: l.discount,
-        })),
+        lines: editLines.map((l) => {
+          const name = l.productName.trim();
+          return {
+            productId: l.productId,
+            // نامِ ویرایش‌شده اگر با نامِ خودِ کالا فرق دارد؛ خالی یعنی نامِ کالا.
+            ...(name ? { label: name } : {}),
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            discount: l.discount,
+          };
+        }),
       }),
     onSuccess: () => {
       toast.success("پیش‌فاکتور ویرایش شد");
@@ -250,6 +280,43 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   }, [row, rows.length]);
 
   React.useEffect(() => setRow(0), [tab]);
+
+  /*
+   * قیمت‌گذاری کارِ مدیر است (روت‌های سرور هم همین را می‌گویند)، پس سطلِ
+   * «برگه‌ی سفید» برای فروشنده هم دیده نمی‌شود: تبِ بازِ بی‌اجازه فقط یک خطای
+   * ۴۰۳ به فروشنده نشان می‌دهد و او فکر می‌کند سیستم خراب است.
+   */
+  const bucketSwitch = !isManager ? null : (
+    <div className="flex shrink-0 overflow-hidden rounded-md border text-xs">
+      {([
+        ["QUOTATION", "پیش‌فاکتور"],
+        ["BLANK", "برگه‌ی سفید"],
+      ] as const).map(([id, label]) => (
+        <button
+          key={id}
+          type="button"
+          onClick={() => setBucket(id)}
+          className={`px-3 py-1.5 ${
+            bucket === id ? "bg-primary text-primary-foreground" : "bg-background"
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  /* برگه‌های سفید فهرست و دیالوگ خودشان را دارند؛ فقط نوارِ انتخاب مشترک است. */
+  if (bucket === "BLANK") {
+    return (
+      <div
+        className={`flex flex-col ${embedded ? "min-h-0 flex-1" : "h-[calc(100vh-2.5rem)]"}`}
+      >
+        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">{bucketSwitch}</div>
+        <BlankQuotationsPanel />
+      </div>
+    );
+  }
 
   return (
     /* همان الگوی بقیه‌ی فهرست‌ها: یک سطر فیلتر، یک جدول، یک نوار کلید. */
@@ -275,6 +342,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       }}
     >
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
+        {bucketSwitch}
         <select
           value={tab}
           onChange={(e) => setTab(e.target.value)}
@@ -380,27 +448,49 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
             <LoadingState />
           ) : editing ? (
             <div className="space-y-4">
-              {/* مشتری — انتساب / تغییر / حذف */}
-              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
-                <div className="min-w-0">
+              {/* مشتری — تایپ آزاد (مثل محسن‌فاکتور) یا انتخاب از لیست */}
+              <div className="rounded-lg border p-3">
+                <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">مشتری</p>
-                  <p className="truncate font-medium">
-                    {editCustomer === undefined
-                      ? q.customerName ?? "بدون مشتری"
-                      : editCustomer?.fullName ?? "بدون مشتری"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setShowCustomerPicker(true)}>
-                    <UserRound className="size-4" />
-                    {q.customerName || editCustomer ? "تغییر" : "انتساب"}
-                  </Button>
-                  {(q.customerName || editCustomer) && (
-                    <Button variant="ghost" size="sm" onClick={() => setEditCustomer(null)}>
-                      حذف
+                  <div className="flex shrink-0 gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setShowCustomerPicker(true)}>
+                      <UserRound className="size-4" />
+                      {editCustomerName.trim()
+                        ? "انتخاب از لیست"
+                        : q.customerName || editCustomer
+                          ? "تغییر"
+                          : "انتساب"}
                     </Button>
-                  )}
+                    {(q.customerName || editCustomer || editCustomerName.trim()) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditCustomer(null);
+                          setEditCustomerName("");
+                        }}
+                      >
+                        حذف
+                      </Button>
+                    )}
+                  </div>
                 </div>
+                <Input
+                  dir="rtl"
+                  className="mt-2 h-9"
+                  placeholder="نام مشتری را تایپ کنید…"
+                  value={
+                    editCustomerName
+                      ? editCustomerName
+                      : editCustomer === undefined
+                        ? q.customerName ?? ""
+                        : editCustomer?.fullName ?? ""
+                  }
+                  onChange={(e) => {
+                    setEditCustomerName(e.target.value);
+                    if (e.target.value.trim()) setEditCustomer(null);
+                  }}
+                />
               </div>
 
               {/* اقلام — کم/زیاد/حذف */}
@@ -418,7 +508,15 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
                   <tbody>
                     {editLines.map((l, i) => (
                       <tr key={l.key} className="border-t">
-                        <td className="p-2 font-medium">{l.productName}</td>
+                        <td className="p-2">
+                          {/* نامِ قابل‌ویرایش — مثل محسن‌فاکتور: هر قلم را می‌شود عوض کرد. */}
+                          <Input
+                            dir="rtl"
+                            className="h-8 w-full min-w-40 text-sm font-medium"
+                            value={l.productName}
+                            onChange={(e) => patchEditLine(i, { productName: e.target.value })}
+                          />
+                        </td>
                         <td className="p-2">
                           <Input
                             dir="ltr"
@@ -509,7 +607,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
                     {q.lines?.map((l) => (
                       <TableRow key={l.id}>
                         <TableCell className="max-w-[20rem] truncate font-medium">
-                          {l.product.name}
+                          {l.label?.trim() || l.product.name}
                         </TableCell>
                         <TableCell className="text-center tabular-nums">{qty(l.quantity)}</TableCell>
                         <TableCell className="tabular-nums">{money(l.unitPrice)}</TableCell>
@@ -618,7 +716,11 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       {/* انتساب/تغییر مشتری در حالت ویرایش */}
       <CustomerPicker
         open={showCustomerPicker}
-        onPick={(c) => { setEditCustomer(c); setShowCustomerPicker(false); }}
+        onPick={(c) => {
+          setEditCustomer(c);
+          setEditCustomerName(""); // انتخاب از لیست، نامِ آزاد را پاک می‌کند.
+          setShowCustomerPicker(false);
+        }}
         onClose={() => setShowCustomerPicker(false)}
       />
 

@@ -40,9 +40,12 @@ export function OpenQuotations({
 
   const rows = list.data?.data ?? [];
 
-  useEffect(() => {
+  /* با بازشدن، ردیف به اول می‌رود — تطبیقِ state در رندر. */
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) setRow(0);
-  }, [open]);
+  }
 
   useEffect(() => {
     document

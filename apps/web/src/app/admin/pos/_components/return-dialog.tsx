@@ -122,8 +122,8 @@ export function ReturnDialog({
 
   const nothingReturnable =
     !data.isLoading && lines.every((l) => l.returnable <= 0);
-  const canSubmit =
-    selectedCount > 0 && reason.trim().length > 0 && !submit.isPending;
+  /* دلیل اختیاری است — مرجوعی نباید به تایپِ دلیل گره بخورد. */
+  const canSubmit = selectedCount > 0 && !submit.isPending;
 
   function setQty(saleLogId: string, raw: string, max: number) {
     // ارقام فارسی/عربی اول به لاتین تبدیل شوند؛ وگرنه `\d` (که فقط 0-9 لاتین است)
@@ -299,7 +299,7 @@ export function ReturnDialog({
 
                   <div className="flex flex-col gap-1">
                     <label className="text-xs text-muted-foreground">
-                      دلیل مرجوعی (اجباری)
+                      دلیل مرجوعی (اختیاری)
                     </label>
                     <Input
                       value={reason}

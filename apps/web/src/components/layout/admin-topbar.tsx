@@ -28,6 +28,7 @@ import { ReadabilityToggle } from "./readability-toggle";
 import { cn } from "@/lib/utils";
 import { LiveClock } from "@/components/live-clock";
 import { NotificationBell } from "@/components/notification-bell";
+import { SiteOrdersBell } from "@/components/site-orders-bell";
 import { useAuthStore } from "@/lib/auth-store";
 import { logoutServer } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/format";
@@ -66,6 +67,7 @@ export function AdminTopbar({
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const canManageSite = user?.canManageSite === true;
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   /*
@@ -137,6 +139,12 @@ export function AdminTopbar({
       */}
 
       <LiveClock />
+
+      {/*
+        زنگِ سفارشِ اینترنتی — فقط برای دارندگانِ `canManageSite` و فقط در
+        صفحه‌هایِ غیر از صندوق. خودِ صندوق هیچ ردی از سایت نمی‌گیرد.
+      */}
+      {!isPos && canManageSite && <SiteOrdersBell />}
 
       <NotificationBell />
 

@@ -13,7 +13,7 @@ import {
   Ban, Check, ChevronLeft, ChevronRight, CreditCard, Eye, FileClock, FilePlus,
   FileSpreadsheet, MessageSquare, Minus, Package, Percent, Plus, Printer,
   ClipboardList, FileSearch, Keyboard, PackagePlus, PackageX, PenLine, ReceiptText,
-  Search, Send, User, Wallet, type LucideIcon,
+  Repeat, Search, Send, User, Wallet, type LucideIcon,
 } from "lucide-react";
 
 export type CommandId =
@@ -22,7 +22,7 @@ export type CommandId =
   | "party" | "ledger" | "kardex"
   | "print" | "preview" | "excel" | "sms"
   | "dispatch" | "workTasks" | "addProduct" | "shortage"
-  | "quote" | "pay" | "commit" | "void"
+  | "quote" | "swap" | "pay" | "commit" | "void"
   | "help";
 
 export type CommandGroup =
@@ -133,6 +133,12 @@ export const COMMANDS: CommandSpec[] = [
 
   { id: "quote",  group: "ثبت", icon: FileClock, label: "پیش‌فاکتور", keyLabel: "F8",
     match: (e) => e.key === "F8" },
+  /*
+   * تعویض — برگشت از فاکتور(های) قبلیِ همین مشتری + فروشِ نو در یک ثبت.
+   * به مشتری وابسته است؛ صفحه‌ها وقتی مشتری انتخاب نشده خاموشش می‌کنند.
+   */
+  { id: "swap",   group: "ثبت", icon: Repeat, label: "تعویض (برگشت+خرید)", keyLabel: "F10",
+    match: (e) => e.key === "F10" },
   { id: "pay",    group: "ثبت", icon: CreditCard, label: "پرداخت",  keyLabel: "F7",
     match: (e) => e.key === "F7" },
   { id: "commit", group: "ثبت", icon: Check, label: "ثبت سند", keyLabel: "F2", primary: true,

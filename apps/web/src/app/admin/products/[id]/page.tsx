@@ -40,6 +40,7 @@ import { ProductFormDialog } from "../_components/product-form-dialog";
 import { ProductKardex } from "../_components/product-kardex";
 import { ProductStock } from "../_components/product-stock";
 import { ProductPrices } from "../_components/product-prices";
+import { ProductPriceStrip } from "../_components/product-price-strip";
 import { ProductBarcodes } from "../_components/product-barcodes";
 
 import { Button } from "@/components/ui/button";
@@ -245,7 +246,10 @@ export default function ProductDetailPage() {
         </TabsContent>
 
         <TabsContent value="kardex" className="mt-4">
-          <ProductKardex productId={product.id} />
+          <div className="mb-4">
+            <ProductPriceStrip productId={product.id} />
+          </div>
+          <ProductKardex productId={product.id} canEdit={canEdit} />
         </TabsContent>
 
         <TabsContent value="prices" className="mt-4">

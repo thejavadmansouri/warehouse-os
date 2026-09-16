@@ -9,7 +9,8 @@
  *
  * ⚠️ دریافت وجه عمداً اینجاست با اینکه کالا جابه‌جا نمی‌کند: از نگاهِ کسی که
  * دنبال یک مشتری می‌گردد، رسیدِ دریافت هم یکی از همان اسناد است. جدا نگه‌داشتنش
- * فقط یعنی یک جای دیگر هم باید بگردد.
+ * فقط یعنی یک جای دیگر هم باید بگردد. پرداخت به مشتری هم همین‌طور — قرینه‌ی
+ * دریافت با جهتِ معکوس.
  *
  * نقش‌ها روی تب‌ها اعمال می‌شوند: فروشنده فاکتور و پیش‌فاکتور را می‌بیند ولی
  * مرجوعی و دریافت را نه. تبی که اجازه‌اش نیست اصلاً رندر نمی‌شود.
@@ -24,6 +25,7 @@ import { InvoicesPanel } from "../invoices/page";
 import { QuotationsPanel } from "../quotations/page";
 import { ReturnsPanel } from "../returns/page";
 import { ReceiptsPanel } from "../receipts/page";
+import { PayoutsPanel } from "../payouts/page";
 
 export default function DocumentsPage() {
   const hasRole = useAuthStore((s) => s.hasRole);
@@ -40,6 +42,7 @@ export default function DocumentsPage() {
         <TabsTrigger value="quotations">پیش‌فاکتورها</TabsTrigger>
         {isManager && <TabsTrigger value="returns">مرجوعی‌ها</TabsTrigger>}
         {isManager && <TabsTrigger value="receipts">دریافت‌ها</TabsTrigger>}
+        {isManager && <TabsTrigger value="payouts">پرداخت‌ها</TabsTrigger>}
       </TabsList>
 
       {/* هر تب تمامِ ارتفاعِ باقی‌مانده را می‌گیرد — جدول باید تا پایین برود. */}
@@ -60,6 +63,12 @@ export default function DocumentsPage() {
       {isManager && (
         <TabsContent value="receipts" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
           <ReceiptsPanel embedded />
+        </TabsContent>
+      )}
+
+      {isManager && (
+        <TabsContent value="payouts" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+          <PayoutsPanel embedded />
         </TabsContent>
       )}
     </Tabs>

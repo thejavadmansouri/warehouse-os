@@ -12,6 +12,10 @@ import * as T from "./types";
  */
 const API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? "3000";
 
+/** نشانگر محیط برای تشخیص نسخه توسعه از نسخه نصب‌شده. */
+export const APP_ENV = process.env.NODE_ENV === "development" ? "development" : "production";
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.2.1";
+
 /**
  * آدرس API — **در زمان اجرا** از خودِ مرورگر گرفته می‌شود، نه از build.
  *
@@ -244,6 +248,41 @@ export function assetUrl(path?: string | null): string {
   return `${apiUrl()}/${path}`;
 }
 
+// GET /uploads/photo/:assetId — عکسِ انبار (گرفته‌شده با گوشی) پشت JwtAuthGuard
+// است و نمی‌توان آن را مستقیم در <img> گذاشت؛ پس با توکن fetch و blob می‌کنیم و
+// یک object-URL برمی‌گردانیم. برای تامب‌نیل variant=thumb ارسال می‌شود.
+// نتیجه را در cache نگه می‌داریم تا هر عکس در هر نشست فقط یک‌بار دانلود شود.
+const assetImageCache = new Map<string, string>();
+
+export async function getAssetImageUrl(
+  assetId: string,
+  variant: "thumb" | "full" = "thumb"
+): Promise<string> {
+  const key = `${assetId}:${variant}`;
+  const cached = assetImageCache.get(key);
+  if (cached) return cached;
+
+  const token = useAuthStore.getState().token;
+  const res = await fetch(
+    `${apiUrl()}/uploads/photo/${assetId}?variant=${variant}`,
+    {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+    }
+  );
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  assetImageCache.set(key, url);
+  return url;
+}
+
 // =====================================================
 // ۴. احراز هویت
 // =====================================================
@@ -404,6 +443,7 @@ export interface ProductLabelPrintOptions {
   showName?: boolean;
   showBarcodeText?: boolean;
   cropMarks?: boolean;
+  footerText?: string;
 }
 export async function printProductLabelsPdf(
   items: { productId: string; quantity: number }[],
@@ -462,6 +502,95 @@ export async function printAllStockLabelsPdf(
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+// POST /labels/roll-print — PDF رول حرارتی: هر صفحه = یک تکه‌ی رول
+// (عرض رول × ارتفاع لیبل) با چند لیبل کنار هم. items خالی = کل موجودی.
+// چون ابعادِ صفحه در ابعادِ رول است (نه A4)، به‌جای باز شدن در تب،
+// مستقیم به‌صورت فایل دانلود می‌شود تا مرورگر اندازه‌اش را عوض نکند.
+export interface RollPrintOptions {
+  items?: { productId: string; quantity: number }[];
+  widthMm?: number;
+  heightMm?: number;
+  mediaWidthMm?: number | null;
+  showName?: boolean;
+  showBarcodeText?: boolean;
+  footerText?: string;
+}
+export async function downloadRollLabelsPdf(
+  opts: RollPrintOptions = {},
+  fileName = "kardo-roll-labels.pdf"
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(`${apiUrl()}/labels/roll-print`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+/*
+ * PDF رول حرارتیِ لیبل قفسه — همان منطقِ دانلودِ رولِ کالا ولی برای موقعیت‌ها:
+ * هر صفحه = یک تکه‌ی رول (عرض رول × ارتفاع لیبل) با چند لیبلِ کیوآر-محور کنار
+ * هم. چون صفحه در ابعادِ رول است، به‌صورت فایل دانلود می‌شود نه تب — تا
+ * مرورگر اندازه‌اش را عوض نکند.
+ */
+export interface RollLocationPrintOptions {
+  ids: string[];
+  widthMm?: number;
+  heightMm?: number;
+  mediaWidthMm?: number | null;
+}
+export async function downloadRollLocationLabelsPdf(
+  opts: RollLocationPrintOptions,
+  fileName = "kardo-roll-locations.pdf"
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(`${apiUrl()}/labels/location/roll-print`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
 // طبق بخش ۶.۳ — POST /products
 export function createProduct(dto: T.CreateProductDto): Promise<T.Product> {
   return apiFetch<T.Product>("/products", { method: "POST", body: dto });
@@ -498,6 +627,18 @@ export function uploadProductImage(
   );
 }
 
+// POST /uploads/product/:productId/from-asset/:assetId — عکسِ گرفته‌شده در
+// کاردکس را «تصویر محصول» می‌کند (بک‌اند کپیِ مستقل در پوشه‌ی عمومی می‌سازد).
+export function setProductImageFromAsset(
+  productId: string,
+  assetId: string
+): Promise<unknown> {
+  return apiFetch<unknown>(
+    `/uploads/product/${encodeURIComponent(productId)}/from-asset/${encodeURIComponent(assetId)}`,
+    { method: "POST" }
+  );
+}
+
 // =====================================================
 // ۶.۴. برندها
 // =====================================================
@@ -530,7 +671,7 @@ export function getProductPrices(id: string): Promise<T.ProductPrice[]> {
 
 export function setProductPrice(
   id: string,
-  dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number }
+  dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number; managerPrice?: number }
 ): Promise<T.ProductPrice> {
   return apiFetch<T.ProductPrice>(`/products/${encodeURIComponent(id)}/prices`, {
     method: "POST",
@@ -972,6 +1113,18 @@ export function updateUserPassword(
   });
 }
 
+// طبق بخش ۶.۱۰ — PATCH /users/:id/site-access
+/** روشن/خاموش کردنِ دسترسیِ کاربر به فروشگاه اینترنتی. فقط ADMIN/MANAGER. */
+export function setUserSiteAccess(
+  id: string,
+  canManageSite: boolean
+): Promise<T.User> {
+  return apiFetch<T.User>(`/users/${encodeURIComponent(id)}/site-access`, {
+    method: "PATCH",
+    body: { canManageSite },
+  });
+}
+
 // =====================================================
 // ۶.۱۲. کاتالوگ قطعات
 // =====================================================
@@ -1068,6 +1221,38 @@ export function bulkLocationLabels(
     method: "POST",
     body: { ids },
   });
+}
+
+// POST /labels/location/half-sheet/print — برگهٔ نیم‌برگِ لیبلِ قفسه.
+// هر لیبل دقیقاً نیمی از کاغذ (A5 → دو A6). خروجی صفحهٔ مستقل HTML است که
+// در تبِ نو باز می‌شود و اندازهٔ کاغذ را درست رعایت می‌کند — برخلاف چاپِ
+// داخلِ دیالوگ که لیبلِ کوچکِ وسطِ برگه می‌داد.
+export type HalfSheetPaper = "A4" | "A5" | "A6";
+export async function printLocationHalfSheetLabels(
+  ids: string[],
+  opts: { paper?: HalfSheetPaper; cutGuide?: boolean } = {}
+): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(`${apiUrl()}/labels/location/half-sheet/print`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify({ ids, ...opts }),
+  });
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 // طبق بخش الف — POST /labels/product/bulk
@@ -1239,6 +1424,11 @@ export function cancelInvoice(id: string, reason: string): Promise<T.Invoice> {
   });
 }
 
+// POST /sales/net — سبدِ خالص: برگشت از چند فاکتور + فروشِ نو در یک تراکنشِ اتمیک.
+export function createNetSale(dto: T.CreateNetSaleDto): Promise<T.NetSaleResult> {
+  return apiFetch<T.NetSaleResult>("/sales/net", { method: "POST", body: dto });
+}
+
 // ----- برگشت از فروش (مرجوعی) -----
 
 /** ردیف‌های قابل‌برگشتِ یک فاکتور — فروخته، مرجوعیِ قبلی، و قابل‌برگشت هر قلم. */
@@ -1301,6 +1491,82 @@ export function updateInvoiceLineNotes(
 
 export function createCorrection(dto: T.CreateCorrectionDto): Promise<T.SaleCorrection> {
   return apiFetch<T.SaleCorrection>("/sales/corrections", { method: "POST", body: dto });
+}
+
+// ----- عملیاتِ یکپارچه (adjust) -----
+
+/** ردیف‌های قابلِ ویرایش برای حالتِ یکپارچه — سقفِ برگشت و تعداد/قیمتِ فعلی. */
+export function getAdjustableLines(invoiceId: string): Promise<T.AdjustableInvoice> {
+  return apiFetch<T.AdjustableInvoice>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/adjustable`
+  );
+}
+
+/**
+ * ثبتِ عملیاتِ یکپارچه — مرجوعی + قلمِ تازه + تصحیح + تسویه، همه در یک
+ * تراکنشِ اتمیک. retry با همان idempotencyKey تکراری نمی‌سازد.
+ */
+export function createAdjust(
+  invoiceId: string,
+  dto: T.CreateAdjustDto
+): Promise<T.AdjustResult> {
+  return apiFetch<T.AdjustResult>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/adjust`,
+    { method: "POST", body: dto }
+  );
+}
+
+/**
+ * وضعیتِ تسویهٔ فاکتور — پایه‌ی پنلِ «اصلاح نحوهٔ پرداخت».
+ *
+ * شاملِ تقسیمِ فعلیِ پرداخت‌ها، مبلغِ فاکتور، و دلیلِ خاموشیِ اصلاح
+ * (`blockedReason`) برای وقتی که فاکتور قابل اصلاح نیست.
+ */
+export function getInvoiceSettlement(
+  invoiceId: string
+): Promise<T.InvoiceSettlement> {
+  return apiFetch<T.InvoiceSettlement>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/settlement`
+  );
+}
+
+/**
+ * بازنویسیِ تقسیمِ پرداخت‌های فاکتور — «تسویهٔ از نو».
+ *
+ * اتمیک: تقسیمِ قبلی خنثی و تقسیمِ تازه ثبت می‌شود، با یک ردیفِ دفتر و یک
+ * سندِ خودکار. retry با همان idempotencyKey ردیفِ تکراری نمی‌سازد.
+ */
+export function recomposeInvoicePayments(
+  invoiceId: string,
+  dto: T.RecomposePaymentsDto
+): Promise<T.InvoiceSettlement> {
+  return apiFetch<T.InvoiceSettlement>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/recompose-payments`,
+    { method: "POST", body: dto }
+  );
+}
+
+/**
+ * برگشتِ پرداخت روی فاکتور — کارتخوان برگشت زد / بانک رد کرد.
+ * مانده‌ی فاکتور به بدهی برمی‌گردد و دفترِ مشتری همان لحظه بدهکار می‌شود.
+ */
+export function reversePayment(
+  invoiceId: string,
+  dto: T.ReversePaymentDto
+): Promise<T.PaymentReversalRow> {
+  return apiFetch<T.PaymentReversalRow>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/reverse-payment`,
+    { method: "POST", body: dto }
+  );
+}
+
+/** سندهای برگشتِ پرداختِ یک فاکتور — تاریخچه‌ی خنثی‌سازی‌ها. */
+export function getPaymentReversals(
+  invoiceId: string
+): Promise<T.PaymentReversalRow[]> {
+  return apiFetch<T.PaymentReversalRow[]>(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/payment-reversals`
+  );
 }
 
 export function getCorrections(params: {
@@ -1519,6 +1785,15 @@ export function bounceCheque(id: string, reason?: string): Promise<unknown> {
 }
 
 // ----- حساب باز (فاکتور کلیِ جاری) -----
+
+/**
+ * همه‌ی مشتری‌های با مانده‌ی غیرصفر — بدهکار و طلبکار با هم، از خودِ دفتر.
+ * خوراکِ «حساب باز» صندوق: نسیه‌های معمولی هم که «حسابِ کلی» ندارند دیده می‌شوند.
+ */
+export function getCustomerBalances(q?: string): Promise<T.CustomerBalanceRow[]> {
+  const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  return apiFetch(`/sales/customer-balances${qs}`);
+}
 
 /** فهرستِ حساب‌های بازِ فعال — دکمه‌ی «حساب باز» در صندوق. */
 export function listOpenAccounts(): Promise<T.OpenAccountSummary[]> {
@@ -1749,6 +2024,11 @@ export function getDebtors(p: { page?: number; limit?: number }) {
 
 export function getChequesReport(p: { status?: string; page?: number; limit?: number }) {
   return apiFetch<T.ChequesReport>(`/reports/cheques?${reportQs(p)}`);
+}
+
+/** چک‌های یک مشتری — تبِ «چک‌ها» در پرونده‌ی مشتری. */
+export function getCustomerCheques(id: string): Promise<T.CustomerChequeRow[]> {
+  return apiFetch(`/sales/customers/${encodeURIComponent(id)}/cheques`);
 }
 
 export function getProductPerformance(p: ReportRange & { type?: string }) {
@@ -2074,18 +2354,93 @@ export function getReceipt(id: string): Promise<T.Receipt> {
 }
 
 // =====================================================
+// دفتر روزنامه (سند خودکار) — فقط ADMIN/MANAGER
+// =====================================================
+
+/**
+ * GET /vouchers — سندهای خودکارِ پشتِ اکشن‌های مالی، با فیلتر نوع/تاریخ.
+ * هر سند خطوطِ بدهکار/بستانکار را دارد (جمعشان همیشه صفر است).
+ */
+export function getVouchers(p: {
+  sourceType?: T.VoucherSourceType | "";
+  sourceId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<T.VouchersResponse> {
+  return apiFetch<T.VouchersResponse>(`/vouchers?${reportQs(p)}`);
+}
+
+/** سندِ یک منبع — لینک «چی به چی»: از هر عدد تا فاکتور/رسیدِ مبدأ و برعکس. */
+export function getVoucherBySource(
+  sourceType: T.VoucherSourceType,
+  sourceId: string
+): Promise<T.VoucherRow | null> {
+  return apiFetch<T.VoucherRow | null>(
+    `/vouchers/source/${encodeURIComponent(sourceType)}/${encodeURIComponent(sourceId)}`
+  );
+}
+
+/**
+ * GET /vouchers/by-invoice/:id — سندهایِ یک فاکتور (فروش، ابطال، مرجوعی‌ها،
+ * اصلاحیه‌ها و رسیدهایِ تخصیص‌یافته به آن) به ترتیبِ زمان. فقط مدیر.
+ */
+export function getVouchersByInvoice(
+  invoiceId: string
+): Promise<T.InvoiceVouchers> {
+  return apiFetch<T.InvoiceVouchers>(
+    `/vouchers/by-invoice/${encodeURIComponent(invoiceId)}`
+  );
+}
+
+// =====================================================
+// پرداخت به مشتری بستانکار (تسویه بستانکاری)
+// =====================================================
+
+/**
+ * پرداخت وجه به مشتریِ بستانکار — پول واقعی می‌رود بیرون، اعتبارش مصرف می‌شود.
+ * هیچ فاکتوری دست نمی‌خورد؛ فقط دفتر حساب مشتری.
+ */
+export function createPayout(body: {
+  idempotencyKey?: string;
+  customerId: string;
+  amount: number;
+  method: Exclude<T.PaymentMethod, "CREDIT">;
+  /** اختیاری — تسویه نباید به تایپِ دلیل گره بخورد. */
+  reason?: string;
+  note?: string;
+  /** فقط برای روشِ چک — مبلغِ روی کاغذ همان amount است. */
+  cheque?: { number: string; bankName?: string; dueDate: string };
+  /** پرداختِ آزاد — مبلغِ بیش از بستانکاری یا به مشتریِ بدون بستانکاری. */
+  allowBeyondCredit?: boolean;
+}): Promise<T.CustomerPayout> {
+  return apiFetch<T.CustomerPayout>("/sales/payouts", { method: "POST", body });
+}
+
+export function getPayouts(p: { customerId?: string; page?: number; limit?: number } = {}) {
+  return apiFetch<{ data: T.CustomerPayout[]; meta: T.ReportMeta }>(
+    `/sales/payouts?${reportQs(p)}`
+  );
+}
+
+// =====================================================
 // پیش‌فاکتور
 // =====================================================
 
 export function createQuotation(body: {
   warehouseId: string;
   customerId?: string | null;
+  /** نامِ آزادِ مشتری (تایپ مستقیم) — مثل محسن‌فاکتور، بدون ساخت مشتری. */
+  customerName?: string;
   discount?: number;
   note?: string;
   validForMinutes: number;
   lines: {
     productId: string;
     locationId?: string;
+    /** نامِ نمایشیِ قابل‌ویرایش — خالی یعنی نامِ خودِ کالا. */
+    label?: string;
     quantity: number;
     unitPrice: number;
     /** تخفیف ردیف به ریال — سرور آن را از جمع ردیف کم می‌کند. */
@@ -2118,11 +2473,15 @@ export function updateQuotation(
   id: string,
   body: {
     customerId?: string | null;
+    /** نامِ آزادِ مشتری — undefined یعنی دست نخورده بماند. */
+    customerName?: string;
     note?: string;
     discount?: number;
     validForMinutes?: number;
     lines: {
       productId: string;
+      /** نامِ نمایشیِ قابل‌ویرایش — خالی یعنی نامِ خودِ کالا. */
+      label?: string;
       quantity: number;
       unitPrice: number;
       discount?: number;
@@ -2164,6 +2523,78 @@ export function cancelQuotation(id: string): Promise<T.Quotation> {
   return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
   });
+}
+
+// =====================================================
+// پیش‌فاکتور سفید (برگه‌ی قیمت)
+//
+// سطلی جدا از پیش‌فاکتور عادی: اقلامش متنِ آزاد هستند و کالای واقعی ندارند تا
+// مدیر وصلشان کند. ساختش از گوشی انجام می‌شود (mobile/blank-quotations)؛ اینجا
+// فقط قیمت‌گذاری، پیشنهاد کالا و تبدیل است.
+// =====================================================
+
+export function getBlankQuotations(
+  p: { status?: string; page?: number; limit?: number } = {}
+) {
+  return apiFetch<{ data: T.BlankQuotation[]; meta: T.ReportMeta }>(
+    `/sales/blank-quotations?${reportQs(p)}`
+  );
+}
+
+export function getBlankQuotation(id: string): Promise<T.BlankQuotation> {
+  return apiFetch<T.BlankQuotation>(`/sales/blank-quotations/${encodeURIComponent(id)}`);
+}
+
+/** پیشنهادِ کالا برای ردیف‌های متنی — نیمه‌خودکار؛ تصمیم نهایی با مدیر است. */
+export function getBlankQuotationSuggestions(id: string): Promise<T.BlankLineSuggestion[]> {
+  return apiFetch<T.BlankLineSuggestion[]>(
+    `/sales/blank-quotations/${encodeURIComponent(id)}/suggestions`
+  );
+}
+
+/**
+ * ذخیرهٔ قیمت نهایی و (اختیاری) وصل‌کردن قلم به کالای واقعی.
+ *
+ * `productId: null` یعنی «وصل را بردار» و نیامدنش یعنی «دست نزن» — همان تفاوتی
+ * که سرور بر اساسش تصمیم می‌گیرد.
+ */
+export function saveBlankPrices(
+  id: string,
+  body: {
+    customerName?: string;
+    note?: string;
+    lines: {
+      lineId: string;
+      finalPrice?: number;
+      productId?: string | null;
+      locationId?: string | null;
+      text?: string;
+    }[];
+  }
+): Promise<T.BlankQuotation> {
+  return apiFetch<T.BlankQuotation>(
+    `/sales/blank-quotations/${encodeURIComponent(id)}/prices`,
+    { method: "POST", body }
+  );
+}
+
+/** تبدیل به فاکتور واقعی — تنها جایی که موجودی کم می‌شود. */
+export function convertBlankQuotation(
+  id: string,
+  payments?: T.PaymentInput[],
+  dueDate?: string
+): Promise<T.Invoice> {
+  return apiFetch<T.Invoice>(
+    `/sales/blank-quotations/${encodeURIComponent(id)}/convert`,
+    { method: "POST", body: { payments, dueDate } }
+  );
+}
+
+export function cancelBlankQuotation(id: string): Promise<T.BlankQuotation> {
+  return apiFetch<T.BlankQuotation>(
+    `/sales/blank-quotations/${encodeURIComponent(id)}/cancel`,
+    { method: "POST" }
+  );
 }
 
 // =====================================================
@@ -2325,4 +2756,38 @@ export function bulkRejectImages(candidateIds: string[], reason?: string): Promi
     method: "POST",
     body: { candidateIds, reason },
   });
+}
+
+// =====================================================
+// سفارش‌های آنلاین (فروشگاه اینترنتی) — صفِ تحویلِ پنل
+// =====================================================
+
+/** GET /online-orders — صفِ سفارش‌های سایت؛ اختیاراً فیلترِ وضعیت. */
+export function listOnlineOrders(status?: T.OnlineOrderStatus): Promise<T.OnlineOrderSummary[]> {
+  const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
+  return apiFetch<T.OnlineOrderSummary[]>(`/online-orders${suffix}`);
+}
+
+/** GET /online-orders/:id */
+export function getOnlineOrder(id: string): Promise<T.OnlineOrderDetail> {
+  return apiFetch<T.OnlineOrderDetail>(`/online-orders/${encodeURIComponent(id)}`);
+}
+
+/**
+ * POST /online-orders/:id/advance — یک مرحله جلو (آماده‌سازی → ارسال → تحویل).
+ * جلوبردنِ یک سفارشِ تازه = «تأیید» برای برداشت است.
+ */
+export function advanceOnlineOrder(id: string): Promise<T.OnlineOrderDetail> {
+  return apiFetch<T.OnlineOrderDetail>(`/online-orders/${encodeURIComponent(id)}/advance`, {
+    method: "POST",
+    body: {},
+  });
+}
+
+/** POST /online-orders/:id/cancel — لغو با دلیل (جنس نبود / مشتری پشیمان). */
+export function cancelOnlineOrder(id: string, reason?: string): Promise<T.CancelOnlineOrderResult> {
+  return apiFetch<T.CancelOnlineOrderResult>(
+    `/online-orders/${encodeURIComponent(id)}/cancel`,
+    { method: "POST", body: { reason } }
+  );
 }

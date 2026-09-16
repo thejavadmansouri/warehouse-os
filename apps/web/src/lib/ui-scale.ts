@@ -15,11 +15,15 @@ import { persist } from "zustand/middleware";
  * پله‌ها، نه یک عددِ آزاد.
  *
  * فروشنده وسطِ فروش نباید اسلایدر تنظیم کند؛ چند پله که هرکدام یک جهش
- * محسوس باشد کافی است. زیر ۱۰۰ نمی‌رویم — مشکل «کوچک بودن» است نه بزرگی.
+ * محسوس باشد کافی است. زیرِ ۱۰۰ هم پله هست (تا ۶۰٪): مانیتورِ کوچکِ صندوق
+ * یا خروجیِ پروژکتور گاهی «بزرگ‌ترین» نیست — کاربر باید بتواند کوچک هم کند.
  */
-export const UI_SCALES = [1, 1.12, 1.25, 1.4, 1.6] as const;
+export const UI_SCALES = [0.6, 0.75, 0.85, 1, 1.12, 1.25, 1.4, 1.6] as const;
 
 export const SCALE_LABELS: Record<number, string> = {
+  0.6: "۶۰٪",
+  0.75: "۷۵٪",
+  0.85: "۸۵٪",
   1: "۱۰۰٪",
   1.12: "۱۱۲٪",
   1.25: "۱۲۵٪",
@@ -30,6 +34,9 @@ export const SCALE_LABELS: Record<number, string> = {
 interface UiScaleState {
   scale: number;
   highContrast: boolean;
+  /** تراکم جدول صندوق — عادی / فشرده (۲۰+ قلم) / خیلی فشرده (۲۵+ قلم). */
+  posDensity: "normal" | "compact" | "ultra";
+  setPosDensity: (d: "normal" | "compact" | "ultra") => void;
   setScale: (s: number) => void;
   bigger: () => void;
   smaller: () => void;
@@ -51,6 +58,8 @@ export const useUiScale = create<UiScaleState>()(
     (set, get) => ({
       scale: 1,
       highContrast: false,
+      posDensity: "normal",
+      setPosDensity: (d) => set({ posDensity: d }),
       setScale: (s) => set({ scale: s }),
       bigger: () =>
         set({ scale: UI_SCALES[Math.min(stepIndex(get().scale) + 1, UI_SCALES.length - 1)] }),

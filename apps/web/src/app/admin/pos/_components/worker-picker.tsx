@@ -32,9 +32,13 @@ export function WorkerPicker({
   const workers = useQuery({ queryKey: ["workers"], queryFn: getWorkers, enabled: open });
   const [note, setNote] = useState("");
 
-  useEffect(() => {
+  /* با بسته‌شدنِ پنل، یادداشت پاک می‌شود تا باز شدنِ بعدی از نو شروع کند —
+     تطبیقِ state در رندر (به‌جای effect). */
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (!open) setNote("");
-  }, [open]);
+  }
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>

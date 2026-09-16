@@ -43,7 +43,7 @@ export function LocationPicker({
                          focus:ring-2 focus:ring-primary"
             >
               <span className="min-w-0">
-                <span className="block truncate font-medium">{s.locationPath}</span>
+                <span className="block break-words font-medium">{s.locationPath}</span>
                 <span className="block text-xs text-muted-foreground">{s.locationCode}</span>
               </span>
               <span className="shrink-0 tabular-nums text-sm">

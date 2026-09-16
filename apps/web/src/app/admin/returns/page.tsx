@@ -77,7 +77,17 @@ export function ReturnsPanel({ embedded }: { embedded?: boolean } = {}) {
                       PAYMENT_LABELS[r.refundMethod] ??
                       r.refundMethod}
                   </td>
-                  <td className={`${TD} max-w-0 truncate text-muted-foreground`}>{r.reason}</td>
+                  <td className={`${TD} max-w-0 truncate text-muted-foreground`}>
+                    {r.operationKey ? (
+                      <span
+                        title="این مرجوعی نیمی از یک «عملیات یکپارچه» است — با اصلاحیه‌ی همان operationKey ثبت شده و در صفحه‌ی فاکتور به‌صورت یک سند دیده می‌شود"
+                        className="me-1 rounded bg-violet-600/10 px-1.5 py-0.5 text-[0.7rem] font-semibold text-violet-700 dark:bg-violet-600/10 dark:text-violet-400"
+                      >
+                        عملیات یکپارچه
+                      </span>
+                    ) : null}
+                    {r.reason}
+                  </td>
                   <td className={`${TD} text-end font-bold tabular-nums text-warning`}>
                     {money(r.refundAmount)}
                   </td>

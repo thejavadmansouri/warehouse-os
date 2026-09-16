@@ -59,9 +59,22 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: "لغو شد",
 };
 
-export function SmsDialog({ customer }: { customer: Customer }) {
+export function SmsDialog({
+  customer,
+  open,
+  onOpenChange,
+}: {
+  customer: Customer;
+  /** حالتِ کنترل‌شده — وقتی داده شد، دکمه‌ی خودش را نشان نمی‌دهد. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}) {
   const qc = useQueryClient();
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const isControlled = open !== undefined;
+  const isOpen = isControlled ? !!open : internalOpen;
+  const setIsOpen = (v: boolean) =>
+    isControlled ? onOpenChange?.(v) : setInternalOpen(v);
   const [templateKey, setTemplateKey] = React.useState("");
   /** متنِ قابل ویرایش — مدیر می‌تواند پیش از ارسال دستکاری‌اش کند. */
   const [body, setBody] = React.useState("");
@@ -84,10 +97,16 @@ export function SmsDialog({ customer }: { customer: Customer }) {
     enabled: open && templateKey !== "",
   });
 
-  // متنِ پیش‌نمایش وارد جعبه می‌شود تا قابل ویرایش باشد.
-  React.useEffect(() => {
-    if (preview.data) setBody(preview.data.body);
-  }, [preview.data]);
+  /*
+   * متنِ پیش‌نمایش وارد جعبه می‌شود تا قابل ویرایش باشد — تطبیقِ state در
+   * رندر به‌جای effect (قانونِ set-state-in-effect). وقتی متنِ پیش‌نمایش
+   * عوض شود، جعبه از نو پر می‌شود؛ وقتی همان متن برگردد، دستِ کاربر نمی‌خورد.
+   */
+  const [prevPreviewBody, setPrevPreviewBody] = React.useState<string | null>(null);
+  if (preview.data && preview.data.body !== prevPreviewBody) {
+    setPrevPreviewBody(preview.data.body);
+    setBody(preview.data.body);
+  }
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ["sms-history", customer.id] });
@@ -129,13 +148,15 @@ export function SmsDialog({ customer }: { customer: Customer }) {
     templateKey !== "" && body.trim().length >= 5 && !blocked && !send.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline">
-          <MessageSquare className="size-4" />
-          پیامک
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline">
+            <MessageSquare className="size-4" />
+            پیامک
+          </Button>
+        </DialogTrigger>
+      )}
 
       <DialogContent className="max-w-2xl">
         <DialogHeader>
@@ -257,7 +278,7 @@ export function SmsDialog({ customer }: { customer: Customer }) {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setIsOpen(false)}>
             بستن
           </Button>
           <Button disabled={!canSend} onClick={() => send.mutate()}>

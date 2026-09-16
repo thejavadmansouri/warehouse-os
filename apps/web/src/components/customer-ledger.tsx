@@ -4,6 +4,8 @@ import * as React from "react";
 
 import { faDate, faTime, money, toFa } from "@/lib/format";
 import type { Invoice } from "@/lib/types";
+import { BALANCE } from "@/lib/finance";
+import { InvoicePayBadge, balanceTextClass } from "@/components/finance-badges";
 
 /**
  * ریزگردش حسابِ یک مشتری — یک جدول، بدون هیچ دکمه‌ای روی ردیف‌ها.
@@ -48,6 +50,7 @@ export function CustomerLedgerTable({
   active,
   onActivate,
   onOpen,
+  onReversePayment,
   empty = "این مشتری هنوز فاکتوری ندارد",
 }: {
   rows: LedgerRow[];
@@ -55,6 +58,12 @@ export function CustomerLedgerTable({
   active?: number;
   onActivate?: (i: number) => void;
   onOpen?: (i: number) => void;
+  /**
+   * دکمهٔ «برگشت پرداخت» — فقط وقتی صداکننده بخواهد ستون می‌آید (پنل مشتریِ
+   * صندوق). فقط ردیف‌هایی که پرداخت‌شده دارند دکمه فعال دارند؛ برگشتِ پرداخت
+   * یعنی پول برگشته و بدهی برقرار شود — کارتخوانِ برگشت‌زده.
+   */
+  onReversePayment?: (invoice: LedgerRow["inv"], paid: number) => void;
   empty?: string;
 }) {
   if (!rows.length) {
@@ -70,9 +79,10 @@ export function CustomerLedgerTable({
           <th className={`${TH} w-16`}>ساعت</th>
           <th className={`${TH} w-20`}>فاکتور</th>
           <th className={TH}>شرح</th>
-          <th className={`${TH} w-36`}>بدهکار</th>
-          <th className={`${TH} w-36`}>بستانکار</th>
+          <th className={`${TH} w-36`}>مبلغ فاکتور</th>
+          <th className={`${TH} w-36`}>پرداخت‌شده</th>
           <th className={`${TH} w-40`}>مانده</th>
+          {onReversePayment && <th className={`${TH} w-28`} />}
         </tr>
       </thead>
       <tbody>
@@ -91,7 +101,11 @@ export function CustomerLedgerTable({
             <td className={`${TD} tabular-nums text-muted-foreground`}>
               {faTime(r.inv.createdAt)}
             </td>
-            <td className={`${TD} font-bold tabular-nums`}>{toFa(r.inv.number)}</td>
+            <td className={`${TD} font-bold tabular-nums`}>
+              {toFa(r.inv.number)}
+              {/* وضعیت پرداخت — همان برچسبِ واحدِ دیکشنری مالی، در همه‌ی صفحات. */}
+              <InvoicePayBadge invoice={r.inv} className="ms-1.5 align-middle" />
+            </td>
             <td className={`${TD} max-w-0 truncate`}>
               {(r.inv.lines ?? []).map((l) => l.product?.name).filter(Boolean).join("، ") ||
                 `فاکتور فروش ${toFa(r.inv.number)}`}
@@ -100,22 +114,41 @@ export function CustomerLedgerTable({
             <td className={`${TD} text-end tabular-nums text-success`}>
               {r.paid ? money(r.paid) : "۰"}
             </td>
-            <td className={`${TD} text-end font-bold tabular-nums`}>{money(r.balance)}</td>
+            <td className={`${TD} text-end font-bold tabular-nums ${balanceTextClass(r.balance)}`}>
+              {money(r.balance)}
+            </td>
+            {onReversePayment && (
+              <td className={`${TD} text-center`}>
+                {r.paid > 0 && r.inv.status !== "CANCELLED" && (
+                  <button
+                    type="button"
+                    className="rounded-md border px-2 py-1 text-xs font-medium hover:border-destructive hover:text-destructive"
+                    onClick={(e) => {
+                      // نرو روی ردیف (بازکردن فاکتور) — هدفِ کلیک، برگشت است.
+                      e.stopPropagation();
+                      onReversePayment(r.inv, r.paid);
+                    }}
+                  >
+                    برگشت پرداخت
+                  </button>
+                )}
+              </td>
+            )}
           </tr>
         ))}
       </tbody>
       <tfoot className="sticky bottom-0 bg-muted/70 backdrop-blur">
         <tr>
-          <td className={`${TD} font-bold`} colSpan={5}>
+          <td className={`${TD} font-bold`} colSpan={onReversePayment ? 6 : 5}>
             جمع
           </td>
           <td className={`${TD} text-end font-bold tabular-nums`}>
             {money(rows.reduce((s, r) => s + r.inv.total, 0))}
           </td>
-          <td className={`${TD} text-end font-bold tabular-nums text-success`}>
+          <td className={`${TD} text-end font-bold tabular-nums ${BALANCE.creditor.text}`}>
             {money(rows.reduce((s, r) => s + r.paid, 0))}
           </td>
-          <td className={`${TD} text-end font-bold tabular-nums text-warning`}>
+          <td className={`${TD} text-end font-bold tabular-nums ${BALANCE.debtor.text}`}>
             {money(rows.at(-1)?.balance ?? 0)}
           </td>
         </tr>
