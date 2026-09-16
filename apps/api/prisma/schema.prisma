@@ -20,6 +20,12 @@ model User {
   password                String
   fullName                String
   role                    Role                     @default(STAFF)
+  /// دسترسی به بخش «فروشگاه اینترنتی» در پنل — مستقل از نقش است.
+  ///
+  /// دلیل جدابودن از `role`: صندوقِ مغازه فقط فروشِ حضوری است و نباید ردی از
+  /// سایت داشته باشد؛ برعکس، یک نفر ممکن است فقط فروشنده‌ی سایت باشد. پس به‌جای
+  /// نقشِ جدید، یک پرچمِ per-user داده شد که مدیر از صفحه‌ی «کاربران» عوض می‌کند.
+  canManageSite           Boolean                  @default(false)
   /// شناسه‌ی نشستِ فعال — هر حساب فقط روی یک دستگاه.
   /// هر ورود مقدار تازه‌ای می‌گذارد؛ توکن‌های قبلی از همان لحظه بی‌اعتبار می‌شوند.
   /// null یعنی هیچ نشست فعالی نیست (خروج یا هرگز وارد نشده).
@@ -40,12 +46,14 @@ model User {
   saleInvoices            SaleInvoice[]            @relation("InvoiceSeller")
   saleInvoicesCancelled   SaleInvoice[]            @relation("InvoiceCanceller")
   receiptsTaken           Receipt[]                @relation("ReceiptTaker")
+  payoutsMade             CustomerPayout[]         @relation("PayoutMaker")
   saleReturns             SaleReturn[]             @relation("ReturnProcessor")
   saleCorrections         SaleCorrection[]         @relation("CorrectionActor")
   purchases               PurchaseInvoice[]        @relation("PurchaseRecorder")
   purchasesCancelled      PurchaseInvoice[]        @relation("PurchaseCanceller")
   ledgerEntries           CustomerLedger[]         @relation("LedgerActor")
   quotations              Quotation[]              @relation("QuotationSeller")
+  blankQuotations         BlankQuotation[]         @relation("BlankQuotationAuthor")
   pickTasksRequested      PickTask[]               @relation("PickRequester")
   pickTasksAssigned       PickTask[]               @relation("PickAssignee")
   pickTasksPicked         PickTask[]               @relation("PickPicker")
@@ -55,6 +63,7 @@ model User {
   workTasksAssigned       WorkTask[]               @relation("WorkTaskAssignee")
   workTaskItemsDone       WorkTaskItem[]           @relation("WorkTaskItemDoneBy")
   onlineOrdersDecided     OnlineOrder[]            @relation("OnlineOrderDecider")
+  paymentReversals        PaymentReversal[]        @relation("ReversalActor")
   reviewedCandidates      ProductImageCandidate[]
   imagePublishLogs        ImagePublishLog[]
 }
@@ -74,6 +83,7 @@ model Warehouse {
   saleCorrections SaleCorrection[]
   pickTasks       PickTask[]
   quotations      Quotation[]
+  blankQuotations BlankQuotation[]
   purchases       PurchaseInvoice[]
   workTasks       WorkTask[]
   shortages       ProductShortage[]
@@ -284,22 +294,26 @@ model ProductBarcode {
   product   Product     @relation(fields: [productId], references: [id])
 }
 
-/// قیمت‌ها به **ریال** و به صورت عدد صحیح ذخیره می‌شوند (بدون اعشار).
+/// قیمت‌ها به **ریال** ذخیره می‌شوند — ستون float8 (double precision).
+/// مقادیر صحیح تا ۲⁵³ ≈ ۹×۱۰¹⁵ ریال در JS دقیق می‌مانند — سقف واقعیِ سندِ ۱۰ میلیارد تومانی (۱۰¹¹ ریال) هزاران بار پایین‌تر است.
 /// ⚠️ داده‌ی ایمپورت‌شده‌ی فعلی از این نظر بررسی نشده — بعضی ردیف‌ها قیمت خریدشان
 /// از قیمت فروش بیشتر است، که یعنی احتمالاً بعضی ردیف‌ها تومان وارد شده‌اند.
 /// پیش از اتکا به گزارش سود باید پاک‌سازی شود.
 model ProductPrice {
   id             String   @id @default(uuid())
   productId      String
-  purchasePrice  Int?
-  salePrice      Int?
-  wholesalePrice Int?
-  /// قیمتِ پیش از تخفیف — روی سایت خط‌خورده کنار قیمت فعلی می‌نشیند.
+  purchasePrice  Float?
+  salePrice      Float?
+  wholesalePrice Float?
+  /// قیمتِ چهارم — عددی که مدیر آزادانه تعیین می‌کند (چانه‌زنی، مشتری خاص،
+  /// فروش ویژه). هیچ‌جا خودکار محاسبه نمی‌شود؛ فقط مدیر آن را می‌نویسد.
+  managerPrice   Float?
+  /// قیمتِ پیش از از تخفیف — روی سایت خط‌خورده کنار قیمت فعلی می‌نشیند.
   ///
   /// معنیِ «تخفیف» همین است و نه یک فیلدِ درصد: درصد از تقسیمِ این دو حساب
   /// می‌شود، پس هیچ‌وقت با قیمت ناهماهنگ نمی‌شود. اگر خالی باشد یا از
   /// `salePrice` بیشتر نباشد، سایت هیچ تخفیفی نشان نمی‌دهد.
-  compareAtPrice Int?
+  compareAtPrice Float?
   createdAt      DateTime @default(now())
   product        Product  @relation(fields: [productId], references: [id])
 
@@ -362,11 +376,11 @@ model InventoryLog {
   /// قیمتِ واحدِ همین حرکت به ریال — قیمتِ **فروش** برای SALE و قیمتِ **خرید**
   /// برای INِ ناشی از فاکتور خرید. برای بقیه‌ی حرکت‌ها null.
   /// مفهوم یکی است («پول به ازای هر واحد در این جابه‌جایی») پس ستون جدا ندارد.
-  unitPrice       Int?
+  unitPrice       Float?
   /// تخفیف همین ردیف به ریال (فقط برای SALE).
   /// بدون این، تخفیفِ ردیفی فقط در subtotal فاکتور جمع می‌شد و روی فاکتور چاپی
   /// جمعِ ردیف‌ها با مبلغ فاکتور نمی‌خواند — که برای مشتری شبیه اشتباه است.
-  lineDiscount    Int?
+  lineDiscount    Float?
   /// توضیحِ همین قلم روی فاکتور — چیزی که فروشنده دستی می‌نویسد و روی برگه
   /// چاپ می‌شود («رنگ مشکی»، «گارانتی ۶ ماه»، «تحویل هفته‌ی بعد»).
   ///
@@ -444,9 +458,9 @@ model PurchaseInvoice {
   supplierRef    String?
   /// تاریخِ روی برگه. با تاریخِ ثبت فرق دارد: فاکتور دیروز ممکن است امروز وارد شود.
   invoiceDate    DateTime?
-  subtotal       Int            @default(0)
-  discount       Int            @default(0)
-  total          Int            @default(0)
+  subtotal       Float          @default(0)
+  discount       Float          @default(0)
+  total          Float          @default(0)
   status         PurchaseStatus @default(CONFIRMED)
   note           String?
   cancelReason   String?
@@ -562,6 +576,94 @@ model VoiceRecord {
   inventoryLogs InventoryLog[]
   product       Product?       @relation(fields: [productId], references: [id])
   user          User?          @relation(fields: [userId], references: [id])
+}
+
+/// ─────────────────────────────────────────────────────────────────────────────
+/// لایه‌ی سند خودکار (Voucher) — «سند پشت صحنه، زبان ساده روی صحنه»
+///
+/// هر اکشن مالی (فاکتور فروش، دریافت، مرجوعی، اصلاحیه، ابطال، خرید) در همان
+/// تراکنشِ دیتابیسِ خودش یک Voucher می‌سازد؛ سند append-only است و اصلاح = سند
+/// معکوس (`reversesVoucherId`). این لایه هرگز به UI صندوق‌دار نشت نمی‌کند —
+/// مانده‌ی نمایشی همچنان فقط از CustomerLedger می‌آید؛ سندها پشت صحنه‌اند و
+/// «چی به چی» را برای مدیر و تطبیق‌ها جواب می‌دهند.
+///
+/// قراردادِ مبلغ هر خط (همان CustomerLedger): **مثبت = بدهکار، منفی = بستانکار**،
+/// و جمعِ مبلغ‌های هر سند همیشه صفر است (موازنه‌ی اجباری در PostingService).
+/// ─────────────────────────────────────────────────────────────────────────────
+
+/// حساب‌های ثابت سیستمی — کوچک و بدون هیچ تنظیم کاربری؛ تفاوت اصلی با
+/// پارسیان/سپیدار که سرفصل باز می‌دهند و در ازایش آموزش می‌خواهند.
+///
+/// عمداً فقط همین‌ها: صندوق‌دار هیچ‌وقت «کدینگی» نمی‌بیند و نمی‌سازد.
+enum FixedAccount {
+  CASH // صندوق (نقد + کارت‌خوانِ همان لحظه)
+  BANK // بانک — چک‌های سپرده‌شده این‌جا می‌نشینند (فاز ۲)
+  CHEQUES // چک‌های دریافتی (در جریان وصول)
+  CUSTOMERS // حساب مشتریان (تفصیلی با customerId روی خط)
+  REFUND_PAYABLE // بازپرداختِ مشتری — وجهِ گرفته‌شده برای کالای باطل‌شده؛ فاز ۲ صافش می‌کند
+  SUPPLIERS // حساب تأمین‌کنندگان
+  SALES // فروش
+  SALES_RETURN // برگشت از فروش (حساب تقابلی فروش)
+  DISCOUNT // تخفیف فروش
+  INVENTORY // موجودی انبار (به بهای خرید)
+  COGS // بهای تمام‌شده
+  FINANCE_CHARGE // درآمدِ تفاوتِ فروشِ مدت‌دار
+}
+
+/// نوعِ سندِ مبدأ — لینک «چی به چی» از هر سند به فاکتور/رسید/مرجوعیِ سازنده‌اش.
+enum VoucherSourceType {
+  SALE_INVOICE
+  SALE_CANCEL
+  RECEIPT
+  SALE_RETURN
+  SALE_CORRECTION
+  PURCHASE_INVOICE
+  PURCHASE_CANCEL
+  CHEQUE_DEPOSIT // سپردن چک به بانک — چک از «چک‌های دریافتی» به «بانک» می‌رود
+  CHEQUE_BOUNCED // برگشت چک — بدهیِ مشتری برمی‌گردد
+  CHEQUE_CASHED // وصول چک — برگشتِ خورده را خنثی می‌کند یا چکِ نزدِ ما نقد می‌شود
+  CUSTOMER_PAYOUT // پرداخت وجه به مشتری — صاف‌کردن بستانکاری یا بازپرداخت
+  PAYMENT_REVERSAL // برگشت پرداخت — پرداختی که بانک/کارت‌خوان رد کرد
+  PAYMENT_RECOMPOSE // اصلاح نحوهٔ پرداخت — تقسیم پرداخت‌های یک فاکتور بازنویسی شد
+}
+
+model Voucher {
+  id                String             @id @default(uuid())
+  number            Int                @default(autoincrement())
+  sourceType        VoucherSourceType
+  /// شناسه‌ی سندِ مبدأ (SaleInvoice.id / Receipt.id / …)
+  sourceId          String
+  /// کلید یکتای idempotency — ارسالِ دوباره همان اکشن سندِ دوباره نمی‌سازد.
+  idempotencyKey    String             @unique
+  note              String?
+  userId            String?
+  /// سندی که این سند معکوسِ آن است (ابطال). null برای سندهای عادی.
+  reversesVoucherId String?            @unique
+  createdAt         DateTime           @default(now())
+
+  lines           VoucherLine[]
+  reversesVoucher Voucher?      @relation("VoucherReversal", fields: [reversesVoucherId], references: [id])
+  reversedBy      Voucher[]     @relation("VoucherReversal")
+
+  @@index([sourceType, sourceId])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model VoucherLine {
+  id         String       @id @default(uuid())
+  voucherId  String
+  account    FixedAccount
+  /// مثبت = بدهکار، منفی = بستانکار. جمعِ کلِ خطوطِ هر سند = صفر.
+  amount     Float
+  /// تفصیلیِ ساده‌ی حسابِ CUSTOMERS — بدون سرفصل تفصیلی.
+  customerId String?
+  note       String?
+
+  voucher Voucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+
+  @@index([account])
+  @@index([customerId])
 }
 
 model AccountingSync {
@@ -827,7 +929,7 @@ model Customer {
   ///
   /// عبور از سقف **جلوی فروش را نمی‌گیرد**، فقط هشدار می‌دهد: فعلاً مدیر خودش
   /// فروشنده است و قفل‌کردن فروش یعنی نرم‌افزار جلوی کار را بگیرد.
-  creditLimit    Int            @default(0)
+  creditLimit    Float          @default(0)
   /// مهلت پرداخت پیش‌فرض این مشتری به روز. سررسید فاکتور از همین ساخته می‌شود
   /// تا فروشنده مجبور نباشد هر بار انتخابش کند؛ صفر یعنی سررسید همان روز.
   creditDays     Int            @default(0)
@@ -851,6 +953,7 @@ model Customer {
   ledger       CustomerLedger[]
   returns      SaleReturn[]
   corrections  SaleCorrection[]
+  payouts      CustomerPayout[]
   shortages    ProductShortage[]
   addresses    CustomerAddress[]
   onlineOrders OnlineOrder[]
@@ -1178,21 +1281,21 @@ model SaleInvoice {
   customerId     String?
   warehouseId    String
   userId         String? // فروشنده
-  subtotal       Int           @default(0) // جمع ردیف‌ها پیش از تخفیف
-  discount       Int           @default(0) // تخفیف کل فاکتور (ریال)
+  subtotal       Float         @default(0) // جمع ردیف‌ها پیش از تخفیف
+  discount       Float         @default(0) // تخفیف کل فاکتور (ریال)
   /// تفاوتِ فروشِ مدت‌دار روی این فاکتور (سودِ چک).
   /// total = subtotal − discount + financeCharge
-  financeCharge  Int           @default(0)
-  total          Int           @default(0) // مبلغ نهایی = subtotal - discount
-  paidAmount     Int           @default(0) // جمع پرداخت‌های ثبت‌شده
-  dueAmount      Int           @default(0) // مانده = total - paidAmount (نسیه)
+  financeCharge  Float         @default(0)
+  total          Float         @default(0) // مبلغ نهایی = subtotal - discount
+  paidAmount     Float         @default(0) // جمع پرداخت‌های ثبت‌شده
+  dueAmount      Float         @default(0) // مانده = total - paidAmount (نسیه)
   /// سررسید پرداختِ بخش نسیه. از `Customer.creditDays` ساخته می‌شود مگر اینکه
   /// فروشنده صراحتاً چیز دیگری بفرستد. null یعنی فاکتور نسیه‌ای نداشته.
   dueDate        DateTime?
   /// سود فاکتور، در همان لحظه‌ی فروش از ProductPrice.purchasePrice محاسبه و
   /// ذخیره می‌شود. اگر بعداً محاسبه شود غلط درمی‌آید، چون قیمت خرید تغییر می‌کند.
   /// null یعنی قیمت خرید در زمان فروش موجود نبوده.
-  profit         Int?
+  profit         Float?
   status         InvoiceStatus @default(CONFIRMED)
   /// حساب بازِ مالکِ این فاکتور (فقط فاکتورهای OPEN). در تسویه همه‌ی فاکتورهای
   /// بازِ یک حساب CONFIRMED می‌شوند و این رابطه دیگر برای فاکتور نهایی استفاده
@@ -1218,6 +1321,7 @@ model SaleInvoice {
   corrections SaleCorrection[]
   workTasks   WorkTask[]
   onlineOrder OnlineOrder?
+  reversals   PaymentReversal[]
 
   @@index([warehouseId, createdAt])
   @@index([customerId])
@@ -1238,8 +1342,14 @@ model Payment {
   id        String        @id @default(uuid())
   invoiceId String
   method    PaymentMethod
-  amount    Int // ریال
+  amount    Float // ریال
   note      String?
+  /// کلید عملیاتی که این ردیف را ساخته — «اصلاح نحوهٔ پرداخت».
+  ///
+  /// یک عملیات چند ردیف می‌سازد (ردیف‌های منفیِ خنثی‌سازی و ردیف‌های تازهٔ
+  /// تقسیم جدید)؛ همین کلید آن‌ها را یک‌جا می‌خواند و ارسالِ دوبارهٔ همان
+  /// عملیات را هم بی‌اثر می‌کند. برای پرداخت‌های عادی null است.
+  operationKey String?
   createdAt DateTime      @default(now())
 
   invoice SaleInvoice @relation(fields: [invoiceId], references: [id])
@@ -1247,6 +1357,7 @@ model Payment {
 
   @@index([invoiceId])
   @@index([method])
+  @@index([operationKey])
 }
 
 enum PaymentMethod {
@@ -1254,6 +1365,32 @@ enum PaymentMethod {
   CARD // کارتخوان
   CHEQUE // چک
   CREDIT // نسیه (ثبت بدهی، بدون دریافت وجه)
+}
+
+/// برگشتِ پرداخت — وجهی که گرفته شده و بعد برمی‌گردد.
+///
+/// کارتخوان تراکنش را برگشت می‌زند یا بانک رد می‌کند: فاکتور سرِ جایش می‌ماند
+/// ولی «پرداخت‌شده» دیگر درست نیست. این سند پرداختِ قبلی را خنثی می‌کند:
+/// مانده‌ی فاکتور به بدهی برمی‌گردد، دفترِ مشتری همان لحظه بدهکار می‌شود، و
+/// ردیفِ پرداختِ منفی (Payment با مبلغ منفی) همه‌ی جمع‌های مشتقِ صورتحساب و
+/// گزارش‌های نقد را درست نگه می‌دارد. سندِ خنثی‌سازی است، نه حذفِ تاریخچه.
+model PaymentReversal {
+  id             String        @id @default(uuid())
+  invoiceId      String
+  method         PaymentMethod
+  /// مبلغِ برگشتِ وجه — همیشه مثبت؛ اثرش روی Payment به‌صورت ردیفِ منفی ثبت می‌شود.
+  amount         Float
+  /// چرا برگشت خورد — «کارتخوان برگشت زد»، «بانک رد کرد» و …
+  reason         String
+  userId         String?
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+
+  invoice SaleInvoice      @relation(fields: [invoiceId], references: [id])
+  user    User?            @relation("ReversalActor", fields: [userId], references: [id])
+  ledger  CustomerLedger[]
+
+  @@index([invoiceId])
 }
 
 /// حساب بازِ مشتری — «فاکتور کلی»ی که هنوز نهایی نشده.
@@ -1306,7 +1443,7 @@ model Cheque {
   /// دست نمی‌خورد، چون بانک دقیقاً همان را پاس می‌کند. این ستون فقط می‌گوید چه
   /// سهمی از آن بابتِ مدت بوده، تا گزارشِ سود، حاشیه‌ی کالا را با درآمدِ مدت
   /// قاطی نکند. مبلغِ پایه = amount − charge.
-  charge           Int          @default(0)
+  charge           Float        @default(0)
   /// نرخ و مدتی که این عدد از آن ساخته شد — برای توضیح‌دادنِ رقم، نه محاسبه‌ی
   /// دوباره‌اش. عددِ نهایی ذخیره شده تا تغییرِ بعدیِ قاعده، تاریخ را عوض نکند.
   rateBp           Int          @default(0)
@@ -1333,7 +1470,7 @@ model Receipt {
   number         Int           @unique @default(autoincrement())
   customerId     String
   userId         String? // دریافت‌کننده
-  amount         Int // ریال — جمعِ سطرهای پرداخت
+  amount         Float // ریال — جمعِ سطرهای پرداخت
   /// روشِ نخستینِ سطر پرداخت — برای سازگاریِ گزارش‌های قدیمی. تفکیک کامل در
   /// ReceiptPayment است.
   method         PaymentMethod // نقد / کارت / چک — نسیه اینجا بی‌معناست
@@ -1360,7 +1497,7 @@ model ReceiptPayment {
   id        String        @id @default(uuid())
   receiptId String
   method    PaymentMethod
-  amount    Int // ریال
+  amount    Float // ریال
   note      String?
   createdAt DateTime      @default(now())
 
@@ -1391,7 +1528,7 @@ model CustomerLedger {
   /// ریال. **مثبت = بدهی مشتری زیاد می‌شود، منفی = کم می‌شود.**
   /// همین یک قرارداد باعث می‌شود مانده یک SUM ساده باشد و هیچ‌جا لازم نشود
   /// بر اساس نوعِ ردیف تصمیم گرفت که جمع کنیم یا تفریق.
-  amount       Int
+  amount       Float
   /// رویدادی که این ردیف را ساخته — برای گردش حساب و ردیابی.
   invoiceId    String?
   receiptId    String?
@@ -1399,6 +1536,10 @@ model CustomerLedger {
   returnId     String?
   /// اصلاحیه‌ای که این ردیفِ لجر را ساخته (نوع CORRECTION). null برای بقیه.
   correctionId String?
+  /// پرداختِ به‌مشتری که این ردیف را ساخته (نوع PAYOUT). null برای بقیه.
+  payoutId     String?
+  /// برگشتِ پرداختی که این ردیف را ساخته (نوع PAYMENT_REVERSED). null برای بقیه.
+  reversalId   String?
   note         String?
   userId       String?
   createdAt    DateTime        @default(now())
@@ -1408,6 +1549,8 @@ model CustomerLedger {
   receipt    Receipt?        @relation(fields: [receiptId], references: [id])
   saleReturn SaleReturn?     @relation(fields: [returnId], references: [id])
   correction SaleCorrection? @relation(fields: [correctionId], references: [id])
+  payout     CustomerPayout? @relation(fields: [payoutId], references: [id])
+  reversal   PaymentReversal? @relation(fields: [reversalId], references: [id])
   user       User?           @relation("LedgerActor", fields: [userId], references: [id])
 
   @@index([customerId, createdAt])
@@ -1415,6 +1558,8 @@ model CustomerLedger {
   @@index([receiptId])
   @@index([returnId])
   @@index([correctionId])
+  @@index([payoutId])
+  @@index([reversalId])
 }
 
 enum LedgerEntryType {
@@ -1428,6 +1573,9 @@ enum LedgerEntryType {
   FINANCE_CHARGE // تفاوتِ فروشِ مدت‌دار روی چکِ بابتِ بدهیِ قبلی
   ADJUSTMENT // اصلاح دستی، همیشه با دلیل
   CORRECTION // اصلاحیه‌ی فاکتور — تغییر قیمت/تعداد بعد از صدور
+  PAYOUT // پرداخت وجه به مشتری بستانکار — اعتبارش مصرف می‌شود
+  PAYMENT_REVERSED // برگشتِ پرداخت — وجهِ گرفته‌شده برمی‌گردد و بدهی برقرار می‌شود
+  RECOMPOSE // اصلاح نحوهٔ پرداخت — تقسیمِ پرداخت‌های فاکتور بازنویسی شد
 }
 
 /// تخصیص یک رسید به فاکتورهای بدهکار.
@@ -1439,7 +1587,7 @@ model ReceiptAllocation {
   id        String   @id @default(uuid())
   receiptId String
   invoiceId String
-  amount    Int
+  amount    Float
   createdAt DateTime @default(now())
 
   receipt Receipt     @relation(fields: [receiptId], references: [id], onDelete: Cascade)
@@ -1447,6 +1595,47 @@ model ReceiptAllocation {
 
   @@index([receiptId])
   @@index([invoiceId])
+}
+
+/// پرداخت وجه به مشتری بستانکار — تسویه‌ی اعتبارِ او.
+///
+/// قرینه‌ی Receipt: رسید یعنی «مشتری پول آورد»، این یعنی «ما پول دادیم».
+/// بستانکاریِ مشتری از مرجوعی/اصلاحیه/اصلاح دستی می‌آید (ردیف‌های منفیِ دفتر)؛
+/// این سند آن اعتبار را مصرف می‌کند تا مانده به صفر برسد.
+///
+/// چرا سندِ مستقل و نه برگرداندنِ Receipt: جهتِ پول برعکس است — اگر در همان
+/// جدول برود، «گزارش دریافت‌ها» پولی را که از صندوق **بیرون رفته** هم نشان
+/// می‌دهد و هیچ‌کس دیگر نمی‌فهمد صندوق چرا کم است. سندِ جدا یعنی دو گزارشِ
+/// روشن و دو نگاهِ جدا به صندوق.
+///
+/// الگوی منطقِ نرم‌افزارهای حسابداری: اعتبار (Credit Note) و پرداختِ بازپرداخت
+/// (Refund Payment) دو رویداد جدا هستند — اعتبار توسط مرجوعی ساخته می‌شود،
+/// پرداخت آن را مصرف می‌کند. یکی روی فاکتور می‌نشیند، دیگری روی صندوق.
+model CustomerPayout {
+  id             String        @id @default(uuid())
+  number         Int           @unique @default(autoincrement())
+  customerId     String
+  userId         String? // پرداخت‌کننده
+  /// مبلغی که به مشتری پرداخت شد — همیشه مثبت.
+  amount         Float
+  method         PaymentMethod // نقد / کارت / چک
+  /// دلیلِ اجباری — سندی که بعداً قابل دفاع باشد.
+  reason         String
+  note           String?
+  /// مشخصات چک پرداختی به مشتری (فقط روشِ CHEQUE).
+  chequeNumber   String?
+  bankName       String?
+  chequeDueDate  DateTime?
+  /// کلید یکتای کلاینت؛ ارسال دوباره پرداخت تکراری نمی‌سازد.
+  idempotencyKey String?       @unique
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  customer Customer         @relation(fields: [customerId], references: [id])
+  user     User?            @relation("PayoutMaker", fields: [userId], references: [id])
+  ledger   CustomerLedger[]
+
+  @@index([customerId, createdAt])
 }
 
 /// برگشت از فروش (مرجوعی).
@@ -1474,9 +1663,13 @@ model SaleReturn {
   /// از حساب مشتری کم شد (ردیفِ بستانکاری در دفتر). نسیه اینجا بی‌معناست.
   refundMethod   PaymentMethod
   /// مجموع مبلغِ برگشتی به ریال — جمعِ lineRefund ردیف‌ها.
-  refundAmount   Int           @default(0)
+  refundAmount   Float         @default(0)
   reason         String
   note           String?
+  /// کلیدِ گروه‌بندیِ عملیات یکپارچه (adjust): وقتی این مرجوعی و یک اصلاحیه در
+  /// یک تراکنشِ واحد ثبت شده‌اند، هر دو سند همین کلید را دارند تا در UI به‌عنوان
+  /// «یک عملیات» دیده و پیگیری شوند. برای مرجوعیِ مستقل null می‌ماند.
+  operationKey   String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 
@@ -1491,6 +1684,7 @@ model SaleReturn {
   @@index([invoiceId])
   @@index([customerId, createdAt])
   @@index([warehouseId, createdAt])
+  @@index([operationKey])
 }
 
 /// یک قلمِ مرجوعی — به یک ردیفِ SALE از فاکتور اصلی قفل می‌شود.
@@ -1508,9 +1702,9 @@ model SaleReturnLine {
   quantity   Int
   /// قیمتِ مؤثرِ هر واحد در لحظه‌ی مرجوعی — قیمتِ فروش منهای سهمِ تخفیفِ فاکتور،
   /// یعنی همان چیزی که مشتری واقعاً پرداخته بود.
-  unitRefund Int
+  unitRefund Float
   /// مبلغِ برگشتیِ این قلم = quantity × unitRefund (با گردکردنِ سازگار).
-  lineRefund Int
+  lineRefund Float
   /// کالا به موجودی برگشت؟ سالم = true؛ معیوب = false (فقط برگشتِ مالی، بدون حرکت انبار).
   restock    Boolean  @default(true)
   createdAt  DateTime @default(now())
@@ -1549,9 +1743,11 @@ model SaleCorrection {
    * تغییرِ خالصِ مبلغ فاکتور به ریال (مثبت = بیشتر، منفی = کمتر).
    * = جمعِ Σ(newQty×newPrice − oldQty×oldPrice) روی ردیف‌ها.
    */
-  amountAdjust   Int      @default(0)
+  amountAdjust   Float    @default(0)
   reason         String
   note           String?
+  /// کلیدِ گروه‌بندیِ عملیات یکپارچه (adjust) — هم‌تاییِ `SaleReturn.operationKey`.
+  operationKey   String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -1566,6 +1762,7 @@ model SaleCorrection {
   @@index([invoiceId])
   @@index([customerId, createdAt])
   @@index([warehouseId, createdAt])
+  @@index([operationKey])
 }
 
 /// یک قلمِ اصلاحیه — به یک ردیفِ SALE از فاکتورِ اصلی قفل می‌شود.
@@ -1584,10 +1781,10 @@ model SaleCorrectionLine {
   locationId   String
   oldQuantity  Int
   newQuantity  Int
-  oldUnitPrice Int
-  newUnitPrice Int
+  oldUnitPrice Float
+  newUnitPrice Float
   /// تغییرِ مبلغ همین قلم = newQty×newPrice − oldQty×oldPrice (ریال).
-  lineAdjust   Int
+  lineAdjust   Float
   /**
    * این ردیف قلمِ **تازه‌ای** است که با همین اصلاحیه به فاکتور اضافه شده،
    * نه تصحیحِ قلمی که از قبل بود.
@@ -1620,15 +1817,18 @@ model Quotation {
   customerId         String?
   warehouseId        String
   userId             String?
-  subtotal           Int             @default(0)
-  discount           Int             @default(0)
-  total              Int             @default(0)
+  subtotal           Float           @default(0)
+  discount           Float           @default(0)
+  total              Float           @default(0)
   /// تا چه زمانی معتبر است. فروشنده هنگام ساخت تعیین می‌کند (۱ ساعت، ۲۴ ساعت، …).
   validUntil         DateTime
   status             QuotationStatus @default(ACTIVE)
   note               String?
   /// اگر به فاکتور واقعی تبدیل شد، اینجا وصل می‌شود.
   convertedInvoiceId String?         @unique
+  /// نامِ آزادِ مشتری که فروشنده مستقیم تایپ کرده (مثل محسن‌فاکتور).
+  /// اگر خالی باشد، نام مشتریِ پیوندی (customerId) نشان داده می‌شود.
+  customerName       String?
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
 
@@ -1650,9 +1850,12 @@ model QuotationLine {
   /// مکان اختیاری است: هنگام قیمت دادن هنوز لازم نیست قفسه مشخص باشد.
   /// در لحظه‌ی تبدیل به فاکتور، موجودی و مکان دوباره بررسی می‌شود.
   locationId  String?
+  /// نامِ نمایشیِ قابل‌ویرایشِ این قلم — فروشنده می‌تواند اسم را عوض کند
+  /// (مثل محسن‌فاکتور). خالی یعنی نامِ خودِ کالا (product.name) چاپ شود.
+  label       String?
   quantity    Int
-  unitPrice   Int
-  discount    Int     @default(0)
+  unitPrice   Float
+  discount    Float   @default(0)
 
   quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id])
@@ -1664,6 +1867,87 @@ enum QuotationStatus {
   ACTIVE
   CONVERTED // به فاکتور واقعی تبدیل شد
   CANCELLED
+}
+
+/// پیش‌فاکتور سفید — برگه‌ی قیمتی که کارگر یا فروشنده از گوشی می‌سازد و
+/// **قیمت نهایی را مدیر می‌گذارد**.
+///
+/// عمداً از `Quotation` جدا است: ردیف‌های پیش‌فاکتور عادی به کالای واقعی گره
+/// خورده‌اند و کل مسیر تبدیل/چاپ/گزارش روی همان بنا شده؛ سفید باید بتواند قلمِ
+/// **متنیِ بدون کالا** داشته باشد («لنت پراید» که هنوز در سیستم نیست). اگر همان
+/// جدول را nullable می‌کردیم، هر مصرف‌کننده‌ی پیش‌فاکتور باید نال‌بودن را می‌فهمید.
+///
+/// هیچ اثری روی موجودی و لجر ندارد (Rule 1) تا لحظه‌ی تبدیل به فاکتور.
+model BlankQuotation {
+  id                 String    @id @default(uuid())
+  /// شماره‌ی خوانا برای کاربر — سری مستقل از Quotation، پس در نمایش با
+  /// پیشوند «سفید» می‌آید (وگرنه دو «پیش‌فاکتور ۱۲» وجود داشت).
+  number             Int       @unique @default(autoincrement())
+  /// کلید یکتای کلاینت (clientRequestId گوشی). صف آفلاین با همین کلید دوباره
+  /// فرستادن را بی‌اثر می‌کند؛ یکتایی در سطح دیتابیس است، نه فقط در کد.
+  idempotencyKey     String?   @unique
+  warehouseId        String
+  userId             String?
+  /// نامِ آزادِ مشتری که روی برگه می‌آید. عمداً رکورد `Customer` نمی‌سازد.
+  customerName       String?
+  note               String?
+  status             BlankQuotationStatus @default(OPEN)
+  /// اختیاری. اگر بدهند مبنای «منقضی» می‌شود؛ null یعنی برگه انقضا ندارد.
+  validUntil         DateTime?
+  /// فقط یک بار قابل تبدیل است؛ یکتایی‌اش گاردِ تبدیلِ دوباره است.
+  convertedInvoiceId String?   @unique
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
+  user      User?              @relation("BlankQuotationAuthor", fields: [userId], references: [id])
+  lines     BlankQuotationLine[]
+
+  @@index([warehouseId, createdAt])
+  @@index([status])
+}
+
+/// یک قلمِ متنی داخل برگه‌ی سفید.
+///
+/// `productId`/`locationId` گرچه مرجع‌اند، **relation ندارند**: کالا و قفسه
+/// soft-delete می‌شوند و برگه‌ی قیمتِ ماه پیش نباید با حذفِ یک کالا بشکند.
+/// نام و آدرسشان هنگام خواندن ضمیمه می‌شود.
+model BlankQuotationLine {
+  id               String  @id @default(uuid())
+  blankQuotationId String
+  ///
+  /// ترتیبِ قلم‌ها روی برگه — همان ترتیبی که کارگر گفت یا نوشت.
+  ///
+  /// بدون این ستون ترتیب وجود ندارد: `createdAt` بی‌فایده است چون همه‌ی
+  /// قلم‌های یک برگه در یک تراکنش ساخته می‌شوند و `CURRENT_TIMESTAMP` هر سه‌تا
+  /// یکی است؛ و ترتیبِ پیش‌فرض هم روی `id` (uuid) می‌افتد که تصادفی است.
+  /// یعنی «ردیف دوم» برگه فقط با شانس همان ردیفی بود که کارگر گفته بود.
+  position         Int     @default(0)
+  /// همان چیزی که کاربر گفت یا نوشت — دست‌نخورده، بدون جست‌وجوی کاتالوگ.
+  text             String
+  quantity         Int
+  /// قیمت پیشنهادیِ گوشی — **فقط نمایشی**. هرگز در جمع، فاکتور یا لجر نمی‌آید.
+  suggestedPrice   Float?
+  /// قیمت نهاییِ مدیر.
+  finalPrice       Float?
+  /// null یعنی «قیمت نخورده» — مبنای قفل تبدیل.
+  pricedAt         DateTime?
+  /// پیش‌نیازهای تبدیل: کالای واقعی و (اختیاری) قفسه‌ی برداشت.
+  productId        String?
+  locationId       String?
+
+  quotation BlankQuotation @relation(fields: [blankQuotationId], references: [id], onDelete: Cascade)
+
+  /// ایندکسِ ترکیبی جای تک‌ستونی را می‌گیرد (پیشوندش همان کوئری قلم‌های یک
+  /// برگه را پوشش می‌دهد) و ترتیبِ خواندن هم از همان می‌آید.
+  @@index([blankQuotationId, position])
+}
+
+enum BlankQuotationStatus {
+  OPEN // ساخته‌شده؛ ممکن است هنوز قیمت نخورده باشد
+  PRICED // همه‌ی ردیف‌ها قیمت خورده‌اند
+  CANCELLED
+  CONVERTED // به فاکتور واقعی تبدیل شد
 }
 
 /// تنظیمات بک‌آپ. تک‌ردیفی است (id ثابت "singleton").
@@ -1696,10 +1980,10 @@ model ShopSettings {
   /// باشد نباید با استقرار کد ناگهان کاتالوگش عمومی شود.
   onlineEnabled Boolean  @default(false)
   /// هزینه‌ی ارسال، به `storedUnit`. صفر یعنی رایگان.
-  shippingFee   Int      @default(0)
+  shippingFee   Float    @default(0)
   /// سفارش بالاتر از این مبلغ ارسال رایگان دارد، به `storedUnit`.
   /// صفر یعنی این قاعده خاموش است.
-  freeShipOver  Int      @default(0)
+  freeShipOver  Float    @default(0)
   /// کالای بی‌قیمت روی سایت دیده شود («تماس بگیرید»)؟
   ///
   /// رقبای ایرانی این کار را می‌کنند و دلیلش تجاری است نه فنی: کالایی که
@@ -1838,6 +2122,13 @@ model LabelSettings {
   showBarcodeText Boolean @default(true)
   /// خط‌های برش برای کاغذ A4 معمولی
   cropMarks       Boolean @default(false)
+  /// متن دلخواه زیر هر لیبل کالا — چیزی که مدیر از تنظیمات چاپ می‌نویسد
+  /// («کد ۱۲۳ — انبار مرکزی»، شماره ردیف قفسه، و…). خالی = بدون متن.
+  footerText      String?
+
+  /// عرض فیزیکیِ رول (میلی‌متر). بزرگ‌تر از widthMm = چند لیبل کنار هم؛
+  /// مثلاً 100 با لیبل 50×30 یعنی دو برچسب کنار هم. خالی = همان widthMm.
+  mediaWidthMm Int?
 
   /// --- پرینتر حرارتی لیبل (TSPL) ---
   /// نام پرینتر در ویندوز، وقتی با USB به همین سرور وصل است.
@@ -1983,16 +2274,16 @@ model OnlineOrder {
   warehouseId    String
   status         OnlineOrderStatus @default(PLACED)
   /// جمع ردیف‌ها (تومان) — از قیمت‌های لحظه‌ی ثبت، نه قیمت امروز.
-  subtotal       Int               @default(0)
-  shippingFee    Int               @default(0)
+  subtotal       Float             @default(0)
+  shippingFee    Float             @default(0)
   /// تخفیفِ کوپن (تومان، مثل بقیه‌ی مبالغِ سفارش). total = subtotal + shipping - discount.
-  discount       Int               @default(0)
+  discount       Float             @default(0)
   /// کوپنِ اعمال‌شده + کدِ snapshot (کوپن ممکن است بعداً حذف شود، کد روی سفارش می‌ماند).
   couponId       String?
   couponCode     String?
   /// منطقه‌ی ارسالِ انتخاب‌شده (اگر منطقه‌بندی فعال باشد). هزینه‌اش در shippingFee کپی است.
   shippingZoneId String?
-  total          Int               @default(0)
+  total          Float             @default(0)
   payMethod      OnlinePayMethod   @default(ON_DELIVERY)
   /// آدرس در لحظه‌ی ثبت کپی می‌شود، نه ارجاع: مشتری آدرسش را عوض می‌کند و
   /// سفارشِ هفته‌ی پیش نباید به آدرس تازه برود.
@@ -2065,11 +2356,11 @@ model Coupon {
   code        String     @unique
   type        CouponType
   /// درصد (۱ تا ۱۰۰) یا مبلغِ ثابت به ریال.
-  value       Int
+  value       Float
   /// حداقلِ جمعِ سبد برای فعال‌شدن (ریال). صفر یعنی بدون حداقل.
-  minSubtotal Int        @default(0)
+  minSubtotal Float      @default(0)
   /// سقفِ تخفیف برای نوعِ درصدی (ریال). null یعنی بی‌سقف.
-  maxDiscount Int?
+  maxDiscount Float?
   /// کلِ دفعاتِ مجاز. null یعنی نامحدود.
   usageLimit  Int?
   usedCount   Int        @default(0)
@@ -2126,7 +2417,7 @@ model StockNotify {
 model ShippingZone {
   id        String        @id @default(uuid())
   name      String
-  fee       Int
+  fee       Float
   freeOver  Int?
   sortOrder Int           @default(0)
   isActive  Boolean       @default(true)
@@ -2147,8 +2438,8 @@ model OnlineOrderLine {
   productName String
   unit        String @default("عدد")
   quantity    Int
-  unitPrice   Int
-  lineTotal   Int
+  unitPrice   Float
+  lineTotal   Float
 
   order   OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product     @relation(fields: [productId], references: [id])
@@ -2225,7 +2516,7 @@ model PaymentAttempt {
   id         String               @id @default(uuid())
   orderId    String
   provider   String               @default("manual")
-  amount     Int
+  amount     Float
   /// شناسه‌ای که درگاه موقع شروع می‌دهد. یکتاست تا callbackِ تکراری دو بار
   /// حساب نشود.
   authority  String?              @unique
