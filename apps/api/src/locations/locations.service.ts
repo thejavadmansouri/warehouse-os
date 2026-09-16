@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { BarcodeService } from '../barcode/barcode.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
@@ -17,65 +21,57 @@ export interface RemoveLocationOptions {
 
 @Injectable()
 export class LocationsService {
-
   constructor(
     private prisma: PrismaService,
     private barcodeService: BarcodeService,
     private operation: InventoryOperationService,
   ) {}
 
-
-
   async findAll() {
-
     return this.prisma.location.findMany({
-
-      include:{
-        type:true,
-        children:true,
-        parent:true,
+      include: {
+        type: true,
+        children: true,
+        parent: true,
       },
 
-      orderBy:{
-        createdAt:'desc'
-      }
-
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
-
   }
 
-
-
-
-  async create(dto:any) {
-
+  async create(dto: any) {
     const type = await this.prisma.locationType.findUnique({
-      where:{ id: dto.typeId },
+      where: { id: dto.typeId },
     });
 
-    if(!type){
+    if (!type) {
       throw new NotFoundException('نوع موقعیت پیدا نشد');
     }
 
+    let parent: {
+      id: string;
+      path: string;
+      code: string;
+      warehouseId: string | null;
+    } | null = null;
 
-    let parent:{ id:string; path:string; code:string; warehouseId:string|null } | null = null;
-
-    if(dto.parentId){
-
+    if (dto.parentId) {
       parent = await this.prisma.location.findUnique({
-        where:{ id: dto.parentId },
-        select:{ id:true, path:true, code:true, warehouseId:true },
+        where: { id: dto.parentId },
+        select: { id: true, path: true, code: true, warehouseId: true },
       });
 
-      if(!parent){
+      if (!parent) {
         throw new NotFoundException('موقعیت والد پیدا نشد');
       }
-
     }
 
-
-    if(dto.warehouseId && dto.warehouseId !== type.warehouseId){
-      throw new BadRequestException('نوع موقعیت انتخاب‌شده متعلق به این انبار نیست');
+    if (dto.warehouseId && dto.warehouseId !== type.warehouseId) {
+      throw new BadRequestException(
+        'نوع موقعیت انتخاب‌شده متعلق به این انبار نیست',
+      );
     }
 
     const warehouseId = type.warehouseId;
@@ -119,78 +115,57 @@ export class LocationsService {
 
     const path = parentPath ? `${parentPath} > ${dto.name}` : dto.name;
 
-
     return this.prisma.location.create({
-
-      data:{
-
+      data: {
         id,
 
-        name:dto.name,
+        name: dto.name,
 
         code,
 
-        typeId:dto.typeId,
+        typeId: dto.typeId,
 
         barcode,
 
         warehouseId,
 
-        parentId:
-          dto.parentId || null,
+        parentId: dto.parentId || null,
 
         path,
 
         depth: type.depth,
-
       },
 
-      include:{
-        type:true,
-        parent:true,
-      }
-
+      include: {
+        type: true,
+        parent: true,
+      },
     });
-
   }
 
-
-
-
-
-  async findOne(id:string){
-
+  async findOne(id: string) {
     return this.prisma.location.findUnique({
-
-      where:{
-        id
+      where: {
+        id,
       },
 
-      include:{
-        type:true,
-        parent:true,
-        children:true,
-      }
-
+      include: {
+        type: true,
+        parent: true,
+        children: true,
+      },
     });
-
   }
 
-
-
-
-
-  async findChildren(parentId:string|null, warehouseId?:string){
-
+  async findChildren(parentId: string | null, warehouseId?: string) {
     return this.prisma.location.findMany({
-
-      where:{
+      where: {
         parentId,
         isActive: true,
         ...(warehouseId ? { warehouseId } : {}),
       },
 
-      include:{
+      include: {
         type: true,
         // فقط شمارش فرزندان تا UI درخت بداند فلش باز/بسته بگذارد؛ خودِ فرزندان
         // با expand و lazy-load جدا گرفته می‌شوند (پرفورمنس در ۱۰۰k+).
@@ -198,58 +173,31 @@ export class LocationsService {
       },
 
       orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }],
-
     });
-
   }
 
-
-
-
-
-  async resolveByBarcode(barcode:string){
-
+  async resolveByBarcode(barcode: string) {
     return this.prisma.location.findFirst({
-
-      where:{
-        barcode
+      where: {
+        barcode,
       },
 
-      include:{
-        type:true,
-        parent:true,
-      }
-
+      include: {
+        type: true,
+        parent: true,
+      },
     });
-
   }
 
+  async getPath(id: string): Promise<string> {
+    const location = await this.findOne(id);
 
+    if (!location) return '';
 
-
-
-  async getPath(id:string):Promise<string>{
-
-    const location =
-      await this.findOne(id);
-
-
-    if(!location)
-      return '';
-
-
-
-    if(!location.parent)
-      return location.name;
-
-
+    if (!location.parent) return location.name;
 
     return `${await this.getPath(location.parent.id)} / ${location.name}`;
-
   }
-
-
-
 
   // ---------------------------------------------------------------------------
   // حذف (طبق قانون تغییرناپذیری): زیردرختِ کاملاً خالی و بی‌سابقه واقعاً حذف
@@ -489,7 +437,11 @@ export class LocationsService {
   // حذف گروهی: هر موقعیت با زیردرختش طبق همان قانون بالا پردازش می‌شود.
   // موقعیت‌هایی که خودشان زیرمجموعه‌ی یک انتخاب دیگرند نادیده گرفته می‌شوند
   // (والدشان قبلاً آن‌ها را پوشش می‌دهد).
-  async bulkRemove(ids: string[], opts?: RemoveLocationOptions, userId?: string) {
+  async bulkRemove(
+    ids: string[],
+    opts?: RemoveLocationOptions,
+    userId?: string,
+  ) {
     const unique = [...new Set(ids)];
     let deleted = 0;
     let deactivated = 0;
@@ -520,5 +472,4 @@ export class LocationsService {
       message: `${deleted} موقعیت حذف و ${deactivated} موقعیت غیرفعال شد.`,
     };
   }
-
 }

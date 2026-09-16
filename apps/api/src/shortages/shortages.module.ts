@@ -5,7 +5,6 @@ import { ShortagesService } from './shortages.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeModule } from '../realtime/realtime.module';
 
-
 @Module({
   imports: [RealtimeModule],
   controllers: [ShortagesController],

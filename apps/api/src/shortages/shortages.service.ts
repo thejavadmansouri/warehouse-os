@@ -3,8 +3,10 @@ import { Prisma, ProductShortageStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
-import { CreateShortageDto, ResolveShortageDto } from './dto/create-shortage.dto';
-
+import {
+  CreateShortageDto,
+  ResolveShortageDto,
+} from './dto/create-shortage.dto';
 
 /**
  * کسری محصول — تقاضایی که جواب نگرفت.
@@ -18,17 +20,14 @@ import { CreateShortageDto, ResolveShortageDto } from './dto/create-shortage.dto
  */
 @Injectable()
 export class ShortagesService {
-
   constructor(
     private prisma: PrismaService,
     private events: EventsGateway,
   ) {}
 
-
   async create(dto: CreateShortageDto, userId?: string) {
-
     const created = await this.prisma.productShortage.create({
-      data:{
+      data: {
         productId: dto.productId ?? null,
         productName: dto.productName.trim(),
         quantity: dto.quantity ?? 1,
@@ -37,18 +36,17 @@ export class ShortagesService {
         userId: userId ?? null,
         note: dto.note?.trim() || null,
       },
-      include:{
-        product:{ select:{ id:true, name:true, sku:true } },
-        customer:{ select:{ id:true, firstName:true, lastName:true } },
+      include: {
+        product: { select: { id: true, name: true, sku: true } },
+        customer: { select: { id: true, firstName: true, lastName: true } },
       },
     });
 
     // مدیر بدون رفرش ببیند — تقاضای ازدست‌رفته تازه‌بودنش ارزش دارد.
-    this.events.broadcast({ type:'shortage.created' });
+    this.events.broadcast({ type: 'shortage.created' });
 
     return created;
   }
-
 
   /**
    * فهرست، با شمارشِ تقاضا برای هر کالا.
@@ -58,7 +56,6 @@ export class ShortagesService {
    * فهرست فقط یک صف بلند است.
    */
   async findAll(q: { status?: string; warehouseId?: string }) {
-
     const where: Prisma.ProductShortageWhereInput = {
       ...(q.status ? { status: q.status as ProductShortageStatus } : {}),
       ...(q.warehouseId ? { warehouseId: q.warehouseId } : {}),
@@ -66,59 +63,57 @@ export class ShortagesService {
 
     const rows = await this.prisma.productShortage.findMany({
       where,
-      orderBy:{ createdAt:'desc' },
+      orderBy: { createdAt: 'desc' },
       take: 200,
-      include:{
-        product:{ select:{ id:true, name:true, sku:true } },
-        customer:{ select:{ id:true, firstName:true, lastName:true } },
-        user:{ select:{ id:true, fullName:true, username:true } },
+      include: {
+        product: { select: { id: true, name: true, sku: true } },
+        customer: { select: { id: true, firstName: true, lastName: true } },
+        user: { select: { id: true, fullName: true, username: true } },
       },
     });
 
     // شمارش فقط برای کالاهای کاتالوگ ممکن است؛ تقاضای متن‌آزاد بر اساس نام
     // شمرده می‌شود چون شناسه‌ای ندارد.
     const openByProduct = await this.prisma.productShortage.groupBy({
-      by:['productId'],
-      where:{ status: ProductShortageStatus.OPEN, productId:{ not: null } },
-      _count:{ _all: true },
+      by: ['productId'],
+      where: { status: ProductShortageStatus.OPEN, productId: { not: null } },
+      _count: { _all: true },
     });
 
     const counts = new Map(
-      openByProduct.map(r => [r.productId!, r._count._all]),
+      openByProduct.map((r) => [r.productId!, r._count._all]),
     );
 
-    return rows.map(r => ({
+    return rows.map((r) => ({
       ...r,
       timesRequested: r.productId ? (counts.get(r.productId) ?? 1) : 1,
     }));
   }
 
-
   async resolve(id: string, dto: ResolveShortageDto, userId?: string) {
-
     const existing = await this.prisma.productShortage.findUnique({
-      where:{ id },
-      select:{ id:true },
+      where: { id },
+      select: { id: true },
     });
 
     if (!existing) {
       throw new NotFoundException({
-        error:'SHORTAGE_NOT_FOUND',
-        message:'این کسری پیدا نشد',
+        error: 'SHORTAGE_NOT_FOUND',
+        message: 'این کسری پیدا نشد',
       });
     }
 
     const updated = await this.prisma.productShortage.update({
-      where:{ id },
-      data:{
-        status: dto.status as ProductShortageStatus,
+      where: { id },
+      data: {
+        status: dto.status,
         note: dto.note?.trim() || undefined,
         resolvedAt: new Date(),
         resolvedById: userId ?? null,
       },
     });
 
-    this.events.broadcast({ type:'shortage.updated' });
+    this.events.broadcast({ type: 'shortage.updated' });
 
     return updated;
   }

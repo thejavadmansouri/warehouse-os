@@ -1,28 +1,21 @@
 import { IsString, IsInt, Min, IsOptional } from 'class-validator';
 
-
 export class ScanOutDto {
+  @IsString()
+  barcode: string;
 
   @IsString()
-  barcode:string;
-
-
-  @IsString()
-  locationId:string;
-
+  locationId: string;
 
   @IsInt()
   @Min(1)
-  quantity:number;
-
-
-  @IsOptional()
-  @IsString()
-  note?:string;
-
+  quantity: number;
 
   @IsOptional()
   @IsString()
-  userId?:string;
+  note?: string;
 
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }

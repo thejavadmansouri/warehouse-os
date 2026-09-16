@@ -20,7 +20,10 @@ function product(over: Record<string, unknown>) {
 
 describe('ProductMatcherService.match ranking', () => {
   let service: ProductMatcherService;
-  const prisma = { product: { findMany: jest.fn() }, $queryRawUnsafe: jest.fn() };
+  const prisma = {
+    product: { findMany: jest.fn() },
+    $queryRawUnsafe: jest.fn(),
+  };
 
   // Retrieval now ranks in Postgres ($queryRawUnsafe → ids), then hydrates via
   // findMany. Mock both from one candidate list.

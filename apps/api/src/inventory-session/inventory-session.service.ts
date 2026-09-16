@@ -3,127 +3,83 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class InventorySessionService {
+  constructor(private prisma: PrismaService) {}
 
-  constructor(
-    private prisma: PrismaService
-  ) {}
+  async addLocation(sessionId: string, locationBarcode: string) {
+    const location = await this.prisma.location.findUnique({
+      where: {
+        barcode: locationBarcode,
+      },
+    });
 
-
-
-
-
-
-  async addLocation(
-    sessionId:string,
-    locationBarcode:string
-  ){
-
-    const location =
-      await this.prisma.location.findUnique({
-
-        where:{
-          barcode:locationBarcode
-        }
-
+    if (!location) {
+      throw new NotFoundException({
+        error: 'LOCATION_NOT_FOUND',
+        message: 'قفسه پیدا نشد',
       });
-
-
-    if(!location){
-      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'قفسه پیدا نشد' });
     }
 
-
     return this.prisma.inventorySessionLocation.create({
-
-      data:{
+      data: {
         sessionId,
-        locationId:location.id
+        locationId: location.id,
       },
 
-      include:{
-        location:true
-      }
-
+      include: {
+        location: true,
+      },
     });
-
   }
 
-
-  async start(
-    warehouseId?: string,
-    userId?: string
-  ){
-
+  async start(warehouseId?: string, userId?: string) {
     return this.prisma.inventorySession.create({
-
-      data:{
+      data: {
         warehouseId,
-        userId
+        userId,
       },
 
-      include:{
-        warehouse:true,
-        user:true
-      }
-
+      include: {
+        warehouse: true,
+        user: true,
+      },
     });
-
   }
 
-
-  create(
-    warehouseId: string,
-    userId?: string
-  ){
-
+  create(warehouseId: string, userId?: string) {
     return this.prisma.inventorySession.create({
-
-      data:{
+      data: {
         warehouseId,
-        userId
-      }
-
+        userId,
+      },
     });
-
   }
 
-
-  findActive(){
-
+  findActive() {
     return this.prisma.inventorySession.findMany({
-
-      where:{
-        finishedAt:null
+      where: {
+        finishedAt: null,
       },
 
-      include:{
-        warehouse:true,
-        user:true
+      include: {
+        warehouse: true,
+        user: true,
       },
 
-      orderBy:{
-        startedAt:'desc'
-      }
-
+      orderBy: {
+        startedAt: 'desc',
+      },
     });
-
   }
 
-
-  finish(id:string){
-
+  finish(id: string) {
     return this.prisma.inventorySession.update({
-
-      where:{
-        id
+      where: {
+        id,
       },
 
-      data:{
-        finishedAt:new Date()
-      }
-
+      data: {
+        finishedAt: new Date(),
+      },
     });
-
   }
-
 }

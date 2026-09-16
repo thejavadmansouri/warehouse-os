@@ -5,85 +5,73 @@ import { ReservationService } from './reservation.service';
 
 @Injectable()
 export class InventoryService {
-
   constructor(
     private prisma: PrismaService,
     private operation: InventoryOperationService,
     private reservations: ReservationService,
   ) {}
 
-
-  async create(dto:any){
-
+  async create(dto: any) {
     return this.operation.execute({
+      type: 'IN',
 
-      type:'IN',
+      productId: dto.productId,
 
-      productId:dto.productId,
+      locationId: dto.locationId,
 
-      locationId:dto.locationId,
+      quantity: dto.quantity,
 
-      quantity:dto.quantity,
+      note: dto.note,
 
-      note:dto.note,
+      userId: dto.userId,
 
-      userId:dto.userId,
-
-      source:'MANUAL'
-
-    });
-
-  }
-
-
-
-  async adjust(dto:any){
-    return this.operation.execute({
-      type:'ADJUST',
-      productId:dto.productId,
-      locationId:dto.locationId,
-      targetQuantity:dto.targetQuantity,
-      note:dto.note,
-      source:'MANUAL',
-      userId:dto.userId,
+      source: 'MANUAL',
     });
   }
 
+  async adjust(dto: any) {
+    return this.operation.execute({
+      type: 'ADJUST',
+      productId: dto.productId,
+      locationId: dto.locationId,
+      targetQuantity: dto.targetQuantity,
+      note: dto.note,
+      source: 'MANUAL',
+      userId: dto.userId,
+    });
+  }
 
-
-  async out(dto:any){
+  async out(dto: any) {
     // موجودی داخل InventoryOperationService.execute به‌صورت اتمیک (داخل تراکنش) چک می‌شه؛
     // چک جداگانه‌ی اینجا حذف شد چون race condition ایجاد می‌کرد (بین این چک و اجرای عملیات).
     return this.operation.execute({
+      type: 'SALE',
 
-      type:'SALE',
+      productId: dto.productId,
 
-      productId:dto.productId,
+      locationId: dto.locationId,
 
-      locationId:dto.locationId,
+      quantity: dto.quantity,
 
-      quantity:dto.quantity,
+      unitPrice: dto.unitPrice,
 
-      unitPrice:dto.unitPrice,
+      note: dto.note,
 
-      note:dto.note,
+      userId: dto.userId,
 
-      userId:dto.userId,
-
-      source:'SALE'
-
+      source: 'SALE',
     });
-
   }
-
-
 
   // اسکن بارکد برای فروش: کالا را از بارکد/SKU/شماره‌فنی/بارکد داخلی پیدا کن و
   // موجودی‌اش را در یک درخواست برگردان (یک round-trip → فروش سریع پشت پیشخوان).
   async resolveForSale(rawBarcode: string) {
     const code = (rawBarcode || '').trim();
     if (!code) {
-      throw new NotFoundException({ error: 'NOT_FOUND', message: 'بارکد خالی است' });
+      throw new NotFoundException({
+        error: 'NOT_FOUND',
+        message: 'بارکد خالی است',
+      });
     }
 
     const product = await this.prisma.product.findFirst({
@@ -145,19 +133,20 @@ export class InventoryService {
        * ملاک `available` است نه `onHand`: جنسی که به کسِ دیگری قول داده شده،
        * برای سفارشِ بعدی موجود نیست.
        */
-      belowMinStock: product.minStock > 0 && onHand - reserved <= product.minStock,
+      belowMinStock:
+        product.minStock > 0 && onHand - reserved <= product.minStock,
     };
   }
 
   // موجودیِ یک کالا به تفکیک مکان — برای صفحه‌ی فروش اپ: «این کالا کجا و چند تا موجوده».
   // فقط مکان‌هایی که موجودیِ مثبت دارند (یعنی ثبت و لیبل خورده‌اند) قابل فروش‌اند.
-  async stockByProduct(productId:string){
+  async stockByProduct(productId: string) {
     const rows = await this.prisma.inventory.findMany({
-      where:{ productId, quantity:{ gt:0 } },
-      include:{ location:true },
-      orderBy:{ quantity:'desc' },
+      where: { productId, quantity: { gt: 0 } },
+      include: { location: true },
+      orderBy: { quantity: 'desc' },
     });
-    return rows.map((r)=>({
+    return rows.map((r) => ({
       locationId: r.locationId,
       locationName: r.location?.name ?? '',
       locationCode: r.location?.code ?? '',
@@ -170,114 +159,90 @@ export class InventoryService {
     }));
   }
 
-
-
-  async scanBarcode(dto:any){
-
-    const product =
-      await this.prisma.product.findFirst({
-
-        where:{
-          barcodes:{
-            some:{
-              barcode:dto.barcode
-            }
-          }
-        }
-
-      });
-
-
-    if(!product){
-      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا پیدا نشد' });
-    }
-
-
-    const location =
-      await this.prisma.location.findUnique({
-
-        where:{
-          barcode:dto.locationBarcode
-        }
-
-      });
-
-
-    if(!location){
-      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
-    }
-
-
-
-    return this.operation.execute({
-
-      type:dto.action || 'IN',
-
-      productId:product.id,
-
-      locationId:location.id,
-
-      quantity:dto.quantity,
-
-      note:'BARCODE',
-
-      userId:dto.userId,
-
-      source:'BARCODE'
-
+  async scanBarcode(dto: any) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        barcodes: {
+          some: {
+            barcode: dto.barcode,
+          },
+        },
+      },
     });
 
-  }
-
-
-
-
-  async scanOut(dto:any){
-
-    const product =
-      await this.prisma.product.findFirst({
-
-        where:{
-          barcodes:{
-            some:{
-              barcode:dto.barcode
-            }
-          }
-        }
-
+    if (!product) {
+      throw new NotFoundException({
+        error: 'PRODUCT_NOT_FOUND',
+        message: 'کالا پیدا نشد',
       });
-
-
-    if(!product){
-      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا پیدا نشد' });
     }
 
-
-
-    return this.operation.execute({
-
-      type:'SALE',
-
-      productId:product.id,
-
-      locationId:dto.locationId,
-
-      quantity:dto.quantity,
-
-      note:dto.note || 'Barcode OUT',
-
-      userId:dto.userId,
-
-      source:'BARCODE'
-
+    const location = await this.prisma.location.findUnique({
+      where: {
+        barcode: dto.locationBarcode,
+      },
     });
 
+    if (!location) {
+      throw new NotFoundException({
+        error: 'LOCATION_NOT_FOUND',
+        message: 'موقعیت پیدا نشد',
+      });
+    }
+
+    return this.operation.execute({
+      type: dto.action || 'IN',
+
+      productId: product.id,
+
+      locationId: location.id,
+
+      quantity: dto.quantity,
+
+      note: 'BARCODE',
+
+      userId: dto.userId,
+
+      source: 'BARCODE',
+    });
   }
 
+  async scanOut(dto: any) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        barcodes: {
+          some: {
+            barcode: dto.barcode,
+          },
+        },
+      },
+    });
 
+    if (!product) {
+      throw new NotFoundException({
+        error: 'PRODUCT_NOT_FOUND',
+        message: 'کالا پیدا نشد',
+      });
+    }
 
+    return this.operation.execute({
+      type: 'SALE',
 
-      async getStock(page: number = 1, limit: number = 50) {
+      productId: product.id,
+
+      locationId: dto.locationId,
+
+      quantity: dto.quantity,
+
+      note: dto.note || 'Barcode OUT',
+
+      userId: dto.userId,
+
+      source: 'BARCODE',
+    });
+  }
+
+  async getStock(page: number = 1, limit: number = 50) {
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
       this.prisma.inventory.findMany({
@@ -285,29 +250,29 @@ export class InventoryService {
         take: limit,
         where: {
           quantity: {
-            gt: 0
-          }
+            gt: 0,
+          },
         },
         include: {
           product: {
             include: {
               brand: true,
-              vehicleModel: true
-            }
+              vehicleModel: true,
+            },
           },
-          location: true
+          location: true,
         },
         orderBy: {
-          updatedAt: 'desc'
-        }
+          updatedAt: 'desc',
+        },
       }),
       this.prisma.inventory.count({
         where: {
           quantity: {
-            gt: 0
-          }
-        }
-      })
+            gt: 0,
+          },
+        },
+      }),
     ]);
 
     return {
@@ -316,40 +281,41 @@ export class InventoryService {
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit)
-      }
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
-  async findByLocation(locationId:string){
-
+  async findByLocation(locationId: string) {
     return this.prisma.inventoryLog.findMany({
-
-      where:{
-        locationId
+      where: {
+        locationId,
       },
 
-      include:{
-        product:true,
-        location:true,
-        user:true
+      include: {
+        product: true,
+        location: true,
+        user: true,
       },
 
-      orderBy:{
-        createdAt:'desc'
-      }
-
+      orderBy: {
+        createdAt: 'desc',
+      },
     });
-
   }
 
+  async getLogs(query: any) {
+    const {
+      productId,
+      locationId,
+      action,
+      from,
+      to,
+      page = 1,
+      limit = 20,
+    } = query;
 
-
-  async getLogs(query:any){
-
-    const { productId, locationId, action, from, to, page = 1, limit = 20 } = query;
-
-    const where:any = {};
+    const where: any = {};
     if (productId) where.productId = productId;
     if (locationId) where.locationId = locationId;
     if (action) where.action = action;
@@ -362,39 +328,30 @@ export class InventoryService {
     const [items, total] = await Promise.all([
       this.prisma.inventoryLog.findMany({
         where,
-        include:{ product:true, location:true, user:true },
-        orderBy:{ createdAt:'desc' },
-        skip:(Number(page)-1)*Number(limit),
-        take:Number(limit),
+        include: { product: true, location: true, user: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (Number(page) - 1) * Number(limit),
+        take: Number(limit),
       }),
       this.prisma.inventoryLog.count({ where }),
     ]);
 
-    return { items, total, page:Number(page), limit:Number(limit) };
-
+    return { items, total, page: Number(page), limit: Number(limit) };
   }
 
-
-
-  async getLog(id:string){
-
+  async getLog(id: string) {
     return this.prisma.inventoryLog.findUnique({
-
-      where:{
-        id
+      where: {
+        id,
       },
 
-      include:{
-        product:true,
-        location:true,
-        user:true
-      }
-
+      include: {
+        product: true,
+        location: true,
+        user: true,
+      },
     });
-
   }
-
-
 
   /**
    * کاردکس کالا — گردشِ ورود/خروج یک کالا با مانده‌ی متحرک.
@@ -421,8 +378,7 @@ export class InventoryService {
       /** فیلتر نوع حرکت — فقط روی نمایش اعمال می‌شود؛ مانده و خلاصه از کل تاریخچه. */
       action?: string;
     },
-  ){
-
+  ) {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, deletedAt: null },
       select: { id: true, name: true, sku: true },
@@ -430,13 +386,20 @@ export class InventoryService {
     if (!product) throw new NotFoundException('کالا یافت نشد');
 
     const start = q.startDate ? new Date(q.startDate) : null;
-    const end   = q.endDate   ? new Date(q.endDate)   : null;
-    const page  = Math.max(1, Number(q.page) || 1);
+    const end = q.endDate ? new Date(q.endDate) : null;
+    const page = Math.max(1, Number(q.page) || 1);
     const limit = Math.min(10_000, Math.max(1, Number(q.limit) || 50));
-    const skip  = (page - 1) * limit;
+    const skip = (page - 1) * limit;
 
     // فیلتر نوع حرکت — فقط مقادیر مجاز. COUNT هرگز لاگ نمی‌شود و در فیلتر نمی‌آید.
-    const KARDEX_ACTIONS = new Set(['IN', 'OUT', 'SALE', 'RETURN', 'TRANSFER', 'ADJUST']);
+    const KARDEX_ACTIONS = new Set([
+      'IN',
+      'OUT',
+      'SALE',
+      'RETURN',
+      'TRANSFER',
+      'ADJUST',
+    ]);
     const action = q.action && KARDEX_ACTIONS.has(q.action) ? q.action : null;
 
     const rows = await this.prisma.$queryRaw<
@@ -511,7 +474,12 @@ export class InventoryService {
      * از اینکه کاربر چه حرکتی را فیلتر کرده.
      */
     const [summaryRow] = await this.prisma.$queryRaw<
-      { totalIn: bigint; totalOut: bigint; saleCount: bigint; saleValue: bigint }[]
+      {
+        totalIn: bigint;
+        totalOut: bigint;
+        saleCount: bigint;
+        saleValue: bigint;
+      }[]
     >`
       WITH moves AS (
         SELECT l."createdAt", l."quantity", l."unitPrice", l."action",
@@ -536,13 +504,40 @@ export class InventoryService {
         AND (${end}::timestamptz   IS NULL OR "createdAt" <= ${end})
     `;
 
+    // عکس‌های گرفته‌شده با گوشی موقع ورود/اسکن — هر حرکت ممکن است یک یا چند
+    // Asset از نوع INVENTORY_IMAGE داشته باشد که با inventoryLogId وصل شده‌اند.
+    const logIds = rows.map((r) => r.id);
+    const assets = logIds.length
+      ? await this.prisma.asset.findMany({
+          where: { inventoryLogId: { in: logIds } },
+          select: {
+            id: true,
+            inventoryLogId: true,
+            path: true,
+            thumbnailPath: true,
+            mimeType: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        })
+      : [];
+    const assetsByLog = new Map<string, typeof assets>();
+    for (const a of assets) {
+      if (!a.inventoryLogId) continue;
+      const list = assetsByLog.get(a.inventoryLogId) ?? [];
+      list.push(a);
+      assetsByLog.set(a.inventoryLogId, list);
+    }
+
     const data = rows.map((r) => {
       const signed = Number(r.signed);
       const docType =
-        r.returnNumber   != null ? 'RETURN'
-        : r.purchaseNumber != null ? 'PURCHASE'
-        : r.saleNumber   != null ? 'SALE'
-        : 'MANUAL';
+        r.returnNumber != null
+          ? 'RETURN'
+          : r.purchaseNumber != null
+            ? 'PURCHASE'
+            : r.saleNumber != null
+              ? 'SALE'
+              : 'MANUAL';
       const docNumber =
         r.returnNumber ?? r.purchaseNumber ?? r.saleNumber ?? null;
 
@@ -558,6 +553,12 @@ export class InventoryService {
         outQty: signed < 0 ? -signed : 0,
         balance: Number(r.balance),
         unitPrice: r.unitPrice,
+        assets: (assetsByLog.get(r.id) ?? []).map((a) => ({
+          assetId: a.id,
+          url: a.path,
+          thumbUrl: a.thumbnailPath,
+          mimeType: a.mimeType,
+        })),
       };
     });
 
@@ -581,96 +582,67 @@ export class InventoryService {
         },
       },
     };
-
   }
 
-
-
-
-  async findOne(
-    productId:string,
-    locationId:string
-  ){
-
+  async findOne(productId: string, locationId: string) {
     return this.prisma.inventory.findUnique({
-
-      where:{
-        productId_locationId:{
+      where: {
+        productId_locationId: {
           productId,
-          locationId
-        }
+          locationId,
+        },
       },
 
-      include:{
-        product:{
-          include:{
-            brand:true,
-            vehicleModel:true
-          }
+      include: {
+        product: {
+          include: {
+            brand: true,
+            vehicleModel: true,
+          },
         },
-        location:true
-      }
+        location: true,
+      },
+    });
+  }
 
+  async scan(barcode: string) {
+    const product = await this.prisma.product.findFirst({
+      where: {
+        barcodes: {
+          some: {
+            barcode,
+          },
+        },
+      },
+
+      include: {
+        brand: true,
+        vehicleModel: true,
+        assets: true,
+      },
     });
 
-  }
-
-
-
-  async scan(barcode:string){
-
-    const product =
-      await this.prisma.product.findFirst({
-
-        where:{
-          barcodes:{
-            some:{
-              barcode
-            }
-          }
-        },
-
-        include:{
-          brand:true,
-          vehicleModel:true,
-          assets:true
-        }
-
+    if (!product) {
+      throw new NotFoundException({
+        error: 'PRODUCT_NOT_FOUND',
+        message: 'کالا با این بارکد پیدا نشد',
       });
-
-
-
-    if(!product){
-
-      throw new NotFoundException({ error:'PRODUCT_NOT_FOUND', message:'کالا با این بارکد پیدا نشد' });
-
     }
 
+    const stocks = await this.prisma.inventory.findMany({
+      where: {
+        productId: product.id,
+      },
 
-
-    const stocks =
-      await this.prisma.inventory.findMany({
-
-        where:{
-          productId:product.id
-        },
-
-        include:{
-          location:true
-        }
-
-      });
-
-
+      include: {
+        location: true,
+      },
+    });
 
     return {
-
       product,
 
-      stocks
-
+      stocks,
     };
-
   }
-
 }

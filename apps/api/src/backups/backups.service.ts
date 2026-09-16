@@ -8,6 +8,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs/promises';
+import * as fsSync from 'fs';
 import * as path from 'path';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -31,13 +32,19 @@ const LIBPQ_PARAMS = new Set([
 ]);
 
 /**
- * Prisma برای ستون BigInt مقدار BigInt جاوااسکریپت می‌دهد و JSON.stringify
+ * Prisma برای ستون‌های BigInt مقدار BigInt جاوااسکریپت می‌دهد و JSON.stringify
  * آن را سریالایز نمی‌کند — پاسخ با «Do not know how to serialize a BigInt»
- * می‌ترکد در حالی که خود بک‌آپ موفق بوده. حجم فایل به number تبدیل می‌شود.
+ * می‌ترکد در حالی که خود بک‌آپ موفق بوده. حجم‌ها به number تبدیل می‌شوند.
  */
-function serializeRun<T extends { sizeBytes?: bigint | null } | null>(row: T) {
+function serializeRun<
+  T extends { sizeBytes?: bigint | null; storageBytes?: bigint | null } | null,
+>(row: T) {
   if (!row) return row;
-  return { ...row, sizeBytes: row.sizeBytes == null ? null : Number(row.sizeBytes) };
+  return {
+    ...row,
+    sizeBytes: row.sizeBytes == null ? null : Number(row.sizeBytes),
+    storageBytes: row.storageBytes == null ? null : Number(row.storageBytes),
+  };
 }
 
 /** حذف رمز از هر متنی پیش از رفتن به کلاینت یا لاگ. */
@@ -45,9 +52,49 @@ function redactSecrets(text: string): string {
   return text.replace(/(postgres(?:ql)?:\/\/[^:@\s]+:)[^@\s]+@/gi, '$1***@');
 }
 
-/** مسیر pg_dump اگر روی PATH نباشد (روی ویندوز معمولاً نیست). */
-const PG_DUMP = process.env.PG_DUMP_PATH || 'pg_dump';
-const PG_RESTORE = process.env.PG_RESTORE_PATH || 'pg_restore';
+/**
+ * مسیر pg_dump/pg_restore.
+ *
+ * روی ویندوز `pg_dump` تقریباً هیچ‌وقت روی PATH نیست — و وقتی نیست، هر بک‌آپ
+ * (دستی، روی-بستن، زمان‌بندی‌شده) با `spawn pg_dump ENOENT` می‌میرد و هیچ سند
+ * موفقی هرگز ثبت نمی‌شود؛ یعنی مشتری فکر می‌کند بک‌آپ می‌گیرد در حالی که هرگز
+ * نگرفته. پس به‌جای اعتماد به PATH:
+ *
+ *   ۱. اگر env (مثل نصبِ بسته‌ای first-run.ps1) مسیر داده، همان.
+ *   ۲. وگرنه نصب‌های استانداردِ ویندوزی PostgreSQL پیمایش می‌شود — بالاترین
+ *      نسخهٔ یافت‌شده برنده است (psql و pg_dump از یک نسخه باید باشند).
+ *   ۳. آخرین حرف همان 'pg_dump' است تا روی مک/لینوکس PATH کار کند.
+ */
+function findPgBinary(name: 'pg_dump' | 'pg_restore'): string {
+  const envKey = name === 'pg_dump' ? 'PG_DUMP_PATH' : 'PG_RESTORE_PATH';
+  if (process.env[envKey]) return process.env[envKey];
+  if (process.platform !== 'win32') return name;
+
+  const roots = [
+    'C:\\Program Files\\PostgreSQL',
+    'C:\\Program Files (x86)\\PostgreSQL',
+  ];
+  for (const root of roots) {
+    let versions: string[] = [];
+    try {
+      versions = fsSync
+        .readdirSync(root)
+        .filter((d) => /^\d+(\.\d+)?$/.test(d))
+        .sort()
+        .reverse();
+    } catch {
+      continue; // پوشهٔ نصب نیست — مسیرِ بعدی
+    }
+    for (const v of versions) {
+      const candidate = path.join(root, v, 'bin', name + '.exe');
+      if (fsSync.existsSync(candidate)) return candidate;
+    }
+  }
+  return name; // آخرین حرف: PATH — اگر نیست، خطای ENOENT صادق می‌آید
+}
+
+const PG_DUMP = findPgBinary('pg_dump');
+const PG_RESTORE = findPgBinary('pg_restore');
 
 /**
  * الگوی نامِ فایل بک‌آپ — همان چیزی که `createBackup` می‌سازد.
@@ -58,10 +105,8 @@ const PG_RESTORE = process.env.PG_RESTORE_PATH || 'pg_restore';
  */
 const BACKUP_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.dump$/;
 
-
 @Injectable()
 export class BackupsService {
-
   private readonly logger = new Logger(BackupsService.name);
   /** جلوی اجرای هم‌زمان دو بک‌آپ را می‌گیرد (زمان‌بندی + دستی با هم). */
   private running = false;
@@ -71,8 +116,15 @@ export class BackupsService {
    */
   private restoring = false;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService) {
+    // یک‌بار در لاگ، تا «چرا بک‌آپ نمی‌گیرد» بدون حدس پاسخ داشته باشد.
+    this.logger.log(`pg_dump: ${PG_DUMP} · pg_restore: ${PG_RESTORE}`);
+  }
 
+  /** برای تست — بدون این، serializeRun و PG_DUMP فقط در پروسهٔ واقعی دیدنی‌اند. */
+  static get testHooks() {
+    return { serializeRun, pgDumpPath: PG_DUMP };
+  }
 
   async getConfig() {
     const existing = await this.prisma.backupConfig.findUnique({
@@ -83,7 +135,6 @@ export class BackupsService {
 
     return this.prisma.backupConfig.create({ data: { id: SINGLETON } });
   }
-
 
   async updateConfig(dto: {
     enabled?: boolean;
@@ -125,7 +176,6 @@ export class BackupsService {
     });
   }
 
-
   /**
    * وضعیتی که کلاینت برای «یادآوری پیش از بستن» می‌پرسد.
    *
@@ -155,7 +205,6 @@ export class BackupsService {
     };
   }
 
-
   /**
    * زمان‌بند: هر دقیقه بیدار می‌شود و فقط اگر ساعت و دقیقه‌ی تنظیم‌شده رسیده
    * باشد اجرا می‌کند.
@@ -171,7 +220,8 @@ export class BackupsService {
       if (!config.enabled || this.running) return;
 
       const now = new Date();
-      if (now.getHours() !== config.hour || now.getMinutes() !== config.minute) return;
+      if (now.getHours() !== config.hour || now.getMinutes() !== config.minute)
+        return;
 
       // اگر در همین دقیقه قبلاً اجرا شده، دوباره اجرا نکن.
       const already = await this.prisma.backupRun.findFirst({
@@ -182,10 +232,11 @@ export class BackupsService {
       this.logger.log('اجرای بک‌آپ زمان‌بندی‌شده');
       await this.createBackup('SCHEDULED');
     } catch (e) {
-      this.logger.error(`بک‌آپ زمان‌بندی‌شده شکست خورد: ${redactSecrets(String(e))}`);
+      this.logger.error(
+        `بک‌آپ زمان‌بندی‌شده شکست خورد: ${redactSecrets(String(e))}`,
+      );
     }
   }
-
 
   /**
    * گرفتن بک‌آپ.
@@ -197,7 +248,6 @@ export class BackupsService {
     trigger: 'MANUAL' | 'SCHEDULED' | 'ON_CLOSE' | 'PRE_RESTORE',
     userId?: string,
   ) {
-
     if (this.running) {
       throw new BadRequestException({
         error: 'BACKUP_IN_PROGRESS',
@@ -219,22 +269,28 @@ export class BackupsService {
     const config = await this.getConfig();
     const dir = await this.resolveDestination(config.destination);
 
-    const stamp = new Date()
-      .toISOString()
-      .replace(/[:.]/g, '-')
-      .slice(0, 19);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filePath = path.join(dir, `warehouse_os_${stamp}.dump`);
 
     const record = await this.prisma.backupRun.create({
-      data: { configId: config.id, trigger, status: 'RUNNING', startedById: userId ?? null },
+      data: {
+        configId: config.id,
+        trigger,
+        status: 'RUNNING',
+        startedById: userId ?? null,
+      },
     });
 
     try {
       const url = this.connectionString();
 
-      await run(PG_DUMP, ['--format=custom', '--file', filePath, '--dbname', url], {
-        maxBuffer: 1024 * 1024 * 64,
-      });
+      await run(
+        PG_DUMP,
+        ['--format=custom', '--file', filePath, '--dbname', url],
+        {
+          maxBuffer: 1024 * 1024 * 64,
+        },
+      );
 
       const stat = await fs.stat(filePath);
 
@@ -267,7 +323,11 @@ export class BackupsService {
         : null;
 
       // مقصد دوم — **بعد از** ثبتِ موفقیتِ دامپ، و شکستش سند را ناموفق نمی‌کند.
-      const mirror = await this.mirror(config.mirrorPath, filePath, storageBytes != null);
+      const mirror = await this.mirror(
+        config.mirrorPath,
+        filePath,
+        storageBytes != null,
+      );
 
       await this.prisma.backupRun.update({
         where: { id: record.id },
@@ -280,7 +340,9 @@ export class BackupsService {
 
       await this.prune(dir, config.keepCount);
       if (config.mirrorPath?.trim()) {
-        await this.prune(config.mirrorPath.trim(), config.keepCount).catch(() => undefined);
+        await this.prune(config.mirrorPath.trim(), config.keepCount).catch(
+          () => undefined,
+        );
       }
 
       this.logger.log(`بک‌آپ موفق: ${filePath} (${stat.size} بایت)`);
@@ -288,7 +350,6 @@ export class BackupsService {
       return serializeRun(
         await this.prisma.backupRun.findUnique({ where: { id: record.id } }),
       );
-
     } catch (e: unknown) {
       // پیام خطای pg_dump رشته‌ی اتصال کامل را تکرار می‌کند — یعنی رمز دیتابیس.
       // بدون پاک‌سازی، رمز مستقیم به مرورگر می‌رفت.
@@ -299,7 +360,11 @@ export class BackupsService {
 
       await this.prisma.backupRun.update({
         where: { id: record.id },
-        data: { status: 'FAILED', error: message.slice(0, 1000), finishedAt: new Date() },
+        data: {
+          status: 'FAILED',
+          error: message.slice(0, 1000),
+          finishedAt: new Date(),
+        },
       });
 
       this.logger.error(`بک‌آپ شکست خورد: ${message}`);
@@ -307,12 +372,10 @@ export class BackupsService {
         error: 'BACKUP_FAILED',
         message: `گرفتن بک‌آپ ناموفق بود: ${message}`,
       });
-
     } finally {
       this.running = false;
     }
   }
-
 
   async history(limit = 30) {
     const rows = await this.prisma.backupRun.findMany({
@@ -321,7 +384,6 @@ export class BackupsService {
     });
     return rows.map(serializeRun);
   }
-
 
   // ---------- بازیابی ----------
 
@@ -357,7 +419,6 @@ export class BackupsService {
 
     return { directory: dir, files };
   }
-
 
   /**
    * مسیر کاملِ یک فایل بک‌آپ، با دو نگهبان.
@@ -401,7 +462,6 @@ export class BackupsService {
     return full;
   }
 
-
   /**
    * بازیابیِ کلِ دیتابیس از یک فایل بک‌آپ.
    *
@@ -433,7 +493,6 @@ export class BackupsService {
    * به‌روزرسانی را اجرا کند — بی‌صدا رهایش نمی‌کنیم.
    */
   async restore(fileName: string, userId?: string) {
-
     if (this.restoring) {
       throw new BadRequestException({
         error: 'RESTORE_IN_PROGRESS',
@@ -543,7 +602,8 @@ export class BackupsService {
           '--exit-on-error',
           '--no-owner',
           '--no-privileges',
-          '--dbname', url,
+          '--dbname',
+          url,
           filePath,
         ],
         { maxBuffer: 1024 * 1024 * 64 },
@@ -606,7 +666,6 @@ export class BackupsService {
           ? 'بازیابی انجام شد، ولی این بک‌آپ از نسخه‌ی قدیمی‌تری از برنامه است. تا زمانی که به‌روزرسانیِ دیتابیس اجرا نشود، بخش‌هایی از برنامه کار نمی‌کنند.'
           : 'بازیابی کامل انجام شد.',
       };
-
     } catch (e: unknown) {
       const message = redactSecrets(e instanceof Error ? e.message : String(e));
 
@@ -645,12 +704,10 @@ export class BackupsService {
           `بازیابی ناموفق بود: ${message}` +
           (pre ? ` — بک‌آپِ پیش از بازیابی «${pre}» سالم است.` : ''),
       });
-
     } finally {
       this.restoring = false;
     }
   }
-
 
   /**
    * ردِ ممیزیِ بازیابی، در فایلی کنارِ خودِ بک‌آپ‌ها.
@@ -674,7 +731,6 @@ export class BackupsService {
     }
   }
 
-
   /**
    * مایگریشن‌هایی که روی دیتابیس نیستند ولی در کد هستند.
    *
@@ -686,20 +742,26 @@ export class BackupsService {
    * مخرب، همان جایی است که وضعیتِ قابل‌برگشت به غیرقابل‌برگشت تبدیل می‌شود.
    */
   private async pendingMigrations(): Promise<string[]> {
-    const dir = process.env.PRISMA_MIGRATIONS_PATH
-      || path.resolve(process.cwd(), 'prisma', 'migrations');
+    const dir =
+      process.env.PRISMA_MIGRATIONS_PATH ||
+      path.resolve(process.cwd(), 'prisma', 'migrations');
 
     let onDisk: string[];
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
-      onDisk = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+      onDisk = entries
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name)
+        .sort();
     } catch {
       // پوشه‌ی مایگریشن‌ها همراه نصب نیامده — چیزی برای مقایسه نیست.
       return [];
     }
 
     try {
-      const rows = await this.prisma.$queryRawUnsafe<{ migration_name: string }[]>(
+      const rows = await this.prisma.$queryRawUnsafe<
+        { migration_name: string }[]
+      >(
         `SELECT migration_name FROM "_prisma_migrations" WHERE finished_at IS NOT NULL`,
       );
       const applied = new Set(rows.map((r) => r.migration_name));
@@ -710,7 +772,6 @@ export class BackupsService {
     }
   }
 
-
   /** سابقه‌ی بازیابی‌ها — ردِ ممیزیِ یک عملیات مخرب. */
   async restoreHistory(limit = 20) {
     return this.prisma.restoreRun.findMany({
@@ -718,7 +779,6 @@ export class BackupsService {
       take: Math.min(100, Math.max(1, limit)),
     });
   }
-
 
   // ---------- کمکی‌ها ----------
 
@@ -739,7 +799,6 @@ export class BackupsService {
     return url.toString();
   }
 
-
   /** خواندن فهرست محتویات آرشیو — بدون بازیابی واقعی. */
   private async verify(filePath: string): Promise<boolean> {
     try {
@@ -747,12 +806,14 @@ export class BackupsService {
         maxBuffer: 1024 * 1024 * 32,
       });
       // آرشیو سالم حتماً چند ورودی دارد.
-      return stdout.split('\n').filter((l) => l.trim() && !l.startsWith(';')).length > 0;
+      return (
+        stdout.split('\n').filter((l) => l.trim() && !l.startsWith(';'))
+          .length > 0
+      );
     } catch {
       return false;
     }
   }
-
 
   private async resolveDestination(destination: string): Promise<string> {
     const dir = destination?.trim()
@@ -762,7 +823,6 @@ export class BackupsService {
     await this.assertWritable(dir);
     return dir;
   }
-
 
   private async assertWritable(dir: string) {
     try {
@@ -780,7 +840,6 @@ export class BackupsService {
       });
     }
   }
-
 
   /** نگه داشتن فقط N فایل آخر. */
   /**
@@ -816,7 +875,6 @@ export class BackupsService {
 
       const out = await fs.stat(target);
       return out.size;
-
     } catch (e: unknown) {
       this.logger.warn(
         `آرشیو عکس‌ها انجام نشد: ${redactSecrets(e instanceof Error ? e.message : String(e))}`,
@@ -824,7 +882,6 @@ export class BackupsService {
       return null;
     }
   }
-
 
   /**
    * کپیِ بک‌آپ روی مقصد دوم.
@@ -841,7 +898,6 @@ export class BackupsService {
     dumpPath: string,
     withStorage: boolean,
   ): Promise<{ attempted: boolean; ok: boolean; error?: string }> {
-
     const dir = mirrorPath?.trim();
     if (!dir) return { attempted: false, ok: false };
 
@@ -859,14 +915,12 @@ export class BackupsService {
       }
 
       return { attempted: true, ok: true };
-
     } catch (e: unknown) {
       const message = redactSecrets(e instanceof Error ? e.message : String(e));
       this.logger.error(`کپی روی مقصد دوم شکست خورد: ${message}`);
       return { attempted: true, ok: false, error: message.slice(0, 500) };
     }
   }
-
 
   private async prune(dir: string, keep: number) {
     try {

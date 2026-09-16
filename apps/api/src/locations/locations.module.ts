@@ -11,14 +11,8 @@ import { InventoryOperationModule } from '../inventory-operation/inventory-opera
     // تغییر موجودی از تک‌نقطه‌ی InventoryOperationService رد می‌شود (قانون ۱).
     InventoryOperationModule,
   ],
-  controllers: [
-    LocationsController,
-  ],
-  providers: [
-    LocationsService,
-  ],
-  exports: [
-    LocationsService,
-  ],
+  controllers: [LocationsController],
+  providers: [LocationsService],
+  exports: [LocationsService],
 })
 export class LocationsModule {}

@@ -69,8 +69,21 @@ const NAME_COVERAGE_WEIGHT = 60;
 // (در حالت ایده‌آل پارسر باید اینها را به‌عنوان UNIT/NUMBER مصرف کند؛
 // این لیست فقط یک لایهٔ دفاعی اضافه در matcher است)
 const STOPWORDS = new Set([
-  'تا', 'دونه', 'عدد', 'تومن', 'ریال', 'ریال',
-  'لطفا', 'لطفاً', 'یه', 'یک', 'یکی', 'برای', 'از', 'به', 'در',
+  'تا',
+  'دونه',
+  'عدد',
+  'تومن',
+  'ریال',
+  'ریال',
+  'لطفا',
+  'لطفاً',
+  'یه',
+  'یک',
+  'یکی',
+  'برای',
+  'از',
+  'به',
+  'در',
 ]);
 
 // اگر بهترین کاندید confidence خیلی پایینی دارد (یعنی فقط از fallback
@@ -146,7 +159,9 @@ export class ProductMatcherService {
       select: { id: true },
     });
 
-    return Array.from(new Set([...direct.map((v) => v.id), ...family.map((v) => v.id)]));
+    return Array.from(
+      new Set([...direct.map((v) => v.id), ...family.map((v) => v.id)]),
+    );
   }
 
   async findBrandIdByName(name: string | null) {
@@ -240,8 +255,12 @@ export class ProductMatcherService {
     const best = ranked[0];
     const second = ranked[1];
 
-    const hasVehicleInput = !!(input.vehicleModelIds?.length || input.vehicleName);
-    const vehicleRequirementSatisfied = !hasVehicleInput ? true : best.vehicleMatched;
+    const hasVehicleInput = !!(
+      input.vehicleModelIds?.length || input.vehicleName
+    );
+    const vehicleRequirementSatisfied = !hasVehicleInput
+      ? true
+      : best.vehicleMatched;
 
     // در گفتار واقعی کارگر «۴۰۵» می‌گوید، نه «پژو ۴۰۵ GLX» — پس modelIsExplicit
     // تقریباً هیچ‌وقت درست نیست. شرط کردنِ تأیید خودکار به آن یعنی هیچ‌وقت
@@ -360,7 +379,10 @@ export class ProductMatcherService {
       `WHERE "deletedAt" IS NULL AND "isActive" = true AND (${ors.join(' OR ')}) ` +
       `ORDER BY (${tokenHitExpr}) DESC, ${simExpr} DESC LIMIT ${limitPlaceholder}`;
 
-    const rows = await this.prisma.$queryRawUnsafe<{ id: string }[]>(sql, ...params);
+    const rows = await this.prisma.$queryRawUnsafe<{ id: string }[]>(
+      sql,
+      ...params,
+    );
     const ids = rows.map((r) => r.id);
     if (!ids.length) return [];
 
@@ -405,7 +427,9 @@ export class ProductMatcherService {
       if (partName && (partName.includes(pn) || pn.includes(partName))) {
         score += WEIGHT.PART_NAME_MATCH;
         partMatched = true;
-        reasons.push(`part matched by name: ${product.partCatalog?.name ?? ''}`);
+        reasons.push(
+          `part matched by name: ${product.partCatalog?.name ?? ''}`,
+        );
       } else if (partAliases.some((a) => norm(a) === pn)) {
         score += WEIGHT.PART_ALIAS_MATCH;
         partMatched = true;
@@ -463,7 +487,9 @@ export class ProductMatcherService {
       if (nameTokenHits.length) {
         partMatched = true;
         score += Math.min(nameTokenHits.length, 3) * WEIGHT.PART_TOKEN_FALLBACK;
-        reasons.push(`keyword(s) matched in product name: ${nameTokenHits.join(', ')}`);
+        reasons.push(
+          `keyword(s) matched in product name: ${nameTokenHits.join(', ')}`,
+        );
       }
     }
 
@@ -471,7 +497,10 @@ export class ProductMatcherService {
     let vehicleMatched = false;
 
     if (input.vehicleModelIds && input.vehicleModelIds.length) {
-      if (product.vehicleModelId && input.vehicleModelIds.includes(product.vehicleModelId)) {
+      if (
+        product.vehicleModelId &&
+        input.vehicleModelIds.includes(product.vehicleModelId)
+      ) {
         score += WEIGHT.VEHICLE_ID_MATCH;
         vehicleMatched = true;
         reasons.push(`vehicle matched: ${product.vehicleModel?.name ?? ''}`);
@@ -486,10 +515,15 @@ export class ProductMatcherService {
     } else if (input.vehicleName) {
       const vn = norm(input.vehicleName);
 
-      if (vehicleName && (vehicleName.includes(vn) || vn.includes(vehicleName))) {
+      if (
+        vehicleName &&
+        (vehicleName.includes(vn) || vn.includes(vehicleName))
+      ) {
         score += WEIGHT.VEHICLE_NAME_MATCH;
         vehicleMatched = true;
-        reasons.push(`vehicle matched by name: ${product.vehicleModel?.name ?? ''}`);
+        reasons.push(
+          `vehicle matched by name: ${product.vehicleModel?.name ?? ''}`,
+        );
       } else if (vehicleAliases.some((a) => norm(a) === vn)) {
         score += WEIGHT.VEHICLE_ALIAS_MATCH;
         vehicleMatched = true;
@@ -573,7 +607,9 @@ export class ProductMatcherService {
     // نامش دقیقاً همان چیزی است که گفته شد، بر محصولی که کلمات اضافه دارد
     // ترجیح داده می‌شود — بدون اینکه محصولات با نام بلند حذف شوند.
     const spokenSet = new Set([...tokens, ...partNameTokens]);
-    const nameTokens = name.split(/\s+/).filter((t) => t.length >= MIN_TOKEN_LENGTH);
+    const nameTokens = name
+      .split(/\s+/)
+      .filter((t) => t.length >= MIN_TOKEN_LENGTH);
 
     if (nameTokens.length && spokenSet.size) {
       const covered = nameTokens.filter((t) => spokenSet.has(t)).length;
@@ -590,7 +626,9 @@ export class ProductMatcherService {
           partMatched,
           vehicleMatched,
           brandMatched,
-          hasVehicleInput: !!(input.vehicleModelIds?.length || input.vehicleName),
+          hasVehicleInput: !!(
+            input.vehicleModelIds?.length || input.vehicleName
+          ),
         });
 
     // یک کاندید با موقعیت متناقض نباید به‌راحتی auto-confirm شود یا بالاتر بنشیند
@@ -637,7 +675,6 @@ export class ProductMatcherService {
       );
     }
   }
-
 
   private computeConfidence(f: {
     partMatched: boolean;

@@ -58,7 +58,8 @@ describe('صفرکردن موجودی منفی هنگام ورود', () => {
       upsert: ({ where, update, create }: any) => {
         const key = where.productId_locationId;
         const found = rows.find(
-          (x) => x.productId === key.productId && x.locationId === key.locationId,
+          (x) =>
+            x.productId === key.productId && x.locationId === key.locationId,
         );
         if (found) {
           found.quantity += update.quantity.increment;

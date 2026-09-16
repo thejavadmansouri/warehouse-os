@@ -15,47 +15,38 @@ import {
  * اجباری نبود، رکوردی می‌ماند که هیچ‌کس نمی‌فهمد درباره‌ی چه بوده.
  */
 export class CreateShortageDto {
-
   @IsOptional()
   @IsString()
-  productId?:string;
-
+  productId?: string;
 
   @IsString()
   @MinLength(2)
-  productName:string;
-
+  productName: string;
 
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(100000)
-  quantity?:number;
-
-
-  @IsOptional()
-  @IsString()
-  customerId?:string;
-
-
-  @IsString()
-  warehouseId:string;
-
+  quantity?: number;
 
   @IsOptional()
   @IsString()
-  note?:string;
+  customerId?: string;
+
+  @IsString()
+  warehouseId: string;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
-
 
 /** تغییرِ وضعیت — «سفارش دادم» یا «تهیه نمی‌کنیم». */
 export class ResolveShortageDto {
-
   @IsString()
-  status:'ORDERED' | 'DISMISSED';
-
+  status: 'ORDERED' | 'DISMISSED';
 
   @IsOptional()
   @IsString()
-  note?:string;
+  note?: string;
 }

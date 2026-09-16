@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../realtime/events.gateway';
@@ -64,39 +68,38 @@ export class InventoryOperationService {
       'locationId' | 'quantity' | 'action'
     >,
   ): Promise<void> {
-
     const target = await tx.location.findUnique({
-      where:{ id: locationId },
-      select:{ warehouseId: true },
+      where: { id: locationId },
+      select: { warehouseId: true },
     });
 
     if (!target?.warehouseId) return;
 
     const negatives = await tx.inventory.findMany({
-      where:{
+      where: {
         productId,
-        quantity:{ lt: 0 },
-        location:{ warehouseId: target.warehouseId },
+        quantity: { lt: 0 },
+        location: { warehouseId: target.warehouseId },
       },
-      select:{ locationId: true, quantity: true },
-      orderBy:{ locationId: 'asc' },
+      select: { locationId: true, quantity: true },
+      orderBy: { locationId: 'asc' },
     });
 
     for (const row of negatives) {
       await tx.inventory.update({
-        where:{
-          productId_locationId:{ productId, locationId: row.locationId },
+        where: {
+          productId_locationId: { productId, locationId: row.locationId },
         },
-        data:{ quantity: 0 },
+        data: { quantity: 0 },
       });
 
       await tx.inventoryLog.create({
-        data:{
+        data: {
           ...logBase,
           locationId: row.locationId,
           // منفی بود، پس قرینه‌اش مثبت است — همان قراردادِ ADJUST که دلتا ثبت می‌کند.
           quantity: -row.quantity,
-          action:'ADJUST',
+          action: 'ADJUST',
           note:
             (logBase.note ? `${logBase.note} — ` : '') +
             'صفرکردن کسریِ پیش از ثبت، هنگام ورود کالا',
@@ -105,14 +108,17 @@ export class InventoryOperationService {
     }
   }
 
-
-  private async runOperation(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
-
+  private async runOperation(
+    dto: any,
+    txClient?: Prisma.TransactionClient,
+  ): Promise<any> {
     // وقتی تراکنش بیرونی داریم از همان استفاده کن، وگرنه تراکنش خودت را باز کن.
-    const db: Prisma.TransactionClient | PrismaService = txClient ?? this.prisma;
+    const db: Prisma.TransactionClient | PrismaService =
+      txClient ?? this.prisma;
 
-    const runInTx = <T>(fn: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> =>
-      txClient ? fn(txClient) : this.prisma.$transaction(fn);
+    const runInTx = <T>(
+      fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    ): Promise<T> => (txClient ? fn(txClient) : this.prisma.$transaction(fn));
 
     const {
       type,
@@ -130,41 +136,27 @@ export class InventoryOperationService {
       invoiceId,
       saleReturnId,
       purchaseId,
-      correctionId
+      correctionId,
     } = dto;
 
-
     if (sessionId) {
+      const session = await db.inventorySession.findUnique({
+        where: {
+          id: sessionId,
+        },
+      });
 
-      const session =
-        await db.inventorySession.findUnique({
-          where:{
-            id:sessionId
-          }
-        });
-
-
-      if(!session){
-
+      if (!session) {
         throw new NotFoundException({
-          error:'SESSION_NOT_FOUND',
-          message:'سشن انبارگردانی معتبر نیست'
+          error: 'SESSION_NOT_FOUND',
+          message: 'سشن انبارگردانی معتبر نیست',
         });
-
       }
-
     }
 
+    const source = dto.source || 'MANUAL';
 
-
-    const source =
-      dto.source || 'MANUAL';
-
-
-    const quantity =
-      Number(dto.quantity);
-
-
+    const quantity = Number(dto.quantity);
 
     /*
      * تعداد باید عددِ صحیح باشد — برای **همه‌ی** حرکت‌ها، حتی ADJUST.
@@ -181,56 +173,48 @@ export class InventoryOperationService {
      * `Number.isInteger` هم `NaN` را می‌گیرد — که برای ADJUST از فیلترِ پایین
      * رد می‌شد.
      */
-    if(!Number.isInteger(quantity)){
-
+    if (!Number.isInteger(quantity)) {
       throw new BadRequestException({
-        error:'INVALID_QUANTITY',
+        error: 'INVALID_QUANTITY',
         quantity: dto.quantity,
-        message:'تعداد باید عدد صحیح باشد'
+        message: 'تعداد باید عدد صحیح باشد',
       });
-
     }
 
-
-    if(type !== 'ADJUST' && (!quantity || quantity <= 0)){
-
+    if (type !== 'ADJUST' && (!quantity || quantity <= 0)) {
       throw new BadRequestException({
-        error:'INVALID_QUANTITY'
+        error: 'INVALID_QUANTITY',
       });
-
     }
-
-
 
     const logBase = {
-
       productId,
 
-      userId:userId ?? null,
+      userId: userId ?? null,
 
-      sessionId:sessionId ?? null,
+      sessionId: sessionId ?? null,
 
-      voiceRecordId:voiceRecordId ?? null,
+      voiceRecordId: voiceRecordId ?? null,
 
       source,
 
-      note:note ?? null,
+      note: note ?? null,
 
       // قیمت واحد برای دو حرکت معنا دارد: فروش (قیمت فروش) و ورودِ ناشی از
       // فاکتور خرید (قیمت خرید). برای بقیه null می‌ماند — یک ورودِ دستی یا
       // برگشتی قیمتی ندارد که ثبت شود.
       unitPrice:
-        ((type === 'SALE' || (type === 'IN' && purchaseId)) && unitPrice != null)
+        (type === 'SALE' || (type === 'IN' && purchaseId)) && unitPrice != null
           ? Number(unitPrice)
           : null,
 
       // تخفیف ردیف هم فقط برای فروش. بدون این، فاکتور چاپی نمی‌تواند نشان دهد
       // تخفیف روی کدام قلم بوده و جمع ردیف‌ها با مبلغ فاکتور نمی‌خواند.
       lineDiscount:
-        (type === 'SALE' && lineDiscount != null) ? Number(lineDiscount) : null,
+        type === 'SALE' && lineDiscount != null ? Number(lineDiscount) : null,
 
       // توضیحِ دستیِ فروشنده روی همین قلم — فقط برای فروش، و فقط برای چاپ.
-      lineNote: (type === 'SALE' && lineNote) ? String(lineNote) : null,
+      lineNote: type === 'SALE' && lineNote ? String(lineNote) : null,
 
       // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال/مرجوعی). برای بقیه null.
       invoiceId: invoiceId ?? null,
@@ -244,12 +228,8 @@ export class InventoryOperationService {
       purchaseId: purchaseId ?? null,
 
       // اصلاحیه‌ای که این حرکتِ جبرانی را ساخته — فقط حرکاتِ اصلاحیه. برای بقیه null.
-      correctionId: correctionId ?? null
-
+      correctionId: correctionId ?? null,
     };
-
-
-
 
     // =========================
     // IN / RETURN
@@ -258,11 +238,8 @@ export class InventoryOperationService {
     // برای ابطال فاکتور استفاده می‌شود: ردیف فروش حذف نمی‌شود، یک حرکت جبرانی
     // ثبت می‌شود تا لجر append-only بماند (قانون ۲).
 
-    if(type === 'IN' || type === 'RETURN'){
-
-      return runInTx(async(tx)=>{
-
-
+    if (type === 'IN' || type === 'RETURN') {
+      return runInTx(async (tx) => {
         /*
          * پیش از افزودن، بدهیِ موجودیِ منفیِ همین کالا صفر می‌شود.
          *
@@ -286,72 +263,49 @@ export class InventoryOperationService {
           await this.zeroOutNegatives(tx, productId, locationId, logBase);
         }
 
-
-        const updated =
-          await tx.inventory.upsert({
-
-            where:{
-              productId_locationId:{
-                productId,
-                locationId
-              }
-            },
-
-
-            update:{
-              quantity:{
-                increment:quantity
-              }
-            },
-
-
-            create:{
+        const updated = await tx.inventory.upsert({
+          where: {
+            productId_locationId: {
               productId,
               locationId,
-              quantity
-            }
+            },
+          },
 
-          });
+          update: {
+            quantity: {
+              increment: quantity,
+            },
+          },
 
-
+          create: {
+            productId,
+            locationId,
+            quantity,
+          },
+        });
 
         const log = await tx.inventoryLog.create({
-
-          data:{
+          data: {
             ...logBase,
             locationId,
             quantity,
-            action: type === 'RETURN' ? 'RETURN' : 'IN'
-          }
-
+            action: type === 'RETURN' ? 'RETURN' : 'IN',
+          },
         });
-
 
         // Return the stock row plus the created ledger id. Additive: existing IN
         // callers read the inventory fields and ignore inventoryLogId; approve()
         // uses it to back-link the pending op and its photo(s) to the ledger row.
         return { ...updated, inventoryLogId: log.id };
-
-
       });
-
-
     }
-
-
-
-
 
     // =========================
     // OUT / SALE
     // =========================
 
-    if(type === 'OUT' || type === 'SALE'){
-
-
-      return runInTx(async(tx)=>{
-
-
+    if (type === 'OUT' || type === 'SALE') {
+      return runInTx(async (tx) => {
         /*
           کسر اتمیک.
 
@@ -369,114 +323,71 @@ export class InventoryOperationService {
         */
 
         if (allowNegative) {
-
           await tx.inventory.upsert({
-            where:{
-              productId_locationId:{ productId, locationId }
+            where: {
+              productId_locationId: { productId, locationId },
             },
             // ردیف موجودی وجود ندارد → یعنی هیچ‌وقت ثبت نشده؛ از صفر منفی می‌شود.
-            create:{ productId, locationId, quantity: -quantity },
-            update:{ quantity:{ decrement: quantity } },
+            create: { productId, locationId, quantity: -quantity },
+            update: { quantity: { decrement: quantity } },
+          });
+        } else {
+          const result = await tx.inventory.updateMany({
+            where: {
+              productId,
+
+              locationId,
+
+              quantity: {
+                gte: quantity,
+              },
+            },
+
+            data: {
+              quantity: {
+                decrement: quantity,
+              },
+            },
           });
 
-        } else {
-
-          const result =
-            await tx.inventory.updateMany({
-
-              where:{
-
-                productId,
-
-                locationId,
-
-                quantity:{
-                  gte:quantity
-                }
-
+          if (result.count === 0) {
+            const current = await tx.inventory.findUnique({
+              where: {
+                productId_locationId: {
+                  productId,
+                  locationId,
+                },
               },
-
-
-              data:{
-
-                quantity:{
-                  decrement:quantity
-                }
-
-              }
-
-
             });
-
-
-
-          if(result.count === 0){
-
-
-            const current =
-              await tx.inventory.findUnique({
-
-                where:{
-                  productId_locationId:{
-                    productId,
-                    locationId
-                  }
-                }
-
-              });
-
-
 
             throw new BadRequestException({
+              error: 'INSUFFICIENT_STOCK',
 
-              error:'INSUFFICIENT_STOCK',
-
-              available:
-                current?.quantity ?? 0
-
+              available: current?.quantity ?? 0,
             });
-
-
           }
-
         }
 
+        const updated = await tx.inventory.findUnique({
+          where: {
+            productId_locationId: {
+              productId,
+              locationId,
+            },
+          },
+        });
 
-
-        const updated =
-          await tx.inventory.findUnique({
-
-            where:{
-              productId_locationId:{
-                productId,
-                locationId
-              }
-            }
-
-          });
-
-
-
-        const log =
-          await tx.inventoryLog.create({
-
-          data:{
-
+        const log = await tx.inventoryLog.create({
+          data: {
             ...logBase,
 
             locationId,
 
             quantity,
 
-            action:
-              type === 'SALE'
-              ? 'SALE'
-              : 'OUT'
-
-          }
-
+            action: type === 'SALE' ? 'SALE' : 'OUT',
+          },
         });
-
 
         /*
            شناسه‌ی لاگ هم برمی‌گردد — افزودنی، مثل شاخه‌ی IN.
@@ -486,337 +397,202 @@ export class InventoryOperationService {
            اضافه می‌شود، ردیفِ اصلاحیه باید به همین لاگِ SALE قفل شود.
         */
         return { ...updated, inventoryLogId: log.id };
-
-
-
       });
-
-
     }
-
-
-
-
 
     // =========================
     // TRANSFER
     // =========================
 
-
-    if(type === 'TRANSFER'){
-
-
-      if(!toLocationId){
-
+    if (type === 'TRANSFER') {
+      if (!toLocationId) {
         throw new BadRequestException({
-          error:'DESTINATION_REQUIRED'
+          error: 'DESTINATION_REQUIRED',
         });
-
       }
 
-
-
-      const result =
-        await runInTx(async(tx)=>{
-
-
-
-          /*
+      const result = await runInTx(async (tx) => {
+        /*
              کم کردن از مبدا به صورت atomic
           */
 
-
-          const removed =
-            await tx.inventory.updateMany({
-
-              where:{
-
-                productId,
-
-                locationId,
-
-                quantity:{
-                  gte:quantity
-                }
-
-              },
-
-
-              data:{
-
-                quantity:{
-                  decrement:quantity
-                }
-
-              }
-
-            });
-
-
-
-          if(removed.count === 0){
-
-
-            const current =
-              await tx.inventory.findUnique({
-
-                where:{
-                  productId_locationId:{
-                    productId,
-                    locationId
-                  }
-                }
-
-              });
-
-
-
-            throw new BadRequestException({
-
-              error:'INSUFFICIENT_STOCK',
-
-              available:
-                current?.quantity ?? 0
-
-            });
-
-
-          }
-
-
-
-
-          const destination =
-            await tx.inventory.upsert({
-
-              where:{
-
-                productId_locationId:{
-                  productId,
-                  locationId:toLocationId
-                }
-
-              },
-
-
-              update:{
-
-                quantity:{
-                  increment:quantity
-                }
-
-              },
-
-
-              create:{
-
-                productId,
-
-                locationId:toLocationId,
-
-                quantity
-
-              }
-
-            });
-
-
-
-
-          await tx.inventoryLog.createMany({
-
-            data:[
-
-              {
-
-                ...logBase,
-
-                locationId,
-
-                quantity,
-
-                action:'TRANSFER',
-
-                note:`TRANSFER OUT -> ${toLocationId}`
-
-              },
-
-
-              {
-
-                ...logBase,
-
-                locationId:toLocationId,
-
-                quantity,
-
-action:'TRANSFER',
-note:`TRANSFER IN <- ${locationId}`
-
-              }
-
-
-            ]
-
-          });
-
-
-
-          return destination;
-
-
+        const removed = await tx.inventory.updateMany({
+          where: {
+            productId,
+
+            locationId,
+
+            quantity: {
+              gte: quantity,
+            },
+          },
+
+          data: {
+            quantity: {
+              decrement: quantity,
+            },
+          },
         });
 
+        if (removed.count === 0) {
+          const current = await tx.inventory.findUnique({
+            where: {
+              productId_locationId: {
+                productId,
+                locationId,
+              },
+            },
+          });
 
+          throw new BadRequestException({
+            error: 'INSUFFICIENT_STOCK',
+
+            available: current?.quantity ?? 0,
+          });
+        }
+
+        const destination = await tx.inventory.upsert({
+          where: {
+            productId_locationId: {
+              productId,
+              locationId: toLocationId,
+            },
+          },
+
+          update: {
+            quantity: {
+              increment: quantity,
+            },
+          },
+
+          create: {
+            productId,
+
+            locationId: toLocationId,
+
+            quantity,
+          },
+        });
+
+        await tx.inventoryLog.createMany({
+          data: [
+            {
+              ...logBase,
+
+              locationId,
+
+              quantity,
+
+              action: 'TRANSFER',
+
+              note: `TRANSFER OUT -> ${toLocationId}`,
+            },
+
+            {
+              ...logBase,
+
+              locationId: toLocationId,
+
+              quantity,
+
+              action: 'TRANSFER',
+              note: `TRANSFER IN <- ${locationId}`,
+            },
+          ],
+        });
+
+        return destination;
+      });
 
       return {
+        success: true,
 
-        success:true,
-
-        operation:'TRANSFER',
+        operation: 'TRANSFER',
 
         quantity,
 
-        inventory:result
-
+        inventory: result,
       };
-
-
     }
-
-
-
-
-
 
     // =========================
     // ADJUST
     // =========================
 
+    if (type === 'ADJUST') {
+      const targetQty = Number(dto.targetQuantity);
 
-    if(type === 'ADJUST'){
-
-
-      const targetQty =
-        Number(dto.targetQuantity);
-
-
-
-      if(isNaN(targetQty) || targetQty < 0){
-
+      if (isNaN(targetQty) || targetQty < 0) {
         throw new BadRequestException({
-          error:'INVALID_TARGET_QUANTITY'
+          error: 'INVALID_TARGET_QUANTITY',
         });
-
       }
 
-
-
-      return runInTx(async(tx)=>{
-
-
-        const inventory =
-          await tx.inventory.findUnique({
-
-            where:{
-              productId_locationId:{
-                productId,
-                locationId
-              }
-            }
-
-          });
-
-
-
-        const oldQty =
-          inventory?.quantity ?? 0;
-
-
-
-        const diff =
-          targetQty-oldQty;
-
-
-
-        const updated =
-          await tx.inventory.upsert({
-
-            where:{
-              productId_locationId:{
-                productId,
-                locationId
-              }
-            },
-
-
-            update:{
-              quantity:targetQty
-            },
-
-
-            create:{
+      return runInTx(async (tx) => {
+        const inventory = await tx.inventory.findUnique({
+          where: {
+            productId_locationId: {
               productId,
               locationId,
-              quantity:targetQty
-            }
+            },
+          },
+        });
 
+        const oldQty = inventory?.quantity ?? 0;
 
-          });
+        const diff = targetQty - oldQty;
 
+        const updated = await tx.inventory.upsert({
+          where: {
+            productId_locationId: {
+              productId,
+              locationId,
+            },
+          },
 
+          update: {
+            quantity: targetQty,
+          },
 
-        if(diff !== 0){
+          create: {
+            productId,
+            locationId,
+            quantity: targetQty,
+          },
+        });
 
+        if (diff !== 0) {
           await tx.inventoryLog.create({
-
-            data:{
-
+            data: {
               ...logBase,
 
               locationId,
 
-              quantity:diff,
+              quantity: diff,
 
-              action:'ADJUST'
-
-            }
-
+              action: 'ADJUST',
+            },
           });
-
         }
 
-
-
         return {
+          success: true,
 
-          success:true,
-
-          operation:'ADJUST',
+          operation: 'ADJUST',
 
           oldQty,
 
-          newQty:targetQty,
+          newQty: targetQty,
 
           diff,
 
-          inventory:updated
-
+          inventory: updated,
         };
-
-
       });
-
-
     }
 
-
-
     throw new BadRequestException({
-      error:'INVALID_OPERATION_TYPE'
+      error: 'INVALID_OPERATION_TYPE',
     });
-
-
   }
-
 }

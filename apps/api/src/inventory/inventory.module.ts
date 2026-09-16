@@ -12,21 +12,12 @@ import { InventoryOperationService } from '../inventory-operation/inventory-oper
 
 import { ParsingEngineModule } from '../engine/parsing-engine.module';
 
-
 @Module({
+  imports: [ParsingEngineModule],
 
-  imports: [
-    ParsingEngineModule,
-  ],
-
-
-  controllers: [
-    InventoryController,
-  ],
-
+  controllers: [InventoryController],
 
   providers: [
-
     PrismaService,
 
     InventoryService,
@@ -39,12 +30,9 @@ import { ParsingEngineModule } from '../engine/parsing-engine.module';
     ProductMatcherService,
 
     SystemLocationsService,
-
   ],
 
-
   exports: [
-
     InventoryService,
 
     VoiceInventoryService,
@@ -52,10 +40,6 @@ import { ParsingEngineModule } from '../engine/parsing-engine.module';
     ProductMatcherService,
 
     SystemLocationsService,
-
   ],
-
 })
-
-
 export class InventoryModule {}

@@ -16,13 +16,10 @@ import { Roles } from '../auth/roles.decorator';
 import { BackupsService } from './backups.service';
 import { RestoreDto } from './dto/restore.dto';
 
-
 /** بک‌آپ فقط برای مدیر. */
 @Controller('backups')
 export class BackupsController {
-
   constructor(private readonly service: BackupsService) {}
-
 
   /**
    * وضعیت بک‌آپ — کلاینت پیش از بستن برنامه این را می‌پرسد.
@@ -34,18 +31,17 @@ export class BackupsController {
     return this.service.status();
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('config')
   getConfig() {
     return this.service.getConfig();
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Put('config')
   updateConfig(
-    @Body() dto: {
+    @Body()
+    dto: {
       enabled?: boolean;
       destination?: string;
       hour?: number;
@@ -53,30 +49,25 @@ export class BackupsController {
       keepCount?: number;
       remindAfterHours?: number;
     },
-  ){
+  ) {
     return this.service.updateConfig(dto);
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('history')
-  history(
-    @Query('limit') limit?: string,
-  ){
+  history(@Query('limit') limit?: string) {
     return this.service.history(limit ? Number(limit) : 30);
   }
-
 
   // trigger=ON_CLOSE یعنی مدیر هنگام بستن برنامه تأیید کرده.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('run')
-  runNow(
-    @Body() body: { trigger?: 'MANUAL' | 'ON_CLOSE' },
-    @Req() req: any,
-  ){
-    return this.service.createBackup(body?.trigger ?? 'MANUAL', req.user?.userId);
+  runNow(@Body() body: { trigger?: 'MANUAL' | 'ON_CLOSE' }, @Req() req: any) {
+    return this.service.createBackup(
+      body?.trigger ?? 'MANUAL',
+      req.user?.userId,
+    );
   }
-
 
   // ---------- بازیابی ----------
 
@@ -87,15 +78,11 @@ export class BackupsController {
     return this.service.listFiles();
   }
 
-
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('restore-history')
-  restoreHistory(
-    @Query('limit') limit?: string,
-  ){
+  restoreHistory(@Query('limit') limit?: string) {
     return this.service.restoreHistory(limit ? Number(limit) : 20);
   }
-
 
   /**
    * دانلود یک فایل بک‌آپ — **فقط مدیر کل**.
@@ -108,15 +95,11 @@ export class BackupsController {
    */
   @Roles(Role.ADMIN)
   @Get('files/:name/download')
-  async download(
-    @Param('name') name: string,
-    @Res() res: Response,
-  ){
+  async download(@Param('name') name: string, @Res() res: Response) {
     const filePath = await this.service.resolveBackupPath(name);
     // نامِ فایل از سرویس آمده و از الگوی سخت‌گیرانه رد شده، پس امن است.
     res.download(filePath, name);
   }
-
 
   /**
    * بازیابیِ کلِ دیتابیس — **فقط مدیر کل**.
@@ -124,10 +107,7 @@ export class BackupsController {
    */
   @Roles(Role.ADMIN)
   @Post('restore')
-  restore(
-    @Body() dto: RestoreDto,
-    @Req() req: any,
-  ){
+  restore(@Body() dto: RestoreDto, @Req() req: any) {
     return this.service.restore(dto.fileName, req.user?.userId);
   }
 }

@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 
-
 /**
  * مکان‌های **سیستمی** — قفسه‌هایی که در انبار فیزیکی وجود ندارند ولی هر حرکت
  * موجودی به یک مکان نیاز دارد.
@@ -21,7 +20,6 @@ import { Prisma } from '@prisma/client';
  */
 @Injectable()
 export class SystemLocationsService {
-
   private static readonly TYPE_NAME = 'سیستمی';
   private static readonly TYPE_DEPTH = 99;
 
@@ -31,9 +29,11 @@ export class SystemLocationsService {
   private static readonly STAGING_NAME = 'انبار موقت';
   private static readonly STAGING_PREFIX = 'SYS-STAGE-';
 
-
   /** مکانِ فروشِ کالای هنوز ثبت‌نشده. در اولین استفاده ساخته می‌شود. */
-  unregisteredStock(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
+  unregisteredStock(
+    tx: Prisma.TransactionClient,
+    warehouseId: string,
+  ): Promise<string> {
     return this.ensure(
       tx,
       warehouseId,
@@ -41,7 +41,6 @@ export class SystemLocationsService {
       SystemLocationsService.UNREGISTERED_NAME,
     );
   }
-
 
   /** مکانِ ورودِ کالای بدون قفسه‌ی مشخص. در اولین استفاده ساخته می‌شود. */
   staging(tx: Prisma.TransactionClient, warehouseId: string): Promise<string> {
@@ -53,14 +52,12 @@ export class SystemLocationsService {
     );
   }
 
-
   private async ensure(
     tx: Prisma.TransactionClient,
     warehouseId: string,
     prefix: string,
     name: string,
   ): Promise<string> {
-
     const code = `${prefix}${warehouseId.slice(0, 8)}`;
 
     /*
@@ -69,48 +66,48 @@ export class SystemLocationsService {
      * بی‌صدا مکانِ انبار دیگری برگردد.
      */
     const existing = await tx.location.findUnique({
-      where:{ code },
-      select:{ id:true, warehouseId:true },
+      where: { code },
+      select: { id: true, warehouseId: true },
     });
     if (existing) {
       if (existing.warehouseId !== warehouseId) {
         throw new NotFoundException({
-          error:'SYSTEM_LOCATION_CONFLICT',
+          error: 'SYSTEM_LOCATION_CONFLICT',
           code,
-          message:'کد مکان سیستمی با انبار دیگری تداخل دارد',
+          message: 'کد مکان سیستمی با انبار دیگری تداخل دارد',
         });
       }
       return existing.id;
     }
 
     const warehouse = await tx.warehouse.findUnique({
-      where:{ id: warehouseId },
-      select:{ code:true },
+      where: { id: warehouseId },
+      select: { code: true },
     });
     if (!warehouse) {
       throw new NotFoundException({
-        error:'WAREHOUSE_NOT_FOUND',
-        message:'انبار پیدا نشد',
+        error: 'WAREHOUSE_NOT_FOUND',
+        message: 'انبار پیدا نشد',
       });
     }
 
     const type = await tx.locationType.upsert({
-      where:{
-        warehouseId_depth:{
+      where: {
+        warehouseId_depth: {
           warehouseId,
           depth: SystemLocationsService.TYPE_DEPTH,
         },
       },
-      create:{
+      create: {
         warehouseId,
         name: SystemLocationsService.TYPE_NAME,
         depth: SystemLocationsService.TYPE_DEPTH,
       },
-      update:{},
+      update: {},
     });
 
     const created = await tx.location.create({
-      data:{
+      data: {
         name,
         code,
         barcode: `LOC-${code}`,
@@ -119,7 +116,7 @@ export class SystemLocationsService {
         warehouseId,
         typeId: type.id,
       },
-      select:{ id:true },
+      select: { id: true },
     });
 
     return created.id;

@@ -41,7 +41,9 @@ export class WarehousesService {
 
   async create(dto: CreateWarehouseDto) {
     const code = dto.code.toUpperCase().trim();
-    const existing = await this.prisma.warehouse.findUnique({ where: { code } });
+    const existing = await this.prisma.warehouse.findUnique({
+      where: { code },
+    });
     if (existing) {
       // تفکیکِ «کد یک انبارِ فعال» از «کد یک انبارِ غیرفعال». دومی همان گیجیِ
       // «حذفش کردم ولی می‌گوید هست» است؛ پس به‌جای بن‌بست، راهِ بازگردانی را
@@ -114,7 +116,10 @@ export class WarehousesService {
       throw new NotFoundException('انبار پیدا نشد');
     }
     if (warehouse.isActive) {
-      return { mode: 'already-active' as const, message: 'این انبار از قبل فعال است.' };
+      return {
+        mode: 'already-active' as const,
+        message: 'این انبار از قبل فعال است.',
+      };
     }
     await this.prisma.warehouse.update({
       where: { id },

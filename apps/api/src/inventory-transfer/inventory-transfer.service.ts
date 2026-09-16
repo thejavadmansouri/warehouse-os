@@ -3,7 +3,6 @@ import { InventoryOperationService } from '../inventory-operation/inventory-oper
 
 @Injectable()
 export class InventoryTransferService {
-
   constructor(private inventoryOperation: InventoryOperationService) {}
 
   async transfer(

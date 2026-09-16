@@ -24,7 +24,10 @@ export class VoiceInventoryService {
     });
 
     if (!location) {
-      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
+      throw new NotFoundException({
+        error: 'LOCATION_NOT_FOUND',
+        message: 'موقعیت پیدا نشد',
+      });
     }
 
     const engineResult = this.parsingEngine.parse(text);
@@ -33,11 +36,7 @@ export class VoiceInventoryService {
     const unknownTokens = engineResult.explanation.unknownTokens ?? [];
 
     // اگر هیچ اطلاعات مفیدی استخراج نشده
-    if (
-      !parsed.brand &&
-      !parsed.vehicleFamily &&
-      unknownTokens.length === 0
-    ) {
+    if (!parsed.brand && !parsed.vehicleFamily && unknownTokens.length === 0) {
       return {
         success: false,
         needSelection: true,
@@ -51,7 +50,9 @@ export class VoiceInventoryService {
     // توجه: findVehicleModelIdsByName ممکن است چند تریم (GLX/SLX/...) برگرداند
     const [partCatalogId, vehicleModelIds, brandId] = await Promise.all([
       this.productMatcher.findPartCatalogIdByName(parsed.productName),
-      this.productMatcher.findVehicleModelIdsByName(parsed.vehicleModel ?? parsed.vehicleFamily),
+      this.productMatcher.findVehicleModelIdsByName(
+        parsed.vehicleModel ?? parsed.vehicleFamily,
+      ),
       this.productMatcher.findBrandIdByName(parsed.brand),
     ]);
 
@@ -122,17 +123,16 @@ export class VoiceInventoryService {
   // پیش‌نمایش صوتی: همان parse + match، اما بدون ثبت موجودی.
   // طبق قانون «voice هرگز auto-commit نمی‌کند» — روی match مطمئن به‌جای commit،
   // proposal برمی‌گرداند تا کارگر در اپ تأیید کند، سپس از طریق confirm ثبت شود.
-  async preview(
-    locationBarcode: string,
-    text: string,
-    sessionId: string,
-  ) {
+  async preview(locationBarcode: string, text: string, sessionId: string) {
     const location = await this.prisma.location.findUnique({
       where: { barcode: locationBarcode },
     });
 
     if (!location) {
-      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
+      throw new NotFoundException({
+        error: 'LOCATION_NOT_FOUND',
+        message: 'موقعیت پیدا نشد',
+      });
     }
 
     const engineResult = this.parsingEngine.parse(text);
@@ -151,7 +151,9 @@ export class VoiceInventoryService {
 
     const [partCatalogId, vehicleModelIds, brandId] = await Promise.all([
       this.productMatcher.findPartCatalogIdByName(parsed.productName),
-      this.productMatcher.findVehicleModelIdsByName(parsed.vehicleModel ?? parsed.vehicleFamily),
+      this.productMatcher.findVehicleModelIdsByName(
+        parsed.vehicleModel ?? parsed.vehicleFamily,
+      ),
       this.productMatcher.findBrandIdByName(parsed.brand),
     ]);
 
@@ -211,14 +213,8 @@ export class VoiceInventoryService {
 
   // تایید دستی زمانی که کاربر از بین پیشنهادها انتخاب می‌کند
   async confirm(dto: any) {
-    const {
-      productId,
-      locationBarcode,
-      quantity,
-      sessionId,
-      note,
-      userId,
-    } = dto;
+    const { productId, locationBarcode, quantity, sessionId, note, userId } =
+      dto;
 
     const location = await this.prisma.location.findUnique({
       where: {
@@ -227,7 +223,10 @@ export class VoiceInventoryService {
     });
 
     if (!location) {
-      throw new NotFoundException({ error:'LOCATION_NOT_FOUND', message:'موقعیت پیدا نشد' });
+      throw new NotFoundException({
+        error: 'LOCATION_NOT_FOUND',
+        message: 'موقعیت پیدا نشد',
+      });
     }
 
     const inventory = await this.inventoryOperation.execute({

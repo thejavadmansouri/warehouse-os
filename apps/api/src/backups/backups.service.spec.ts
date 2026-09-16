@@ -7,7 +7,6 @@ import * as path from 'path';
 import { BackupsService } from './backups.service';
 import { PrismaService } from '../prisma/prisma.service';
 
-
 /**
  * `resolveBackupPath` مرزِ امنیتیِ دو اندپوینت است: دانلود و بازیابی.
  *
@@ -21,7 +20,10 @@ describe('BackupsService — نگهبانِ نامِ فایل', () => {
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), 'wos-backup-test-'));
-    await fs.writeFile(path.join(dir, 'warehouse_os_2026-01-01T00-00-00.dump'), 'x');
+    await fs.writeFile(
+      path.join(dir, 'warehouse_os_2026-01-01T00-00-00.dump'),
+      'x',
+    );
     // فایلی بیرون از پوشه‌ی مقصد، برای آزمونِ فرار از مسیر.
     await fs.writeFile(path.join(path.dirname(dir), 'secret.dump'), 'x');
 
@@ -55,9 +57,10 @@ describe('BackupsService — نگهبانِ نامِ فایل', () => {
     await fs.rm(path.join(path.dirname(dir), 'secret.dump'), { force: true });
   });
 
-
   it('نامِ درست پذیرفته می‌شود', async () => {
-    const p = await service.resolveBackupPath('warehouse_os_2026-01-01T00-00-00.dump');
+    const p = await service.resolveBackupPath(
+      'warehouse_os_2026-01-01T00-00-00.dump',
+    );
     expect(p).toBe(path.join(dir, 'warehouse_os_2026-01-01T00-00-00.dump'));
   });
 
@@ -74,7 +77,9 @@ describe('BackupsService — نگهبانِ نامِ فایل', () => {
     ['نامِ خالی', ''],
     ['نقطه‌ی متوالی داخل نام', 'warehouse..dump'],
   ])('%s رد می‌شود', async (_label, name) => {
-    await expect(service.resolveBackupPath(name)).rejects.toBeInstanceOf(BadRequestException);
+    await expect(service.resolveBackupPath(name)).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('نامِ معتبرِ ناموجود ۴۰۴ می‌دهد، نه ۴۰۰', async () => {
@@ -82,7 +87,6 @@ describe('BackupsService — نگهبانِ نامِ فایل', () => {
       service.resolveBackupPath('warehouse_os_1999-01-01T00-00-00.dump'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
-
 
   describe('listFiles', () => {
     it('فقط فایل‌های dump را برمی‌گرداند', async () => {
@@ -98,5 +102,51 @@ describe('BackupsService — نگهبانِ نامِ فایل', () => {
       // محتوای فایل «x» است، نه آرشیوِ واقعی pg_dump.
       expect(files[0].verified).toBe(false);
     });
+  });
+});
+
+describe('BackupsService — serializeRun و کشفِ pg_dump', () => {
+  let service: BackupsService;
+
+  beforeAll(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [BackupsService, { provide: PrismaService, useValue: {} }],
+    }).compile();
+    service = module.get(BackupsService);
+  });
+
+  it('هر دو حجمِ BigInt به number می‌رسند — پاسخِ JSON نمی‌ترکد', () => {
+    const row = {
+      id: 'r1',
+      sizeBytes: 6_763_984n,
+      storageBytes: 158_466n,
+      status: 'SUCCESS',
+    };
+    const out = BackupsService.testHooks.serializeRun(row);
+    expect(out.sizeBytes).toBe(6_763_984);
+    expect(out.storageBytes).toBe(158_466);
+    expect(Number.isInteger(out.sizeBytes)).toBe(true);
+  });
+
+  it('ردیفِ بدون حجم هم بدون خطا می‌آید', () => {
+    const out = BackupsService.testHooks.serializeRun({
+      id: 'r2',
+    } as unknown as {
+      sizeBytes?: bigint | null;
+      storageBytes?: bigint | null;
+    });
+    expect(out && out.sizeBytes).toBeNull();
+    expect(out && out.storageBytes).toBeNull();
+  });
+
+  it('مسیرِ pg_dump روی ویندوز به نصبِ استاندارد می‌رسد — نه صرفِ PATH', () => {
+    // در همین ماشینِ توسعه PostgreSQL 17 در Program Files نصب است؛ اگر env
+    // هم ست شده باشد همان برنده است. مهم این است که خروجی یک مسیرِ واقعی
+    // pg_dump باشد، نه صرفِ نامِ خام وقتی فایل وجود دارد.
+    const p = BackupsService.testHooks.pgDumpPath;
+    expect(p).toContain('pg_dump');
+    if (p.toLowerCase().includes('program files')) {
+      expect(p.toLowerCase()).toContain('postgresql');
+    }
   });
 });

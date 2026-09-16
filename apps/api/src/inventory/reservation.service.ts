@@ -28,7 +28,6 @@ import { PrismaService } from '../prisma/prisma.service';
  */
 @Injectable()
 export class ReservationService {
-
   constructor(private prisma: PrismaService) {}
 
   /** رزروِ یک کالا. */
@@ -130,7 +129,9 @@ export class ReservationService {
           status: WorkTaskItemStatus.PENDING,
           task: {
             kind: WorkTaskKind.PICK,
-            status: { in: [WorkTaskStatus.PENDING, WorkTaskStatus.IN_PROGRESS] },
+            status: {
+              in: [WorkTaskStatus.PENDING, WorkTaskStatus.IN_PROGRESS],
+            },
           },
         },
         select: {
@@ -177,19 +178,22 @@ export class ReservationService {
             status: { notIn: [OnlineOrderStatus.CANCELLED] },
           },
         },
-        select: { quantity: true, order: { select: { id: true, number: true } } },
+        select: {
+          quantity: true,
+          order: { select: { id: true, number: true } },
+        },
       }),
     ]);
 
     return {
-      pickTasks: tasks.map(t => ({
+      pickTasks: tasks.map((t) => ({
         taskId: t.task.id,
         quantity: t.quantity,
         invoiceNumber: t.task.invoice?.number ?? null,
         assignedTo: t.task.assignedTo?.fullName ?? null,
         createdAt: t.task.createdAt,
       })),
-      quotations: quotations.map(q => ({
+      quotations: quotations.map((q) => ({
         quotationId: q.quotation.id,
         number: q.quotation.number,
         quantity: q.quantity,
@@ -198,7 +202,7 @@ export class ReservationService {
           ? `${q.quotation.customer.firstName} ${q.quotation.customer.lastName ?? ''}`.trim()
           : null,
       })),
-      onlineOrders: orders.map(o => ({
+      onlineOrders: orders.map((o) => ({
         orderId: o.order.id,
         number: o.order.number,
         quantity: o.quantity,

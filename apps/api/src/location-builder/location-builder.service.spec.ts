@@ -61,9 +61,7 @@ describe('LocationBuilderService', () => {
       fn({
         location: {
           findMany: ({ where }: any) =>
-            Promise.resolve(
-              rows.filter((r) => where.code.in.includes(r.code)),
-            ),
+            Promise.resolve(rows.filter((r) => where.code.in.includes(r.code))),
           createMany: ({ data }: any) => {
             rows.push(...data);
             return Promise.resolve({ count: data.length });
@@ -83,7 +81,7 @@ describe('LocationBuilderService', () => {
   });
 
   const generate = (levels: any[], parentId?: string) =>
-    service.generateTree({ warehouseId: 'w1', parentId, levels } as any);
+    service.generateTree({ warehouseId: 'w1', parentId, levels });
 
   it('درختِ چندسطحی را با کدِ زنجیره‌ای می‌سازد', async () => {
     const result = await generate([
@@ -181,17 +179,13 @@ describe('LocationBuilderService', () => {
   });
 
   it('نام‌گذاری حرفی برای سطحی که بخواهد', async () => {
-    await generate([
-      { locationTypeId: 't-floor', count: 2, naming: 'alpha' },
-    ]);
+    await generate([{ locationTypeId: 't-floor', count: 2, naming: 'alpha' }]);
 
     expect(rows.map((r) => r.code)).toEqual(['WH-A', 'WH-B']);
   });
 
   it('پیشوندِ دلخواه جای نامِ نوع می‌نشیند', async () => {
-    await generate([
-      { locationTypeId: 't-floor', count: 1, prefix: 'سالن' },
-    ]);
+    await generate([{ locationTypeId: 't-floor', count: 1, prefix: 'سالن' }]);
 
     expect(rows[0].name).toBe('سالن 01');
   });

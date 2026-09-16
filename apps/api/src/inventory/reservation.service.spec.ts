@@ -66,7 +66,9 @@ describe('ReservationService', () => {
   it('کارِ چیدمان رزرو نیست — جنس دارد وارد می‌شود، نه خارج', async () => {
     await service.forProduct('p1');
 
-    expect(prisma.workTaskItem.groupBy.mock.calls[0][0].where.task.kind).toBe('PICK');
+    expect(prisma.workTaskItem.groupBy.mock.calls[0][0].where.task.kind).toBe(
+      'PICK',
+    );
   });
 
   it('پیش‌فاکتورِ منقضی جنس را قفل نمی‌کند', async () => {
@@ -112,8 +114,9 @@ describe('ReservationService', () => {
 
     expect(map.get('p1')).toBe(1);
     expect(map.get('p2')).toBe(4);
-    expect(prisma.workTaskItem.groupBy.mock.calls[0][0].where.productId.in)
-      .toEqual(['p1', 'p2']);
+    expect(
+      prisma.workTaskItem.groupBy.mock.calls[0][0].where.productId.in,
+    ).toEqual(['p1', 'p2']);
   });
 
   it('فهرست خالی به دیتابیس نمی‌رود', async () => {
