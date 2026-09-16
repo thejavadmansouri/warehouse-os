@@ -17,8 +17,7 @@ pub struct PrinterInfo {
 #[cfg(windows)]
 mod imp {
     use super::PrinterInfo;
-    use std::ptr;
-    use windows::core::PCWSTR;
+    use windows::core::{PCWSTR, PWSTR};
     use windows::Win32::Foundation::HANDLE;
     use windows::Win32::Graphics::Printing::{
         ClosePrinter, EndDocPrinter, EndPagePrinter, EnumPrintersW, GetDefaultPrinterW,
@@ -33,18 +32,17 @@ mod imp {
     fn default_printer() -> Option<String> {
         unsafe {
             let mut len: u32 = 0;
-            // اولین فراخوانی فقط طول لازم را می‌دهد.
-            let _ = GetDefaultPrinterW(None, &mut len);
+            // اولین فراخوانی عمداً با بافرِ خالی است: بازگشتِ FALSE با ERROR_INSUFFICIENT_BUFFER
+            // فقط طولِ لازم را در len می‌گذارد — این هم رفتارِ مستندِ API است.
+            let _ = GetDefaultPrinterW(PWSTR::null(), &mut len);
             if len == 0 {
                 return None;
             }
 
             let mut buf = vec![0u16; len as usize];
-            GetDefaultPrinterW(
-                Some(windows::core::PWSTR(buf.as_mut_ptr())),
-                &mut len,
-            )
-            .ok()?;
+            if !GetDefaultPrinterW(PWSTR(buf.as_mut_ptr()), &mut len).as_bool() {
+                return None;
+            }
 
             let s = String::from_utf16_lossy(&buf);
             Some(s.trim_end_matches('\0').to_string())
@@ -125,9 +123,11 @@ mod imp {
                     return Err("شروع کار چاپ ناموفق بود".to_string());
                 }
 
-                StartPagePrinter(handle)
-                    .ok()
-                    .ok_or_else(|| "شروع صفحه‌ی چاپ ناموفق بود".to_string())?;
+                // در windows-rs 0.58، StartPagePrinter بولینِ خام برمی‌گرداند —
+                // همان قراردادِ WritePrinter: با as_bool() سنجیده می‌شود.
+                if !StartPagePrinter(handle).as_bool() {
+                    return Err("شروع صفحه‌ی چاپ ناموفق بود".to_string());
+                }
 
                 let mut written: u32 = 0;
                 let ok = WritePrinter(
@@ -155,7 +155,6 @@ mod imp {
             })();
 
             let _ = ClosePrinter(handle);
-            let _ = ptr::null::<u8>(); // جلوگیری از هشدار unused import در بعضی نسخه‌ها
 
             result
         }
@@ -202,6 +201,28 @@ pub fn print_receipt(app: tauri::AppHandle, bytes: Vec<u8>) -> Result<(), String
         None
     } else {
         Some(cfg.printer_name.clone())
+    };
+
+    imp::print_raw(printer.as_deref(), &bytes)
+}
+
+/// چاپ لیبل حرارتی (TSPL). `bytes` دستورهای خام TSPL است که سمت جاوااسکریپت
+/// ساخته می‌شود (نگاه کنید به `src/lib/tspl.ts` در وب).
+///
+/// پرینترِ لیبل جدا از پرینترِ فیش انتخاب می‌شود (label_printer_name)؛ اگر
+/// خالی باشد، پرینتر پیش‌فرض ویندوز می‌گیرد — همان RAW، درایور دور زده می‌شود
+/// و بایت‌ها دست‌نخورده به پرینتر می‌رسند.
+#[tauri::command]
+pub fn print_tsp_label(app: tauri::AppHandle, bytes: Vec<u8>) -> Result<(), String> {
+    if bytes.is_empty() {
+        return Err("داده‌ای برای چاپ ارسال نشده است".to_string());
+    }
+
+    let cfg = crate::config::load_config(&app);
+    let printer = if cfg.label_printer_name.trim().is_empty() {
+        None
+    } else {
+        Some(cfg.label_printer_name.clone())
     };
 
     imp::print_raw(printer.as_deref(), &bytes)

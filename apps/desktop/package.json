@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "icons": "tauri icon ../web/public/logo.svg",
+    "icons": "tauri icon ../web/public/logo.png",
     "tauri": "tauri"
   },
   "devDependencies": {

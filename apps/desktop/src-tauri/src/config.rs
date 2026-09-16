@@ -10,6 +10,10 @@ pub struct AppConfig {
     /// نام پرینتر فیش. خالی یعنی «پرینتر پیش‌فرض ویندوز».
     #[serde(default)]
     pub printer_name: String,
+    /// نام پرینتر لیبل (حرارتی TSPL). خالی یعنی «پرینتر پیش‌فرض ویندوز».
+    /// جدا از پرینتر فیش ذخیره می‌شود چون دو دستگاهِ متفاوت‌اند.
+    #[serde(default)]
+    pub label_printer_name: String,
 }
 
 impl Default for AppConfig {
@@ -17,6 +21,7 @@ impl Default for AppConfig {
         Self {
             server_url: String::new(), // خالی = هنوز تنظیم نشده → صفحه‌ی تنظیمات باز می‌شود
             printer_name: String::new(),
+            label_printer_name: String::new(),
         }
     }
 }
@@ -55,7 +60,7 @@ pub fn save_config(app: &AppHandle, config: &AppConfig) -> Result<(), String> {
 }
 
 /// نرمال‌سازی آدرس سرور: پروتکل اگر نبود اضافه شود، اسلش انتهایی حذف شود.
-/// کاربر معمولاً فقط «192.168.1.50:3000» را تایپ می‌کند.
+/// کاربر معمولاً فقط «192.168.1.50:3001» را تایپ می‌کند.
 pub fn normalize_server_url(input: &str) -> Result<String, String> {
     let trimmed = input.trim().trim_end_matches('/');
 
@@ -70,9 +75,28 @@ pub fn normalize_server_url(input: &str) -> Result<String, String> {
     };
 
     // اعتبارسنجی واقعی، تا آدرس خراب ذخیره نشود و پنجره سفید بالا نیاید.
-    with_scheme
-        .parse::<tauri::Url>()
+    let parsed: tauri::Url = with_scheme
+        .parse()
         .map_err(|_| format!("آدرس معتبر نیست: {input}"))?;
 
-    Ok(with_scheme)
+    /*
+     * میزبانِ کوچک‌شده.
+     *
+     * میزبانِ URL از نظر استاندارد بی‌اهمیتِ حروف است («LOCALHOST» همان
+     * «localhost» است) — ولی globِ مجوزهای Tauri (`remote.urls` در
+     * capabilities) به بزرگیِ حروف حساس است. آدرسِ ذخیره‌شدهٔ «LOCALHOST»
+     * یعنی پنجره‌ی اصلی هیچ مجوزی ندارد و هر invoke با «not allowed by ACL»
+     * می‌میرد — بستن با بک‌آپ، F11، چاپ فیش، همه.
+     */
+    let mut normalized = parsed;
+    if let Some(host) = normalized.host_str() {
+        let lowered = host.to_lowercase();
+        if lowered != host {
+            normalized
+                .set_host(Some(&lowered))
+                .map_err(|_| format!("آدرس معتبر نیست: {input}"))?;
+        }
+    }
+
+    Ok(normalized.to_string())
 }

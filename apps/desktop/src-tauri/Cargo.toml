@@ -21,11 +21,16 @@ serde_json = "1"
 
 # چاپ خام روی ویندوز از طریق winspool.
 # فقط روی ویندوز کامپایل می‌شود تا توسعه روی مک/لینوکس ممکن بماند.
+#
+# نکته‌ی عجیبِ windows-rs: OpenPrinterW و PRINTER_INFO_2W پشتِ
+# `Win32_Graphics_Gdi` و `Win32_Security` قفل شده‌اند (شبحِ متادیتای خودِ
+# ویندوز) — بدون این دو فیچر، importها unresolved می‌شوند.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.58", features = [
   "Win32_Foundation",
   "Win32_Graphics_Printing",
-  "Win32_System_Memory",
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
 ] }
 
 [profile.release]

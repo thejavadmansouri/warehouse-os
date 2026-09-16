@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-print-tsp-label"
+description = "Enables the print_tsp_label command without any pre-configured scope."
+commands.allow = ["print_tsp_label"]
+
+[[permission]]
+identifier = "deny-print-tsp-label"
+description = "Denies the print_tsp_label command without any pre-configured scope."
+commands.deny = ["print_tsp_label"]

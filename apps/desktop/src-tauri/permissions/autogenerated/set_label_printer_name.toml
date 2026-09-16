@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-set-label-printer-name"
+description = "Enables the set_label_printer_name command without any pre-configured scope."
+commands.allow = ["set_label_printer_name"]
+
+[[permission]]
+identifier = "deny-set-label-printer-name"
+description = "Denies the set_label_printer_name command without any pre-configured scope."
+commands.deny = ["set_label_printer_name"]

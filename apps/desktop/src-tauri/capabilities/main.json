@@ -2,9 +2,23 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "main",
   "description": "مجوزهای پنجره‌ی اصلی و تنظیمات. بخش remote لازم است چون صفحه از سرور on-prem بارگذاری می‌شود؛ بدون آن صفحه نمی‌تواند invoke بزند و چاپ فیش کار نمی‌کند. اگر آدرس سرور ثابت است، urls را به همان آدرس محدود کنید.",
-  "windows": ["main", "setup"],
+  "windows": ["main", "setup", "popup-*"],
   "remote": {
     "urls": ["http://*:*", "https://*:*"]
   },
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "allow-get-server-url",
+    "allow-get-config",
+    "allow-update-server-url",
+    "allow-set-printer-name",
+    "allow-set-label-printer-name",
+    "allow-toggle-fullscreen",
+    "allow-open-settings",
+    "allow-approve-close",
+    "allow-list-printers",
+    "allow-print-receipt",
+    "allow-print-tsp-label",
+    "allow-test-print"
+  ]
 }

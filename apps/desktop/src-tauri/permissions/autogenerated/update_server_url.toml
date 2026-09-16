@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-update-server-url"
+description = "Enables the update_server_url command without any pre-configured scope."
+commands.allow = ["update_server_url"]
+
+[[permission]]
+identifier = "deny-update-server-url"
+description = "Denies the update_server_url command without any pre-configured scope."
+commands.deny = ["update_server_url"]

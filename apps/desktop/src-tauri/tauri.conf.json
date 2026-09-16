@@ -19,14 +19,14 @@
 
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis"],
     "icon": ["icons/icon.ico"],
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": "",
       "nsis": {
-        "languages": ["Persian", "English"],
+        "languages": ["Farsi", "English"],
         "installMode": "currentUser"
       }
     }

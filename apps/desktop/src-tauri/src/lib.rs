@@ -2,15 +2,22 @@ mod config;
 mod printer;
 
 use config::{load_config, normalize_server_url, save_config, AppConfig};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    webview::NewWindowResponse,
     AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 /// وقتی صفحه اجازه‌ی بستن داد، دفعه‌ی بعد جلوی بسته شدن گرفته نمی‌شود.
 /// بدون این، حلقه‌ی بی‌پایان می‌شد: بستن → جلوگیری → بستن → …
 static CLOSE_APPROVED: AtomicBool = AtomicBool::new(false);
+
+/// شمارنده‌ی پنجره‌های بازشده (window.open).
+///
+/// هر پنجره‌ی بازشده به یک label یکتا نیاز دارد — اگر label تکراری باشد،
+/// ساختن پنجره شکست می‌خورد. این شمارنده ساده همان یکتایی را می‌دهد.
+static POPUP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// اسکریپتی که پیش از بارگذاری صفحه تزریق می‌شود.
 ///
@@ -79,6 +86,13 @@ fn set_printer_name(app: AppHandle, name: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_label_printer_name(app: AppHandle, name: String) -> Result<(), String> {
+    let mut cfg = load_config(&app);
+    cfg.label_printer_name = name;
+    save_config(&app, &cfg)
+}
+
+#[tauri::command]
 fn toggle_fullscreen(app: AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("main") {
         let now = win.is_fullscreen().unwrap_or(false);
@@ -107,7 +121,11 @@ fn open_main_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
         .parse()
         .unwrap_or_else(|_| "http://localhost:3001".parse().unwrap());
 
-    let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+    // برای پنجره‌های بازشده باید یک AppHandle مالکانه داشته باشیم — closure
+    // باید 'static باشد و نمی‌تواند از مرجعِ تابع قرض بگیرد.
+    let app_owned = app.clone();
+
+    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
         .title("Warehouse OS — فروش")
         .inner_size(1280.0, 800.0)
         .min_inner_size(1024.0, 700.0)
@@ -120,7 +138,47 @@ fn open_main_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
         .maximized(true)
         .resizable(true)
         .initialization_script(KEY_HANDLER)
-        .build()?;
+        // پنجره‌های بازشده (window.open) — چاپ فاکتور، پیش‌فاکتور، صورت‌حساب،
+        // کاردکس و… — باید واقعاً باز شوند.
+        //
+        // بدون این handler، wry درخواستِ پنجره‌ی جدید را بی‌صدا می‌بلعد
+        // (SetHandled(true) و هیچ چیز باز نمی‌شود) و دکمه‌ی «چاپ» انگار کار
+        // نمی‌کند. این همان باگِ گزارش‌شده بود: در مرورگر چاپ باز می‌شد، در
+        // اپ فروشنده نه.
+        .on_new_window(move |url, features| {
+            let label = format!("popup-{}", POPUP_COUNTER.fetch_add(1, Ordering::SeqCst));
+            let app = app_owned.clone();
+            let mut builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::External(url))
+                .title("Warehouse OS")
+                .inner_size(1100.0, 800.0)
+                .min_inner_size(640.0, 480.0)
+                .center()
+                .resizable(true);
+
+            // ابعاد پیشنهادیِ صفحه (اگر window.open ابعاد خواسته باشد) را
+            // منتقل می‌کنیم؛ وگرنه پیش‌فرضِ بالایی می‌ماند.
+            builder = builder.window_features(features);
+
+            match builder.build() {
+                Ok(window) => NewWindowResponse::Create { window },
+                Err(_) => NewWindowResponse::Deny,
+            }
+        });
+
+    // پورتِ دیباگِ WebView2 — فقط برای پشتیبانی و تست.
+    //
+    // wry همیشه آرگومان‌های مرورگر را برنامه‌نویسی‌شده ست می‌کند، پس متغیرِ
+    // محیطیِ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS هیچ‌وقت اعمال نمی‌شود؛
+    // تنها راهِ رسمی همین هوک است. در نصبِ عادی این شاخه اجرا نمی‌شود و
+    // آرگومان‌های پیش‌فرضِ wry دست‌نخورده می‌مانند.
+    let devtools_port = std::env::var("WOOS_DEVTOOLS_PORT").ok().filter(|p| !p.trim().is_empty());
+    if let Some(port) = devtools_port {
+        builder = builder.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+        ));
+    }
+
+    let window = builder.build()?;
 
     // پیش از بستن، از صفحه بپرس آیا بک‌آپ لازم است.
     //
@@ -210,7 +268,9 @@ pub fn run() {
             approve_close,
             printer::list_printers,
             printer::print_receipt,
+            printer::print_tsp_label,
             printer::test_print,
+            set_label_printer_name,
         ])
         .run(tauri::generate_context!())
         .expect("اجرای برنامه‌ی Tauri با خطا مواجه شد");
