@@ -1,0 +1,6 @@
+#!/bin/sh
+# Warehouse OS guard — checks what this commit would contain.
+# Activate once per clone:  git config core.hooksPath .githooks
+# Emergency override:       git commit --no-verify
+cd "$(git rev-parse --show-toplevel)" || exit 0
+exec node .githooks/guard.mjs commit
