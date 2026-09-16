@@ -27,6 +27,276 @@
 
 ## Unreleased
 
+### Post-shop-update delta — **none of this is installed in the shop** (2026-09-15)
+
+The last installer that exists is `WarehouseOS-Setup-0.4.0.exe` (2026-09-06), and the
+last thing actually applied on the shop machine is the `seller-print-fix` package plus
+`apply-update.ps1` / `run-update.bat` in `deploy/windows/updates/` (2026-09-07 → 09).
+Everything below happened *after* that and has not been delivered anywhere.
+
+Caveat on the evidence: this tree has **no git history** (see
+`docs/ANDROID_READINESS.md` §3.3), so this list was reconstructed from file
+modification times. It is complete for source files and proves nothing.
+`deploy/windows/payload/app/desktop/warehouse-seller.exe` was rebuilt on 2026-09-08
+but the tree holds no record of it being pushed to the shop.
+
+#### Direct thermal label printing (2026-09-09)
+
+- `deploy/windows/updates/gen-labels.cjs` — offline generator for the TSC TTP-244 Pro:
+  SKUs harvested from a supplier PDF, names pulled from the app database, Persian names
+  rasterised with sharp into `BITMAP` commands, 2-up on a 105 mm roll (two 51×32 mm
+  die-cut labels), output `kardo-labels.prn` for the spooler. Built because the
+  barcode/name layout had to be provable before committing it to the app.
+- `deploy/windows/updates/print-test.cjs` — print smoke test for the same path.
+
+#### POS cart tabs that survive a refresh (2026-09-11 → 12)
+
+- `apps/web/src/app/admin/pos/_lib/carts-persist.ts` — the invoice tabs used to live
+  only in React memory: they survived navigation but a full refresh (or a browser crash
+  or a shop power cut) burned every half-finished invoice at exactly the moment the
+  customer was standing at the counter. Now written to `localStorage`.
+- Safety rules are the point, not the serialisation: versioned shape, a **compatible**
+  old version is still read (a mid-sale cart must not be sacrificed to an update),
+  reading never throws (corrupt JSON ⇒ empty cart, not a broken POS), writing never
+  throws (quota/serialisation errors are swallowed — persistence must not compete with
+  selling), and every restored shape is lightly validated so tampered data cannot reach
+  state. Covered by `carts.test.ts`.
+
+#### Payment recomposition — «اصلاح نحوهٔ پرداخت» (2026-09-12)
+
+- `POST` route + `sales/payments-recompose.service.ts` (557 lines) + `dto/`. The real
+  counter scenario: a 100m invoice was rung up entirely on card, then it turns out 30m
+  was cash and 70m نسیه. Nothing accepted that before — a correction rejected a
+  zero-total change, and settling a difference found no difference.
+- It recomposes instead of recording a delta: per-method difference between the current
+  and requested split ⇒ offsetting negative rows plus real positive rows, all still
+  `Payment` rows so cash/card reports and صورتحساب totals are right with **no other code
+  change**. One ledger row and one auto-voucher «قبل: … · بعد: …»; if only cash/card
+  swapped (نسیه unchanged) no money moved and no voucher is written — an empty voucher
+  only clutters the journal.
+- `apps/api/src/sales/line-lock.ts` — `SELECT … FOR UPDATE` on the invoice. Two
+  concurrent operations on the *same* invoice (two returns, two corrections, or one of
+  each) each read the refundable cap from `lineBalances`; without the lock both can see
+  the same remaining balance and both overshoot — e.g. 10 sold units returned twice.
+  Locking the invoice serialises every race on its rows while stock keeps the project's
+  fixed `inLockOrder`.
+- `apps/api/src/common/tehran-day.ts` — the shop's day boundary. Timestamps are UTC but
+  the shop is in Tehran and its working night ends at Tehran midnight, so "today" from
+  UTC shows the night shift (20:30–24:00) its own 11 pm invoice as "yesterday". Iran has
+  had no DST since 1401 and is always +3:30, so the conversion is exact and needs no
+  timezone library. Also the rule that a cashier may only recompose *today's* invoices.
+- New POS UI: `payment-recompose-dialog.tsx`, `open-accounts.tsx`,
+  `customer-invoices.tsx`, plus `invoices/[id]/page.tsx` and three test files.
+
+#### Journal labels, statements and live updates (2026-09-12)
+
+- `apps/api/src/vouchers/labels.ts` — Persian labels for `FixedAccount` and
+  `VoucherSourceType` (صندوق، چک‌های دریافتی، برگشت از فروش، …) for the manager's journal
+  screen and the reconciliation report; `components/voucher-card.tsx` renders them.
+- `admin/print/statement/[id]/page.tsx` + `customers/[id]/_components/statement-table.tsx`
+  — printable customer statement (صورتحساب) built from the same ledger rows the invoice
+  uses, so the two can never disagree.
+- `apps/api/src/realtime/realtime.events.ts` + `apps/web/src/lib/use-live-events.ts` +
+  `sales.controller.ts`/`sales.module.ts` — realtime contract. Golden rule, stated in the
+  file: these events are **notifications, not payloads**. No price, cost or sensitive
+  field goes over the socket — only what happened plus a few light ids, so the client
+  refetches through the same guarded REST endpoint. That way the realtime channel can
+  never become a role-scoped data leak.
+- `admin/print/_components/invoice-sheet.tsx` — the printed invoice sheet.
+
+#### Roll labels for shelf locations (2026-09-09 → 12)
+
+- `apps/api/src/labels/{labels.controller.ts,labels.service.ts,label-template.ts}` +
+  `admin/labels/page.tsx`, `components/labels/label-print-dialog.tsx`, `lib/api.ts` —
+  location labels can now be printed as thermal **roll** output: each PDF page is one
+  piece of the roll (`@page size: mediaWidth × height`) carrying
+  `floor(mediaWidth / widthMm)` QR-first labels side by side, big QR (`height − 4` mm)
+  with the location code in bold next to it. Why `@page` at the roll size: a thermal
+  printer emits a page as one roll piece, so a PDF in any other size gets scaled or
+  truncated by the driver — the same failure that used to put a tiny label in the middle
+  of an A4 sheet.
+- **The settings already express the 3-up layout**: media width 104 mm, label
+  width 34 mm, height 25 mm ⇒ three 34×25 mm labels per piece with a ~21 mm QR. No code
+  change is needed for that; note only that `widthMm` is rounded, so 35 gives 2-up while
+  34 gives 3-up.
+- `apps/web/src/lib/tspl.ts` — client-side TSPL builder for «چاپ مستقیم (حرارتی)» from
+  inside the seller app, a faithful port of `apps/api/src/labels/tspl.service.ts` (same
+  dimensions, layout and bitmap packing). It has to be client-side: the thermal printer
+  is attached to the machine running the seller app, not to the API server. The web app
+  only builds the commands and hands them to the desktop bridge, which writes them with
+  `datatype=RAW` so the driver stays out of the way.
+
+#### Android operator app (2026-09-12)
+
+- Auth/session hardening on top of Epics 2–3, now covered by unit tests:
+  `AuthRepository.kt` (login/logout/start routing that does **not** throw a valid session
+  away just because the LAN server is unreachable), `SettingsStore.kt`, the encrypted
+  token store, `LoginViewModel.kt` (Persian wording that separates wrong credentials from
+  a dead LAN from a server error), `StartupViewModel.kt`, `RepositoryModule.kt`.
+- `WorkTaskWatcherService.kt` — the pick-task watcher now starts only after a successful
+  login, so a logged-out phone stops polling.
+- `deploy/android/setup-android.ps1` + `build-android.ps1` — user-scope JDK 17 + Android
+  SDK toolchain and a build/install script, so the app can be built without Android
+  Studio, admin rights or an emulator. Full inventory and the remaining gaps (no release
+  keystore, no device verification, no git): `docs/ANDROID_READINESS.md`.
+
+#### Docs
+
+- `docs/ANDROID_READINESS.md` (new) — toolchain inventory with exact paths, working
+  commands, the three real blockers, and what the app actually contains.
+- `docs/task-cards/android-operator-app-checklist.md` — prerequisites section added ahead
+  of Epic 0; Epics 0–3 marked verified, 4–12 written-but-unverified on a device.
+- `docs/AUTO_VOUCHER_ROADMAP.md` — automatic-voucher plan updated.
+
+#### One invoice across two warehouses (2026-09-15)
+
+- `apps/api/src/sales/sales.service.ts` — the `LOCATION_NOT_IN_WAREHOUSE` rejection is
+  gone: a sale line may come from a shelf in another warehouse. It existed for a real
+  reason (a client-supplied `locationId` could decrement another warehouse's shelf, and
+  because sales run with `allowNegative` it went silently negative), but it was the wrong
+  shape for this shop: the warehouses sit behind one counter, and the POS picks the shelf
+  from the **most-stocked** location automatically — so ordinary sales were refused with
+  «مکان انتخاب‌شده در این انبار نیست» without anyone doing anything unusual.
+- `apps/api/src/sales/sale-locations.ts` (new) — the remaining line-location policy in one
+  pure, tested place: a line without a shelf is the system location's business; a
+  deactivated/deleted shelf stays sellable; a shelf with no row at all is accepted only if
+  that product actually sits on it. The module deliberately takes no warehouse input, and
+  `sale-locations.spec.ts` fails if the old rule is ever reintroduced.
+- What carries the truth now: each line is an `InventoryLog` with its own `locationId`, so
+  the right shelf is decremented and returns restock to that same shelf
+  (`returns.service.ts`). `SaleInvoice.warehouseId` stays as the header — the counter the
+  sale was rung up at — and is what the invoice list filters on. The printed customer
+  receipt shows no warehouse; the shelf `path` (which starts with the warehouse code)
+  already shows it in the on-screen cart and in today's invoices.
+- Verified end to end on a real database, not with mocks:
+  `apps/api/prisma/smoke-multi-warehouse.ts` (new) sells one line from warehouse A and one
+  from a second warehouse on a single invoice and asserts each shelf dropped by exactly
+  one. It builds its own fixture and deletes it afterwards. QA `T017` and `T096` updated
+  from "rejected" to the new expectation (their `warehouse_os_qa` guard means neither ever
+  touches the live database).
+
+#### Build stamp — /health now says which build is running (2026-09-15)
+
+- `VERSION` (new, repo root) — the product version in one place. `installer.iss`
+  still carries its own `AppVersion` (0.4.0) for the Setup route; the two should be
+  bumped together at the next installer build.
+- `apps/api/scripts/write-build-info.cjs` (new) + the `build` script in
+  `apps/api/package.json` — `nest build` now ends by writing
+  `dist/build-info.json` (`version`, `builtAt`, `node`). It refuses to write into a
+  missing `dist`, so a build that never happened cannot leave a stamp behind.
+- `apps/api/src/common/build-info.ts` (new, with `build-info.spec.ts`) — reads that
+  stamp and always returns the same shape, falling back to the `package.json`
+  version when it is absent or malformed. The reader is deliberately unfussy: a
+  missing metadata file must never turn `/health` into a 500.
+- `apps/api/src/app.service.ts` — `/health` reports `version`, `builtAt`, `kit` and
+  `packagedAt` instead of the meaningless `0.0.1` from `package.json`. Reason: after
+  an update, `{"status":"ok"}` cannot distinguish a half-applied update, a file
+  replaced by the wrong one, and a service that never restarted. These four fields
+  can.
+- `deploy/windows/updates/build-update-kit.ps1` — re-stamps its own copy with the
+  kit name + packaging time (`kit`, `packagedAt`), prints the stamp in the build
+  summary and self-test, records it in `kit-contents.txt`, and now **fails the
+  self-test** when the stamp is missing or names a different kit than the folder.
+- `deploy/windows/updates/apply-update.ps1` — at 95% the health step also calls
+  `/health` and prints the running build, then compares it with the kit's own stamp
+  (`MATCH` / `MISMATCH`). A mismatch is the one failure that otherwise looks like
+  success: files replaced, old process still answering.
+- `deploy/windows/updates/restore-update.ps1` — the same comparison against the
+  stamp inside the backup being restored, plus a `build` line in `restored.txt`.
+  `deploy/windows/health-watch.ps1` was left alone on purpose: it is installed by
+  `Setup.exe`, not by this kit, so an edit there would not reach the shop.
+
+#### Blank price sheet — «پیش‌فاکتور سفید» (2026-09-16)
+
+The counter keeps meeting the same case: the worker knows what the customer wants
+(«لنت پراید جلو») but the product either does not exist in the system yet or the
+price is not the worker's to set. Until now the options were to create a product on
+the spot or to write on paper. This adds a third path: a price sheet with **free
+text lines** that the worker creates from the phone (by voice or by hand) and the
+manager prices and turns into a real invoice from the panel.
+
+Why a separate model instead of reusing `Quotation`: `QuotationLine.productId` is
+mandatory and the whole existing flow (print, convert, reports) is built on the
+product being there. Making it nullable would have put a "line without a product"
+case into every one of those paths. `BlankQuotation`/`BlankQuotationLine` are new
+and additive; nothing existing was reshaped.
+
+**Stock and ledger are untouched until conversion.** Nothing in
+`BlankQuotationsService` writes `InventoryLog`; the only writer is
+`SalesService.createInvoice`, called from `convert()`.
+
+- `apps/api/prisma/schema.prisma` + `20260916120000_blank_quotation` — additive:
+one enum and two tables, no change to any existing table.
+- `20260916130000_blank_quotation_line_position` — adds
+`BlankQuotationLine.position` and replaces the single-column index with
+`(blankQuotationId, position)`. Why it was needed: without it the line order of a
+sheet was `ORDER BY id`, i.e. **the order of the uuid**, so "line 2" of a price
+sheet was whatever line happened to sort second. `createdAt` could not fix it —
+all lines of a sheet are written in one transaction, so `CURRENT_TIMESTAMP` is
+identical for every one of them. The smoke test below is what caught it: it asserted
+that the suggestions come back in the order the worker spoke them and they did not.
+- `apps/api/src/sales/blank-quotations.service.ts` (new with spec) — create / list /
+detail / `prices` / `suggestions` / `convert` / `cancel`.
+- **Two prices, deliberately separate.** `suggestedPrice` is what the phone guessed
+and `finalPrice`/`pricedAt` is what the manager decided. The suggested number never
+enters a total, an invoice or a document — it is a hint next to the line, and the
+ledger's arithmetic only ever sees `finalPrice`.
+- **Idempotent from the phone.** `idempotencyKey = mobile-<clientRequestId>`, unique
+at the database level. The phone is offline-first, so a retry must not create a
+second sheet that the manager then prices twice.
+- **Conversion key cannot be chosen by the client**: it is `blank-<id>`, built from
+the sheet itself. Two concurrent converts with two different client keys would have
+created two invoices and deducted stock twice — the mistake already recorded in
+`QuotationsService.convert`.
+- **The three locks on convert**: every line must be linked to a real product, every
+line must be priced, and the sheet must not be expired. A half-priced sheet reaching
+`createInvoice` is the one path that can move stock on a number nobody agreed to.
+- `locationId` is optional on convert, exactly as `InvoiceLineDto` means it: absent
+means "I don't know where it is" and the invoice lands on the system
+"unregistered stock" location. It is never a silent default of a user-visible shelf.
+- **Semi-automatic linking** reuses `ProductsService.searchWithStock` — the same
+engine the POS and the panel already search with. No second string-similarity
+implementation was written; the suggestion carries stock and shelf path so
+"link + pick shelf" is one click.
+- `apps/api/src/sales/sales.controller.ts` + `apps/api/src/mobile/mobile.controller.ts`
+and their modules — manager routes under `sales/blank-quotations`
+(ADMIN/MANAGER/SALES), phone route `mobile/blank-quotations` (STAFF/SALES).
+- Phone side (`apps/android`): a card on `ShiftHomeScreen` **outside the shift gate**
+(sellers still cannot open an inventory shift and this path never needs one), a
+row-per-line form with a continuously re-arming mic that captures **name and
+quantity only** — the price stays manual — and a new outbox type
+`BLANK_QUOTATION` with its own drain branch. No Room migration: the outbox `type`
+column is a string and `payload` already carried JSON.
+- Manager side (`apps/web`): a «برگه‌ی سفید» bucket in the quotations page, and
+`apps/web/src/app/admin/quotations/_lib/blank-quote.ts` (with tests) computing the
+display state. «چند قلم بی‌قیمت و ناوصل مانده» is the number that matters, and the
+convert button is disabled **with its reason written next to it** — a disabled
+button with no explanation sends the manager back to the phone.
+- Print: `apps/web/src/app/admin/print/blank-quotation/[id]` +
+`blank-quotation-sheet.tsx`. Unpriced lines print **blank** so the manager can fill
+them in by hand, and the total is labelled «جمع N قلم قیمت‌خورده» rather than
+looking like a final amount.
+
+- `apps/api/prisma/smoke-blank-quotation.ts` — end-to-end smoke test on the real
+database (the convention the other `smoke-*.ts` scripts follow, self-cleaning):
+phone create + retry with the same key, stock untouched until conversion, early
+converts rejected, suggestion path, manager pricing, conversion (stock 40 → 37),
+double conversion, cancel, expiry, list filters and line order. Run:
+`npx ts-node --transpile-only prisma/smoke-blank-quotation.ts`.
+
+Evidence: `apps/api` 42 suites / 323 tests green, `apps/web` 33 files / 252 tests
+green, `apps/android` 12 classes / 102 tests green (`gradlew testDevDebugUnitTest`),
+`npx tsc --noEmit` clean for api and web, and the smoke script above green on the
+dev database (61 checks). Both migrations were applied to the local dev database
+(`migrate deploy`, then `migrate status` → up to date) and are additive-only.
+**Not verified: no phone, no emulator, and no dashboard click-through** — the Android
+screen, the voice re-arming and the panel interactions were proven by unit tests and
+types, not by a human looking at them. Nothing here has been installed anywhere.
+
+Pre-existing and untouched: `apps/api/test/qa/harness.ts` and `pooltune.qa.ts` do not
+compile (service constructors gained arguments), which was already true before this
+change.
+
 ### Migration baseline fixed (2026-08-03)
 
 - `20260803090000_baseline_catchup` — reconciles migration history with the dev DB

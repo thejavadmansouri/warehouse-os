@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پیش‌نمایش — ماندهٔ مشتری روی فاکتورها و POS (ماکِت — بدون تغییر در برنامه)</title>
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#fff; --border:#e2e8f0; --muted:#64748b; --fg:#0f172a;
+    --primary:#2563eb; --primary-soft:#eff6ff;
+    --amber:#b45309; --amber-bg:#fef3c7; --amber-bd:#fde68a;
+    --ok:#15803d; --ok-bg:#dcfce7; --ok-bd:#bbf7d0;
+    --red:#dc2626; --red-bg:#fee2e2; --red-bd:#fecaca;
+    --gray-bg:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);font-family:Vazirmatn,"Segoe UI",Tahoma,sans-serif;font-size:14px}
+  .wrap{max-width:1180px;margin:0 auto;padding:14px 14px 60px}
+  .banner{background:#1e293b;color:#f8fafc;border-radius:10px;padding:10px 16px;margin-bottom:12px;font-size:13px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .banner .tag{background:#fbbf24;color:#1e293b;border-radius:6px;padding:2px 8px;font-weight:700;font-size:12px}
+  .banner b{color:#fbbf24}
+  .screenbtns{display:flex;gap:8px;margin-bottom:12px}
+  .screenbtns button{border:1px solid var(--border);background:var(--card);border-radius:8px;padding:9px 22px;font:inherit;font-weight:700;cursor:pointer;color:var(--muted)}
+  .screenbtns button.active{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  .badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+  .b-ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-bd)}
+  .b-debt{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+  .b-over{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+  .b-gray{background:var(--gray-bg);color:var(--muted);border:1px solid var(--border)}
+  .b-blue{background:var(--primary-soft);color:#1d4ed8;border:1px solid #bfdbfe}
+  kbd{background:#fff;border:1px solid var(--border);border-radius:4px;padding:1px 6px;font-size:11px;color:var(--muted)}
+  .note{background:var(--primary-soft);border:1px solid #bfdbfe;color:#1d4ed8;border-radius:8px;padding:7px 12px;font-size:12.5px;margin-bottom:10px}
+
+  /* ============ POS ============ */
+  .pos{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .pos-top{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--gray-bg);flex-wrap:wrap}
+  .tabchip{border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 12px;font-size:13px;display:flex;gap:8px;align-items:center}
+  .tabchip.active{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-soft)}
+  .custbal{display:flex;gap:6px;align-items:center}
+  .membar{display:flex;gap:10px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--border);background:#fffbf2;flex-wrap:wrap}
+  .switch{display:inline-flex;gap:8px;align-items:center;font-weight:700;cursor:pointer}
+  .switch .knob{width:34px;height:19px;background:var(--ok);border-radius:999px;position:relative}
+  .switch .knob::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;background:#fff;border-radius:50%}
+  .balstrip{display:flex;gap:8px;flex-wrap:wrap;margin-inline-start:auto;align-items:center}
+  .balbox{border:1px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12.5px;background:var(--gray-bg)}
+  .balbox b{font-variant-numeric:tabular-nums}
+  .balbox.amber{background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)}
+  .balbox.red{background:var(--red-bg);border-color:var(--red-bd);color:var(--red)}
+  .cart{padding:8px 12px;display:flex;flex-direction:column;gap:6px;min-height:210px}
+  .line{display:flex;gap:10px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:7px 10px;background:#fff}
+  .line.faded{opacity:.5;background:repeating-linear-gradient(45deg,#fff,#fff 8px,#f8fafc 8px,#f8fafc 9px)}
+  .line .nm{flex:1;font-weight:600}
+  .line .qty{font-variant-numeric:tabular-nums;color:var(--muted)}
+  .line .price{font-variant-numeric:tabular-nums;font-weight:700;min-width:110px;text-align:left}
+  .pos-foot{display:flex;gap:8px;align-items:center;padding:10px 12px;border-top:1px solid var(--border);background:var(--gray-bg);flex-wrap:wrap}
+  .fkey{border:1px solid var(--border);background:#fff;border-radius:7px;padding:6px 12px;font-size:12.5px;font-weight:600}
+  .fkey b{color:var(--primary)}
+  .total{margin-inline-start:auto;font-size:16px;font-weight:800}
+  .warnbox{background:var(--red-bg);border:1px solid var(--red-bd);color:var(--red);border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700}
+
+  /* ============ Invoices page ============ */
+  .page{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  .page-head{display:flex;gap:10px;align-items:center;padding:12px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .page-head h2{margin:0;font-size:17px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{background:var(--gray-bg);color:var(--muted);font-weight:600;text-align:right;padding:9px 10px;border-bottom:1px solid var(--border);font-size:12.5px;white-space:nowrap}
+  td{padding:8px 10px;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr:hover td{background:#fafcff}
+  .num{font-variant-numeric:tabular-nums}
+  .muted{color:var(--muted)}
+  .rowlink{color:var(--primary);cursor:pointer;text-decoration:none;font-weight:600}
+  .custcell{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+  .custcell .nm{font-weight:600}
+  .custcell .bal{font-size:11.5px}
+  .detail{background:#fbfdff;border:1px solid #dbeafe;border-radius:10px;margin:8px 12px;padding:10px 12px}
+  .detail .ttl{font-weight:800;margin-bottom:6px;display:flex;gap:8px;align-items:center}
+  .kv{display:flex;gap:14px;flex-wrap:wrap;font-size:13px}
+  .kv div b{font-variant-numeric:tabular-nums}
+  .memtoggle{display:inline-flex;gap:8px;align-items:center;font-weight:700}
+  .foot{margin-top:12px;color:var(--muted);font-size:12.5px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="banner">
+    <span class="tag">پیش‌نمایش</span>
+    <span>ماکِت ظاهری — هیچ تغییری در برنامه اعمال نشده. ایدهٔ جدید: <b>ماندهٔ حساب مشتری داخل هر فاکتور، دقیقاً کنار «دیدن حافظهٔ فاکتور»</b> — هم در POS و هم در صفحهٔ فاکتورها.</span>
+  </div>
+  <div class="screenbtns">
+    <button class="active" id="b-pos">🖥 صفحهٔ POS</button>
+    <button id="b-inv">📄 صفحهٔ فاکتورها</button>
+  </div>
+
+  <!-- ==================== POS ==================== -->
+  <div id="pos">
+    <div class="note">تغییر نسبت به الان: نوار بسته‌شدهٔ کهربایی زیر تب‌ها = <b>وضعیت مالی مشتری در لحظه</b>، چسبیده به کلید «دیدن حافظهٔ این فاکتور». فروشنده بدون رفتن به جای دیگر می‌فهمد مشتری چند بدهکار است و آیا معوق دارد.</div>
+
+    <div class="pos">
+      <div class="pos-top">
+        <div class="tabchip active">
+          <span>فاکتور #۱۰۲۹ — علی رضایی</span>
+          <span class="custbal">
+            <span class="badge b-debt">بدهکار: ۱۲٬۴۵۰٬۰۰۰</span>
+            <span class="badge b-over">معوق: ۹٬۳۰۰٬۰۰۰</span>
+            <span class="badge b-gray">از سقف اعتبار: ۶۲٪</span>
+          </span>
+        </div>
+        <div class="tabchip">سبد ۲ — بدون مشتری</div>
+      </div>
+
+      <div class="membar">
+        <span class="switch"><span class="knob"></span> دیدن حافظهٔ این فاکتور</span>
+        <span class="muted" style="font-size:12px">(خاموش = فقط اقلام فعلی · روشن = اقلام برگشتی کم‌رنگ + تاریخچه)</span>
+        <span class="balstrip">
+          <span class="balbox">ماندهٔ کل حساب: <b>۱۲٬۴۵۰٬۰۰۰</b> بدهکار</span>
+          <span class="balbox">بدون این فاکتور: <b>۱۰٬۳۵۰٬۰۰۰</b> بدهکار</span>
+          <span class="balbox amber">ماندهٔ همین فاکتور: <b>۱٬۰۰۰٬۰۰۰</b></span>
+          <span class="balbox red">۱ فاکتور معوق از ۰۵/۲۱</span>
+        </span>
+      </div>
+
+      <div class="cart">
+        <div class="line"><span class="nm">لنت جلو پژو ۲۰۶</span><span class="qty">۵ عدد</span><span class="price">۱٬۵۰۰٬۰۰۰</span></div>
+        <div class="line"><span class="nm">روغن موتور ۴ لیتری</span><span class="qty">۱ عدد</span><span class="price">۶۵۰٬۰۰۰</span></div>
+        <div class="line faded"><span class="nm">چراغ جلو <span class="badge b-gray">برگشتی</span></span><span class="qty">۳ عدد</span><span class="price">−۴۵۰٬۰۰۰</span></div>
+        <div class="line faded"><span class="nm">لنت جلو پژو ۲۰۶ <span class="badge b-gray">برگشتی</span></span><span class="qty">۳ عدد</span><span class="price">−۹۰۰٬۰۰۰</span></div>
+        <div class="line"><span class="nm">کاسه‌نمد <span class="badge b-blue">اضافه‌شده</span></span><span class="qty">۲ عدد</span><span class="price">۳۰۰٬۰۰۰</span></div>
+      </div>
+
+      <div class="pos-foot">
+        <span class="fkey"><b>F2</b> ثبت</span>
+        <span class="fkey"><b>F3</b> مشتری</span>
+        <span class="fkey"><b>F4</b> کالا</span>
+        <span class="fkey"><b>Ctrl+Z</b> برگشت</span>
+        <span class="warnbox">⚠ این فاکتور ۱٬۰۰۰٬۰۰۰ مانده دارد — با ثبت، ماندهٔ مشتری ۱۲٬۴۵۰٬۰۰۰ می‌شود</span>
+        <span class="total">جمع سبد: ۱٬۱۰۰٬۰۰۰</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== INVOICES PAGE ==================== -->
+  <div id="inv" style="display:none">
+    <div class="note">تغییر نسبت به الان: کنار نام هر مشتری <b>ماندهٔ کل حسابش</b> هست (کهربایی بدهکار / سبز بستانکار / قرمز اگر معوق دارد) — و داخل نمایش فاکتور، همان نوار «حافظه + مانده» که در POS دیدید.</div>
+
+    <div class="page">
+      <div class="page-head">
+        <h2>فاکتورها</h2>
+        <div class="badge b-blue">امروز: ۱۲ فاکتور</div>
+        <span class="muted" style="margin-inline-start:auto;font-size:12.5px">🔍 جستجو: شماره، مشتری، کالا، مبلغ</span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>شماره</th><th>تاریخ</th><th>مشتری</th><th>مبلغ کل</th><th>پرداخت‌شده</th><th>مانده فاکتور</th><th>وضعیت</th>
+        </tr></thead>
+        <tbody>
+          <tr>
+            <td><a class="rowlink">#۱۰۳۲</a></td><td>۱۴۰۵/۰۶/۰۸</td>
+            <td><div class="custcell"><span class="nm">رضا کاظمی</span><span class="bal"><span class="badge b-ok">حساب تسویه</span></span></div></td>
+            <td class="num">۴٬۸۵۰٬۰۰۰</td><td class="num">۴٬۸۵۰٬۰۰۰</td><td class="num">۰</td>
+            <td><span class="badge b-ok">پرداخت کامل</span></td>
+          </tr>
+          <tr>
+            <td><a class="rowlink">#۱۰۲۹</a></td><td>۱۴۰۵/۰۶/۰۳</td>
+            <td><div class="custcell"><span class="nm">علی رضایی</span><span class="bal"><span class="badge b-debt">بدهکار کل: ۱۲٬۴۵۰٬۰۰۰</span></span></div></td>
+            <td class="num">۲٬۱۰۰٬۰۰۰</td><td class="num">۱٬۱۰۰٬۰۰۰</td><td class="num" style="color:var(--amber);font-weight:700">۱٬۰۰۰٬۰۰۰</td>
+            <td><span class="badge b-debt">نسیه</span></td>
+          </tr>
+          <tr>
+            <td><a class="rowlink">#۱۰۱۷</a></td><td>۱۴۰۵/۰۵/۲۱</td>
+            <td><div class="custcell"><span class="nm">علی رضایی</span><span class="bal"><span class="badge b-over">بدهکار کل: ۱۲٬۴۵۰٬۰۰۰ · معوق</span></span></div></td>
+            <td class="num">۹٬۳۰۰٬۰۰۰</td><td class="num">۰</td><td class="num" style="color:var(--red);font-weight:700">۹٬۳۰۰٬۰۰۰</td>
+            <td><span class="badge b-over">معوق</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="detail">
+        <div class="ttl">
+          فاکتور #۱۰۲۹ — علی رضایی
+          <span class="memtoggle"><span class="switch"><span class="knob"></span> دیدن حافظهٔ این فاکتور</span></span>
+        </div>
+        <div class="kv">
+          <div>ماندهٔ کل حساب: <b style="color:var(--amber)">۱۲٬۴۵۰٬۰۰۰ بدهکار</b></div>
+          <div>بدون این فاکتور: <b>۱۰٬۳۵۰٬۰۰۰</b></div>
+          <div>ماندهٔ همین فاکتور: <b style="color:var(--amber)">۱٬۰۰۰٬۰۰۰</b></div>
+          <div><span class="badge b-over">۱ فاکتور معوق</span></div>
+          <div><span class="badge b-gray">۱ چک ۵م نزد ما</span></div>
+          <div style="margin-inline-start:auto"><button class="fkey">دریافت از مشتری <b style="color:var(--primary)">F6</b></button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot">
+    اصل: هر جا «حافظهٔ فاکتور» هست، وضعیت مالی مشتری هم همان‌جاست — POS، صفحهٔ فاکتورها، و صفحهٔ چاپ. اعداد همیشه realtime از سرور.
+  </div>
+</div>
+<script>
+  const bp=document.getElementById('b-pos'),bi=document.getElementById('b-inv'),
+        sp=document.getElementById('pos'),si=document.getElementById('inv');
+  bp.onclick=()=>{bp.classList.add('active');bi.classList.remove('active');sp.style.display='';si.style.display='none';};
+  bi.onclick=()=>{bi.classList.add('active');bp.classList.remove('active');si.style.display='';sp.style.display='none';};
+</script>
+</body>
+</html>

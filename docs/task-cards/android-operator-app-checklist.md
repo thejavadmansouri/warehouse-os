@@ -17,6 +17,77 @@ Backend contract (already exists, do not modify unless a task says so):
 
 Each task below is scoped to ~20–30 minutes and independently committable.
 
+---
+
+## Status: Epics 0–3 are built and verified (2026-09-12)
+
+The scaffold had drifted ahead of this document. As of this date the app builds from
+source on the Windows dev laptop and its unit tests are green:
+
+```
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\android\build-android.ps1
+# BUILD SUCCESSFUL · 87 unit tests, 0 failures · app-dev-bench.apk (23.4 MB)
+```
+
+**Re-verified 2026-09-15.** `:app:testDevDebugUnitTest --rerun-tasks` executed all 31
+tasks in 1m 42s with **87 tests, 0 failures, 0 errors, 0 skipped**, and
+`assembleDevBench` reproduced the 23.4 MB APK. Running the same test task *without*
+`--rerun-tasks` is misleading: Gradle marks everything `UP-TO-DATE` and finishes in
+3 s without executing a single test. Full output and the two operational gotchas
+(lingering Gradle daemon; never pipe the build through `tee`) are in
+[`../ANDROID_READINESS.md`](../ANDROID_READINESS.md) §6.
+
+- **Epic 0 (1–6)** — done: `apps/android` module, Gradle 8.11.1 wrapper, Hilt, Room, Retrofit,
+  CameraX/ML Kit, DataStore, WorkManager; `dev`/`prod` flavors with `BuildConfig.BASE_URL`;
+  `values-fa` + RTL + splash; Compose Navigation graph with every screen wired.
+- **Epic 1 (7–10)** — done: `ApiService` covers the backend contract (incl. the worker
+  endpoints), `AuthInterceptor` attaches the bearer token and persists the
+  `X-Refreshed-Token` sliding-session refresh, 401 emits `AuthEvent.Unauthorized`,
+  and every repository returns `ApiResult` via one `safeApiCall`.
+- **Epic 2 (11–13)** — done and now covered by tests: `SecureTokenStore` over
+  EncryptedSharedPreferences (Keystore-backed), `AuthRepository.login/logout/
+  resolveStartDestination`, and the offline-tolerant start routing (an unreachable
+  server must NOT throw a valid session out).
+- **Epic 3 (14–16)** — done and now covered by tests: Persian error wording per
+  outcome (wrong credentials vs dead LAN vs server error), the role gate that logs a
+  foreign role straight back out, and the pick-task watcher starting only on success.
+
+Toolchain and deploy scripts live in `deploy/android/` (`setup-android.ps1`,
+`build-android.ps1`): JDK 17 + Android SDK, user-scope, no Android Studio, no emulator,
+no admin rights (~1.0 GB). `gradle.properties` pins the JVM locale to `en-US` — see the
+comment there; on a Persian-locale Windows the Kotlin daemon handshake failed and every
+build lost ~13 minutes to connect retries.
+
+Epics 4–12 are implemented in the tree but not yet verified task-by-task; tick them only
+after an on-device pass.
+
+---
+
+## Prerequisites before touching the app (checked 2026-09-15)
+
+The build toolchain is present and this laptop can build, test and sideload the app.
+Three things are **not** in place, and one of them (#58) blocks any real release:
+
+1. **No release keystore.** The `release` build type has no `signingConfig`, so
+   `assembleRelease` emits an unsigned APK. The only installable builds are `debug` and
+   `bench`, both signed with the throwaway debug key under the `.debug` applicationId.
+   Task #58 stays open until a keystore is generated *and kept*; a lost key means no
+   future build can install over an existing one.
+2. **No emulator and no instrumented tests.** The SDK has no `emulator/` or
+   `system-images/`, and `app/src/androidTest` does not exist — so CameraX, ML Kit,
+   audio/vibration feedback, Compose layout and battery behaviour can only be verified
+   on a physical phone over adb. Tasks #55–56 depend on this.
+3. **No version control.** The tree has no `.git`, so Android changes cannot be
+   diffed, reviewed or reverted.
+
+Before the first change, run
+`powershell -NoProfile -ExecutionPolicy Bypass -File deploy\android\build-android.ps1 -SkipTests`
+and confirm it is green, so a later failure is provably yours.
+
+Full inventory, exact commands and evidence: [`../ANDROID_READINESS.md`](../ANDROID_READINESS.md).
+
+---
+
 ## Epic 0 — Project scaffolding
 - [ ] 1. Create `apps/android` module: new Android Studio project, Kotlin + Jetpack Compose, package id, min/target SDK decision.
 - [ ] 2. Add Gradle deps: Retrofit, OkHttp (+ logging interceptor), kotlinx.serialization, Room, Hilt, Coroutines, CameraX, ML Kit barcode scanning, DataStore.
