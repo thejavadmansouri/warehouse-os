@@ -35,6 +35,16 @@ interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE status = 'FAILED' ORDER BY createdAt DESC")
     fun failed(): Flow<List<OutboxEntity>>
 
+    /**
+     * ردیف‌های یک نوعِ خاص که هنوز نفرستاده‌اند — صفحه‌ی برگه‌ی سفید با این
+     * فهرست نشان می‌دهد «چه ساختیم و هنوز نرفته»، تا کارگر بتواند قبل از
+     * سینک اشتباهش را حذف کند.
+     *
+     * FAILED هم می‌آید: برگه‌ای که سرور ردش کرده هم باید روی صفحه دیده شود.
+     */
+    @Query("SELECT * FROM outbox WHERE type = :type AND status IN ('PENDING','FAILED') ORDER BY createdAt ASC")
+    fun unsyncedOfType(type: String): Flow<List<OutboxEntity>>
+
     /** Returns rows removed — 0 means the op had already synced and is gone. */
     @Query("DELETE FROM outbox WHERE clientRequestId = :id")
     suspend fun delete(id: String): Int

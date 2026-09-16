@@ -39,4 +39,13 @@ object OutboxType {
     const val WORK_TASK_TICK = "WORK_TASK_TICK"
     /** چسباندن بارکد جعبه به کالا — به POST /barcode/link می‌رود. */
     const val BARCODE_LINK = "BARCODE_LINK"
+    /**
+     * برگه‌ی سفید (پیش‌فاکتور سفید) — اقلام متنی + تعداد، به
+     * POST /mobile/blank-quotations می‌رود.
+     *
+     * موجودی را دست نمی‌زند؛ فقط قیمت‌گذاریِ مدیر را ممکن می‌کند. کل بدنه‌ی
+     * درخواست در `payload` می‌نشیند (مثل NEW_PRODUCT_REQUEST) و کلید یکتا
+     * همان `clientRequestId` این ردیف است.
+     */
+    const val BLANK_QUOTATION = "BLANK_QUOTATION"
 }

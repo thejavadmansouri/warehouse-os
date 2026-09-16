@@ -1,7 +1,10 @@
 package com.warehouseos.operator.di
 
+import com.warehouseos.operator.data.notifications.WorkTaskWatcher
+import com.warehouseos.operator.data.notifications.WorkTaskWatcherController
 import com.warehouseos.operator.data.repository.PhotoQueue
 import com.warehouseos.operator.data.repository.PhotoRepository
+import com.warehouseos.operator.data.settings.AppSettings
 import com.warehouseos.operator.data.settings.CatalogReadyFlag
 import com.warehouseos.operator.data.settings.SettingsStore
 import com.warehouseos.operator.data.sync.PhotoUploadRequester
@@ -38,4 +41,12 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindCatalogReadyFlag(impl: SettingsStore): CatalogReadyFlag
+
+    @Binds
+    @Singleton
+    abstract fun bindAppSettings(impl: SettingsStore): AppSettings
+
+    @Binds
+    @Singleton
+    abstract fun bindWorkTaskWatcher(impl: WorkTaskWatcherController): WorkTaskWatcher
 }

@@ -123,22 +123,36 @@ class WorkTaskWatcherService : Service() {
 }
 
 /**
+ * Start/stop of the foreground pick-task watcher, as seen by the rest of the app.
+ *
+ * An interface (the same pattern as [com.warehouseos.operator.data.session.TokenProvider]
+ * and [com.warehouseos.operator.data.settings.CatalogReadyFlag]) so the login and
+ * startup flows can be unit-tested on the JVM without an Android Context.
+ */
+interface WorkTaskWatcher {
+    /** Start the foreground watcher (safe to call repeatedly). */
+    fun start()
+
+    /** Stop the watcher (no-op when it isn't running). */
+    fun stop()
+}
+
+/**
  * Thin wrapper so ViewModels/repositories can start/stop the watcher without
  * holding an Activity context or knowing the service class.
  */
 @Singleton
 class WorkTaskWatcherController @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
-    /** Start the foreground watcher (safe to call repeatedly). */
-    fun start() {
+) : WorkTaskWatcher {
+
+    override fun start() {
         val intent = Intent(context, WorkTaskWatcherService::class.java)
             .setAction(WorkTaskWatcherService.ACTION_START)
         ContextCompat.startForegroundService(context, intent)
     }
 
-    /** Stop the watcher (no-op when it isn't running). */
-    fun stop() {
+    override fun stop() {
         context.stopService(Intent(context, WorkTaskWatcherService::class.java))
     }
 }

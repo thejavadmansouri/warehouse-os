@@ -17,6 +17,19 @@ interface CatalogReadyFlag {
 }
 
 /**
+ * The runtime-editable backend address on its own, so the login flow can be
+ * unit-tested on the JVM (same reasoning as [CatalogReadyFlag]): the
+ * operator types the server IP before signing in, which is exactly the screen
+ * worth testing.
+ */
+interface AppSettings {
+    /** Configured base URL, falling back to the build flavor's default. */
+    fun baseUrl(): String
+
+    fun setBaseUrl(url: String)
+}
+
+/**
  * App settings (Epic 9). Currently just the backend base URL, which must be
  * runtime-configurable because the warehouse server is an on-prem LAN host whose
  * IP changes. Plain SharedPreferences (not encrypted — the URL isn't sensitive)
@@ -25,14 +38,14 @@ interface CatalogReadyFlag {
 @Singleton
 class SettingsStore @Inject constructor(
     @ApplicationContext context: Context,
-) : CatalogReadyFlag {
+) : CatalogReadyFlag, AppSettings {
     private val prefs = context.getSharedPreferences("operator_settings", Context.MODE_PRIVATE)
 
     /** Configured base URL, falling back to the build flavor's default. */
-    fun baseUrl(): String =
+    override fun baseUrl(): String =
         prefs.getString(KEY_BASE_URL, null)?.takeIf { it.isNotBlank() } ?: BuildConfig.BASE_URL
 
-    fun setBaseUrl(url: String) {
+    override fun setBaseUrl(url: String) {
         prefs.edit { putString(KEY_BASE_URL, url.trim()) }
     }
 

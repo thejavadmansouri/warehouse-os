@@ -16,8 +16,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Assignment
+import androidx.compose.material.icons.automirrored.filled.Assignment
 import androidx.compose.material.icons.filled.Checklist
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
@@ -74,6 +75,7 @@ fun ShiftHomeScreen(
     onLocate: () -> Unit,
     onLinkBarcode: () -> Unit,
     onTransfer: () -> Unit,
+    onBlankQuote: () -> Unit,
     onMyWork: () -> Unit,
     onWorkTasks: () -> Unit,
     onSettings: () -> Unit,
@@ -134,6 +136,23 @@ fun ShiftHomeScreen(
             if (failedItems.isNotEmpty()) {
                 FailedSyncSection(failedItems, viewModel::retryFailed, viewModel::discardFailed)
             }
+
+            /*
+             * برگه‌ی قیمت — عمداً **بیرون** از شرط شیفت.
+             *
+             * سازنده‌اش می‌تواند کارگر باشد یا فروشنده، و نه مسیر ساختش از
+             * `InventorySession` استفاده می‌کند و نه فروشنده (SALES) اصلاً اجازه‌ی
+             * شروع شیفت دارد. پس گره زدن این کارت به شیفت یعنی قفل کردنِ یک
+             * قابلیتِ مستقل پشت چیزی که به آن نیازی ندارد.
+             */
+            SectionLabel("برگه‌ی قیمت")
+            ActionCard(
+                title = "پیش‌فاکتور سفید",
+                subtitle = "نام و تعداد را بگو؛ قیمت با مدیر",
+                icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                accent = AccentBlank,
+                onClick = onBlankQuote,
+            )
 
             if (sessionId == null) {
                 NoSessionContent(uiState.isStarting, uiState.error, viewModel::startShift)
@@ -254,6 +273,7 @@ private val AccentFind = Color(0xFF0F766E)
 private val AccentBarcode = Color(0xFF15803D)
 private val AccentMine = Color(0xFF475569)
 private val AccentTransfer = Color(0xFFBE185D)
+private val AccentBlank = Color(0xFF0891B2)
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -308,7 +328,7 @@ private fun ActiveSessionContent(
             HomeAction(
                 "کارهای انبار",
                 if (pendingWorkCount > 0) "${faNum(pendingWorkCount)} کار در جریان" else "برداشتن و چیدن کالا",
-                Icons.Filled.Assignment,
+                Icons.AutoMirrored.Filled.Assignment,
                 onWorkTasks,
                 pendingWorkCount,
                 AccentWork,
@@ -386,6 +406,7 @@ private fun OutboxEntity.label(): String {
         OutboxType.IN -> "ثبت کالا$where"
         OutboxType.COUNT -> "انبارگردانی$where"
         OutboxType.WORK_TASK_TICK -> "تیک کار انبار"
+        OutboxType.BLANK_QUOTATION -> "پیش‌فاکتور سفید"
         else -> "عملیات$where"
     }
 }

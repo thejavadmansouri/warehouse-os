@@ -39,6 +39,10 @@ object Routes {
     const val SETTINGS = "settings"
     const val LINK_BARCODE = "link_barcode"
 
+    // پیش‌فاکتور سفید — برگه‌ی قیمتِ متنی که کارگر/فروشنده از گوشی می‌سازد و
+    // قیمت‌گذاری‌اش با مدیر است. به شیفت گره نمی‌خورد.
+    const val BLANK_QUOTE = "blank_quote"
+
     // انتقال بین قفسه — جابه‌جایی موجودی با اسکن مبدأ و مقصد.
     const val TRANSFER = "transfer"
 

@@ -1,12 +1,13 @@
 package com.warehouseos.operator.data.repository
 
-import com.warehouseos.operator.data.notifications.WorkTaskWatcherController
+import com.warehouseos.operator.data.notifications.WorkTaskWatcher
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.ApiService
 import com.warehouseos.operator.data.remote.dto.LoginRequest
 import com.warehouseos.operator.data.remote.safeApiCall
 import com.warehouseos.operator.data.session.AuthUser
 import com.warehouseos.operator.data.session.SecureTokenStore
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,7 +23,7 @@ enum class StartupDestination { LOGIN, SHIFT_HOME }
 class AuthRepository @Inject constructor(
     private val api: ApiService,
     private val tokenStore: SecureTokenStore,
-    private val watcher: WorkTaskWatcherController,
+    private val watcher: WorkTaskWatcher,
 ) {
 
     fun cachedUser(): AuthUser? = tokenStore.cachedUser()
@@ -33,10 +34,17 @@ class AuthRepository @Inject constructor(
      * The local token goes regardless of what the server says — a worker on a
      * dead network still has to be able to hand the phone over. Releasing the
      * server-side session is best effort on top of that.
+     *
+     * The server call still runs FIRST, because releasing the single-device seat
+     * needs an authenticated request and the interceptor reads the token from the
+     * store — clearing before it would leave an orphaned session on the server.
+     * What it must not do is hold the handover hostage: on a dead LAN OkHttp would
+     * otherwise block for the full 30s read timeout with the operator staring at a
+     * spinner. [LOGOUT_TIMEOUT_MS] bounds that; the local session is gone either way.
      */
     suspend fun logout() {
         watcher.stop()
-        runCatching { api.logout() }
+        runCatching { withTimeoutOrNull(LOGOUT_TIMEOUT_MS) { api.logout() } }
         tokenStore.clear()
     }
 
@@ -83,5 +91,10 @@ class AuthRepository @Inject constructor(
             }
             is ApiResult.NetworkError, is ApiResult.ServerError -> StartupDestination.SHIFT_HOME
         }
+    }
+
+    private companion object {
+        /** Ceiling on the best-effort server-side logout before the phone is free. */
+        const val LOGOUT_TIMEOUT_MS = 2_000L
     }
 }

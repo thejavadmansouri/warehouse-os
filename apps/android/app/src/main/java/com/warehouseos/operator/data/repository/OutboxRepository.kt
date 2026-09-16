@@ -6,6 +6,7 @@ import com.warehouseos.operator.data.local.OutboxStatus
 import com.warehouseos.operator.data.local.OutboxType
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.ApiService
+import com.warehouseos.operator.data.remote.dto.CreateBlankQuotationRequest
 import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
 import com.warehouseos.operator.data.remote.dto.SyncOperationRequest
 import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
@@ -144,14 +145,44 @@ class OutboxRepository @Inject constructor(
     }
 
     /**
+     * برگه‌ی سفید — local-first.
+     *
+     * کل بدنه‌ی درخواست در `payload` می‌نشیند و به
+     * POST /mobile/blank-quotations می‌رود. کلید یکتا همان `clientRequestId` این
+     * ردیف است؛ پس اگر برگشت به وای‌فای مغازه دو بار سینک شود، سرور همان برگه را
+     * برمی‌گرداند و مدیر دو بار قیمت نمی‌گذارد.
+     */
+    suspend fun enqueueBlankQuotation(request: CreateBlankQuotationRequest): String {
+        dao.insert(
+            OutboxEntity(
+                clientRequestId = request.clientRequestId,
+                type = OutboxType.BLANK_QUOTATION,
+                locationBarcode = "",
+                voiceText = null,
+                productId = null,
+                quantity = request.lines.sumOf { it.quantity },
+                unit = null,
+                status = OutboxStatus.PENDING,
+                payload = Json.encodeToString(CreateBlankQuotationRequest.serializer(), request),
+            ),
+        )
+        return request.clientRequestId
+    }
+
+    /** برگه‌های این دستگاه که هنوز نرفته‌اند (یا سرور ردشان کرده) — برای نمایش روی صفحه. */
+    fun unsyncedBlankQuotations(): Flow<List<OutboxEntity>> =
+        dao.unsyncedOfType(OutboxType.BLANK_QUOTATION)
+
+    /**
      * Drains all syncable (PENDING) rows. Returns true when every row reached a
      * terminal state (SYNCED or rejected → FAILED); false only when the network
      * blocked progress, so the worker's retry means "try again later" — never
      * "re-send something the server already rejected".
      *
      * New-product requests go to POST /product-requests; stock ops go to the
-     * batch POST /sync/operations; work-task ticks go to POST /work-tasks/sync.
-     * A failure in one kind doesn't block the other.
+     * batch POST /sync/operations; work-task ticks go to POST /work-tasks/sync;
+     * blank quotations go to POST /mobile/blank-quotations. A failure in one kind
+     * doesn't block the other.
      */
     suspend fun sync(): Boolean {
         val ops = dao.getSyncable()
@@ -160,11 +191,13 @@ class OutboxRepository @Inject constructor(
         val ticks = ops.filter { it.type == OutboxType.WORK_TASK_TICK }
         val productRequests = ops.filter { it.type == OutboxType.NEW_PRODUCT_REQUEST }
         val barcodeLinks = ops.filter { it.type == OutboxType.BARCODE_LINK }
-        // هرچه از سه نوعِ بالا نیست، حرکتِ موجودی است.
+        val blankQuotations = ops.filter { it.type == OutboxType.BLANK_QUOTATION }
+        // هرچه از چهار نوعِ بالا نیست، حرکتِ موجودی است.
         val stockOps = ops.filter {
             it.type != OutboxType.WORK_TASK_TICK &&
                 it.type != OutboxType.NEW_PRODUCT_REQUEST &&
-                it.type != OutboxType.BARCODE_LINK
+                it.type != OutboxType.BARCODE_LINK &&
+                it.type != OutboxType.BLANK_QUOTATION
         }
 
         var allTerminal = true
@@ -181,6 +214,9 @@ class OutboxRepository @Inject constructor(
         }
         for (op in barcodeLinks) {
             allTerminal = syncBarcodeLink(op) && allTerminal
+        }
+        for (op in blankQuotations) {
+            allTerminal = syncBlankQuotation(op) && allTerminal
         }
 
         return allTerminal
@@ -347,6 +383,43 @@ class OutboxRepository @Inject constructor(
                     op.attemptCount + 1,
                     message,
                 )
+                true
+            }
+        }
+    }
+
+    /**
+     * یک برگه‌ی سفید را می‌فرستد.
+     *
+     * یک ۴xx ردِ قطعی است: دوباره‌فرستادن همان بدنه هیچ‌وقت جواب نمی‌دهد. پس
+     * FAILED با پیام فارسی می‌شود تا کارگر در «ردشده‌ها» ببیند و برگه‌ی درست را
+     * بسازد — نه اینکه بی‌صدا هر سینک دوباره بفرستد.
+     */
+    private suspend fun syncBlankQuotation(op: OutboxEntity): Boolean {
+        val body = runCatching {
+            Json.decodeFromString(CreateBlankQuotationRequest.serializer(), op.payload ?: "")
+        }.getOrNull() ?: run {
+            dao.updateStatus(op.clientRequestId, OutboxStatus.FAILED, op.attemptCount + 1, "bad payload")
+            return true
+        }
+
+        return when (val result = safeApiCall { api.createBlankQuotation(body) }) {
+            is ApiResult.Success -> {
+                dao.updateStatus(op.clientRequestId, OutboxStatus.SYNCED, op.attemptCount, null)
+                dao.clearSynced()
+                true
+            }
+            // قطعی شبکه — برگه در صف می‌ماند تا برگشت به وای‌فای مغازه.
+            is ApiResult.NetworkError -> false
+            // 401 = توکن منقضی، ردِ برگه نیست — PENDING بماند تا توکن تازه شود.
+            ApiResult.Unauthorized -> false
+            is ApiResult.ServerError -> {
+                val message = when (result.code) {
+                    400 -> "سرور این برگه را نپذیرفت؛ اقلام را بررسی کنید"
+                    404 -> "این مسیر روی سرور نیست — نسخه‌ی سرور را به‌روز کنید"
+                    else -> "ثبت پیش‌فاکتور سفید ناموفق بود"
+                }
+                dao.updateStatus(op.clientRequestId, OutboxStatus.FAILED, op.attemptCount + 1, message)
                 true
             }
         }

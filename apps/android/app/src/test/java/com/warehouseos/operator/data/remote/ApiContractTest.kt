@@ -1,6 +1,8 @@
 package com.warehouseos.operator.data.remote
 
+import com.warehouseos.operator.data.remote.dto.BlankQuotationLineRequest
 import com.warehouseos.operator.data.remote.dto.CountVoiceRequest
+import com.warehouseos.operator.data.remote.dto.CreateBlankQuotationRequest
 import com.warehouseos.operator.data.remote.dto.LoginRequest
 import com.warehouseos.operator.data.remote.dto.VoiceInputRequest
 import kotlinx.coroutines.test.runTest
@@ -99,6 +101,49 @@ class ApiContractTest {
         val res = api.searchProducts("لنت")
         assertEquals(2, res.size)
         assertEquals("p1", res[0].id)
+    }
+
+    @Test
+    fun `blank quotation create serialises its body and parses the created sheet`() = runTest {
+        server.enqueue(MockResponse().setBody("""{"id":"q1","number":12,"status":"OPEN"}"""))
+
+        val res = api.createBlankQuotation(
+            CreateBlankQuotationRequest(
+                clientRequestId = "bq-1",
+                customerName = "محسن",
+                lines = listOf(
+                    BlankQuotationLineRequest("لنت پراید", 3, 200_000),
+                    BlankQuotationLineRequest("فیلتر روغن", 1),
+                ),
+            ),
+        )
+
+        assertEquals("q1", res.id)
+        assertEquals(12, res.number)
+
+        val request = server.takeRequest()
+        assertEquals("/mobile/blank-quotations", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body.contains("\"clientRequestId\":\"bq-1\""))
+        assertTrue(body.contains("لنت پراید"))
+        // قلمِ بدون قیمت، کلید suggestedPrice را اصلاً نمی‌فرستد (نه null).
+        assertTrue(body.contains("\"quantity\":1"))
+    }
+
+    @Test
+    fun `my blank quotations parses the slim list shape`() = runTest {
+        server.enqueue(
+            MockResponse().setBody(
+                """{"data":[{"id":"q1","number":12,"status":"OPEN","createdAt":"2026-09-16T10:00:00.000Z","customerName":"محسن","unpricedCount":2}]}""",
+            ),
+        )
+
+        val res = api.myBlankQuotations()
+
+        assertEquals(1, res.data.size)
+        assertEquals(12, res.data.first().number)
+        assertEquals(2, res.data.first().unpricedCount)
+        assertEquals("/mobile/blank-quotations/mine?limit=20", server.takeRequest().path)
     }
 
     @Test

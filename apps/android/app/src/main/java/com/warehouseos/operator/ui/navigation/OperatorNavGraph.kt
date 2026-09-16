@@ -12,6 +12,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.warehouseos.operator.data.repository.StartupDestination
+import com.warehouseos.operator.ui.screens.blankquote.BlankQuoteScreen
 import com.warehouseos.operator.ui.screens.catalog.CatalogSetupScreen
 import com.warehouseos.operator.ui.screens.count.CountScreen
 import com.warehouseos.operator.ui.screens.login.LoginScreen
@@ -106,6 +107,7 @@ fun OperatorNavGraph(
                 onLocate = { navController.navigate(Routes.LOCATE) },
                 onLinkBarcode = { navController.navigate(Routes.LINK_BARCODE) },
                 onTransfer = { navController.navigate(Routes.TRANSFER) },
+                onBlankQuote = { navController.navigate(Routes.BLANK_QUOTE) },
                 onMyWork = { navController.navigate(Routes.MY_WORK) },
                 onWorkTasks = { navController.navigate(Routes.WORK_TASKS) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
@@ -222,6 +224,12 @@ fun OperatorNavGraph(
 
         composable(Routes.SETTINGS) {
             SettingsScreen(
+                onBack = { navController.popBackStack() },
+            )
+        }
+
+        composable(Routes.BLANK_QUOTE) {
+            BlankQuoteScreen(
                 onBack = { navController.popBackStack() },
             )
         }

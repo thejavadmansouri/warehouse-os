@@ -1,7 +1,10 @@
 package com.warehouseos.operator.data.remote
 
 import com.warehouseos.operator.data.remote.dto.AuthMeResponse
+import com.warehouseos.operator.data.remote.dto.BlankQuotationCreated
 import com.warehouseos.operator.data.remote.dto.CatalogPageDto
+import com.warehouseos.operator.data.remote.dto.CreateBlankQuotationRequest
+import com.warehouseos.operator.data.remote.dto.MyBlankQuotationsResponse
 import com.warehouseos.operator.data.remote.dto.CountStartRequest
 import com.warehouseos.operator.data.remote.dto.LinkBarcodeRequest
 import com.warehouseos.operator.data.remote.dto.LinkBarcodeResponse
@@ -145,6 +148,19 @@ interface ApiService {
         @Path("countId") countId: String,
         @Body body: CountVoiceRequest,
     ): CountVoiceResponse
+
+    // ---- پیش‌فاکتور سفید (برگه‌ی قیمت از گوشی) ----
+    //
+    // چرا این دو در مجموعه‌ی `mobile` هستند و نه `sales`: سازندهٔ برگه می‌تواند
+    // کارگر (STAFF) باشد و کل سطح فروش برای کارگر بسته است. انبار را هم سرور
+    // انتخاب می‌کند، چون گوشی هیچ‌وقت warehouseId ندارد.
+
+    @POST("mobile/blank-quotations")
+    suspend fun createBlankQuotation(@Body body: CreateBlankQuotationRequest): BlankQuotationCreated
+
+    /** برگه‌های همین کاربر — بعد از سینک معلوم می‌شود قیمت خورده یا نه. */
+    @GET("mobile/blank-quotations/mine")
+    suspend fun myBlankQuotations(@Query("limit") limit: Int = 20): MyBlankQuotationsResponse
 
     // ---- Offline sync ----
     // Batch-upload the local outbox; server dedupes by clientRequestId and lands

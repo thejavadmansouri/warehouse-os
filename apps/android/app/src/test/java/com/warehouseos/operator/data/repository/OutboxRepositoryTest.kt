@@ -6,6 +6,8 @@ import com.warehouseos.operator.data.local.OutboxEntity
 import com.warehouseos.operator.data.local.OutboxStatus
 import com.warehouseos.operator.data.local.OutboxType
 import com.warehouseos.operator.data.remote.ApiService
+import com.warehouseos.operator.data.remote.dto.BlankQuotationLineRequest
+import com.warehouseos.operator.data.remote.dto.CreateBlankQuotationRequest
 import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -120,6 +122,108 @@ class OutboxRepositoryTest {
         assertTrue(body.contains("SHELF-2"))
         // هم‌اهنگ با مسیر batch: ردیفِ ارسال‌شده از صف پاک می‌شود.
         assertTrue(dao.all().isEmpty())
+    }
+
+    /**
+     * برگه‌ی سفید مسیر خودش را دارد: `mobile/blank-quotations` و نه batchِ
+     * `sync/operations`. رفتن از مسیر batch یعنی برگه به‌عنوان «عملیات در انتظار
+     * تأیید مدیر» می‌نشست، در حالی که اینجا مدیر باید *قیمت بگذارد*، نه تأیید کند.
+     */
+    @Test
+    fun `blank quotation posts to its own mobile endpoint and is cleared on success`() = runTest {
+        repo.enqueueBlankQuotation(
+            CreateBlankQuotationRequest(
+                clientRequestId = "bq-1",
+                customerName = "محسن",
+                lines = listOf(BlankQuotationLineRequest("لنت پراید", 3, 200_000)),
+            ),
+        )
+        assertEquals(OutboxType.BLANK_QUOTATION, dao.all().single().type)
+
+        server.enqueue(MockResponse().setBody("""{"id":"q1","number":12,"status":"OPEN"}"""))
+        assertTrue(repo.sync())
+
+        val request = server.takeRequest()
+        assertEquals("/mobile/blank-quotations", request.path)
+        val body = request.body.readUtf8()
+        assertTrue(body.contains("\"clientRequestId\":\"bq-1\""))
+        assertTrue(body.contains("لنت پراید"))
+        assertTrue(body.contains("\"suggestedPrice\":200000"))
+        assertTrue(body.contains("محسن"))
+        // موجودی هیچ‌وقت اینجا لمس نمی‌شود؛ فقط برگه ساخته شد.
+        assertTrue(dao.all().isEmpty())
+    }
+
+    @Test
+    fun `blank quotation network failure keeps it PENDING`() = runTest {
+        repo.enqueueBlankQuotation(
+            CreateBlankQuotationRequest(
+                clientRequestId = "bq-2",
+                lines = listOf(BlankQuotationLineRequest("لنت پراید", 1)),
+            ),
+        )
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        assertFalse(repo.sync())
+        val row = dao.all().single()
+        assertEquals(OutboxStatus.PENDING, row.status)
+        assertEquals(OutboxType.BLANK_QUOTATION, row.type)
+    }
+
+    @Test
+    fun `blank quotation rejected with 401 stays PENDING`() = runTest {
+        repo.enqueueBlankQuotation(
+            CreateBlankQuotationRequest(
+                clientRequestId = "bq-3",
+                lines = listOf(BlankQuotationLineRequest("لنت پراید", 1)),
+            ),
+        )
+        server.enqueue(MockResponse().setResponseCode(401).setBody("""{"message":"unauthorized"}"""))
+
+        // ۴۰۱ یعنی توکن منقضی، نه ردِ برگه — کارِ ثبت‌شده نباید گم شود.
+        assertFalse(repo.sync())
+        assertEquals(OutboxStatus.PENDING, dao.all().single().status)
+    }
+
+    @Test
+    fun `blank quotation rejected by the server is FAILED with a persian message`() = runTest {
+        repo.enqueueBlankQuotation(
+            CreateBlankQuotationRequest(
+                clientRequestId = "bq-4",
+                lines = listOf(BlankQuotationLineRequest("   ", 1)),
+            ),
+        )
+        server.enqueue(MockResponse().setResponseCode(400).setBody("""{"message":"EMPTY_TEXT"}"""))
+
+        assertTrue(repo.sync())
+        val row = dao.all().single()
+        assertEquals(OutboxStatus.FAILED, row.status)
+        assertEquals("سرور این برگه را نپذیرفت؛ اقلام را بررسی کنید", row.lastError)
+
+        // ردشده دوباره فرستاده نمی‌شود.
+        assertTrue(repo.sync())
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test
+    fun `blank quotation with corrupt payload is marked FAILED locally`() = runTest {
+        dao.insert(
+            OutboxEntity(
+                clientRequestId = "bq-corrupt",
+                type = OutboxType.BLANK_QUOTATION,
+                locationBarcode = "",
+                voiceText = null,
+                productId = null,
+                quantity = 1,
+                unit = null,
+                status = OutboxStatus.PENDING,
+                payload = "{not json",
+            ),
+        )
+
+        assertTrue(repo.sync())
+        assertEquals("bad payload", dao.all().single().lastError)
+        assertEquals(0, server.requestCount)
     }
 
     @Test

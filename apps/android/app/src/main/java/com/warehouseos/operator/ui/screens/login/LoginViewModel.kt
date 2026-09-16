@@ -2,10 +2,10 @@ package com.warehouseos.operator.ui.screens.login
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.warehouseos.operator.data.notifications.WorkTaskWatcherController
+import com.warehouseos.operator.data.notifications.WorkTaskWatcher
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.repository.AuthRepository
-import com.warehouseos.operator.data.settings.SettingsStore
+import com.warehouseos.operator.data.settings.AppSettings
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,8 +29,8 @@ data class LoginUiState(
 @HiltViewModel
 class LoginViewModel @Inject constructor(
     private val authRepository: AuthRepository,
-    private val settings: SettingsStore,
-    private val watcher: WorkTaskWatcherController,
+    private val settings: AppSettings,
+    private val watcher: WorkTaskWatcher,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(LoginUiState(serverUrl = settings.baseUrl()))
