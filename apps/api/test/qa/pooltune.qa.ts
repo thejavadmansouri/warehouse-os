@@ -8,6 +8,8 @@ import { InventoryOperationService } from '../../src/inventory-operation/invento
 import { SystemLocationsService } from '../../src/inventory/system-locations.service';
 import { LedgerService } from '../../src/sales/ledger.service';
 import { SalesService } from '../../src/sales/sales.service';
+import { ReturnsService } from '../../src/sales/returns.service';
+import { PostingService } from '../../src/vouchers/posting.service';
 import {
   baseFixture,
   prisma as basePrisma,
@@ -33,12 +35,17 @@ async function run(limit: number, maxWait: number, n = 100) {
   }) as unknown as PrismaService;
 
   const op = new InventoryOperationService(client, gw);
+  const ledger = new LedgerService(client);
+  const posting = new PostingService(client);
+  const returns = new ReturnsService(client, op, ledger, gw, posting);
   const svc = new SalesService(
     client,
     op,
-    new LedgerService(client),
+    ledger,
     new SystemLocationsService(),
     gw,
+    posting,
+    returns,
   );
 
   const f = await baseFixture();

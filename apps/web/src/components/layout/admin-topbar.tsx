@@ -2,9 +2,7 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Menu, Moon, Sun, LogOut,
-} from "lucide-react";
+import { Menu, Moon, Sun, LogOut } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +23,7 @@ import {
 import { AdminSidebar, SidebarCollapseToggle } from "./admin-sidebar";
 import { FullscreenToggle } from "./fullscreen-toggle";
 import { ReadabilityToggle } from "./readability-toggle";
+import { ConnectionInfoDialog } from "@/components/connection-info-dialog";
 import { cn } from "@/lib/utils";
 import { LiveClock } from "@/components/live-clock";
 import { NotificationBell } from "@/components/notification-bell";
@@ -33,12 +32,22 @@ import { useAuthStore } from "@/lib/auth-store";
 import { logoutServer } from "@/lib/api";
 import { ROLE_LABELS } from "@/lib/format";
 
+/**
+ * هیدریشن را به‌صورت external store می‌خوانیم — نه setState در effect.
+ * سرور همیشه false می‌گوید؛ بعد از mount دوباره رندر می‌شود و تم دیده می‌شود.
+ */
+const mountedSubscribe = () => () => {};
+const getMounted = () => true;
+const getServerMounted = () => false;
+
 function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
-  React.useEffect(() => setMounted(true), []);
-  if (!mounted)
-    return <div className="size-7" />;
+  const mounted = React.useSyncExternalStore(
+    mountedSubscribe,
+    getMounted,
+    getServerMounted,
+  );
+  if (!mounted) return <div className="size-7" />;
   return (
     <Button
       variant="ghost"
@@ -116,14 +125,20 @@ export function AdminTopbar({
           <SheetHeader className="sr-only">
             <SheetTitle>منوی پنل</SheetTitle>
           </SheetHeader>
-          <AdminSidebar collapsed={false} onNavigate={() => setMobileOpen(false)} />
+          <AdminSidebar
+            collapsed={false}
+            onNavigate={() => setMobileOpen(false)}
+          />
         </SheetContent>
       </Sheet>
 
       {/* دکمه collapse سایدبار دسکتاپ — روی صندوق سایدباری نیست که جمع شود. */}
       {!isPos && (
         <div className="hidden lg:block">
-          <SidebarCollapseToggle collapsed={collapsed} onToggle={onToggleCollapse} />
+          <SidebarCollapseToggle
+            collapsed={collapsed}
+            onToggle={onToggleCollapse}
+          />
         </div>
       )}
 
@@ -182,6 +197,7 @@ export function AdminTopbar({
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <ConnectionInfoDialog />
           <DropdownMenuItem
             onClick={handleLogout}
             className="text-destructive focus:text-destructive"

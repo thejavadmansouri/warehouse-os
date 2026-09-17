@@ -3,10 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { PackagePlus, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import { Download, FileSpreadsheet, PackagePlus, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { cancelPurchase, getPurchases, getSuppliers, getWarehouses } from "@/lib/api";
+import { cancelPurchase, downloadPurchaseImportTemplate, getPurchases, getSuppliers, getWarehouses } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import { PURCHASE_STATUS_LABELS } from "@/lib/types";
 import { money, qty as faQty, toFa } from "@/lib/format";
@@ -58,7 +58,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="فاکتورهای خرید" description="ثبت و پیگیری ورود کالا از برگه‌ی فروشنده" icon={PackagePlus} actions={<Button asChild><Link href="/admin/purchases/new"><Plus className="me-2 h-4 w-4" />فاکتور خرید جدید</Link></Button>} />
+      <PageHeader title="فاکتورهای خرید" description="ثبت و پیگیری ورود کالا از برگه‌ی فروشنده" icon={PackagePlus} actions={<div className="flex flex-wrap gap-2"><Button variant="outline" asChild><Link href="/admin/purchases/import"><FileSpreadsheet className="me-2 h-4 w-4" />ورود از Excel</Link></Button><Button variant="outline" onClick={() => downloadPurchaseImportTemplate().catch((e) => toast.error(e instanceof ApiException ? e.message : "دانلود قالب ناموفق بود"))}><Download className="me-2 h-4 w-4" />دانلود قالب Excel</Button><Button asChild><Link href="/admin/purchases/new"><Plus className="me-2 h-4 w-4" />فاکتور خرید جدید</Link></Button></div>} />
 
       <Card className="border-primary/15 bg-card p-3">
         <div className="mb-2 flex items-center gap-2 text-sm font-semibold"><SlidersHorizontal className="size-4 text-primary" />جست‌وجو و فیلتر</div>

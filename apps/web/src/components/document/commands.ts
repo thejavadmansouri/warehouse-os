@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export type CommandId =
-  | "new" | "prev" | "next" | "find" | "quotes"
+  | "new" | "prev" | "next" | "find" | "quotes" | "blankQuotes"
   | "addRow" | "delRow" | "discount" | "lineNote"
   | "party" | "ledger" | "kardex"
   | "print" | "preview" | "excel" | "sms"
@@ -95,6 +95,8 @@ export const COMMANDS: CommandSpec[] = [
 
   { id: "quotes", group: "سند", icon: FileSearch, label: "پیش‌فاکتورهای باز", keyLabel: "Alt+Q",
     match: (e) => e.altKey && !mod(e) && letter(e, "q") },
+  { id: "blankQuotes", group: "سند", icon: FileClock, label: "پیش‌فاکتورهای سفید", keyLabel: "Alt+B",
+    match: (e) => e.altKey && !mod(e) && letter(e, "b") },
 
   { id: "addRow",   group: "ردیف", icon: Plus, label: "افزودن ردیف", keyLabel: "Insert",
     match: (e) => e.key === "Insert" },

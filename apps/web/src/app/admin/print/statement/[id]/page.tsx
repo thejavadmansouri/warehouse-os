@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getCustomer, getCustomerFullStatement, getStatement } from "@/lib/api";
@@ -58,21 +58,25 @@ export default function StatementPrintPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [size, setSize] = useState<PaperSize>("a4");
+  /*
+   * همه‌ی پارامترها از کوئری‌استرینگ خوانده می‌شوند — lazy init، نه effect
+   * (setState در بدنه‌ی effect رندرِ آبشاری می‌سازد و lint را قرمز می‌کند).
+   */
+  const initialQuery =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search);
+  const [size, setSize] = useState<PaperSize>(() => {
+    const s = initialQuery?.get("size");
+    return s === "a4" || s === "a5" ? s : "a4";
+  });
   /** بازه‌ی صورت‌حساب. خالی یعنی از اول تا امروز. */
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => initialQuery?.get("from") ?? "");
+  const [to, setTo] = useState(() => initialQuery?.get("to") ?? "");
   /** گردشِ حسابِ دفتری روی کاغذ بیاید؟ برای مشتریِ پرتراکنش گاهی اضافه است. */
-  const [withLedger, setWithLedger] = useState(true);
-
-  useEffect(() => {
-    const p = new URLSearchParams(window.location.search);
-    const s = p.get("size");
-    if (s === "a4" || s === "a5") setSize(s);
-    if (p.get("from")) setFrom(p.get("from")!);
-    if (p.get("to")) setTo(p.get("to")!);
-    if (p.get("ledger") === "0") setWithLedger(false);
-  }, []);
+  const [withLedger, setWithLedger] = useState(
+    () => initialQuery?.get("ledger") !== "0",
+  );
 
   const range = {
     startDate: from ? new Date(from).toISOString() : undefined,
@@ -129,7 +133,10 @@ export default function StatementPrintPage({
         {(from || to) && (
           <button
             type="button"
-            onClick={() => { setFrom(""); setTo(""); }}
+            onClick={() => {
+              setFrom("");
+              setTo("");
+            }}
             className="rounded-md border border-slate-300 px-3 py-1 text-slate-700"
           >
             کلِ تاریخچه
@@ -238,8 +245,8 @@ export default function StatementPrintPage({
                     {p.cheque && (
                       <div className="muted">
                         چک {toFa(p.cheque.number)}
-                        {p.cheque.bankName ? ` — ${p.cheque.bankName}` : ""}، سررسید{" "}
-                        {faDate(p.cheque.dueDate)}
+                        {p.cheque.bankName ? ` — ${p.cheque.bankName}` : ""}،
+                        سررسید {faDate(p.cheque.dueDate)}
                       </div>
                     )}
                   </td>
@@ -273,7 +280,9 @@ export default function StatementPrintPage({
                       {LABELS[e.type]}
                       {e.note && <div className="muted">{e.note}</div>}
                     </td>
-                    <td className="num">{e.amount > 0 ? money(e.amount) : "—"}</td>
+                    <td className="num">
+                      {e.amount > 0 ? money(e.amount) : "—"}
+                    </td>
                     <td className="num">
                       {e.amount < 0 ? money(Math.abs(e.amount)) : "—"}
                     </td>
@@ -397,7 +406,10 @@ function numbered(f: CustomerFullStatement) {
   );
   return f.purchases.map((purchase, pi) => ({
     purchase,
-    lines: purchase.lines.map((line, li) => ({ line, no: offsets[pi] + li + 1 })),
+    lines: purchase.lines.map((line, li) => ({
+      line,
+      no: offsets[pi] + li + 1,
+    })),
     gross: purchase.lines.reduce((s, l) => s + Math.max(0, l.lineTotal), 0),
   }));
 }
@@ -470,7 +482,10 @@ function PurchaseRows({
               {l.productName}
               {l.sku && <span className="muted sku"> · کد {toFa(l.sku)}</span>}
               {l.returnedQuantity > 0 && (
-                <span className="ret"> · {toFa(l.returnedQuantity)} مرجوعی</span>
+                <span className="ret">
+                  {" "}
+                  · {toFa(l.returnedQuantity)} مرجوعی
+                </span>
               )}
             </td>
             <td className="num center">

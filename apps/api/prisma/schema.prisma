@@ -949,14 +949,15 @@ model Customer {
   openAccounts OpenAccount[]
   messages     SmsMessage[]
   receipts     Receipt[]
-  quotations   Quotation[]
-  ledger       CustomerLedger[]
-  returns      SaleReturn[]
-  corrections  SaleCorrection[]
-  payouts      CustomerPayout[]
-  shortages    ProductShortage[]
-  addresses    CustomerAddress[]
-  onlineOrders OnlineOrder[]
+  quotations     Quotation[]
+  ledger         CustomerLedger[]
+  returns        SaleReturn[]
+  corrections    SaleCorrection[]
+  payouts        CustomerPayout[]
+  shortages      ProductShortage[]
+  addresses      CustomerAddress[]
+  onlineOrders   OnlineOrder[]
+  blankQuotations BlankQuotation[]
 
   @@index([searchName])
   @@index([lastName])
@@ -1888,8 +1889,12 @@ model BlankQuotation {
   idempotencyKey     String?   @unique
   warehouseId        String
   userId             String?
-  /// نامِ آزادِ مشتری که روی برگه می‌آید. عمداً رکورد `Customer` نمی‌سازد.
+  /// نامِ آزادِ مشتری که روی برگه می‌آید. عمداً رکورد `Customer` نمی‌سازد؛
+  /// وقتی به پرونده‌ای وصل شد، `customerId` مرجعِ واقعی است.
   customerName       String?
+  /// اتصال اختیاری به پرونده‌ی مشتری — وقتی مدیر نام را به مشتریِ موجود وصل
+  /// کرد. رکورد Customer ساخته نمی‌شود؛ صرفاً پیوند است.
+  customerId         String?
   note               String?
   status             BlankQuotationStatus @default(OPEN)
   /// اختیاری. اگر بدهند مبنای «منقضی» می‌شود؛ null یعنی برگه انقضا ندارد.
@@ -1901,10 +1906,12 @@ model BlankQuotation {
 
   warehouse Warehouse          @relation(fields: [warehouseId], references: [id])
   user      User?              @relation("BlankQuotationAuthor", fields: [userId], references: [id])
+  customer  Customer?          @relation(fields: [customerId], references: [id])
   lines     BlankQuotationLine[]
 
   @@index([warehouseId, createdAt])
   @@index([status])
+  @@index([customerId])
 }
 
 /// یک قلمِ متنی داخل برگه‌ی سفید.

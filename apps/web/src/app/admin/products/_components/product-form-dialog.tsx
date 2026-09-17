@@ -46,6 +46,7 @@ import {
   updateProduct,
   getBrands,
   getVehicleModels,
+  getNextProductIdentifiers,
 } from "@/lib/api";
 import { ApiException } from "@/lib/api-error-messages";
 import { useToast } from "@/hooks/use-toast";
@@ -112,6 +113,14 @@ export function ProductFormDialog({
   const isEdit = mode === "edit";
   const { toast } = useToast();
   const qc = useQueryClient();
+
+  const identifiersQ = useQuery({
+    queryKey: ["next-product-identifiers"],
+    queryFn: getNextProductIdentifiers,
+    enabled: open && !isEdit,
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+  });
 
   // طبق بخش ۶.۴ — GET /brands (فقط هنگام باز بودن دیالوگ)
   const brandsQ = useQuery({
@@ -181,8 +190,12 @@ export function ProductFormDialog({
             isActive: initial.isActive ?? true,
             showOnline: initial.showOnline ?? false,
           }
-        : defaults,
-    [isEdit, initial, defaults]
+        : {
+            ...defaults,
+            sku: identifiersQ.data?.sku ?? defaults.sku,
+            internalBarcode: identifiersQ.data?.internalBarcode ?? defaults.internalBarcode,
+          },
+    [isEdit, initial, defaults, identifiersQ.data]
   );
 
   const form = useForm<
@@ -410,7 +423,11 @@ export function ProductFormDialog({
                         کد SKU <span className="text-destructive">*</span>
                       </FormLabel>
                       <FormControl>
-                        <Input placeholder="FL-PR-001" {...field} />
+                        <Input
+                          placeholder="در حال دریافت کد…"
+                          disabled={!isEdit && identifiersQ.isLoading}
+                          {...field}
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -441,8 +458,9 @@ export function ProductFormDialog({
                       <FormLabel>بارکد داخلی</FormLabel>
                       <FormControl>
                         <Input
-                          placeholder="6290000000000"
+                          placeholder="در حال دریافت بارکد…"
                           inputMode="numeric"
+                          disabled={!isEdit && identifiersQ.isLoading}
                           {...field}
                         />
                       </FormControl>

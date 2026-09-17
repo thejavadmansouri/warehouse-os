@@ -20,6 +20,7 @@ import { WorkTasksService } from '../work-tasks/work-tasks.service';
 import { INT4_MAX } from '../common/money';
 import { inLockOrder } from '../common/lock-order';
 import { checkPurchasePrice, type PriceWarning } from '../common/price-guard';
+import * as XLSX from 'xlsx';
 
 import {
   CreatePurchaseDto,
@@ -414,6 +415,104 @@ export class PurchasesService {
     });
 
     return this.findOne(id);
+  }
+
+  /** پیش‌نمایش ورود خرید؛ کالاها فقط با شناسه‌ی قطعی یا نام پیشنهادی تطبیق می‌شوند. */
+  async previewImport(file: Express.Multer.File) {
+    if (!file?.buffer)
+      throw new BadRequestException('فایلی برای ورود دریافت نشد');
+    const workbook = XLSX.read(file.buffer, { type: 'buffer' });
+    const sheet =
+      workbook.Sheets['Items'] ?? workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) throw new BadRequestException('شیت Items در فایل پیدا نشد');
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
+    if (!rows.length) throw new BadRequestException('شیت اقلام خالی است');
+
+    const products = await this.prisma.product.findMany({
+      where: { deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        internalBarcode: true,
+        barcodes: { select: { barcode: true } },
+      },
+    });
+    const byIdentifier = new Map<string, (typeof products)[number]>();
+    for (const product of products) {
+      if (product.sku) byIdentifier.set(product.sku, product);
+      if (product.internalBarcode)
+        byIdentifier.set(product.internalBarcode, product);
+      for (const barcode of product.barcodes)
+        byIdentifier.set(barcode.barcode, product);
+    }
+
+    return rows.map((row, index) => {
+      const sku = String(row.sku ?? row.SKU ?? row['کد کالا'] ?? '').trim();
+      const barcode = String(
+        row.barcode ?? row.Barcode ?? row['بارکد'] ?? '',
+      ).trim();
+      const productName = String(
+        row.productName ?? row['نام کالا'] ?? row['نام محصول'] ?? '',
+      ).trim();
+      const product =
+        byIdentifier.get(sku) ??
+        byIdentifier.get(barcode) ??
+        products.find((p) => p.name === productName);
+      const quantity = Number(row.quantity ?? row['تعداد'] ?? 0);
+      const unitPrice = Number(
+        row.unitPrice ?? row['قیمت خرید'] ?? row['قیمت'] ?? 0,
+      );
+      return {
+        row: index + 2,
+        sku,
+        barcode,
+        productName,
+        quantity,
+        unitPrice,
+        product: product
+          ? { id: product.id, name: product.name, sku: product.sku }
+          : null,
+        status: product && quantity > 0 && unitPrice >= 0 ? 'READY' : 'REVIEW',
+      };
+    });
+  }
+
+  /** قالبِ رسمی ورود فاکتور خرید؛ فقط ساختار می‌دهد و داده‌ی واقعی ندارد. */
+  buildImportTemplate(): Buffer {
+    const invoice = XLSX.utils.json_to_sheet([
+      {
+        supplier: 'نام تأمین‌کننده',
+        supplierRef: 'شماره فاکتور فروشنده',
+        invoiceDate: '2026-01-01',
+        warehouseCode: 'کد انبار',
+        discount: 0,
+        note: 'توضیحات اختیاری',
+      },
+    ]);
+    const items = XLSX.utils.json_to_sheet([
+      {
+        sku: '1000001',
+        barcode: '',
+        productName: 'نام کالا (برای بررسی)',
+        quantity: 1,
+        unitPrice: 0,
+        lineDiscount: 0,
+        locationCode: '',
+      },
+    ]);
+    const guide = XLSX.utils.aoa_to_sheet([
+      ['راهنمای ورود فاکتور خرید'],
+      ['Invoice: یک ردیف برای اطلاعات فاکتور؛ Items: هر ردیف یک کالا.'],
+      ['برای تطبیق کالا حداقل یکی از sku یا barcode را وارد کنید.'],
+      ['قیمت و تعداد عددی باشند؛ تاریخ به‌صورت YYYY-MM-DD باشد.'],
+      ['این فایل نمونه است؛ ردیف مثال را پیش از ورود حذف یا جایگزین کنید.'],
+    ]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, invoice, 'Invoice');
+    XLSX.utils.book_append_sheet(workbook, items, 'Items');
+    XLSX.utils.book_append_sheet(workbook, guide, 'راهنما');
+    return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
   }
 
   async findOne(id: string) {

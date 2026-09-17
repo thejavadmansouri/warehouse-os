@@ -20,11 +20,14 @@ import { ShopHeader } from "./shop-header";
 export function BlankQuotationSheet({
   quotation: q,
   size,
+  showLinkedName,
 }: {
   quotation: BlankQuotation;
   size: PaperSize;
+  showLinkedName?: boolean;
 }) {
   const lines = q.lines ?? [];
+  const showName = showLinkedName ?? true;
   const unpriced = lines.filter((l) => l.pricedAt === null).length;
   const cancelled = q.displayStatus === "CANCELLED";
   const expired = q.displayStatus === "EXPIRED";
@@ -37,7 +40,7 @@ export function BlankQuotationSheet({
 
         <header className="head">
           <div>
-            <div className="title">برگه‌ی قیمت</div>
+            <div className="title">پیش فاکتور</div>
             <ShopHeader />
             <div className="muted">سند فروش نیست — فقط اعلام قیمت</div>
           </div>
@@ -55,6 +58,9 @@ export function BlankQuotationSheet({
           <div>
             <span className="muted">مشتری: </span>
             <b>{q.customerName ?? "—"}</b>
+            {q.customer && q.customer.fullName && (
+              <span className="muted"> (پرونده: {q.customer.fullName})</span>
+            )}
           </div>
           {q.validUntil && (
             <div>
@@ -80,14 +86,20 @@ export function BlankQuotationSheet({
                 <td>{toFa(i + 1)}</td>
                 <td>
                   {l.text}
-                  {l.product && <div className="line-note">{l.product.name}</div>}
+                  {showName && l.product && (
+                    <div className="line-note">{l.product.name}</div>
+                  )}
                 </td>
                 <td className="center">
                   {qty(l.quantity)} {l.product?.unit ?? ""}
                 </td>
                 {/* ردیفِ بی‌قیمت خالی می‌ماند تا با دست پر شود، نه اینکه «۰» چاپ شود. */}
-                <td className="num">{l.finalPrice === null ? "" : money(l.finalPrice)}</td>
-                <td className="num">{l.finalPrice === null ? "" : money(l.lineTotal)}</td>
+                <td className="num">
+                  {l.finalPrice === null ? "" : money(l.finalPrice)}
+                </td>
+                <td className="num">
+                  {l.finalPrice === null ? "" : money(l.lineTotal)}
+                </td>
               </tr>
             ))}
           </tbody>

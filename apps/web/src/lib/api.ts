@@ -13,7 +13,8 @@ import * as T from "./types";
 const API_PORT = process.env.NEXT_PUBLIC_API_PORT ?? "3000";
 
 /** نشانگر محیط برای تشخیص نسخه توسعه از نسخه نصب‌شده. */
-export const APP_ENV = process.env.NODE_ENV === "development" ? "development" : "production";
+export const APP_ENV =
+  process.env.NODE_ENV === "development" ? "development" : "production";
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION ?? "0.2.1";
 
 /**
@@ -106,7 +107,8 @@ function defaultStatusMessage(status: number): string {
   if (status === 401) return "احراز هویت نشده‌اید";
   if (status === 403) return "دسترسی غیرمجاز";
   if (status === 404) return "موردی یافت نشد";
-  if (status === 429) return "تلاش‌های زیاد — کمی صبر کنید و دوباره امتحان کنید";
+  if (status === 429)
+    return "تلاش‌های زیاد — کمی صبر کنید و دوباره امتحان کنید";
   if (status >= 500) return "خطای سمت سرور";
   return "خطای غیرمنتظره";
 }
@@ -122,7 +124,10 @@ function defaultStatusMessage(status: number): string {
  * سرنخی. حالا هر سه شکل خوانده می‌شود و پیامِ سرور برنده است.
  */
 function toErrorBody(parsed: unknown, status: number): ApiErrorBody {
-  const fallback = { error: `HTTP_${status}`, message: defaultStatusMessage(status) };
+  const fallback = {
+    error: `HTTP_${status}`,
+    message: defaultStatusMessage(status),
+  };
 
   // بدنه‌ی رشته‌ای — مثل `new HttpException('متن', status)` در Nest.
   if (typeof parsed === "string" && parsed.trim()) {
@@ -134,7 +139,9 @@ function toErrorBody(parsed: unknown, status: number): ApiErrorBody {
     // آرایه‌ی `message`ِ ValidationPipe دست‌نخورده رد می‌شود؛ ساختنِ متن کارِ
     // `resolveApiError` است و اینجا تکرارش فقط دو جداکننده‌ی متفاوت می‌سازد.
     const hasMessage =
-      typeof body.message === "string" ? body.message.trim() !== "" : Array.isArray(body.message);
+      typeof body.message === "string"
+        ? body.message.trim() !== ""
+        : Array.isArray(body.message);
 
     return {
       ...fallback,
@@ -158,7 +165,7 @@ const REQUEST_TIMEOUT_MS = 30_000;
 // fetch پایین‌سطحی — بدون تزریق خودکار توکن، بدون redirect
 async function rawFetch<R>(
   path: string,
-  init: ApiRequestInit = {}
+  init: ApiRequestInit = {},
 ): Promise<R> {
   let res: Response;
 
@@ -200,7 +207,10 @@ async function rawFetch<R>(
   useConnectionStore.getState().setOnline(true);
 
   if (!res.ok) {
-    throw new ApiException(res.status, toErrorBody(await parseJson(res), res.status));
+    throw new ApiException(
+      res.status,
+      toErrorBody(await parseJson(res), res.status),
+    );
   }
 
   if (res.status === 204) return undefined as R;
@@ -210,7 +220,10 @@ async function rawFetch<R>(
 }
 
 // fetch احراز‌شده — توکن را از store می‌خواند و روی ۴۰۱ لاگ‌اوت + ریدایرکت می‌کند
-async function apiFetch<R>(path: string, init: ApiRequestInit = {}): Promise<R> {
+async function apiFetch<R>(
+  path: string,
+  init: ApiRequestInit = {},
+): Promise<R> {
   const token = useAuthStore.getState().token;
   const headers: Record<string, string> = {
     ...((init.headers as Record<string, string>) ?? {}),
@@ -256,7 +269,7 @@ const assetImageCache = new Map<string, string>();
 
 export async function getAssetImageUrl(
   assetId: string,
-  variant: "thumb" | "full" = "thumb"
+  variant: "thumb" | "full" = "thumb",
 ): Promise<string> {
   const key = `${assetId}:${variant}`;
   const cached = assetImageCache.get(key);
@@ -268,13 +281,16 @@ export async function getAssetImageUrl(
     {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       credentials: "include",
-    }
+    },
   );
   if (!res.ok) {
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
     throw new ApiException(
       res.status,
-      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
     );
   }
   const blob = await res.blob();
@@ -290,7 +306,7 @@ export async function getAssetImageUrl(
 // طبق بخش ۴ — POST /auth/login (عمومی)
 export async function login(
   username: string,
-  password: string
+  password: string,
 ): Promise<T.LoginResponse> {
   try {
     return await rawFetch<T.LoginResponse>("/auth/login", {
@@ -328,8 +344,8 @@ export function logoutServer(): Promise<{ success: boolean }> {
 // GET /products — سرور پاسخ صفحه‌بندی‌شده { data, meta } می‌دهد؛ آرایه‌ی محصولات را
 // استخراج می‌کنیم و در برابر هر دو شکل (آرایه‌ی خام یا wrapped) مقاوم می‌مانیم.
 export function getProducts(): Promise<T.Product[]> {
-  return apiFetch<T.Product[] | { data?: T.Product[] }>("/products").then((r) =>
-    Array.isArray(r) ? r : (r.data ?? [])
+  return apiFetch<T.Product[] | { data?: T.Product[] }>("/products").then(
+    (r) => (Array.isArray(r) ? r : (r.data ?? [])),
   );
 }
 
@@ -338,14 +354,18 @@ export function getProductsPaged(
   page = 1,
   limit = 50,
   search?: string,
-  brandId?: string
-): Promise<{ data: T.Product[]; meta: { total: number; page: number; lastPage: number } }> {
+  brandId?: string,
+): Promise<{
+  data: T.Product[];
+  meta: { total: number; page: number; lastPage: number };
+}> {
   const qs = new URLSearchParams({ page: String(page), limit: String(limit) });
   if (search) qs.set("search", search);
   if (brandId) qs.set("brandId", brandId);
-  return apiFetch<{ data?: T.Product[]; meta?: { total: number; page: number; lastPage: number } }>(
-    `/products?${qs.toString()}`
-  ).then((r) => ({
+  return apiFetch<{
+    data?: T.Product[];
+    meta?: { total: number; page: number; lastPage: number };
+  }>(`/products?${qs.toString()}`).then((r) => ({
     data: r.data ?? [],
     meta: r.meta ?? { total: (r.data ?? []).length, page, lastPage: 1 },
   }));
@@ -357,7 +377,7 @@ export function getProductsPaged(
 export function searchProducts(q: string): Promise<T.Product[]> {
   const qs = new URLSearchParams({ q });
   return apiFetch<T.Product[] | { data?: T.Product[] }>(
-    `/products/search?${qs.toString()}`
+    `/products/search?${qs.toString()}`,
   ).then((r) => (Array.isArray(r) ? r : (r.data ?? [])));
 }
 
@@ -384,6 +404,20 @@ export function getPosStock(productId: string): Promise<T.LocateResult> {
   return apiFetch<T.LocateResult>(`/products/${productId}/pos-stock`);
 }
 
+/** موجودیِ زنده‌ی چند کالا با یک درخواست — «اصلاح زنده» نتایج سرچ POS. */
+export function getPosStockBatch(ids: string[]): Promise<T.LocateResult[]> {
+  const qs = ids.length ? `?ids=${ids.map(encodeURIComponent).join(",")}` : "";
+  return apiFetch<T.LocateResult[]>(`/products/stock-batch${qs}`);
+}
+
+/** آدرس‌های شبکه‌ی سرور — برای صفحه‌ی «اتصال گوشی» در منوی کاربر. */
+export function getNetworkInfo(): Promise<{
+  hostname: string;
+  addresses: string[];
+}> {
+  return apiFetch(`/network`);
+}
+
 export function getPosCatalog(
   page: number,
   limit: number,
@@ -402,7 +436,7 @@ export function getProduct(id: string): Promise<T.Product> {
 // طبق بخش ۶.۳ — GET /products/barcode/:barcode
 export function getProductByBarcode(barcode: string): Promise<T.Product> {
   return apiFetch<T.Product>(
-    `/products/barcode/${encodeURIComponent(barcode)}`
+    `/products/barcode/${encodeURIComponent(barcode)}`,
   );
 }
 
@@ -417,10 +451,13 @@ export async function exportProductsCsv(): Promise<void> {
   });
   if (!res.ok) {
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
-    throw new ApiException(res.status, parsed ?? {
-      error: `HTTP_${res.status}`,
-      message: defaultStatusMessage(res.status),
-    });
+    throw new ApiException(
+      res.status,
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
+    );
   }
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -447,7 +484,7 @@ export interface ProductLabelPrintOptions {
 }
 export async function printProductLabelsPdf(
   items: { productId: string; quantity: number }[],
-  opts: ProductLabelPrintOptions = {}
+  opts: ProductLabelPrintOptions = {},
 ): Promise<void> {
   const token = useAuthStore.getState().token;
   const res = await fetch(`${apiUrl()}/labels/product/print`, {
@@ -463,7 +500,10 @@ export async function printProductLabelsPdf(
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
     throw new ApiException(
       res.status,
-      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
     );
   }
   const blob = await res.blob();
@@ -477,7 +517,7 @@ export async function printProductLabelsPdf(
 // POST /labels/stock/print — چاپ PDF لیبلِ کل موجودیِ واردشده (هر کالا به تعداد
 // مجموع موجودی‌اش) و بازکردن در تب جدید.
 export async function printAllStockLabelsPdf(
-  opts: ProductLabelPrintOptions = {}
+  opts: ProductLabelPrintOptions = {},
 ): Promise<void> {
   const token = useAuthStore.getState().token;
   const res = await fetch(`${apiUrl()}/labels/stock/print`, {
@@ -493,7 +533,10 @@ export async function printAllStockLabelsPdf(
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
     throw new ApiException(
       res.status,
-      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
     );
   }
   const blob = await res.blob();
@@ -517,7 +560,7 @@ export interface RollPrintOptions {
 }
 export async function downloadRollLabelsPdf(
   opts: RollPrintOptions = {},
-  fileName = "kardo-roll-labels.pdf"
+  fileName = "kardo-roll-labels.pdf",
 ): Promise<void> {
   const token = useAuthStore.getState().token;
   const res = await fetch(`${apiUrl()}/labels/roll-print`, {
@@ -533,7 +576,10 @@ export async function downloadRollLabelsPdf(
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
     throw new ApiException(
       res.status,
-      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
     );
   }
   const blob = await res.blob();
@@ -561,7 +607,7 @@ export interface RollLocationPrintOptions {
 }
 export async function downloadRollLocationLabelsPdf(
   opts: RollLocationPrintOptions,
-  fileName = "kardo-roll-locations.pdf"
+  fileName = "kardo-roll-locations.pdf",
 ): Promise<void> {
   const token = useAuthStore.getState().token;
   const res = await fetch(`${apiUrl()}/labels/location/roll-print`, {
@@ -577,7 +623,10 @@ export async function downloadRollLocationLabelsPdf(
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
     throw new ApiException(
       res.status,
-      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
     );
   }
   const blob = await res.blob();
@@ -591,6 +640,16 @@ export async function downloadRollLocationLabelsPdf(
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
+// شناسه‌های پیشنهادی فرم ساخت کالا — قبل از ذخیره برای نمایش آماده می‌شوند.
+export function getNextProductIdentifiers(): Promise<{
+  sku: string;
+  internalBarcode: string;
+}> {
+  return apiFetch<{ sku: string; internalBarcode: string }>(
+    "/products/next-identifiers",
+  );
+}
+
 // طبق بخش ۶.۳ — POST /products
 export function createProduct(dto: T.CreateProductDto): Promise<T.Product> {
   return apiFetch<T.Product>("/products", { method: "POST", body: dto });
@@ -599,7 +658,7 @@ export function createProduct(dto: T.CreateProductDto): Promise<T.Product> {
 // طبق بخش ۶.۳ — PATCH /products/:id
 export function updateProduct(
   id: string,
-  dto: T.UpdateProductDto
+  dto: T.UpdateProductDto,
 ): Promise<T.Product> {
   return apiFetch<T.Product>(`/products/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -615,27 +674,24 @@ export function deleteProduct(id: string): Promise<void> {
 }
 
 // طبق بخش ۶.۳ — POST /uploads/product/:id/image (multipart، فیلد file)
-export function uploadProductImage(
-  id: string,
-  file: File
-): Promise<unknown> {
+export function uploadProductImage(id: string, file: File): Promise<unknown> {
   const fd = new FormData();
   fd.append("file", file);
-  return apiFetch<unknown>(
-    `/uploads/product/${encodeURIComponent(id)}/image`,
-    { method: "POST", body: fd }
-  );
+  return apiFetch<unknown>(`/uploads/product/${encodeURIComponent(id)}/image`, {
+    method: "POST",
+    body: fd,
+  });
 }
 
 // POST /uploads/product/:productId/from-asset/:assetId — عکسِ گرفته‌شده در
 // کاردکس را «تصویر محصول» می‌کند (بک‌اند کپیِ مستقل در پوشه‌ی عمومی می‌سازد).
 export function setProductImageFromAsset(
   productId: string,
-  assetId: string
+  assetId: string,
 ): Promise<unknown> {
   return apiFetch<unknown>(
     `/uploads/product/${encodeURIComponent(productId)}/from-asset/${encodeURIComponent(assetId)}`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }
 
@@ -661,22 +717,34 @@ export function linkBarcode(body: {
 
 // DELETE /barcode/link/:id
 export function unlinkBarcode(id: string): Promise<{ success: boolean }> {
-  return apiFetch(`/barcode/link/${encodeURIComponent(id)}`, { method: "DELETE" });
+  return apiFetch(`/barcode/link/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
 }
 
 // GET /products/:id/prices — تاریخچه‌ی قیمت، تازه‌ترین اول
 export function getProductPrices(id: string): Promise<T.ProductPrice[]> {
-  return apiFetch<T.ProductPrice[]>(`/products/${encodeURIComponent(id)}/prices`);
+  return apiFetch<T.ProductPrice[]>(
+    `/products/${encodeURIComponent(id)}/prices`,
+  );
 }
 
 export function setProductPrice(
   id: string,
-  dto: { purchasePrice?: number; salePrice?: number; wholesalePrice?: number; managerPrice?: number }
+  dto: {
+    purchasePrice?: number;
+    salePrice?: number;
+    wholesalePrice?: number;
+    managerPrice?: number;
+  },
 ): Promise<T.ProductPrice> {
-  return apiFetch<T.ProductPrice>(`/products/${encodeURIComponent(id)}/prices`, {
-    method: "POST",
-    body: dto,
-  });
+  return apiFetch<T.ProductPrice>(
+    `/products/${encodeURIComponent(id)}/prices`,
+    {
+      method: "POST",
+      body: dto,
+    },
+  );
 }
 
 /**
@@ -685,16 +753,19 @@ export function setProductPrice(
  * `dryRun` فقط می‌شمارد چند کالا اثر می‌گیرند و چیزی نمی‌نویسد؛ روی هزاران
  * ردیف، دیدنِ عدد قبل از اجرا تفاوت بین اصلاح و فاجعه است.
  */
-export function bulkSetPrice(body: T.BulkPriceRequest): Promise<T.BulkPriceResult> {
+export function bulkSetPrice(
+  body: T.BulkPriceRequest,
+): Promise<T.BulkPriceResult> {
   return apiFetch<T.BulkPriceResult>("/products/prices/bulk", {
     method: "POST",
     body,
   });
 }
 
-
 /** روشن/خاموش کردنِ گروهیِ «نمایش در سایت». */
-export function bulkSetOnline(body: T.BulkOnlineRequest): Promise<T.BulkOnlineResult> {
+export function bulkSetOnline(
+  body: T.BulkOnlineRequest,
+): Promise<T.BulkOnlineResult> {
   return apiFetch<T.BulkOnlineResult>("/products/online/bulk", {
     method: "POST",
     body,
@@ -717,7 +788,7 @@ export function getVehicleModels(): Promise<T.VehicleModel[]> {
 
 // طبق بخش ۶.۵ — POST /vehicle-models
 export function createVehicleModel(
-  dto: T.CreateVehicleModelDto
+  dto: T.CreateVehicleModelDto,
 ): Promise<T.VehicleModel> {
   return apiFetch<T.VehicleModel>("/vehicle-models", {
     method: "POST",
@@ -737,7 +808,7 @@ export function getLocations(): Promise<T.Location[]> {
 // طبق بخش ۶.۶ — GET /locations/children?parentId=&warehouseId=
 export function getLocationChildren(
   parentId?: string,
-  warehouseId?: string
+  warehouseId?: string,
 ): Promise<T.Location[]> {
   const p = new URLSearchParams();
   if (parentId) p.set("parentId", parentId);
@@ -748,24 +819,18 @@ export function getLocationChildren(
 
 // طبق بخش ۶.۶ — GET /locations/:id/path
 export function getLocationPath(id: string): Promise<T.Location[]> {
-  return apiFetch<T.Location[]>(
-    `/locations/${encodeURIComponent(id)}/path`
-  );
+  return apiFetch<T.Location[]>(`/locations/${encodeURIComponent(id)}/path`);
 }
 
 // طبق بخش ۶.۶ — GET /locations/resolve/:barcode
-export function resolveLocationByBarcode(
-  barcode: string
-): Promise<T.Location> {
+export function resolveLocationByBarcode(barcode: string): Promise<T.Location> {
   return apiFetch<T.Location>(
-    `/locations/resolve/${encodeURIComponent(barcode)}`
+    `/locations/resolve/${encodeURIComponent(barcode)}`,
   );
 }
 
 // طبق بخش ۶.۶ — POST /locations
-export function createLocation(
-  dto: T.CreateLocationDto
-): Promise<T.Location> {
+export function createLocation(dto: T.CreateLocationDto): Promise<T.Location> {
   return apiFetch<T.Location>("/locations", { method: "POST", body: dto });
 }
 
@@ -781,17 +846,17 @@ export function getInactiveWarehouses(): Promise<T.Warehouse[]> {
 
 // POST /warehouses/:id/reactivate (ADMIN/MANAGER)
 export function reactivateWarehouse(
-  id: string
+  id: string,
 ): Promise<T.ReactivateWarehouseResult> {
   return apiFetch<T.ReactivateWarehouseResult>(
     `/warehouses/${encodeURIComponent(id)}/reactivate`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }
 
 // POST /warehouses (ADMIN/MANAGER)
 export function createWarehouse(
-  dto: T.CreateWarehouseDto
+  dto: T.CreateWarehouseDto,
 ): Promise<T.Warehouse> {
   return apiFetch<T.Warehouse>("/warehouses", { method: "POST", body: dto });
 }
@@ -799,7 +864,7 @@ export function createWarehouse(
 // PATCH /warehouses/:id (ADMIN/MANAGER)
 export function updateWarehouse(
   id: string,
-  dto: T.UpdateWarehouseDto
+  dto: T.UpdateWarehouseDto,
 ): Promise<T.Warehouse> {
   return apiFetch<T.Warehouse>(`/warehouses/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -808,21 +873,19 @@ export function updateWarehouse(
 }
 
 // DELETE /warehouses/:id (ADMIN/MANAGER) — انبار دارای موقعیت فقط غیرفعال می‌شود
-export function deleteWarehouse(
-  id: string
-): Promise<T.DeleteWarehouseResult> {
+export function deleteWarehouse(id: string): Promise<T.DeleteWarehouseResult> {
   return apiFetch<T.DeleteWarehouseResult>(
     `/warehouses/${encodeURIComponent(id)}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 }
 
 // GET /locations/:id/subtree-stats — برای دیالوگ تأیید حذف
 export function getLocationSubtreeStats(
-  id: string
+  id: string,
 ): Promise<T.LocationSubtreeStats> {
   return apiFetch<T.LocationSubtreeStats>(
-    `/locations/${encodeURIComponent(id)}/subtree-stats`
+    `/locations/${encodeURIComponent(id)}/subtree-stats`,
   );
 }
 
@@ -831,18 +894,18 @@ export function getLocationSubtreeStats(
 // خطای LOCATION_HAS_STOCK می‌دهد تا UI انتخاب بگیرد.
 export function deleteLocation(
   id: string,
-  stockOpts?: T.RemoveLocationStockOptions
+  stockOpts?: T.RemoveLocationStockOptions,
 ): Promise<T.DeleteLocationResult> {
   return apiFetch<T.DeleteLocationResult>(
     `/locations/${encodeURIComponent(id)}`,
-    { method: "DELETE", body: stockOpts ?? undefined }
+    { method: "DELETE", body: stockOpts ?? undefined },
   );
 }
 
 // POST /locations/bulk-delete (ADMIN/MANAGER)
 export function bulkDeleteLocations(
   ids: string[],
-  stockOpts?: T.RemoveLocationStockOptions
+  stockOpts?: T.RemoveLocationStockOptions,
 ): Promise<T.BulkDeleteLocationsResult> {
   return apiFetch<T.BulkDeleteLocationsResult>("/locations/bulk-delete", {
     method: "POST",
@@ -852,7 +915,7 @@ export function bulkDeleteLocations(
 
 // طبق بخش ۶.۶ — GET /location-types?warehouseId=
 export function getLocationTypes(
-  warehouseId?: string
+  warehouseId?: string,
 ): Promise<T.LocationType[]> {
   const qs = warehouseId
     ? `?warehouseId=${encodeURIComponent(warehouseId)}`
@@ -862,7 +925,7 @@ export function getLocationTypes(
 
 // طبق بخش ۶.۶ — POST /location-types
 export function createLocationType(
-  dto: T.CreateLocationTypeDto
+  dto: T.CreateLocationTypeDto,
 ): Promise<T.LocationType> {
   return apiFetch<T.LocationType>("/location-types", {
     method: "POST",
@@ -872,7 +935,7 @@ export function createLocationType(
 
 // POST /location-builder/generate — ساخت گروهی درخت موقعیت‌ها
 export function generateLocationTree(
-  dto: T.GenerateLocationTreeDto
+  dto: T.GenerateLocationTreeDto,
 ): Promise<T.GenerateLocationTreeResult> {
   return apiFetch<T.GenerateLocationTreeResult>("/location-builder/generate", {
     method: "POST",
@@ -887,20 +950,20 @@ export function generateLocationTree(
 // طبق بخش ۶.۷ — GET /inventory/current-stock?page=&limit=
 export function getCurrentStock(
   page = 1,
-  limit = 50
+  limit = 50,
 ): Promise<T.CurrentStockResponse> {
   const qs = new URLSearchParams({
     page: String(page),
     limit: String(limit),
   });
   return apiFetch<T.CurrentStockResponse>(
-    `/inventory/current-stock?${qs.toString()}`
+    `/inventory/current-stock?${qs.toString()}`,
   );
 }
 
 // طبق بخش ۶.۷ — GET /inventory/logs (کلید پاسخ items است)
 export function getInventoryLogs(
-  query: T.InventoryLogsQuery = {}
+  query: T.InventoryLogsQuery = {},
 ): Promise<T.InventoryLogsResponse> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
@@ -908,22 +971,20 @@ export function getInventoryLogs(
       qs.set(k, String(v));
     }
   }
-  return apiFetch<T.InventoryLogsResponse>(
-    `/inventory/logs?${qs.toString()}`
-  );
+  return apiFetch<T.InventoryLogsResponse>(`/inventory/logs?${qs.toString()}`);
 }
 
 // طبق بخش ۶.۷ — GET /inventory/logs/:id
 export function getInventoryLog(id: string): Promise<T.InventoryLogRow> {
   return apiFetch<T.InventoryLogRow>(
-    `/inventory/logs/${encodeURIComponent(id)}`
+    `/inventory/logs/${encodeURIComponent(id)}`,
   );
 }
 
 // کاردکس کالا — GET /inventory/kardex/:productId
 export function getProductKardex(
   productId: string,
-  query: T.KardexQuery = {}
+  query: T.KardexQuery = {},
 ): Promise<T.KardexResponse> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
@@ -933,26 +994,26 @@ export function getProductKardex(
   }
   const suffix = qs.toString() ? `?${qs.toString()}` : "";
   return apiFetch<T.KardexResponse>(
-    `/inventory/kardex/${encodeURIComponent(productId)}${suffix}`
+    `/inventory/kardex/${encodeURIComponent(productId)}${suffix}`,
   );
 }
 
 // طبق بخش ۶.۷ — GET /inventory/location/:locationId (آرایه خام، بدون wrapper)
 export function getInventoryByLocation(
-  locationId: string
+  locationId: string,
 ): Promise<T.InventoryLogRow[]> {
   return apiFetch<T.InventoryLogRow[]>(
-    `/inventory/location/${encodeURIComponent(locationId)}`
+    `/inventory/location/${encodeURIComponent(locationId)}`,
   );
 }
 
 // طبق بخش ۶.۷ — GET /inventory/:productId/:locationId
 export function getInventoryRecord(
   productId: string,
-  locationId: string
+  locationId: string,
 ): Promise<T.InventoryRow | null> {
   return apiFetch<T.InventoryRow | null>(
-    `/inventory/${encodeURIComponent(productId)}/${encodeURIComponent(locationId)}`
+    `/inventory/${encodeURIComponent(productId)}/${encodeURIComponent(locationId)}`,
   );
 }
 
@@ -976,14 +1037,18 @@ export function scanProduct(barcode: string): Promise<unknown> {
 
 // طبق بخش ۶.۷ — POST /inventory/scan-out
 export function scanOut(dto: T.ScanOutDto): Promise<unknown> {
-  return apiFetch<unknown>("/inventory/scan-out", { method: "POST", body: dto });
+  return apiFetch<unknown>("/inventory/scan-out", {
+    method: "POST",
+    body: dto,
+  });
 }
 
 // طبق بخش ۶.۷ — POST /inventory-transfer
-export function transferStock(
-  dto: T.InventoryTransferDto
-): Promise<unknown> {
-  return apiFetch<unknown>("/inventory-transfer", { method: "POST", body: dto });
+export function transferStock(dto: T.InventoryTransferDto): Promise<unknown> {
+  return apiFetch<unknown>("/inventory-transfer", {
+    method: "POST",
+    body: dto,
+  });
 }
 
 // =====================================================
@@ -992,7 +1057,7 @@ export function transferStock(
 
 // طبق بخش ۶.۸ — POST /inventory-session/start
 export function startVoiceSession(
-  dto: T.VoiceSessionStartDto = {}
+  dto: T.VoiceSessionStartDto = {},
 ): Promise<T.VoiceSession> {
   return apiFetch<T.VoiceSession>("/inventory-session/start", {
     method: "POST",
@@ -1010,7 +1075,7 @@ export function submitVoice(dto: T.VoiceInputDto): Promise<T.VoiceResponse> {
 
 // طبق بخش ۶.۸ — POST /mobile/count/start (مسیر شمارش صوتی با explanation)
 export function startCount(
-  dto: T.CountStartDto
+  dto: T.CountStartDto,
 ): Promise<T.CountStartResponse> {
   return apiFetch<T.CountStartResponse>("/mobile/count/start", {
     method: "POST",
@@ -1021,11 +1086,11 @@ export function startCount(
 // طبق بخش ۶.۸ — POST /mobile/count/:countId/voice
 export function countVoice(
   countId: string,
-  dto: T.CountVoiceDto
+  dto: T.CountVoiceDto,
 ): Promise<T.CountVoiceResponse> {
   return apiFetch<T.CountVoiceResponse>(
     `/mobile/count/${encodeURIComponent(countId)}/voice`,
-    { method: "POST", body: dto }
+    { method: "POST", body: dto },
   );
 }
 
@@ -1035,7 +1100,7 @@ export function countVoice(
 
 // طبق بخش ۶.۹ — POST /inventory-count
 export function createInventoryCount(
-  dto: T.CreateInventoryCountDto
+  dto: T.CreateInventoryCountDto,
 ): Promise<T.InventoryCount> {
   return apiFetch<T.InventoryCount>("/inventory-count", {
     method: "POST",
@@ -1046,18 +1111,18 @@ export function createInventoryCount(
 // طبق بخش ۶.۹ — POST /inventory-count/:id/items
 export function addInventoryCountItem(
   id: string,
-  dto: T.CreateInventoryCountItemDto
+  dto: T.CreateInventoryCountItemDto,
 ): Promise<unknown> {
-  return apiFetch<unknown>(
-    `/inventory-count/${encodeURIComponent(id)}/items`,
-    { method: "POST", body: dto }
-  );
+  return apiFetch<unknown>(`/inventory-count/${encodeURIComponent(id)}/items`, {
+    method: "POST",
+    body: dto,
+  });
 }
 
 // طبق بخش ۶.۹ — GET /inventory-count/:id
 export function getInventoryCount(id: string): Promise<T.InventoryCount> {
   return apiFetch<T.InventoryCount>(
-    `/inventory-count/${encodeURIComponent(id)}`
+    `/inventory-count/${encodeURIComponent(id)}`,
   );
 }
 
@@ -1065,16 +1130,15 @@ export function getInventoryCount(id: string): Promise<T.InventoryCount> {
 export function finishInventoryCount(id: string): Promise<unknown> {
   return apiFetch<unknown>(
     `/inventory-count/${encodeURIComponent(id)}/finish`,
-    { method: "PATCH" }
+    { method: "PATCH" },
   );
 }
 
 // طبق بخش ۶.۹ — POST /inventory-count/:id/apply
 export function applyInventoryCount(id: string): Promise<unknown> {
-  return apiFetch<unknown>(
-    `/inventory-count/${encodeURIComponent(id)}/apply`,
-    { method: "POST" }
-  );
+  return apiFetch<unknown>(`/inventory-count/${encodeURIComponent(id)}/apply`, {
+    method: "POST",
+  });
 }
 
 // =====================================================
@@ -1094,7 +1158,7 @@ export function createUser(dto: T.CreateUserDto): Promise<T.User> {
 // طبق بخش ۶.۱۰ — PATCH /users/:id/role
 export function updateUserRole(
   id: string,
-  dto: T.UpdateRoleDto
+  dto: T.UpdateRoleDto,
 ): Promise<T.User> {
   return apiFetch<T.User>(`/users/${encodeURIComponent(id)}/role`, {
     method: "PATCH",
@@ -1105,7 +1169,7 @@ export function updateUserRole(
 // طبق بخش ۶.۱۰ — PATCH /users/:id/password
 export function updateUserPassword(
   id: string,
-  dto: T.UpdatePasswordDto
+  dto: T.UpdatePasswordDto,
 ): Promise<unknown> {
   return apiFetch<unknown>(`/users/${encodeURIComponent(id)}/password`, {
     method: "PATCH",
@@ -1117,7 +1181,7 @@ export function updateUserPassword(
 /** روشن/خاموش کردنِ دسترسیِ کاربر به فروشگاه اینترنتی. فقط ADMIN/MANAGER. */
 export function setUserSiteAccess(
   id: string,
-  canManageSite: boolean
+  canManageSite: boolean,
 ): Promise<T.User> {
   return apiFetch<T.User>(`/users/${encodeURIComponent(id)}/site-access`, {
     method: "PATCH",
@@ -1142,7 +1206,7 @@ export function searchPartCatalog(q: string): Promise<T.PartCatalog[]> {
 
 // طبق بخش ۶.۱۲ — POST /part-catalog
 export function createPartCatalog(
-  dto: T.CreatePartCatalogDto
+  dto: T.CreatePartCatalogDto,
 ): Promise<T.PartCatalog> {
   return apiFetch<T.PartCatalog>("/part-catalog", {
     method: "POST",
@@ -1153,12 +1217,12 @@ export function createPartCatalog(
 // طبق بخش ۶.۱۲ — PATCH /part-catalog/:id
 export function updatePartCatalog(
   id: string,
-  dto: T.CreatePartCatalogDto
+  dto: T.CreatePartCatalogDto,
 ): Promise<T.PartCatalog> {
-  return apiFetch<T.PartCatalog>(
-    `/part-catalog/${encodeURIComponent(id)}`,
-    { method: "PATCH", body: dto }
-  );
+  return apiFetch<T.PartCatalog>(`/part-catalog/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: dto,
+  });
 }
 
 // طبق بخش ۶.۱۲ — DELETE /part-catalog/:id
@@ -1173,9 +1237,7 @@ export function deletePartCatalog(id: string): Promise<void> {
 // =====================================================
 
 // طبق بخش ۶.۱۱ — POST /imports/upload (multipart، فیلد file)
-export function uploadImport(
-  file: File
-): Promise<T.ImportUploadResponse> {
+export function uploadImport(file: File): Promise<T.ImportUploadResponse> {
   const fd = new FormData();
   fd.append("file", file);
   return apiFetch<T.ImportUploadResponse>("/imports/upload", {
@@ -1187,12 +1249,12 @@ export function uploadImport(
 // طبق بخش ۶.۱۱ — POST /imports/:id/confirm
 export function confirmImport(
   id: string,
-  dto: T.ImportConfirmDto
+  dto: T.ImportConfirmDto,
 ): Promise<unknown> {
-  return apiFetch<unknown>(
-    `/imports/${encodeURIComponent(id)}/confirm`,
-    { method: "POST", body: dto }
-  );
+  return apiFetch<unknown>(`/imports/${encodeURIComponent(id)}/confirm`, {
+    method: "POST",
+    body: dto,
+  });
 }
 
 // =====================================================
@@ -1202,21 +1264,17 @@ export function confirmImport(
 // طبق بخش الف — GET /labels/location/:id
 export function getLocationLabel(id: string): Promise<T.LocationLabel> {
   return apiFetch<T.LocationLabel>(
-    `/labels/location/${encodeURIComponent(id)}`
+    `/labels/location/${encodeURIComponent(id)}`,
   );
 }
 
 // طبق بخش الف — GET /labels/product/:id
 export function getProductLabel(id: string): Promise<T.ProductLabel> {
-  return apiFetch<T.ProductLabel>(
-    `/labels/product/${encodeURIComponent(id)}`
-  );
+  return apiFetch<T.ProductLabel>(`/labels/product/${encodeURIComponent(id)}`);
 }
 
 // طبق بخش الف — POST /labels/location/bulk
-export function bulkLocationLabels(
-  ids: string[]
-): Promise<T.LocationLabel[]> {
+export function bulkLocationLabels(ids: string[]): Promise<T.LocationLabel[]> {
   return apiFetch<T.LocationLabel[]>("/labels/location/bulk", {
     method: "POST",
     body: { ids },
@@ -1230,7 +1288,7 @@ export function bulkLocationLabels(
 export type HalfSheetPaper = "A4" | "A5" | "A6";
 export async function printLocationHalfSheetLabels(
   ids: string[],
-  opts: { paper?: HalfSheetPaper; cutGuide?: boolean } = {}
+  opts: { paper?: HalfSheetPaper; cutGuide?: boolean } = {},
 ): Promise<void> {
   const token = useAuthStore.getState().token;
   const res = await fetch(`${apiUrl()}/labels/location/half-sheet/print`, {
@@ -1246,7 +1304,10 @@ export async function printLocationHalfSheetLabels(
     const parsed = (await parseJson(res)) as ApiErrorBody | null;
     throw new ApiException(
       res.status,
-      parsed ?? { error: `HTTP_${res.status}`, message: defaultStatusMessage(res.status) }
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
     );
   }
   const blob = await res.blob();
@@ -1256,9 +1317,7 @@ export async function printLocationHalfSheetLabels(
 }
 
 // طبق بخش الف — POST /labels/product/bulk
-export function bulkProductLabels(
-  ids: string[]
-): Promise<T.ProductLabel[]> {
+export function bulkProductLabels(ids: string[]): Promise<T.ProductLabel[]> {
   return apiFetch<T.ProductLabel[]>("/labels/product/bulk", {
     method: "POST",
     body: { ids },
@@ -1271,7 +1330,7 @@ export function bulkProductLabels(
 
 // طبق بخش ب — POST /inventory/voice/confirm
 export function confirmVoice(
-  dto: T.VoiceConfirmDto
+  dto: T.VoiceConfirmDto,
 ): Promise<T.VoiceConfirmResponse> {
   return apiFetch<T.VoiceConfirmResponse>("/inventory/voice/confirm", {
     method: "POST",
@@ -1285,7 +1344,7 @@ export function confirmVoice(
 
 // GET /manager/review/pending — صف تأیید مدیر (اختیاری بر اساس انبار)
 export function getPendingOperations(
-  warehouseId?: string
+  warehouseId?: string,
 ): Promise<T.PendingOperation[]> {
   const qs = warehouseId
     ? `?warehouseId=${encodeURIComponent(warehouseId)}`
@@ -1296,7 +1355,7 @@ export function getPendingOperations(
 // POST /manager/review/:id/approve — تأیید = ثبت واقعی موجودی (idempotent سمت سرور)
 export function approvePendingOperation(
   id: string,
-  body: { productId?: string; quantity?: number } = {}
+  body: { productId?: string; quantity?: number } = {},
 ): Promise<unknown> {
   return apiFetch(`/manager/review/${encodeURIComponent(id)}/approve`, {
     method: "POST",
@@ -1305,9 +1364,11 @@ export function approvePendingOperation(
 }
 
 // POST /manager/review/approve-many — تأیید گروهیِ آماده‌ها (idempotent per-item)
-export function approvePendingOperationsMany(
-  ids: string[]
-): Promise<{ approved: number; failedCount: number; failed: { id: string; message: string }[] }> {
+export function approvePendingOperationsMany(ids: string[]): Promise<{
+  approved: number;
+  failedCount: number;
+  failed: { id: string; message: string }[];
+}> {
   return apiFetch("/manager/review/approve-many", {
     method: "POST",
     body: { ids },
@@ -1317,7 +1378,7 @@ export function approvePendingOperationsMany(
 // POST /manager/review/:id/reject — رد با ذخیره‌ی دلیل
 export function rejectPendingOperation(
   id: string,
-  body: { reviewNote?: string } = {}
+  body: { reviewNote?: string } = {},
 ): Promise<unknown> {
   return apiFetch(`/manager/review/${encodeURIComponent(id)}/reject`, {
     method: "POST",
@@ -1331,16 +1392,17 @@ export function getCategories(): Promise<T.Category[]> {
 }
 
 export function getProductRequests(
-  status?: string
+  status?: string,
 ): Promise<T.ProductCreationRequest[]> {
-  const qs = status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
+  const qs =
+    status && status !== "all" ? `?status=${encodeURIComponent(status)}` : "";
   return apiFetch<T.ProductCreationRequest[]>(`/product-requests${qs}`);
 }
 
 // POST /product-requests/:id/approve — creates the Product + applies stock (server-side)
 export function approveProductRequest(
   id: string,
-  body: T.ApproveProductRequestDto = {}
+  body: T.ApproveProductRequestDto = {},
 ): Promise<unknown> {
   return apiFetch(`/product-requests/${encodeURIComponent(id)}/approve`, {
     method: "POST",
@@ -1350,7 +1412,7 @@ export function approveProductRequest(
 
 export function rejectProductRequest(
   id: string,
-  body: { reviewNote?: string } = {}
+  body: { reviewNote?: string } = {},
 ): Promise<unknown> {
   return apiFetch(`/product-requests/${encodeURIComponent(id)}/reject`, {
     method: "POST",
@@ -1364,24 +1426,24 @@ export function rejectProductRequest(
 
 // GET /inventory/product/:id/reserved — «چرا این تعداد رزرو شده»
 export function getReservationBreakdown(
-  productId: string
+  productId: string,
 ): Promise<T.ReservationBreakdown> {
   return apiFetch<T.ReservationBreakdown>(
-    `/inventory/product/${encodeURIComponent(productId)}/reserved`
+    `/inventory/product/${encodeURIComponent(productId)}/reserved`,
   );
 }
 
 // GET /inventory/sale/resolve/:barcode — کالا + مکان‌های دارای موجودی، در یک درخواست
 export function resolveForSale(barcode: string): Promise<T.SaleResolve> {
   return apiFetch<T.SaleResolve>(
-    `/inventory/sale/resolve/${encodeURIComponent(barcode.trim())}`
+    `/inventory/sale/resolve/${encodeURIComponent(barcode.trim())}`,
   );
 }
 
 // GET /inventory/product/:id/stock — فقط مکان‌هایی که موجودی مثبت دارند
 export function getProductStock(productId: string): Promise<T.StockLocation[]> {
   return apiFetch<T.StockLocation[]>(
-    `/inventory/product/${encodeURIComponent(productId)}/stock`
+    `/inventory/product/${encodeURIComponent(productId)}/stock`,
   );
 }
 
@@ -1394,22 +1456,27 @@ export function getInvoice(id: string): Promise<T.Invoice> {
   return apiFetch<T.Invoice>(`/sales/invoices/${encodeURIComponent(id)}`);
 }
 
-export function getInvoices(params: {
-  warehouseId?: string;
-  customerId?: string;
-  q?: string;
-  status?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  pageSize?: number;
-  /** فروشنده‌ی ثبت‌کننده. */
-  userId?: string;
-  /** فقط فاکتورهای مانده‌دار ("true") یا فقط تسویه‌شده‌ها ("false"). */
-  hasDue?: "true" | "false";
-  /** ردیف‌های فاکتور (اقلام) هم در پاسخ بیایند — برای کاردکس مشتری. */
-  includeLines?: boolean;
-} = {}): Promise<{ data: T.Invoice[]; meta: { total: number; page: number; pageSize: number; pageCount: number } }> {
+export function getInvoices(
+  params: {
+    warehouseId?: string;
+    customerId?: string;
+    q?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    pageSize?: number;
+    /** فروشنده‌ی ثبت‌کننده. */
+    userId?: string;
+    /** فقط فاکتورهای مانده‌دار ("true") یا فقط تسویه‌شده‌ها ("false"). */
+    hasDue?: "true" | "false";
+    /** ردیف‌های فاکتور (اقلام) هم در پاسخ بیایند — برای کاردکس مشتری. */
+    includeLines?: boolean;
+  } = {},
+): Promise<{
+  data: T.Invoice[];
+  meta: { total: number; page: number; pageSize: number; pageCount: number };
+}> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
@@ -1418,40 +1485,52 @@ export function getInvoices(params: {
 }
 
 export function cancelInvoice(id: string, reason: string): Promise<T.Invoice> {
-  return apiFetch<T.Invoice>(`/sales/invoices/${encodeURIComponent(id)}/cancel`, {
-    method: "POST",
-    body: { reason },
-  });
+  return apiFetch<T.Invoice>(
+    `/sales/invoices/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "POST",
+      body: { reason },
+    },
+  );
 }
 
 // POST /sales/net — سبدِ خالص: برگشت از چند فاکتور + فروشِ نو در یک تراکنشِ اتمیک.
-export function createNetSale(dto: T.CreateNetSaleDto): Promise<T.NetSaleResult> {
+export function createNetSale(
+  dto: T.CreateNetSaleDto,
+): Promise<T.NetSaleResult> {
   return apiFetch<T.NetSaleResult>("/sales/net", { method: "POST", body: dto });
 }
 
 // ----- برگشت از فروش (مرجوعی) -----
 
 /** ردیف‌های قابل‌برگشتِ یک فاکتور — فروخته، مرجوعیِ قبلی، و قابل‌برگشت هر قلم. */
-export function getReturnableLines(invoiceId: string): Promise<T.ReturnableInvoice> {
+export function getReturnableLines(
+  invoiceId: string,
+): Promise<T.ReturnableInvoice> {
   return apiFetch<T.ReturnableInvoice>(
-    `/sales/invoices/${encodeURIComponent(invoiceId)}/returnable`
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/returnable`,
   );
 }
 
 // POST /sales/returns — ثبت مرجوعی. اتمیک: موجودی، دفتر و سند با هم یا هیچ‌کدام.
 export function createReturn(dto: T.CreateReturnDto): Promise<T.SaleReturn> {
-  return apiFetch<T.SaleReturn>("/sales/returns", { method: "POST", body: dto });
+  return apiFetch<T.SaleReturn>("/sales/returns", {
+    method: "POST",
+    body: dto,
+  });
 }
 
-export function getReturns(params: {
-  warehouseId?: string;
-  customerId?: string;
-  invoiceId?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  limit?: number;
-} = {}): Promise<{ data: T.SaleReturnListRow[]; meta: T.ReportMeta }> {
+export function getReturns(
+  params: {
+    warehouseId?: string;
+    customerId?: string;
+    invoiceId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+): Promise<{ data: T.SaleReturnListRow[]; meta: T.ReportMeta }> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
@@ -1466,9 +1545,11 @@ export function getReturn(id: string): Promise<T.SaleReturn> {
 // ----- اصلاحیه فاکتور -----
 
 /** ردیف‌های قابل‌اصلاحِ یک فاکتور — وضعیت فعلی هر قلم (فروش + اصلاحیه‌های قبلی). */
-export function getCorrectableLines(invoiceId: string): Promise<T.CorrectableInvoice> {
+export function getCorrectableLines(
+  invoiceId: string,
+): Promise<T.CorrectableInvoice> {
   return apiFetch<T.CorrectableInvoice>(
-    `/sales/invoices/${encodeURIComponent(invoiceId)}/correctable`
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/correctable`,
   );
 }
 
@@ -1483,22 +1564,32 @@ export function updateInvoiceLineNotes(
   invoiceId: string,
   notes: { saleLogId: string; lineNote?: string }[],
 ): Promise<{ updated: number }> {
-  return apiFetch(`/sales/invoices/${encodeURIComponent(invoiceId)}/line-notes`, {
-    method: "POST",
-    body: { notes },
-  });
+  return apiFetch(
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/line-notes`,
+    {
+      method: "POST",
+      body: { notes },
+    },
+  );
 }
 
-export function createCorrection(dto: T.CreateCorrectionDto): Promise<T.SaleCorrection> {
-  return apiFetch<T.SaleCorrection>("/sales/corrections", { method: "POST", body: dto });
+export function createCorrection(
+  dto: T.CreateCorrectionDto,
+): Promise<T.SaleCorrection> {
+  return apiFetch<T.SaleCorrection>("/sales/corrections", {
+    method: "POST",
+    body: dto,
+  });
 }
 
 // ----- عملیاتِ یکپارچه (adjust) -----
 
 /** ردیف‌های قابلِ ویرایش برای حالتِ یکپارچه — سقفِ برگشت و تعداد/قیمتِ فعلی. */
-export function getAdjustableLines(invoiceId: string): Promise<T.AdjustableInvoice> {
+export function getAdjustableLines(
+  invoiceId: string,
+): Promise<T.AdjustableInvoice> {
   return apiFetch<T.AdjustableInvoice>(
-    `/sales/invoices/${encodeURIComponent(invoiceId)}/adjustable`
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/adjustable`,
   );
 }
 
@@ -1508,11 +1599,11 @@ export function getAdjustableLines(invoiceId: string): Promise<T.AdjustableInvoi
  */
 export function createAdjust(
   invoiceId: string,
-  dto: T.CreateAdjustDto
+  dto: T.CreateAdjustDto,
 ): Promise<T.AdjustResult> {
   return apiFetch<T.AdjustResult>(
     `/sales/invoices/${encodeURIComponent(invoiceId)}/adjust`,
-    { method: "POST", body: dto }
+    { method: "POST", body: dto },
   );
 }
 
@@ -1523,10 +1614,10 @@ export function createAdjust(
  * (`blockedReason`) برای وقتی که فاکتور قابل اصلاح نیست.
  */
 export function getInvoiceSettlement(
-  invoiceId: string
+  invoiceId: string,
 ): Promise<T.InvoiceSettlement> {
   return apiFetch<T.InvoiceSettlement>(
-    `/sales/invoices/${encodeURIComponent(invoiceId)}/settlement`
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/settlement`,
   );
 }
 
@@ -1538,11 +1629,11 @@ export function getInvoiceSettlement(
  */
 export function recomposeInvoicePayments(
   invoiceId: string,
-  dto: T.RecomposePaymentsDto
+  dto: T.RecomposePaymentsDto,
 ): Promise<T.InvoiceSettlement> {
   return apiFetch<T.InvoiceSettlement>(
     `/sales/invoices/${encodeURIComponent(invoiceId)}/recompose-payments`,
-    { method: "POST", body: dto }
+    { method: "POST", body: dto },
   );
 }
 
@@ -1552,32 +1643,34 @@ export function recomposeInvoicePayments(
  */
 export function reversePayment(
   invoiceId: string,
-  dto: T.ReversePaymentDto
+  dto: T.ReversePaymentDto,
 ): Promise<T.PaymentReversalRow> {
   return apiFetch<T.PaymentReversalRow>(
     `/sales/invoices/${encodeURIComponent(invoiceId)}/reverse-payment`,
-    { method: "POST", body: dto }
+    { method: "POST", body: dto },
   );
 }
 
 /** سندهای برگشتِ پرداختِ یک فاکتور — تاریخچه‌ی خنثی‌سازی‌ها. */
 export function getPaymentReversals(
-  invoiceId: string
+  invoiceId: string,
 ): Promise<T.PaymentReversalRow[]> {
   return apiFetch<T.PaymentReversalRow[]>(
-    `/sales/invoices/${encodeURIComponent(invoiceId)}/payment-reversals`
+    `/sales/invoices/${encodeURIComponent(invoiceId)}/payment-reversals`,
   );
 }
 
-export function getCorrections(params: {
-  warehouseId?: string;
-  customerId?: string;
-  invoiceId?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  limit?: number;
-} = {}): Promise<{ data: T.SaleCorrectionListRow[]; meta: T.ReportMeta }> {
+export function getCorrections(
+  params: {
+    warehouseId?: string;
+    customerId?: string;
+    invoiceId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+): Promise<{ data: T.SaleCorrectionListRow[]; meta: T.ReportMeta }> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
@@ -1586,7 +1679,9 @@ export function getCorrections(params: {
 }
 
 export function getCorrection(id: string): Promise<T.SaleCorrection> {
-  return apiFetch<T.SaleCorrection>(`/sales/corrections/${encodeURIComponent(id)}`);
+  return apiFetch<T.SaleCorrection>(
+    `/sales/corrections/${encodeURIComponent(id)}`,
+  );
 }
 
 export type CustomerSort = "name" | "newest" | "dueDesc" | "dueAsc";
@@ -1619,7 +1714,7 @@ export function searchCustomersPaged(params: {
 // نسخه‌ی سبک برای پیکرهای انتخابِ مشتری در صندوق — بدون صفحه‌بندی.
 export function searchCustomers(
   q: string,
-  pageSize = 20
+  pageSize = 20,
 ): Promise<T.Customer[]> {
   return searchCustomersPaged({ q, pageSize }).then((r) => r.data ?? []);
 }
@@ -1635,7 +1730,7 @@ export function getShopSettings(): Promise<T.ShopSettings> {
 }
 
 export function updateShopSettings(
-  body: Partial<T.ShopSettings>
+  body: Partial<T.ShopSettings>,
 ): Promise<T.ShopSettings> {
   return apiFetch<T.ShopSettings>("/shop-settings", { method: "PUT", body });
 }
@@ -1656,7 +1751,7 @@ export function updateCustomer(
     /** نرخِ فروشِ مدت‌دار به پایه‌ی هزارم. ۲۵۰ = ۲.۵٪ */
     chequeRateBp?: number;
     chequeRateMode?: "FLAT" | "MONTHLY";
-  }
+  },
 ): Promise<T.Customer> {
   return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -1677,37 +1772,43 @@ export function deactivateCustomer(id: string): Promise<T.Customer> {
 /** آمار خرید دوره‌ای مشتری — این ماه، ماه قبل، کل و میانگین فاکتور. */
 export function getCustomerStats(id: string): Promise<T.CustomerPurchaseStats> {
   return apiFetch<T.CustomerPurchaseStats>(
-    `/sales/customers/${encodeURIComponent(id)}/stats`
+    `/sales/customers/${encodeURIComponent(id)}/stats`,
   );
 }
 
 /** افزودن شماره به بانک شماره‌ی مشتری — با برچسب (موبایل/ثابت/محل کار). */
 export function addCustomerPhone(
   id: string,
-  body: { phone: string; label?: string; isPrimary?: boolean }
+  body: { phone: string; label?: string; isPrimary?: boolean },
 ): Promise<T.Customer> {
-  return apiFetch<T.Customer>(`/sales/customers/${encodeURIComponent(id)}/phones`, {
-    method: "POST",
-    body,
-  });
+  return apiFetch<T.Customer>(
+    `/sales/customers/${encodeURIComponent(id)}/phones`,
+    {
+      method: "POST",
+      body,
+    },
+  );
 }
 
 /** حذف شماره از بانک شماره‌ی مشتری. */
-export function removeCustomerPhone(id: string, phoneId: string): Promise<T.Customer> {
+export function removeCustomerPhone(
+  id: string,
+  phoneId: string,
+): Promise<T.Customer> {
   return apiFetch<T.Customer>(
     `/sales/customers/${encodeURIComponent(id)}/phones/${encodeURIComponent(phoneId)}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 }
 
 /** تعیین شماره‌ی اصلی مشتری — بقیه‌ی شماره‌های او غیراصلی می‌شوند. */
 export function setPrimaryCustomerPhone(
   id: string,
-  phoneId: string
+  phoneId: string,
 ): Promise<T.Customer> {
   return apiFetch<T.Customer>(
     `/sales/customers/${encodeURIComponent(id)}/phones/${encodeURIComponent(phoneId)}/primary`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }
 
@@ -1719,10 +1820,10 @@ export function setPrimaryCustomerPhone(
  */
 export function creditCheck(
   customerId: string,
-  amount: number
+  amount: number,
 ): Promise<T.CreditCheck> {
   return apiFetch<T.CreditCheck>(
-    `/sales/customers/${encodeURIComponent(customerId)}/credit-check?amount=${amount}`
+    `/sales/customers/${encodeURIComponent(customerId)}/credit-check?amount=${amount}`,
   );
 }
 
@@ -1733,8 +1834,16 @@ export function creditCheck(
  * لازم نیست دوباره مرتبش کند.
  */
 export function getOpenAccounts(
-  params: { q?: string; onlyOverdue?: boolean; page?: number; limit?: number } = {}
-): Promise<{ data: T.Debtor[]; meta: { total: number; page: number; limit: number } }> {
+  params: {
+    q?: string;
+    onlyOverdue?: boolean;
+    page?: number;
+    limit?: number;
+  } = {},
+): Promise<{
+  data: T.Debtor[];
+  meta: { total: number; page: number; limit: number };
+}> {
   const qs = new URLSearchParams();
   if (params.q) qs.set("q", params.q);
   if (params.onlyOverdue) qs.set("onlyOverdue", "true");
@@ -1790,7 +1899,9 @@ export function bounceCheque(id: string, reason?: string): Promise<unknown> {
  * همه‌ی مشتری‌های با مانده‌ی غیرصفر — بدهکار و طلبکار با هم، از خودِ دفتر.
  * خوراکِ «حساب باز» صندوق: نسیه‌های معمولی هم که «حسابِ کلی» ندارند دیده می‌شوند.
  */
-export function getCustomerBalances(q?: string): Promise<T.CustomerBalanceRow[]> {
+export function getCustomerBalances(
+  q?: string,
+): Promise<T.CustomerBalanceRow[]> {
   const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
   return apiFetch(`/sales/customer-balances${qs}`);
 }
@@ -1814,10 +1925,15 @@ export function getOpenAccountSheet(id: string): Promise<T.OpenAccountSheet> {
 }
 
 /** باز کردن حساب برای مشتری (idempotent). */
-export function ensureOpenAccount(customerId: string): Promise<T.OpenAccountDetail> {
-  return apiFetch(`/sales/customers/${encodeURIComponent(customerId)}/open-account`, {
-    method: "POST",
-  });
+export function ensureOpenAccount(
+  customerId: string,
+): Promise<T.OpenAccountDetail> {
+  return apiFetch(
+    `/sales/customers/${encodeURIComponent(customerId)}/open-account`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 /** تسویه — همه‌ی فاکتورهای بازِ حساب CONFIRMED می‌شوند. */
@@ -1841,14 +1957,19 @@ export function getAlerts(): Promise<T.Alerts> {
  */
 export function getStatement(
   customerId: string,
-  params: { startDate?: string; endDate?: string; page?: number; limit?: number } = {}
+  params: {
+    startDate?: string;
+    endDate?: string;
+    page?: number;
+    limit?: number;
+  } = {},
 ): Promise<T.StatementResponse> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) {
     if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
   }
   return apiFetch(
-    `/sales/customers/${encodeURIComponent(customerId)}/statement?${qs.toString()}`
+    `/sales/customers/${encodeURIComponent(customerId)}/statement?${qs.toString()}`,
   );
 }
 
@@ -1856,11 +1977,11 @@ export function getStatement(
 export function setOpeningBalance(
   customerId: string,
   amount: number,
-  note?: string
+  note?: string,
 ): Promise<T.LedgerEntry> {
   return apiFetch(
     `/sales/customers/${encodeURIComponent(customerId)}/opening-balance`,
-    { method: "POST", body: { amount, note } }
+    { method: "POST", body: { amount, note } },
   );
 }
 
@@ -1868,7 +1989,7 @@ export function setOpeningBalance(
 export function adjustBalance(
   customerId: string,
   amount: number,
-  reason: string
+  reason: string,
 ): Promise<T.LedgerEntry> {
   return apiFetch(`/sales/customers/${encodeURIComponent(customerId)}/adjust`, {
     method: "POST",
@@ -1923,19 +2044,21 @@ export function updateCustomerCategory(
     color?: string;
     sortOrder?: number;
     isActive?: boolean;
-  }
+  },
 ): Promise<T.CustomerCategory> {
   return apiFetch<T.CustomerCategory>(
     `/sales/customer-categories/${encodeURIComponent(id)}`,
-    { method: "PATCH", body }
+    { method: "PATCH", body },
   );
 }
 
 /** غیرفعال‌سازی — مشتری‌ها دست نمی‌خورند، فقط از انتخاب‌های جدید می‌افتد. */
-export function deactivateCustomerCategory(id: string): Promise<T.CustomerCategory> {
+export function deactivateCustomerCategory(
+  id: string,
+): Promise<T.CustomerCategory> {
   return apiFetch<T.CustomerCategory>(
     `/sales/customer-categories/${encodeURIComponent(id)}`,
-    { method: "DELETE" }
+    { method: "DELETE" },
   );
 }
 
@@ -1968,11 +2091,13 @@ export function createWorkTask(body: {
 }
 
 /** GET /work-tasks — همه‌ی کارها با پیشرفت (نمای مدیر/فروشنده برای POS). */
-export function getWorkTasks(params: {
-  status?: T.WorkTaskStatus;
-  warehouseId?: string;
-  invoiceId?: string;
-} = {}): Promise<T.WorkTask[]> {
+export function getWorkTasks(
+  params: {
+    status?: T.WorkTaskStatus;
+    warehouseId?: string;
+    invoiceId?: string;
+  } = {},
+): Promise<T.WorkTask[]> {
   const qs = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v) qs.set(k, String(v));
   return apiFetch<T.WorkTask[]>(`/work-tasks?${qs.toString()}`);
@@ -1984,7 +2109,10 @@ export function getWorkTask(id: string): Promise<T.WorkTask> {
 }
 
 /** POST /work-tasks/:id/cancel — لغو کارِ در انتظار/در جریان. */
-export function cancelWorkTask(id: string, reason?: string): Promise<T.WorkTask> {
+export function cancelWorkTask(
+  id: string,
+  reason?: string,
+): Promise<T.WorkTask> {
   return apiFetch<T.WorkTask>(`/work-tasks/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
     body: reason ? { reason } : undefined,
@@ -2011,18 +2139,26 @@ function reportQs(params: object): string {
 }
 
 export function getPeriodicSales(p: ReportRange) {
-  return apiFetch<T.PeriodicSalesReport>(`/reports/periodic-sales?${reportQs(p)}`);
+  return apiFetch<T.PeriodicSalesReport>(
+    `/reports/periodic-sales?${reportQs(p)}`,
+  );
 }
 
 export function getPeriodicProfit(p: ReportRange) {
-  return apiFetch<T.PeriodicProfitReport>(`/reports/periodic-profit?${reportQs(p)}`);
+  return apiFetch<T.PeriodicProfitReport>(
+    `/reports/periodic-profit?${reportQs(p)}`,
+  );
 }
 
 export function getDebtors(p: { page?: number; limit?: number }) {
   return apiFetch<T.DebtorsReport>(`/reports/debtors?${reportQs(p)}`);
 }
 
-export function getChequesReport(p: { status?: string; page?: number; limit?: number }) {
+export function getChequesReport(p: {
+  status?: string;
+  page?: number;
+  limit?: number;
+}) {
   return apiFetch<T.ChequesReport>(`/reports/cheques?${reportQs(p)}`);
 }
 
@@ -2032,7 +2168,9 @@ export function getCustomerCheques(id: string): Promise<T.CustomerChequeRow[]> {
 }
 
 export function getProductPerformance(p: ReportRange & { type?: string }) {
-  return apiFetch<T.ProductPerformanceReport>(`/reports/product-performance?${reportQs(p)}`);
+  return apiFetch<T.ProductPerformanceReport>(
+    `/reports/product-performance?${reportQs(p)}`,
+  );
 }
 
 export function getLowStock(p: { page?: number; limit?: number }) {
@@ -2053,7 +2191,7 @@ export function getSmsTemplates(): Promise<T.SmsTemplate[]> {
  */
 export function updateSmsTemplate(
   id: string,
-  dto: { title?: string; body?: string; isActive?: boolean }
+  dto: { title?: string; body?: string; isActive?: boolean },
 ): Promise<T.SmsTemplate> {
   return apiFetch<T.SmsTemplate>(`/sms/templates/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -2065,11 +2203,11 @@ export function updateSmsTemplate(
 export function previewSms(
   customerId: string,
   templateKey: string,
-  extra: Record<string, string> = {}
+  extra: Record<string, string> = {},
 ): Promise<T.SmsPreview> {
   const qs = new URLSearchParams(extra).toString();
   return apiFetch<T.SmsPreview>(
-    `/sms/preview/${encodeURIComponent(customerId)}/${encodeURIComponent(templateKey)}${qs ? `?${qs}` : ""}`
+    `/sms/preview/${encodeURIComponent(customerId)}/${encodeURIComponent(templateKey)}${qs ? `?${qs}` : ""}`,
   );
 }
 
@@ -2087,22 +2225,30 @@ export function drainSms(): Promise<{ sent: number; failed: number }> {
 }
 
 export function getSmsHistory(customerId: string): Promise<T.SmsMessage[]> {
-  return apiFetch<T.SmsMessage[]>(`/sms/history/${encodeURIComponent(customerId)}`);
+  return apiFetch<T.SmsMessage[]>(
+    `/sms/history/${encodeURIComponent(customerId)}`,
+  );
 }
 
 export function retrySms(id: string): Promise<T.SmsMessage> {
-  return apiFetch<T.SmsMessage>(`/sms/${encodeURIComponent(id)}/retry`, { method: "POST" });
+  return apiFetch<T.SmsMessage>(`/sms/${encodeURIComponent(id)}/retry`, {
+    method: "POST",
+  });
 }
 
 // =====================================================
 // کسری محصول — تقاضایی که جواب نگرفت
 // =====================================================
 
-export function createShortage(body: T.CreateShortageInput): Promise<T.ProductShortage> {
+export function createShortage(
+  body: T.CreateShortageInput,
+): Promise<T.ProductShortage> {
   return apiFetch<T.ProductShortage>("/shortages", { method: "POST", body });
 }
 
-export function getShortages(p: { status?: string; warehouseId?: string } = {}) {
+export function getShortages(
+  p: { status?: string; warehouseId?: string } = {},
+) {
   const qs = new URLSearchParams();
   if (p.status) qs.set("status", p.status);
   if (p.warehouseId) qs.set("warehouseId", p.warehouseId);
@@ -2111,7 +2257,7 @@ export function getShortages(p: { status?: string; warehouseId?: string } = {}) 
 
 export function resolveShortage(
   id: string,
-  body: { status: "ORDERED" | "DISMISSED"; note?: string }
+  body: { status: "ORDERED" | "DISMISSED"; note?: string },
 ): Promise<T.ProductShortage> {
   return apiFetch<T.ProductShortage>(`/shortages/${id}/resolve`, {
     method: "PATCH",
@@ -2120,15 +2266,21 @@ export function resolveShortage(
 }
 
 export function getSuspiciousPrices(p: { page?: number; limit?: number }) {
-  return apiFetch<T.SuspiciousPricesReport>(`/reports/suspicious-prices?${reportQs(p)}`);
+  return apiFetch<T.SuspiciousPricesReport>(
+    `/reports/suspicious-prices?${reportQs(p)}`,
+  );
 }
 
 export function getSellerPerformance(p: ReportRange) {
-  return apiFetch<T.SellerPerformanceReport>(`/reports/seller-performance?${reportQs(p)}`);
+  return apiFetch<T.SellerPerformanceReport>(
+    `/reports/seller-performance?${reportQs(p)}`,
+  );
 }
 
 export function getSalesByCategory(p: ReportRange) {
-  return apiFetch<T.SalesByCategoryReport>(`/reports/sales-by-category?${reportQs(p)}`);
+  return apiFetch<T.SalesByCategoryReport>(
+    `/reports/sales-by-category?${reportQs(p)}`,
+  );
 }
 
 /**
@@ -2138,7 +2290,7 @@ export function getSalesByCategory(p: ReportRange) {
 export async function downloadReportExcel(
   endpoint: string,
   params: Record<string, unknown>,
-  fileName: string
+  fileName: string,
 ): Promise<void> {
   const token = useAuthStore.getState().token;
   const qs = reportQs({ ...params, format: "excel" });
@@ -2211,13 +2363,21 @@ export function getBackupHistory(limit = 30): Promise<BackupRun[]> {
 }
 
 export function updateBackupConfig(
-  dto: Partial<Omit<BackupConfig, "id">>
+  dto: Partial<Omit<BackupConfig, "id">>,
 ): Promise<BackupConfig> {
-  return apiFetch<BackupConfig>("/backups/config", { method: "PUT", body: dto });
+  return apiFetch<BackupConfig>("/backups/config", {
+    method: "PUT",
+    body: dto,
+  });
 }
 
-export function runBackup(trigger: "MANUAL" | "ON_CLOSE" = "MANUAL"): Promise<BackupRun> {
-  return apiFetch<BackupRun>("/backups/run", { method: "POST", body: { trigger } });
+export function runBackup(
+  trigger: "MANUAL" | "ON_CLOSE" = "MANUAL",
+): Promise<BackupRun> {
+  return apiFetch<BackupRun>("/backups/run", {
+    method: "POST",
+    body: { trigger },
+  });
 }
 
 /** فایل‌های بک‌آپِ موجود روی سرور. */
@@ -2266,7 +2426,10 @@ export async function downloadBackupFile(name: string): Promise<void> {
  * ⚠️ همه‌ی داده‌ی فعلی جایگزین می‌شود. `confirm` باید دقیقاً «بازیابی» باشد —
  * سرور هم همین را دوباره بررسی می‌کند، این فقط لایه‌ی اول است.
  */
-export function restoreBackup(fileName: string, confirm: string): Promise<T.RestoreResult> {
+export function restoreBackup(
+  fileName: string,
+  confirm: string,
+): Promise<T.RestoreResult> {
   return apiFetch<T.RestoreResult>("/backups/restore", {
     method: "POST",
     body: { fileName, confirm },
@@ -2279,39 +2442,95 @@ export function restoreBackup(fileName: string, confirm: string): Promise<T.Rest
 
 /** تأمین‌کننده‌ها — فهرست کوتاه است و صفحه‌بندی ندارد. */
 export function getSuppliers(): Promise<T.Supplier[]> {
-  return apiFetch<T.Supplier[] | { data?: T.Supplier[] }>("/suppliers").then((r) =>
-    Array.isArray(r) ? r : (r.data ?? []),
+  return apiFetch<T.Supplier[] | { data?: T.Supplier[] }>("/suppliers").then(
+    (r) => (Array.isArray(r) ? r : (r.data ?? [])),
   );
 }
 
-export function createSupplier(body: T.CreateSupplierInput): Promise<T.Supplier> {
+export function createSupplier(
+  body: T.CreateSupplierInput,
+): Promise<T.Supplier> {
   return apiFetch<T.Supplier>("/suppliers", { method: "POST", body });
 }
 
-export function createPurchase(body: T.CreatePurchaseInput): Promise<T.Purchase> {
+export function createPurchase(
+  body: T.CreatePurchaseInput,
+): Promise<T.Purchase> {
   return apiFetch<T.Purchase>("/purchases", { method: "POST", body });
 }
 
-export function getPurchases(p: {
-  q?: string;
-  supplierId?: string;
-  warehouseId?: string;
-  status?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  limit?: number;
-} = {}) {
+export function previewPurchaseImport(
+  file: File,
+): Promise<T.PurchaseImportRow[]> {
+  const form = new FormData();
+  form.append("file", file);
+  return apiFetch<T.PurchaseImportRow[]>("/purchases/import/preview", {
+    method: "POST",
+    body: form,
+  });
+}
+
+export function confirmPurchaseImport(
+  body: T.CreatePurchaseInput,
+): Promise<T.Purchase> {
+  return apiFetch<T.Purchase>("/purchases/import/confirm", {
+    method: "POST",
+    body,
+  });
+}
+
+export function getPurchases(
+  p: {
+    q?: string;
+    supplierId?: string;
+    warehouseId?: string;
+    status?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+) {
   return apiFetch<{ data: T.Purchase[]; meta: T.ReportMeta }>(
     `/purchases?${reportQs(p)}`,
   );
+}
+
+export async function downloadPurchaseImportTemplate(): Promise<void> {
+  const token = useAuthStore.getState().token;
+  const res = await fetch(`${apiUrl()}/purchases/import-template`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const parsed = (await parseJson(res)) as ApiErrorBody | null;
+    throw new ApiException(
+      res.status,
+      parsed ?? {
+        error: `HTTP_${res.status}`,
+        message: defaultStatusMessage(res.status),
+      },
+    );
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "kardo-purchase-template.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 export function getPurchase(id: string): Promise<T.Purchase> {
   return apiFetch<T.Purchase>(`/purchases/${encodeURIComponent(id)}`);
 }
 
-export function cancelPurchase(id: string, reason: string): Promise<T.Purchase> {
+export function cancelPurchase(
+  id: string,
+  reason: string,
+): Promise<T.Purchase> {
   return apiFetch<T.Purchase>(`/purchases/${encodeURIComponent(id)}/cancel`, {
     method: "POST",
     body: { reason },
@@ -2343,9 +2562,11 @@ export function createReceipt(body: {
   return apiFetch<T.Receipt>("/sales/receipts", { method: "POST", body });
 }
 
-export function getReceipts(p: { customerId?: string; page?: number; limit?: number } = {}) {
+export function getReceipts(
+  p: { customerId?: string; page?: number; limit?: number } = {},
+) {
   return apiFetch<{ data: T.Receipt[]; meta: T.ReportMeta }>(
-    `/sales/receipts?${reportQs(p)}`
+    `/sales/receipts?${reportQs(p)}`,
   );
 }
 
@@ -2361,24 +2582,26 @@ export function getReceipt(id: string): Promise<T.Receipt> {
  * GET /vouchers — سندهای خودکارِ پشتِ اکشن‌های مالی، با فیلتر نوع/تاریخ.
  * هر سند خطوطِ بدهکار/بستانکار را دارد (جمعشان همیشه صفر است).
  */
-export function getVouchers(p: {
-  sourceType?: T.VoucherSourceType | "";
-  sourceId?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  limit?: number;
-} = {}): Promise<T.VouchersResponse> {
+export function getVouchers(
+  p: {
+    sourceType?: T.VoucherSourceType | "";
+    sourceId?: string;
+    from?: string;
+    to?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+): Promise<T.VouchersResponse> {
   return apiFetch<T.VouchersResponse>(`/vouchers?${reportQs(p)}`);
 }
 
 /** سندِ یک منبع — لینک «چی به چی»: از هر عدد تا فاکتور/رسیدِ مبدأ و برعکس. */
 export function getVoucherBySource(
   sourceType: T.VoucherSourceType,
-  sourceId: string
+  sourceId: string,
 ): Promise<T.VoucherRow | null> {
   return apiFetch<T.VoucherRow | null>(
-    `/vouchers/source/${encodeURIComponent(sourceType)}/${encodeURIComponent(sourceId)}`
+    `/vouchers/source/${encodeURIComponent(sourceType)}/${encodeURIComponent(sourceId)}`,
   );
 }
 
@@ -2387,10 +2610,10 @@ export function getVoucherBySource(
  * اصلاحیه‌ها و رسیدهایِ تخصیص‌یافته به آن) به ترتیبِ زمان. فقط مدیر.
  */
 export function getVouchersByInvoice(
-  invoiceId: string
+  invoiceId: string,
 ): Promise<T.InvoiceVouchers> {
   return apiFetch<T.InvoiceVouchers>(
-    `/vouchers/by-invoice/${encodeURIComponent(invoiceId)}`
+    `/vouchers/by-invoice/${encodeURIComponent(invoiceId)}`,
   );
 }
 
@@ -2418,9 +2641,11 @@ export function createPayout(body: {
   return apiFetch<T.CustomerPayout>("/sales/payouts", { method: "POST", body });
 }
 
-export function getPayouts(p: { customerId?: string; page?: number; limit?: number } = {}) {
+export function getPayouts(
+  p: { customerId?: string; page?: number; limit?: number } = {},
+) {
   return apiFetch<{ data: T.CustomerPayout[]; meta: T.ReportMeta }>(
-    `/sales/payouts?${reportQs(p)}`
+    `/sales/payouts?${reportQs(p)}`,
   );
 }
 
@@ -2450,14 +2675,16 @@ export function createQuotation(body: {
   return apiFetch<T.Quotation>("/sales/quotations", { method: "POST", body });
 }
 
-export function getQuotations(p: {
-  status?: string;
-  customerId?: string;
-  page?: number;
-  limit?: number;
-} = {}) {
+export function getQuotations(
+  p: {
+    status?: string;
+    customerId?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+) {
   return apiFetch<{ data: T.Quotation[]; meta: T.ReportMeta }>(
-    `/sales/quotations?${reportQs(p)}`
+    `/sales/quotations?${reportQs(p)}`,
   );
 }
 
@@ -2486,7 +2713,7 @@ export function updateQuotation(
       unitPrice: number;
       discount?: number;
     }[];
-  }
+  },
 ): Promise<T.Quotation> {
   return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}`, {
     method: "PATCH",
@@ -2504,25 +2731,37 @@ export function updateQuotation(
 export function convertQuotation(
   id: string,
   payments?: T.PaymentInput[],
-  dueDate?: string
+  dueDate?: string,
 ): Promise<T.Invoice> {
-  return apiFetch<T.Invoice>(`/sales/quotations/${encodeURIComponent(id)}/convert`, {
-    method: "POST",
-    body: { payments, dueDate },
-  });
+  return apiFetch<T.Invoice>(
+    `/sales/quotations/${encodeURIComponent(id)}/convert`,
+    {
+      method: "POST",
+      body: { payments, dueDate },
+    },
+  );
 }
 
-export function extendQuotation(id: string, validForMinutes: number): Promise<T.Quotation> {
-  return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}/extend`, {
-    method: "POST",
-    body: { validForMinutes },
-  });
+export function extendQuotation(
+  id: string,
+  validForMinutes: number,
+): Promise<T.Quotation> {
+  return apiFetch<T.Quotation>(
+    `/sales/quotations/${encodeURIComponent(id)}/extend`,
+    {
+      method: "POST",
+      body: { validForMinutes },
+    },
+  );
 }
 
 export function cancelQuotation(id: string): Promise<T.Quotation> {
-  return apiFetch<T.Quotation>(`/sales/quotations/${encodeURIComponent(id)}/cancel`, {
-    method: "POST",
-  });
+  return apiFetch<T.Quotation>(
+    `/sales/quotations/${encodeURIComponent(id)}/cancel`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 // =====================================================
@@ -2534,21 +2773,25 @@ export function cancelQuotation(id: string): Promise<T.Quotation> {
 // =====================================================
 
 export function getBlankQuotations(
-  p: { status?: string; page?: number; limit?: number } = {}
+  p: { status?: string; page?: number; limit?: number } = {},
 ) {
   return apiFetch<{ data: T.BlankQuotation[]; meta: T.ReportMeta }>(
-    `/sales/blank-quotations?${reportQs(p)}`
+    `/sales/blank-quotations?${reportQs(p)}`,
   );
 }
 
 export function getBlankQuotation(id: string): Promise<T.BlankQuotation> {
-  return apiFetch<T.BlankQuotation>(`/sales/blank-quotations/${encodeURIComponent(id)}`);
+  return apiFetch<T.BlankQuotation>(
+    `/sales/blank-quotations/${encodeURIComponent(id)}`,
+  );
 }
 
 /** پیشنهادِ کالا برای ردیف‌های متنی — نیمه‌خودکار؛ تصمیم نهایی با مدیر است. */
-export function getBlankQuotationSuggestions(id: string): Promise<T.BlankLineSuggestion[]> {
+export function getBlankQuotationSuggestions(
+  id: string,
+): Promise<T.BlankLineSuggestion[]> {
   return apiFetch<T.BlankLineSuggestion[]>(
-    `/sales/blank-quotations/${encodeURIComponent(id)}/suggestions`
+    `/sales/blank-quotations/${encodeURIComponent(id)}/suggestions`,
   );
 }
 
@@ -2562,19 +2805,22 @@ export function saveBlankPrices(
   id: string,
   body: {
     customerName?: string;
+    /** اتصال نام به پرونده‌ی مشتری — null یعنی «وصل را بردار». */
+    customerId?: string | null;
     note?: string;
     lines: {
       lineId: string;
+      quantity?: number;
       finalPrice?: number;
       productId?: string | null;
       locationId?: string | null;
       text?: string;
     }[];
-  }
+  },
 ): Promise<T.BlankQuotation> {
   return apiFetch<T.BlankQuotation>(
     `/sales/blank-quotations/${encodeURIComponent(id)}/prices`,
-    { method: "POST", body }
+    { method: "POST", body },
   );
 }
 
@@ -2582,18 +2828,19 @@ export function saveBlankPrices(
 export function convertBlankQuotation(
   id: string,
   payments?: T.PaymentInput[],
-  dueDate?: string
+  dueDate?: string,
+  customerId?: string,
 ): Promise<T.Invoice> {
   return apiFetch<T.Invoice>(
     `/sales/blank-quotations/${encodeURIComponent(id)}/convert`,
-    { method: "POST", body: { payments, dueDate } }
+    { method: "POST", body: { payments, dueDate, customerId } },
   );
 }
 
 export function cancelBlankQuotation(id: string): Promise<T.BlankQuotation> {
   return apiFetch<T.BlankQuotation>(
     `/sales/blank-quotations/${encodeURIComponent(id)}/cancel`,
-    { method: "POST" }
+    { method: "POST" },
   );
 }
 
@@ -2601,14 +2848,16 @@ export function cancelBlankQuotation(id: string): Promise<T.BlankQuotation> {
 // صف چاپ لیبل + تنظیمات پیش‌فرض
 // =====================================================
 
-export function getPendingLabels(p: {
-  onlyWithStock?: boolean;
-  since?: string;
-  page?: number;
-  limit?: number;
-} = {}) {
+export function getPendingLabels(
+  p: {
+    onlyWithStock?: boolean;
+    since?: string;
+    page?: number;
+    limit?: number;
+  } = {},
+) {
   return apiFetch<{ data: T.PendingLabelProduct[]; meta: T.ReportMeta }>(
-    `/products/labels/pending?${reportQs(p)}`
+    `/products/labels/pending?${reportQs(p)}`,
   );
 }
 
@@ -2617,7 +2866,7 @@ export function getLabelSettings(): Promise<T.LabelSettings> {
 }
 
 export function updateLabelSettings(
-  body: Partial<T.LabelSettings>
+  body: Partial<T.LabelSettings>,
 ): Promise<T.LabelSettings> {
   return apiFetch<T.LabelSettings>("/labels/settings", { method: "PUT", body });
 }
@@ -2697,7 +2946,10 @@ export function getImageCandidates(params: {
   categoryId?: string;
   search?: string;
   productId?: string;
-}): Promise<{ data: ImageCandidate[]; meta: { total: number; page: number; lastPage: number } }> {
+}): Promise<{
+  data: ImageCandidate[];
+  meta: { total: number; page: number; lastPage: number };
+}> {
   const qs = new URLSearchParams();
   if (params.page) qs.set("page", String(params.page));
   if (params.limit) qs.set("limit", String(params.limit));
@@ -2713,7 +2965,9 @@ export function getImageStats(): Promise<ImageStats> {
   return apiFetch("/admin/product-images/stats");
 }
 
-export function getCandidate(id: string): Promise<ImageCandidate & { product: any }> {
+export function getCandidate(
+  id: string,
+): Promise<ImageCandidate & { product: any }> {
   return apiFetch(`/admin/product-images/${encodeURIComponent(id)}`);
 }
 
@@ -2723,17 +2977,25 @@ export function approveCandidate(id: string): Promise<{ assetId: string }> {
   });
 }
 
-export function rejectCandidate(id: string, reason?: string): Promise<{ success: boolean }> {
+export function rejectCandidate(
+  id: string,
+  reason?: string,
+): Promise<{ success: boolean }> {
   return apiFetch(`/admin/product-images/${encodeURIComponent(id)}/reject`, {
     method: "POST",
     body: { reason },
   });
 }
 
-export function searchAgain(id: string): Promise<{ queued: number; alreadyQueued: number }> {
-  return apiFetch(`/admin/product-images/${encodeURIComponent(id)}/search-again`, {
-    method: "POST",
-  });
+export function searchAgain(
+  id: string,
+): Promise<{ queued: number; alreadyQueued: number }> {
+  return apiFetch(
+    `/admin/product-images/${encodeURIComponent(id)}/search-again`,
+    {
+      method: "POST",
+    },
+  );
 }
 
 export function startImageSearch(opts: {
@@ -2741,17 +3003,25 @@ export function startImageSearch(opts: {
   limit?: number;
   brandId?: string;
 }): Promise<{ queued: number; alreadyQueued: number }> {
-  return apiFetch("/admin/product-images/search", { method: "POST", body: opts });
+  return apiFetch("/admin/product-images/search", {
+    method: "POST",
+    body: opts,
+  });
 }
 
-export function bulkApproveImages(candidateIds: string[]): Promise<{ approved: number; skipped: number }> {
+export function bulkApproveImages(
+  candidateIds: string[],
+): Promise<{ approved: number; skipped: number }> {
   return apiFetch("/admin/product-images/bulk-approve", {
     method: "POST",
     body: { candidateIds },
   });
 }
 
-export function bulkRejectImages(candidateIds: string[], reason?: string): Promise<{ rejected: number }> {
+export function bulkRejectImages(
+  candidateIds: string[],
+  reason?: string,
+): Promise<{ rejected: number }> {
   return apiFetch("/admin/product-images/bulk-reject", {
     method: "POST",
     body: { candidateIds, reason },
@@ -2763,14 +3033,18 @@ export function bulkRejectImages(candidateIds: string[], reason?: string): Promi
 // =====================================================
 
 /** GET /online-orders — صفِ سفارش‌های سایت؛ اختیاراً فیلترِ وضعیت. */
-export function listOnlineOrders(status?: T.OnlineOrderStatus): Promise<T.OnlineOrderSummary[]> {
+export function listOnlineOrders(
+  status?: T.OnlineOrderStatus,
+): Promise<T.OnlineOrderSummary[]> {
   const suffix = status ? `?status=${encodeURIComponent(status)}` : "";
   return apiFetch<T.OnlineOrderSummary[]>(`/online-orders${suffix}`);
 }
 
 /** GET /online-orders/:id */
 export function getOnlineOrder(id: string): Promise<T.OnlineOrderDetail> {
-  return apiFetch<T.OnlineOrderDetail>(`/online-orders/${encodeURIComponent(id)}`);
+  return apiFetch<T.OnlineOrderDetail>(
+    `/online-orders/${encodeURIComponent(id)}`,
+  );
 }
 
 /**
@@ -2778,16 +3052,22 @@ export function getOnlineOrder(id: string): Promise<T.OnlineOrderDetail> {
  * جلوبردنِ یک سفارشِ تازه = «تأیید» برای برداشت است.
  */
 export function advanceOnlineOrder(id: string): Promise<T.OnlineOrderDetail> {
-  return apiFetch<T.OnlineOrderDetail>(`/online-orders/${encodeURIComponent(id)}/advance`, {
-    method: "POST",
-    body: {},
-  });
+  return apiFetch<T.OnlineOrderDetail>(
+    `/online-orders/${encodeURIComponent(id)}/advance`,
+    {
+      method: "POST",
+      body: {},
+    },
+  );
 }
 
 /** POST /online-orders/:id/cancel — لغو با دلیل (جنس نبود / مشتری پشیمان). */
-export function cancelOnlineOrder(id: string, reason?: string): Promise<T.CancelOnlineOrderResult> {
+export function cancelOnlineOrder(
+  id: string,
+  reason?: string,
+): Promise<T.CancelOnlineOrderResult> {
   return apiFetch<T.CancelOnlineOrderResult>(
     `/online-orders/${encodeURIComponent(id)}/cancel`,
-    { method: "POST", body: { reason } }
+    { method: "POST", body: { reason } },
   );
 }

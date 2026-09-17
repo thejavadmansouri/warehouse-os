@@ -130,6 +130,25 @@ export class ProductsController {
     });
   }
 
+  /**
+   * موجودیِ زنده‌ی چند محصول با یک درخواست — نتایجِ رویِ صفحه‌ی سرچِ زنده‌ی POS
+   * را «اصلاحِ زنده» می‌کند: کاتالوگِ لوکال فوری جواب می‌دهد ولی موجودی ندارد؛
+   * همین مسیر برای همان چند نتیجه عددِ تازه می‌آورد. `ids` با کاما جدا می‌شود.
+   */
+  @Get('stock-batch')
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF, Role.SALES)
+  stockBatch(@Query('ids') ids: string, @Req() req: any) {
+    const list = (ids ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 30);
+    return this.productsService.productStockBatch(list, {
+      includePurchase:
+        req.user?.role === Role.ADMIN || req.user?.role === Role.MANAGER,
+    });
+  }
+
   @Get('export')
   @Roles(Role.ADMIN, Role.MANAGER)
   async exportCsv(@Res() res: Response) {
@@ -146,6 +165,12 @@ export class ProductsController {
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   detailByBarcode(@Param('barcode') barcode: string) {
     return this.productsService.detailByBarcode(barcode);
+  }
+
+  @Get('next-identifiers')
+  @Roles(Role.ADMIN, Role.MANAGER)
+  nextIdentifiers() {
+    return this.productsService.nextIdentifiers();
   }
 
   @Get(':id')

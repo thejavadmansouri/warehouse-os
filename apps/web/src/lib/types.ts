@@ -315,13 +315,7 @@ export interface CurrentStockResponse {
 }
 
 export type InventoryAction =
-  | "IN"
-  | "OUT"
-  | "TRANSFER"
-  | "ADJUST"
-  | "SALE"
-  | "RETURN"
-  | "COUNT";
+  "IN" | "OUT" | "TRANSFER" | "ADJUST" | "SALE" | "RETURN" | "COUNT";
 
 export interface InventoryLogRow {
   id: string;
@@ -741,7 +735,6 @@ export interface ApproveProductRequestDto {
   quantity?: number;
   unit?: string;
 }
-
 
 // =====================================================
 // فروش — فاکتور، مشتری، پرداخت، کار برداشت
@@ -1434,7 +1427,11 @@ export interface Invoice {
     method: PaymentMethod;
     amount: number;
     note?: string | null;
-    cheque?: { number: string; bankName?: string | null; dueDate: string } | null;
+    cheque?: {
+      number: string;
+      bankName?: string | null;
+      dueDate: string;
+    } | null;
   }[];
   lines: {
     id: string;
@@ -1448,7 +1445,12 @@ export interface Invoice {
     lineDiscount?: number | null;
     /** توضیحِ دستیِ فروشنده روی همین قلم — زیرِ نامِ کالا چاپ می‌شود. */
     lineNote?: string | null;
-    product: { id: string; name: string; sku?: string | null; unit?: string | null };
+    product: {
+      id: string;
+      name: string;
+      sku?: string | null;
+      unit?: string | null;
+    };
     location: { id: string; name: string; code: string; path: string };
     /*
      * وضعیتِ «الان»ِ قلم — خوراکِ برگه‌ی چاپ. سرور برای برگه‌ی نهایی می‌فرستد:
@@ -1531,8 +1533,19 @@ export interface PickTask {
   status: PickTaskStatus;
   note?: string | null;
   createdAt: string;
-  product: { id: string; name: string; sku?: string | null; unit?: string | null };
-  location: { id: string; name: string; code: string; barcode: string; path: string };
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  };
+  location: {
+    id: string;
+    name: string;
+    code: string;
+    barcode: string;
+    path: string;
+  };
   requestedBy?: { id: string; fullName: string } | null;
   pickedBy?: { id: string; fullName: string } | null;
 }
@@ -1541,7 +1554,8 @@ export interface PickTask {
 // کارِ کارگر (WorkTask) — فقط تابلوی کار و پیشرفت؛ هیچ ربطی به موجودی ندارد
 // =====================================================
 
-export type WorkTaskStatus = "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type WorkTaskStatus =
+  "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type WorkTaskItemStatus = "PENDING" | "DONE";
 
 /** یک قلمِ کارِ کارگر — کالا + قفسه + تعداد + وضعیت تیک. */
@@ -1554,8 +1568,19 @@ export interface WorkTaskItem {
   quantity: number;
   doneById?: string | null;
   doneAt?: string | null;
-  product?: { id: string; name: string; sku?: string | null; unit?: string | null } | null;
-  location?: { id: string; name: string; code: string; barcode: string; path: string } | null;
+  product?: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  } | null;
+  location?: {
+    id: string;
+    name: string;
+    code: string;
+    barcode: string;
+    path: string;
+  } | null;
   doneBy?: { id: string; fullName: string } | null;
 }
 
@@ -1595,7 +1620,12 @@ export interface WorkTaskSyncResult {
   clientMutationId: string;
   taskId: string;
   itemId: string;
-  status: "OK" | "ALREADY_DONE" | "TASK_CANCELLED" | "TASK_NOT_VISIBLE" | "ITEM_NOT_FOUND";
+  status:
+    | "OK"
+    | "ALREADY_DONE"
+    | "TASK_CANCELLED"
+    | "TASK_NOT_VISIBLE"
+    | "ITEM_NOT_FOUND";
 }
 
 // =====================================================
@@ -1968,7 +1998,12 @@ export interface CustomerPayout {
 /** یک ردیفِ قابل‌برگشت از یک فاکتور — خوراکِ صفحه‌ی مرجوعی. */
 export interface ReturnableLine {
   saleLogId: string;
-  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  };
   location: { id: string; name: string; code: string; path: string };
   unitPrice: number;
   lineDiscount: number;
@@ -1986,7 +2021,12 @@ export interface ReturnableInvoice {
     status: InvoiceStatus;
     total: number;
     dueAmount: number;
-    customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+    customer: {
+      id: string;
+      firstName: string;
+      lastName?: string | null;
+      fullName: string;
+    } | null;
   };
   lines: ReturnableLine[];
   /** فاکتورِ باطل‌شده قابلِ مرجوعی نیست؛ نهایی و حساب‌باز هستند. */
@@ -2025,7 +2065,12 @@ export interface SaleReturn {
     unitRefund: number;
     lineRefund: number;
     restock: boolean;
-    product: { id: string; name: string; sku?: string | null; unit?: string | null };
+    product: {
+      id: string;
+      name: string;
+      sku?: string | null;
+      unit?: string | null;
+    };
     location: { id: string; name: string; code: string; path: string };
   }[];
   _count?: { lines: number };
@@ -2041,7 +2086,12 @@ export interface SaleReturnListRow {
   /** وقتی این مرجوعی نیمی از «عملیات یکپارچه» (adjust) است، کلیدِ گروه‌بندیِ مشترک. */
   operationKey?: string | null;
   invoice?: { id: string; number: number } | null;
-  customer?: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  customer?: {
+    id: string;
+    firstName: string;
+    lastName?: string | null;
+    fullName: string;
+  } | null;
   user?: { id: string; fullName: string } | null;
   _count?: { lines: number };
 }
@@ -2052,7 +2102,12 @@ export interface CorrectableLine {
   saleLogId: string;
   /** توضیحِ فعلیِ همین قلم روی فاکتور. */
   lineNote?: string | null;
-  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  };
   location: { id: string; name: string; code: string; path: string };
   /** تعدادِ فعلی (فروش + اثر اصلاحیه‌های قبلی). */
   oldQuantity: number;
@@ -2070,7 +2125,12 @@ export interface CorrectableInvoice {
     total: number;
     dueAmount: number;
     accountId?: string | null;
-    customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+    customer: {
+      id: string;
+      firstName: string;
+      lastName?: string | null;
+      fullName: string;
+    } | null;
   };
   lines: CorrectableLine[];
   /** نهایی و حساب‌باز اصلاحیه می‌خورند؛ باطل‌شده نه. */
@@ -2111,7 +2171,12 @@ export interface SaleCorrectionLine {
   lineAdjust: number;
   /** این قلم با همین اصلاحیه به فاکتور اضافه شده، تصحیح نشده. */
   isNewLine?: boolean;
-  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  };
   location: { id: string; name: string; code: string; path: string };
 }
 
@@ -2140,7 +2205,12 @@ export interface SaleCorrectionListRow {
   /** وقتی این اصلاحیه نیمی از «عملیات یکپارچه» (adjust) است، کلیدِ گروه‌بندیِ مشترک. */
   operationKey?: string | null;
   invoice?: { id: string; number: number } | null;
-  customer?: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+  customer?: {
+    id: string;
+    firstName: string;
+    lastName?: string | null;
+    fullName: string;
+  } | null;
   user?: { id: string; fullName: string } | null;
   _count?: { lines: number };
 }
@@ -2154,7 +2224,12 @@ export interface AdjustableLine {
   saleLogId: string;
   /** توضیحِ فعلیِ همین قلم. */
   lineNote?: string | null;
-  product: { id: string; name: string; sku?: string | null; unit?: string | null };
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  };
   location: { id: string; name: string; code: string; path: string };
   sold: number;
   alreadyReturned: number;
@@ -2178,7 +2253,12 @@ export interface AdjustableInvoice {
     paidAmount: number;
     dueAmount: number;
     accountId?: string | null;
-    customer: { id: string; firstName: string; lastName?: string | null; fullName: string } | null;
+    customer: {
+      id: string;
+      firstName: string;
+      lastName?: string | null;
+      fullName: string;
+    } | null;
   };
   lines: AdjustableLine[];
   /** نهایی و حساب باز قابلِ ویرایش‌اند؛ باطل‌شده نه. */
@@ -2244,10 +2324,7 @@ export interface PaymentReversalRow {
 
 /** وضعیتِ نمایشیِ هر ردیف پس از عملیات. */
 export type AdjustLineStatus =
-  | "ACTIVE"
-  | "PARTIALLY_RETURNED"
-  | "RETURNED"
-  | "ADDED_LATER";
+  "ACTIVE" | "PARTIALLY_RETURNED" | "RETURNED" | "ADDED_LATER";
 
 export interface AdjustResultLine {
   saleLogId: string;
@@ -2321,12 +2398,18 @@ export interface Quotation {
     quantity: number;
     unitPrice: number;
     discount: number;
-    product: { id: string; name: string; sku?: string | null; unit?: string | null };
+    product: {
+      id: string;
+      name: string;
+      sku?: string | null;
+      unit?: string | null;
+    };
   }[];
 }
 
 // طبق بخش ۱۱.۵ — پیش‌فاکتور سفید (برگه‌ی قیمت)
-export type BlankQuotationStatus = "OPEN" | "PRICED" | "CANCELLED" | "CONVERTED";
+export type BlankQuotationStatus =
+  "OPEN" | "PRICED" | "CANCELLED" | "CONVERTED";
 
 /**
  * یک قلمِ متنیِ برگه‌ی سفید.
@@ -2342,7 +2425,12 @@ export interface BlankQuotationLine {
   finalPrice: number | null;
   /** نال یعنی «قیمت نخورده» — قفلِ اولِ تبدیل. */
   pricedAt: string | null;
-  product: { id: string; name: string; sku?: string | null; unit?: string | null } | null;
+  product: {
+    id: string;
+    name: string;
+    sku?: string | null;
+    unit?: string | null;
+  } | null;
   locationId: string | null;
   locationPath: string | null;
   lineTotal: number;
@@ -2355,6 +2443,8 @@ export interface BlankQuotation {
   /** «منقضی» وضعیت ذخیره‌شده نیست؛ سرور آن را از تاریخ حساب می‌کند. */
   displayStatus: BlankQuotationStatus | "EXPIRED";
   customerName: string | null;
+  /** پرونده‌ی مشتری، اگر مدیر نام را به مشتریِ موجود وصل کرده باشد. */
+  customer?: { id: string; fullName: string } | null;
   note: string | null;
   validUntil: string | null;
   convertedInvoiceId: string | null;
@@ -2488,7 +2578,6 @@ export interface LabelSettings {
   mediaWidthMm: number | null;
 }
 
-
 export interface Worker {
   id: string;
   fullName: string;
@@ -2604,6 +2693,17 @@ export interface PurchaseLine {
   location?: { id: string; name: string; code: string; path?: string | null };
 }
 
+export interface PurchaseImportRow {
+  row: number;
+  sku: string;
+  barcode: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  product: { id: string; name: string; sku: string } | null;
+  status: "READY" | "REVIEW";
+}
+
 export interface Purchase {
   id: string;
   number: number;
@@ -2630,7 +2730,6 @@ export const PURCHASE_STATUS_LABELS: Record<string, string> = {
   CANCELLED: "باطل شده",
 };
 
-
 /** «نمایش در سایت» به‌صورت گروهی — همان شکلِ انتخابِ قیمت‌گذاری گروهی. */
 export interface BulkOnlineRequest {
   select: {
@@ -2656,11 +2755,7 @@ export interface BulkOnlineResult {
 // =====================================================
 
 export type OnlineOrderStatus =
-  | "PLACED"
-  | "PREPARING"
-  | "SHIPPED"
-  | "DELIVERED"
-  | "CANCELLED";
+  "PLACED" | "PREPARING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
 
 export type OnlinePayMethod = "ON_DELIVERY" | "TRANSFER" | "GATEWAY";
 

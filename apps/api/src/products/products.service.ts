@@ -203,6 +203,16 @@ export class ProductsService {
     };
   }
 
+  async nextIdentifiers() {
+    const sku = await nextSku(this.prisma);
+    const body = `200${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 10)}`;
+    const sum = body
+      .split("")
+      .reduce((total, digit, index) => total + Number(digit) * (index % 2 === 0 ? 1 : 3), 0);
+    const internalBarcode = `${body}${(10 - (sum % 10)) % 10}`;
+    return { sku, internalBarcode };
+  }
+
   async create(dto: any) {
     // کد کالا = کد حسابداری و همان چیزی که روی لیبل بارکد می‌شود.
     // اگر داده نشده باشد، عدد بعدیِ دنباله تخصیص می‌یابد تا هیچ کالایی
@@ -1193,6 +1203,44 @@ export class ProductsService {
    * چون کش‌شدنِ آن یعنی فروش روی یک عددِ ممکن‌است‌کهنه. این endpoint دقیقاً
    * لحظه‌ی pick صدا زده می‌شود تا آن عدد همیشه تازه باشد.
    */
+  /**
+   * موجودیِ زنده‌ی چند محصول — همان خروجیِ `productStock` برای هر کدام، ولی با
+   * یک کوئری. برای «اصلاحِ زنده‌ی» نتایجِ سرچِ لوکالِ POS: نتایج فوری از کش
+   * می‌آیند و عددِ موجودیِ تازه چندصد میلی‌ثانیه بعد جایگزین می‌شود.
+   */
+  async productStockBatch(
+    ids: string[],
+    opts?: { includePurchase?: boolean },
+  ) {
+    if (ids.length === 0) return [];
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: ids }, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        unit: true,
+        partNumber: true,
+        brand: { select: { name: true } },
+        vehicleModel: { select: { name: true } },
+        prices: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            salePrice: true,
+            ...(opts?.includePurchase
+              ? { purchasePrice: true, managerPrice: true }
+              : {}),
+          },
+        },
+      },
+    });
+    return this.attachStock(
+      products.map((p) => ({ ...p, salePrice: null })),
+      opts,
+    );
+  }
+
   async productStock(productId: string, opts?: { includePurchase?: boolean }) {
     const product = await this.prisma.product.findFirst({
       where: { id: productId, deletedAt: null },

@@ -6,6 +6,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   Max,
   MaxLength,
@@ -59,6 +60,11 @@ export class CreateBlankQuotationDto {
   @MaxLength(120)
   customerName?: string;
 
+  /** اتصال اختیاری به پرونده‌ی مشتریِ موجود. */
+  @IsOptional()
+  @IsUUID()
+  customerId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -96,6 +102,12 @@ export class SaveBlankPricesLineDto {
   finalPrice?: number;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(INT4_MAX)
+  quantity?: number;
+
+  @IsOptional()
   @IsString()
   productId?: string | null;
 
@@ -122,6 +134,11 @@ export class SaveBlankPricesDto {
   @MaxLength(120)
   customerName?: string;
 
+  /** اتصال/جداکردن نام از پرونده‌ی مشتری — null یعنی «وصل را بردار». */
+  @IsOptional()
+  @IsUUID()
+  customerId?: string | null;
+
   @IsOptional()
   @IsString()
   @MaxLength(500)
@@ -139,6 +156,10 @@ export class SaveBlankPricesDto {
  * `ConvertQuotationDto` ثبت شده است.
  */
 export class ConvertBlankQuotationDto {
+  @IsOptional()
+  @IsUUID()
+  customerId?: string;
+
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)

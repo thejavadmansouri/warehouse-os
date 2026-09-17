@@ -13,6 +13,7 @@ import { CorrectionsService } from '../../src/sales/corrections.service';
 import { CustomersService } from '../../src/sales/customers.service';
 import { CustomerCategoriesService } from '../../src/sales/customer-categories.service';
 import { InvoiceEffectsService } from '../../src/sales/invoice-effects.service';
+import { PostingService } from '../../src/vouchers/posting.service';
 import { buildSearchTokens } from '../../src/products/search-tokens';
 
 if (
@@ -40,18 +41,26 @@ export const prisma = new PrismaService();
 export const operation = new InventoryOperationService(prisma, fakeGateway);
 export const systemLocations = new SystemLocationsService();
 export const ledger = new LedgerService(prisma);
+/*
+ * سندِ دفتری (voucher) — ساختِ فاکتور/مرجوعی/اصلاحیه بدونِ آن ناقص است؛
+ * واقعی نگهش داشتیم چون append-only است و روی DB واقعیِ QA مشکل نمی‌سازد.
+ */
+export const posting = new PostingService(prisma);
+export const returns = new ReturnsService(
+  prisma,
+  operation,
+  ledger,
+  fakeGateway,
+  posting,
+);
 export const sales = new SalesService(
   prisma,
   operation,
   ledger,
   systemLocations,
   fakeGateway,
-);
-export const returns = new ReturnsService(
-  prisma,
-  operation,
-  ledger,
-  fakeGateway,
+  posting,
+  returns,
 );
 export const corrections = new CorrectionsService(
   prisma,
@@ -59,6 +68,7 @@ export const corrections = new CorrectionsService(
   systemLocations,
   ledger,
   fakeGateway,
+  posting,
 );
 export const categories = new CustomerCategoriesService(prisma);
 export const customers = new CustomersService(prisma, ledger, categories);

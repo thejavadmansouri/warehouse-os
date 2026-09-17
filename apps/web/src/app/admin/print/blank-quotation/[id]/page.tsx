@@ -19,10 +19,15 @@ export default function BlankQuotationPrintPage({
 }) {
   const { id } = use(params);
   const [size, setSize] = useState<PaperSize>("a5");
+  const [showLinkedName, setShowLinkedName] = useState(true);
 
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("size");
-    if (q === "a4" || q === "a5") setSize(q);
+    const params = new URLSearchParams(window.location.search);
+    const paper = params.get("size");
+    // URL query parameters are external input; sync them once on mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (paper === "a4" || paper === "a5") setSize(paper);
+    if (params.get("showLinkedName") === "0") setShowLinkedName(false);
   }, []);
 
   const blank = useQuery({
@@ -31,7 +36,8 @@ export default function BlankQuotationPrintPage({
   });
 
   if (blank.isLoading) return <p className="p-6 text-sm">در حال آماده‌سازی…</p>;
-  if (blank.isError || !blank.data) return <p className="p-6 text-sm">برگه پیدا نشد.</p>;
+  if (blank.isError || !blank.data)
+    return <p className="p-6 text-sm">برگه پیدا نشد.</p>;
 
   return (
     <>
@@ -51,6 +57,15 @@ export default function BlankQuotationPrintPage({
             {s.toUpperCase()}
           </button>
         ))}
+        <label className="ms-2 inline-flex cursor-pointer items-center gap-2 text-slate-700">
+          <input
+            type="checkbox"
+            checked={showLinkedName}
+            onChange={(e) => setShowLinkedName(e.target.checked)}
+            className="size-4 accent-blue-600"
+          />
+          نمایش نام کالای وصل‌شده
+        </label>
         <button
           type="button"
           onClick={() => window.print()}
@@ -60,7 +75,11 @@ export default function BlankQuotationPrintPage({
         </button>
       </div>
 
-      <BlankQuotationSheet quotation={blank.data} size={size} />
+      <BlankQuotationSheet
+        quotation={blank.data}
+        size={size}
+        showLinkedName={showLinkedName}
+      />
     </>
   );
 }

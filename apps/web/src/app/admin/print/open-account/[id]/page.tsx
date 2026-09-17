@@ -1,10 +1,13 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getOpenAccountSheet } from "@/lib/api";
-import { OpenAccountSheet, type PaperSize } from "../../_components/open-account-sheet";
+import {
+  OpenAccountSheet,
+  type PaperSize,
+} from "../../_components/open-account-sheet";
 
 /**
  * چاپ صورت‌حساب کلیِ یک حساب باز.
@@ -22,12 +25,12 @@ export default function OpenAccountPrintPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [size, setSize] = useState<PaperSize>("a4");
-
-  useEffect(() => {
+  // اندازه از کوئری‌استرینگ خوانده می‌شود — lazy init، نه effect (سبزِ lint).
+  const [size, setSize] = useState<PaperSize>(() => {
+    if (typeof window === "undefined") return "a4";
     const q = new URLSearchParams(window.location.search).get("size");
-    if (q === "a4" || q === "a5") setSize(q);
-  }, []);
+    return q === "a4" || q === "a5" ? q : "a4";
+  });
 
   const sheet = useQuery({
     queryKey: ["open-account-sheet", id],

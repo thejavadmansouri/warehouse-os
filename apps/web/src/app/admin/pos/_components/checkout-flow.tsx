@@ -92,6 +92,7 @@ export function CheckoutFlow({
   onSubmit,
   onOpenFullPayment,
   onClose,
+  requireCustomer = false,
 }: {
   open: boolean;
   total: number;
@@ -108,6 +109,8 @@ export function CheckoutFlow({
   /** فرار به فرم پرداخت کامل (ترکیبی/چک). */
   onOpenFullPayment: () => void;
   onClose: () => void;
+  /** بعض مسیرها مثل تبدیل برگه‌ی سفید، مشتری را اجباری می‌کنند. */
+  requireCustomer?: boolean;
 }) {
   const [step, setStep] = useState<Step>("customer");
   /* سه فیلدِ مشتری — همان شکلِ فرمِ «مشتری جدید» در صفحه‌ی مشتریان. */
@@ -203,7 +206,12 @@ export function CheckoutFlow({
   const creditNeedsCustomer = method === "CREDIT" && !customer;
   const change = method === "CASH" ? Math.max(0, received - total) : 0;
   const shortPaid = method !== "CREDIT" && received < total;
-  const canSubmit = !pending && !creditNeedsCustomer && !shortPaid && lineCount > 0;
+  const canSubmit =
+    !pending &&
+    !creditNeedsCustomer &&
+    !shortPaid &&
+    lineCount > 0 &&
+    (!requireCustomer || !!customer);
 
   /*
    * هشدار اعتبار — فقط وقتی واقعاً حساب‌باز انتخاب شده.

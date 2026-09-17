@@ -30,12 +30,14 @@ export function ProductSearchSelect({
   placeholder = "انتخاب محصول...",
   disabled,
   className,
+  id,
 }: {
   value?: string;
   onChange: (product: Product | null) => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
+  id?: string;
 }) {
   const [open, setOpen] = React.useState(false);
   const [q, setQ] = React.useState("");
@@ -48,14 +50,9 @@ export function ProductSearchSelect({
     staleTime: 30_000,
   });
 
-  // برای نگه‌داشتن نام محصول انتخاب‌شده وقتی نتیجه جستجو عوض می‌شود
+  // نام انتخاب‌شده فقط تا وقتی معتبر است که شناسه‌ی والد همان باشد.
   const [selected, setSelected] = React.useState<Product | null>(null);
-  React.useEffect(() => {
-    if (value && !selected) {
-      // وقتی فرم ریست می‌شود مقدار value خالی می‌شود
-    }
-    if (!value) setSelected(null);
-  }, [value, selected]);
+  const visibleSelected = selected?.id === value ? selected : null;
 
   const items = searchQ.data ?? [];
 
@@ -65,17 +62,18 @@ export function ProductSearchSelect({
         <Button
           type="button"
           variant="outline"
+          id={id}
           role="combobox"
           aria-expanded={open}
           disabled={disabled}
           className={cn("w-full justify-between font-normal", className)}
         >
-          {selected ? (
+          {visibleSelected ? (
             <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate">{selected.name}</span>
-              {selected.sku ? (
+              <span className="truncate">{visibleSelected.name}</span>
+              {visibleSelected.sku ? (
                 <span className="text-xs text-muted-foreground">
-                  ({selected.sku})
+                  ({visibleSelected.sku})
                 </span>
               ) : null}
             </span>
@@ -85,7 +83,10 @@ export function ProductSearchSelect({
           <ChevronsUpDown className="ms-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+      <PopoverContent
+        className="w-[var(--radix-popover-trigger-width)] p-0"
+        align="start"
+      >
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="جستجوی نام، SKU یا بارکد..."
@@ -123,7 +124,7 @@ export function ProductSearchSelect({
                     <Check
                       className={cn(
                         "h-4 w-4",
-                        value === p.id ? "opacity-100" : "opacity-0"
+                        value === p.id ? "opacity-100" : "opacity-0",
                       )}
                     />
                     <div className="flex min-w-0 flex-1 items-center justify-between gap-2">

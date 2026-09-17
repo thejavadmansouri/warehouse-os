@@ -9,6 +9,8 @@ import { discountToRial, type DiscountInput as DiscountValue } from "../_lib/dis
 import { DiscountField } from "./discount-input";
 
 export interface PosLine {
+  /** شناسه‌ی قلمِ پیش‌فاکتور سفید؛ فقط هنگام تبدیل همان سند استفاده می‌شود. */
+  blankLineId?: string;
   key: string;
   productId: string;
   productName: string;

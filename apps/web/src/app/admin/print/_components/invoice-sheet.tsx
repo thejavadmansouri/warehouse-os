@@ -4,9 +4,45 @@ import { PrintStyles, type PaperSize } from "./print-styles";
 import { ShopHeader, ShopPaymentInfo } from "./shop-header";
 
 import { amount, faDate, money, qty, toFa, PAYMENT_LABELS } from "@/lib/format";
-import type { Invoice } from "@/lib/types";
+import type { CustomerFullStatement, Invoice } from "@/lib/types";
 
 export type { PaperSize };
+
+/**
+ * گزینه‌های اضافه‌ی چاپ فاکتور — بخش «حساب مشتری».
+ *
+ * همه پیش‌فرض خاموش‌اند: برگه‌ی ساده همان فاکتورِ همیشگی است و این بخش فقط
+ * وقتی چاپ می‌شود که فروشنده تیکش را بزند.
+ */
+export interface InvoiceSheetExtrasProps {
+  /** مانده‌ی کل حساب مشتری از دفتر. */
+  showBalance?: boolean;
+  /** چند خریدِ آخر با تاریخ و مبلغ. */
+  showPurchaseHistory?: boolean;
+  /** برچسبِ خوش‌حسابی: خوش‌حساب / عادی / پرریسک. */
+  showTrust?: boolean;
+  /** سررسیدِ فاکتورهای باز (نسیه‌ی تسویه‌نشده). */
+  showDueInvoices?: boolean;
+  /** داده‌ی صورت‌حسابِ کاملِ مشتری — فقط وقتی یکی از گزینه‌ها روشن است. */
+  statement?: CustomerFullStatement | null;
+}
+
+/**
+ * برچسبِ ساده‌ی خوش‌حسابی — سه حالت، از سررسیدِ فاکتورهای باز.
+ * خوش‌حساب: هیچ فاکتورِ معوقی ندارد · عادی: معوق دارد ولی کم · پرریسک:
+ * بیشترین بدهی‌اش معوق است. ساده نگه داشته شد چون تصمیمش فروشنده است نه فرمول.
+ */
+function trustLabel(statement: CustomerFullStatement): string {
+  const overdue = statement.purchases.reduce(
+    (s, p) =>
+      s + (p.dueDate && new Date(p.dueDate) < new Date() ? p.dueAmount : 0),
+    0,
+  );
+  const due = statement.purchases.reduce((s, p) => s + p.dueAmount, 0);
+  if (due <= 0) return "خوش‌حساب";
+  if (overdue <= 0) return "خوش‌حساب";
+  return overdue >= due / 2 ? "پرریسک" : "عادی";
+}
 
 /**
  * برگه‌ی فاکتور برای چاپ روی A4 یا A5.
@@ -25,10 +61,15 @@ export type { PaperSize };
 export function InvoiceSheet({
   invoice: inv,
   size,
+  showBalance,
+  showPurchaseHistory,
+  showTrust,
+  showDueInvoices,
+  statement,
 }: {
   invoice: Invoice;
   size: PaperSize;
-}) {
+} & InvoiceSheetExtrasProps) {
   const refundTotal = inv.refundTotal ?? 0;
   const hasReturns = refundTotal > 0;
 
@@ -59,8 +100,10 @@ export function InvoiceSheet({
    * همیشه درست بخوانند، حتی اگر نشود گفت روی کدام قلم بوده.
    */
   const lineDiscounts =
-    netLines.reduce((s, l) => s + (l.netLineDiscount ?? l.lineDiscount ?? 0), 0) ||
-    (hasReturns ? 0 : Math.max(0, linesGross - inv.subtotal));
+    netLines.reduce(
+      (s, l) => s + (l.netLineDiscount ?? l.lineDiscount ?? 0),
+      0,
+    ) || (hasReturns ? 0 : Math.max(0, linesGross - inv.subtotal));
   const perLineKnown = !hasReturns && lineDiscounts > 0;
   /** مبلغِ نهایی: جمعِ فاکتور منهم همه‌ی وجهِ برگشتی — وضعیتِ واقعیِ حسابِ همین برگه. */
   const payable = Math.max(0, inv.total - refundTotal);
@@ -93,12 +136,19 @@ export function InvoiceSheet({
             </div>
             <div>
               <span className="muted">خریدار </span>
-              <span className="strong">{inv.customer?.fullName ?? "مشتری نقدی"}</span>
+              <span className="strong">
+                {inv.customer?.fullName ?? "مشتری نقدی"}
+              </span>
               {inv.customer?.phones?.[0]?.phone && (
-                <span className="num muted"> · {toFa(inv.customer.phones[0].phone)}</span>
+                <span className="num muted">
+                  {" "}
+                  · {toFa(inv.customer.phones[0].phone)}
+                </span>
               )}
             </div>
-            {inv.user && <div className="muted">فروشنده: {inv.user.fullName}</div>}
+            {inv.user && (
+              <div className="muted">فروشنده: {inv.user.fullName}</div>
+            )}
           </div>
         </header>
 
@@ -120,7 +170,10 @@ export function InvoiceSheet({
                 <td>
                   {l.product?.name ?? "—"}
                   {l.product?.sku && (
-                    <span className="muted sku"> · کد {toFa(l.product.sku)}</span>
+                    <span className="muted sku">
+                      {" "}
+                      · کد {toFa(l.product.sku)}
+                    </span>
                   )}
                   {/* توضیحِ دستیِ فروشنده — خطِ دوم، ریزتر. */}
                   {l.lineNote && <div className="line-note">{l.lineNote}</div>}
@@ -129,7 +182,9 @@ export function InvoiceSheet({
                   {qty(l.q)} {l.product?.unit ?? ""}
                 </td>
                 <td className="num">{money(l.unit)}</td>
-                {perLineKnown && <td className="num">{l.disc ? money(l.disc) : "—"}</td>}
+                {perLineKnown && (
+                  <td className="num">{l.disc ? money(l.disc) : "—"}</td>
+                )}
                 <td className="num strong">{money(l.q * l.unit - l.disc)}</td>
               </tr>
             ))}
@@ -189,13 +244,96 @@ export function InvoiceSheet({
           چهار بلوکِ پشتِ‌سرِ‌هم. روی A5 همین چهار بلوک بود که برگه را به
           صفحه‌ی دوم می‌برد، حتی وقتی فقط شش قلم داشت.
         */}
+        {/*
+          بخشِ حسابِ مشتری — فقط وقتی یکی از گزینه‌های تیک‌دار روشن باشد و
+          مشتریِ فاکتور پرونده داشته باشد رندر می‌شود.
+        */}
+        {statement &&
+          inv.customer &&
+          (showBalance ||
+            showPurchaseHistory ||
+            showTrust ||
+            showDueInvoices) && (
+            <section
+              className="party"
+              style={{
+                borderTop: "1px solid #ccc",
+                marginTop: 8,
+                paddingTop: 6,
+              }}
+            >
+              <div>
+                <span className="muted">خلاصه حساب مشتری</span>
+              </div>
+              <div />
+              {showTrust && (
+                <div>
+                  <span className="muted">سابقه: </span>
+                  <b>{trustLabel(statement)}</b>
+                </div>
+              )}
+              {showBalance && (
+                <div>
+                  <span className="muted">مانده کل حساب: </span>
+                  <b className="num">
+                    {statement.totals.closingBalance >= 0
+                      ? `${money(statement.totals.closingBalance)} بدهکار`
+                      : `${money(-statement.totals.closingBalance)} بستانکار`}
+                  </b>
+                </div>
+              )}
+            </section>
+          )}
+        {statement &&
+          inv.customer &&
+          (showPurchaseHistory || showDueInvoices) && (
+            <table className="items" style={{ marginTop: 6 }}>
+              <thead>
+                <tr>
+                  <th>تاریخ</th>
+                  <th>شماره فاکتور</th>
+                  <th className="w-price">مبلغ کل</th>
+                  {showDueInvoices && <th className="w-price">مانده</th>}
+                  {showDueInvoices && <th className="w-price">سررسید</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {(showDueInvoices
+                  ? statement.purchases.filter(
+                      (p) => p.status === "OPEN" || p.dueAmount > 0,
+                    )
+                  : statement.purchases
+                )
+                  .slice(-6)
+                  .reverse()
+                  .map((p) => (
+                    <tr key={p.id}>
+                      <td className="num">{faDate(p.createdAt)}</td>
+                      <td className="num">{toFa(p.number)}</td>
+                      <td className="num">{money(p.netTotal)}</td>
+                      {showDueInvoices && (
+                        <td className="num">
+                          {p.dueAmount > 0 ? money(p.dueAmount) : "—"}
+                        </td>
+                      )}
+                      {showDueInvoices && (
+                        <td className="num">
+                          {p.dueDate ? faDate(p.dueDate) : "—"}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          )}
+
         <footer className="foot">
           <div className="foot-col">
             {(inv.payments ?? []).length > 0 && (
               <div className="muted">
                 پرداخت:{" "}
-                {inv.payments!
-                  .map((p) =>
+                {inv
+                  .payments!.map((p) =>
                     // مبلغِ منفی = ردیفِ «اصلاح نحوهٔ پرداخت» که سهمِ قبلی را
                     // برمی‌دارد؛ روی کاغذ با کلمهٔ «برداشت» خوانده می‌شود تا
                     // جهتِ پول اشتباه فهمیده نشود.

@@ -3,13 +3,28 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ApiException } from "@/lib/api-error-messages";
 import {
-  Search, FileClock, PencilLine, Undo2, X, Volume2, VolumeX,
+  Search,
+  FileClock,
+  PencilLine,
+  Undo2,
+  X,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
-import { isScanSoundMuted, playScanSound, toggleScanSoundMuted } from "./_lib/scan-sound";
+import {
+  isScanSoundMuted,
+  playScanSound,
+  toggleScanSoundMuted,
+} from "./_lib/scan-sound";
 import { useRealtimeStore } from "@/lib/realtime-store";
 import { useAuthStore } from "@/lib/auth-store";
 
@@ -27,11 +42,15 @@ import {
   setProductPrice,
   getAdjustableLines,
   getCustomer,
+  getBlankQuotation,
+  convertBlankQuotation,
+  saveBlankPrices,
   getInvoice,
   getInvoiceSettlement,
   getReturnableLines,
   getInvoices,
   getPosStock,
+  getPosStockBatch,
   getQuotation,
   getWarehouses,
   getWorkTasks,
@@ -59,13 +78,20 @@ import { LocationPicker } from "./_components/location-picker";
 import { CartTabs } from "./_components/cart-tabs";
 import { CheckoutFlow } from "./_components/checkout-flow";
 import { CurrentCustomerChip } from "./_components/current-customer-chip";
-import { InlineResults, type SearchResultRow } from "./_components/inline-results";
+import {
+  InlineResults,
+  type SearchResultRow,
+} from "./_components/inline-results";
 import { OpenAccounts } from "./_components/open-accounts";
 import { CustomerInvoicesPanel } from "./_components/customer-invoices";
 import { OpenQuotations } from "./_components/open-quotations";
 import { OpenInvoices } from "./_components/open-invoices";
+import { BlankQuotationsPanel } from "../quotations/_components/blank-quotations";
 import { ShortcutsHelp, type ShortcutGroup } from "@/components/shortcuts-help";
-import { DocumentShell, type CommandMap } from "@/components/document/document-shell";
+import {
+  DocumentShell,
+  type CommandMap,
+} from "@/components/document/document-shell";
 import { DiscountField } from "./_components/discount-input";
 import {
   LineItems,
@@ -90,7 +116,11 @@ import {
   type DiscountInput as DiscountValue,
 } from "./_lib/discount";
 import { QUOTE_DOC, SALE_DOC, type Cart } from "./_lib/carts";
-import { invoiceToReturnLines, returnDraft, returningStateOf } from "./_lib/invoice-return";
+import {
+  invoiceToReturnLines,
+  returnDraft,
+  returningStateOf,
+} from "./_lib/invoice-return";
 import { NetSwapDialog } from "./_components/net-sale-dialog";
 import {
   adjustDraft,
@@ -151,8 +181,19 @@ export default function PosPage() {
    * سراسری نشود.
    */
   const {
-    carts, cart, activeId, setActiveId, addCart, closeCart, endLockedDoc, runInNewTab,
-    patch: patchCart, resetCurrent, ensureIdem, invalidateIdem, canAdd,
+    carts,
+    cart,
+    activeId,
+    setActiveId,
+    addCart,
+    closeCart,
+    endLockedDoc,
+    runInNewTab,
+    patch: patchCart,
+    resetCurrent,
+    ensureIdem,
+    invalidateIdem,
+    canAdd,
   } = useCartsContext();
 
   const qc = useQueryClient();
@@ -182,7 +223,7 @@ export default function PosPage() {
   const setLines = useCallback(
     (u: Line[] | ((prev: Line[]) => Line[])) =>
       patchCart((c) => ({ lines: typeof u === "function" ? u(c.lines) : u })),
-    [patchCart]
+    [patchCart],
   );
   const setCustomer = useCallback(
     // جدا کردنِ مشتری، قفل را هم باز می‌کند — قفلِ بی‌مشتری بی‌معناست.
@@ -191,29 +232,32 @@ export default function PosPage() {
       patchCart(
         c
           ? { customer: c }
-          : { customer: null, customerLocked: false, openAccountId: null }
+          : { customer: null, customerLocked: false, openAccountId: null },
       ),
-    [patchCart]
+    [patchCart],
   );
   const toggleCustomerLock = useCallback(
     () => patchCart((c) => ({ customerLocked: !c.customerLocked })),
-    [patchCart]
+    [patchCart],
   );
-  const setNote = useCallback((n: string) => patchCart({ note: n }), [patchCart]);
+  const setNote = useCallback(
+    (n: string) => patchCart({ note: n }),
+    [patchCart],
+  );
   const setInvoiceDiscountInput = useCallback(
     (d: DiscountValue) => patchCart({ discount: d }),
-    [patchCart]
+    [patchCart],
   );
   const setActiveRow = useCallback(
     (u: number | ((prev: number) => number)) =>
       patchCart((c) => ({
         activeRow: typeof u === "function" ? u(c.activeRow) : u,
       })),
-    [patchCart]
+    [patchCart],
   );
   const setErrorLine = useCallback(
     (n: number | null) => patchCart({ errorLine: n }),
-    [patchCart]
+    [patchCart],
   );
 
   // انبار بین همه‌ی تب‌ها مشترک است — فروشنده پشت یک پیشخوان نشسته.
@@ -245,7 +289,9 @@ export default function PosPage() {
    * null یعنی بسته. «pick» از F4 می‌آید (انتخاب مشتری برای سبد)، «ledger» از
    * کلیک روی نامِ مشتری (دیدن فاکتورهایش).
    */
-  const [customerPanel, setCustomerPanel] = useState<"pick" | "ledger" | null>(null);
+  const [customerPanel, setCustomerPanel] = useState<"pick" | "ledger" | null>(
+    null,
+  );
   const showCustomer = customerPanel !== null;
   const setShowCustomer = useCallback(
     (v: boolean) => setCustomerPanel(v ? "pick" : null),
@@ -255,6 +301,8 @@ export default function PosPage() {
   const [showHelp, setShowHelp] = useState(false);
   /** فهرست پیش‌فاکتورهای باز (Alt+Q) — بارگذاری یکی از آن‌ها در همین سبد. */
   const [showQuotes, setShowQuotes] = useState(false);
+  /** فهرست و workspace پیش‌فاکتورهای سفید — داخل صندوق و با Alt+B. */
+  const [showBlankQuotes, setShowBlankQuotes] = useState(false);
   /** فهرست فاکتورها (Ctrl+F) — جایگزینِ پنجره‌ی «فاکتورهای امروز». */
   const [showInvoices, setShowInvoices] = useState(false);
   /** تعویض (سبدِ خالص) — برگشت از فاکتورهایِ قبلیِ مشتریِ همین تب + فروشِ نو. */
@@ -268,9 +316,10 @@ export default function PosPage() {
    * تقسیمِ پرداخت را بازنویسی می‌کند («همه‌اش کارت زده شد، در حالی که ۳۰ نقد
    * بود و ۷۰ نسیه»).
    */
-  const [fixPayment, setFixPayment] = useState<
-    { invoiceId: string; customer: Customer | null } | null
-  >(null);
+  const [fixPayment, setFixPayment] = useState<{
+    invoiceId: string;
+    customer: Customer | null;
+  } | null>(null);
   /** بازگشت به همین پنل بعد از انتخابِ مشتری از پنلِ صندوق. */
   const pendingFixPick = useRef<{ invoiceId: string } | null>(null);
   /*
@@ -284,7 +333,8 @@ export default function PosPage() {
    * جای این بلوک بعد از `fixPayment` است، نه قبلش: خودِ شناسهٔ فاکتور از
    * `adjusting ?? fixPayment` می‌آید.
    */
-  const settlementInvoiceId = adjusting?.invoiceId ?? fixPayment?.invoiceId ?? null;
+  const settlementInvoiceId =
+    adjusting?.invoiceId ?? fixPayment?.invoiceId ?? null;
   const settleQ = useQuery({
     queryKey: ["invoice-settlement", settlementInvoiceId],
     queryFn: () => getInvoiceSettlement(settlementInvoiceId!),
@@ -303,15 +353,13 @@ export default function PosPage() {
    * پیشخوان ایستاده. بدون این، فروشنده باید سند را ثبت کند، برود پرونده‌ی
    * مشتری، دریافت وجه بزند و مبلغ را دستی پیدا کند.
    */
-  const [settle, setSettle] = useState<
-    {
-      amount: number
-      /** null = فروشِ نقدیِ گذری؛ جایی برای ثبتِ پول نیست. */
-      customerId: string | null
-      customerName: string
-      invoiceNumber: number
-    } | null
-  >(null);
+  const [settle, setSettle] = useState<{
+    amount: number;
+    /** null = فروشِ نقدیِ گذری؛ جایی برای ثبتِ پول نیست. */
+    customerId: string | null;
+    customerName: string;
+    invoiceNumber: number;
+  } | null>(null);
 
   const [refundMethod, setRefundMethod] = useState<PaymentMethod | "">("");
   const [returnReason, setReturnReason] = useState("");
@@ -402,7 +450,10 @@ export default function PosPage() {
    * پس کلید باطل می‌شود.
    */
 
-  const warehouses = useQuery({ queryKey: ["warehouses"], queryFn: getWarehouses });
+  const warehouses = useQuery({
+    queryKey: ["warehouses"],
+    queryFn: getWarehouses,
+  });
 
   /*
    * کارهایِ ارسال‌شده به کارگر + پیشرفت زنده.
@@ -434,7 +485,6 @@ export default function PosPage() {
    */
   const noWarehouse = !warehouses.isLoading && !warehouses.data?.length;
 
-
   /*
    * پرونده‌ی کامل مشتریِ انتخاب‌شده.
    *
@@ -465,7 +515,6 @@ export default function PosPage() {
       .catch(() => toast.error("مشتری پیدا نشد"));
   }, [searchParams, setCustomer, patchCart]);
 
-
   /*
    * بارگذاری پیش‌فاکتور در سبد (?quotation=...).
    *
@@ -475,7 +524,8 @@ export default function PosPage() {
    * اسکن کند.
    */
   const seededQuotation = useRef(false);
-
+  const seededBlankQuotation = useRef(false);
+  const [blankQuotationId, setBlankQuotationId] = useState<string | null>(null);
 
   const customerDetail = useQuery({
     queryKey: ["customer", customer?.id],
@@ -492,7 +542,11 @@ export default function PosPage() {
   const customerTodayInvoices = useQuery({
     queryKey: ["customer-today-count", customer?.id],
     queryFn: () =>
-      getInvoices({ customerId: customer!.id, from: startOfToday(), pageSize: 5 }),
+      getInvoices({
+        customerId: customer!.id,
+        from: startOfToday(),
+        pageSize: 5,
+      }),
     enabled: !!customer?.id,
     staleTime: 30_000,
   });
@@ -532,7 +586,7 @@ export default function PosPage() {
 
   const localHits = useMemo(
     () => (useLocalSearch && liveEnabled ? posCatalog.search(liveQuery) : []),
-    [useLocalSearch, liveEnabled, posCatalog, liveQuery]
+    [useLocalSearch, liveEnabled, posCatalog, liveQuery],
   );
 
   const queryTokens = useMemo(() => tokenizeQuery(liveQuery), [liveQuery]);
@@ -561,6 +615,50 @@ export default function PosPage() {
   }, [liveEnabled, useLocalSearch, localHits, liveResults.data, queryTokens]);
 
   /*
+   * اصلاحِ زنده‌ی موجودی نتایجِ سرچِ لوکال.
+   *
+   * کاتالوگِ لوکال فوری جواب می‌دهد ولی عمداً موجودی ندارد؛ این کوئریِ کوچک
+   * (فقط نتایجِ روی صفحه، حداکثر ۳۰) چندصد میلی‌ثانیه بعد می‌آید و همان
+   * ردیف‌های `unknown` را به `known` تبدیل می‌کند — با عددِ تازه از سرور،
+   * بدونِ کش. فروش همچنان در لحظه‌ی pick یک fetch تازه می‌گیرد (`onPickRow`).
+   */
+  const visibleIds = useMemo(
+    () =>
+      liveList
+        .slice(0, 30)
+        .map((r) => r.id)
+        .join(","),
+    [liveList],
+  );
+  const stockBatch = useQuery({
+    queryKey: ["pos-stock-batch", visibleIds, canManagePrice],
+    queryFn: () => getPosStockBatch(visibleIds.split(",").filter(Boolean)),
+    enabled: !!visibleIds,
+    staleTime: 0,
+    gcTime: 0,
+    placeholderData: keepPreviousData,
+  });
+  const stockById = useMemo(() => {
+    const m = new Map<string, LocateResult>();
+    for (const r of stockBatch.data ?? []) m.set(r.id, r);
+    return m;
+  }, [stockBatch.data]);
+
+  const liveListWithStock = useMemo((): SearchResultRow[] => {
+    if (stockById.size === 0) return liveList;
+    return liveList.map((row) => {
+      const fresh = stockById.get(row.id);
+      if (row.kind !== "unknown" || !fresh) return row;
+      return {
+        kind: "known" as const,
+        id: row.id,
+        nameSegments: row.nameSegments,
+        result: fresh,
+      };
+    });
+  }, [liveList, stockById]);
+
+  /*
    * با عوض‌شدنِ متن، انتخاب باید از نو شروع شود — تطبیقِ state در رندر، نه
    * effect (اگر effect بود، رندرِ اولِ متنِ تازه هنوز انتخابِ کهنه را می‌دید).
    */
@@ -568,6 +666,9 @@ export default function PosPage() {
   if (liveQuery !== prevLiveQuery) {
     setPrevLiveQuery(liveQuery);
     setLiveHighlight(-1);
+    // تایپِ ادامه‌ی متن یعنی «سرچ می‌خواهم» — بعد از Esc هم لیست دوباره زنده
+    // می‌شود؛ «سرچ همیشه زنده» است و Enter برای دیدنِ نتیجه لازم نیست.
+    setLiveDismissed(false);
   }
 
   /** بستن لیست بعد از افزودن — وگرنه روی سبدِ تازه باز می‌ماند. */
@@ -617,17 +718,17 @@ export default function PosPage() {
   const cartTotal = useCallback(
     (c: Cart) =>
       c.lines.filter((l) => l.included).reduce((s, l) => s + lineNet(l), 0),
-    []
+    [],
   );
 
   const grossSubtotal = useMemo(
     () => activeLines.reduce((s, l) => s + lineGross(l), 0),
-    [activeLines]
+    [activeLines],
   );
   /** جمع تخفیف‌های ردیفی — فقط برای نمایش. */
   const linesDiscountTotal = useMemo(
     () => activeLines.reduce((s, l) => s + lineDiscount(l), 0),
-    [activeLines]
+    [activeLines],
   );
   /** همان چیزی که سرور subtotal صدایش می‌کند: جمع ردیف‌ها **پس از** تخفیف ردیفی. */
   const subtotal = grossSubtotal - linesDiscountTotal;
@@ -645,7 +746,7 @@ export default function PosPage() {
    */
   const zeroPriceCount = useMemo(
     () => activeLines.filter((l) => l.unitPrice <= 0).length,
-    [activeLines]
+    [activeLines],
   );
   const canCheckout =
     activeLines.length > 0 && zeroPriceCount === 0 && !noWarehouse;
@@ -669,7 +770,7 @@ export default function PosPage() {
         const prev = c.lines;
         // یک کالا از یک مکان نباید دو ردیف جدا بگیرد — سرور هم ردش می‌کند.
         const i = prev.findIndex(
-          (l) => l.productId === p.id && l.locationId === s.locationId
+          (l) => l.productId === p.id && l.locationId === s.locationId,
         );
 
         if (i >= 0) {
@@ -682,7 +783,9 @@ export default function PosPage() {
             ? prevQty + 1
             : Math.min(prevQty + 1, s.quantity);
           if (!unregistered && q === prevQty) {
-            toast.warning(`بیش از موجودی این مکان نمی‌شود (${qty(s.quantity)})`);
+            toast.warning(
+              `بیش از موجودی این مکان نمی‌شود (${qty(s.quantity)})`,
+            );
           }
           next[i] = { ...next[i], quantity: q };
           setActiveRow(i);
@@ -718,7 +821,7 @@ export default function PosPage() {
       playScanSound("ok");
       focusScan();
     },
-    [focusScan, patchCart]
+    [focusScan, patchCart],
   );
 
   /** بارکد → کالا + مکان‌ها در یک درخواست. */
@@ -755,7 +858,11 @@ export default function PosPage() {
         // کالا پیدا شد ولی چند مکان دارد — پیکرِ مکان می‌آید؛ خودش بیپِ
         // موفق را می‌زند بعد از انتخاب. همین‌جا فقط اعلامِ «پیدا شد» کافی است.
         playScanSound("ok");
-        setPickerStock({ name: res.product.name, product: res.product, stock: res.stock });
+        setPickerStock({
+          name: res.product.name,
+          product: res.product,
+          stock: res.stock,
+        });
       }
     },
     onError: (_e, barcode) => {
@@ -801,7 +908,7 @@ export default function PosPage() {
             // موجودی نامعلوم است، نه بی‌نهایت. عددِ ساختگی همان چیزی بود که
             // «موجودی ۹٬۰۰۷٬۱۹۹٬۲۵۴٬۷۴۰٬۹۹۱» را روی صفحه می‌آورد.
             quantity: 0,
-          }
+          },
         );
         toast.warning(`«${r.name}» در سیستم ثبت نشده — بدون قفسه ثبت می‌شود`);
         return;
@@ -824,7 +931,7 @@ export default function PosPage() {
       if (stock.length === 1) addLine(product, stock[0]);
       else setPickerStock({ name: r.name, product, stock });
     },
-    [addLine, focusScan]
+    [addLine, focusScan],
   );
 
   /**
@@ -849,12 +956,14 @@ export default function PosPage() {
         addFromLocate(fresh);
         closeLive();
       } catch (e) {
-        toast.error(e instanceof ApiException ? e.message : "دریافت موجودی ناموفق بود");
+        toast.error(
+          e instanceof ApiException ? e.message : "دریافت موجودی ناموفق بود",
+        );
       } finally {
         setPickingId(null);
       }
     },
-    [addFromLocate, closeLive, pickingId]
+    [addFromLocate, closeLive, pickingId],
   );
 
   // ---------- ویرایش ردیف ----------
@@ -949,7 +1058,10 @@ export default function PosPage() {
           patchLine(i, { quantity: Math.min(Math.max(0, n), l.available) });
           return;
         }
-        const { returnQty, overflow } = offQtyToReturnQty(l.outstanding ?? 0, n);
+        const { returnQty, overflow } = offQtyToReturnQty(
+          l.outstanding ?? 0,
+          n,
+        );
         if (overflow > 0) {
           handleQtyOverflow(i, overflow);
           return;
@@ -974,7 +1086,7 @@ export default function PosPage() {
     if (adjusting && lines[i]?.sold !== undefined) {
       if (memory) {
         toast.error(
-          "قلمِ فاکتور حذف نمی‌شود — برای برگشتِ کامل، مقدارِ برگشتی را برابرِ مانده کنید"
+          "قلمِ فاکتور حذف نمی‌شود — برای برگشتِ کامل، مقدارِ برگشتی را برابرِ مانده کنید",
         );
         return;
       }
@@ -1002,63 +1114,114 @@ export default function PosPage() {
   const loadQuotation = useCallback(
     (id: string) =>
       getQuotation(id)
-      .then(async (q) => {
-        const rows = (q.lines ?? []).map((l) => ({
-          key: uuid(),
-          productId: l.product.id,
-          productName: l.product.name,
-          unit: l.product.unit ?? "عدد",
-          locationId: l.locationId ?? "",
-          locationPath: "",
-          available: 0,
-          quantity: l.quantity,
-          unitPrice: l.unitPrice,
-          // تخفیف ردیف ریالی است — همین شکل را سرور می‌گیرد.
-          discount: { value: l.discount, mode: "amount" } as DiscountValue,
-          included: true,
-        }));
-        // مشتری پیش از ساختنِ محموله می‌آید تا با همان یک payload روی تبِ درست بنشیند.
-        const customer = q.customerId
-          ? await getCustomer(q.customerId).catch(() => {
-              toast.error("مشتری پیش‌فاکتور پیدا نشد");
-              return null;
-            })
-          : null;
+        .then(async (q) => {
+          const rows = (q.lines ?? []).map((l) => ({
+            key: uuid(),
+            productId: l.product.id,
+            productName: l.product.name,
+            unit: l.product.unit ?? "عدد",
+            locationId: l.locationId ?? "",
+            locationPath: "",
+            available: 0,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            // تخفیف ردیف ریالی است — همین شکل را سرور می‌گیرد.
+            discount: { value: l.discount, mode: "amount" } as DiscountValue,
+            included: true,
+          }));
+          // مشتری پیش از ساختنِ محموله می‌آید تا با همان یک payload روی تبِ درست بنشیند.
+          const customer = q.customerId
+            ? await getCustomer(q.customerId).catch(() => {
+                toast.error("مشتری پیش‌فاکتور پیدا نشد");
+                return null;
+              })
+            : null;
 
-        const payload: Partial<Cart> = {
-          lines: rows,
-          customer,
-          customerLocked: false,
-          openAccountId: null,
-          discount: NO_DISCOUNT,
-          note: "",
-          activeRow: 0,
-          errorLine: null,
-          memory: false,
-          lastAdd: null,
-          doc: SALE_DOC,
-        };
-        invalidateIdem();
+          const payload: Partial<Cart> = {
+            lines: rows,
+            customer,
+            customerLocked: false,
+            openAccountId: null,
+            discount: NO_DISCOUNT,
+            note: "",
+            activeRow: 0,
+            errorLine: null,
+            memory: false,
+            lastAdd: null,
+            doc: SALE_DOC,
+          };
+          invalidateIdem();
 
-        // همان قراردادِ بقیهٔ مسیرها: تبِ خالیِ واقعی همان‌جا، وگرنه تبِ تازه.
-        if (!cart.lines.length && !cart.customer && !cart.openAccountId && cart.doc.type === "sale") {
-          patchCart(payload);
-        } else if (canAdd) {
-          pendingEdit.current = payload;
-          addCart();
-        } else {
-          toast.error("همه‌ی تب‌ها پُرند — یکی را ببندید");
-          return;
-        }
+          // همان قراردادِ بقیهٔ مسیرها: تبِ خالیِ واقعی همان‌جا، وگرنه تبِ تازه.
+          if (
+            !cart.lines.length &&
+            !cart.customer &&
+            !cart.openAccountId &&
+            cart.doc.type === "sale"
+          ) {
+            patchCart(payload);
+          } else if (canAdd) {
+            pendingEdit.current = payload;
+            addCart();
+          } else {
+            toast.error("همه‌ی تب‌ها پُرند — یکی را ببندید");
+            return;
+          }
 
-        toast.success(
-          `پیش‌فاکتور ${toFa(q.number)} در صندوق بارگذاری شد — قیمت‌ها را بررسی کنید`,
-        );
-        setShowQuotes(false);
-        focusScan();
-      })
-      .catch(() => toast.error("بارگذاری پیش‌فاکتور ناموفق بود")),
+          toast.success(
+            `پیش‌فاکتور ${toFa(q.number)} در صندوق بارگذاری شد — قیمت‌ها را بررسی کنید`,
+          );
+          setShowQuotes(false);
+          focusScan();
+        })
+        .catch(() => toast.error("بارگذاری پیش‌فاکتور ناموفق بود")),
     [cart, patchCart, addCart, canAdd, invalidateIdem, focusScan],
+  );
+
+  const loadBlankQuotation = useCallback(
+    (id: string) =>
+      getBlankQuotation(id)
+        .then((q) => {
+          if (q.unpricedCount > 0 || q.unlinkedCount > 0 || !q.lines.length) {
+            toast.error("این پیش‌فاکتور سفید هنوز کامل نیست");
+            return;
+          }
+          const rows = q.lines.map((l) => ({
+            blankLineId: l.id,
+            key: uuid(),
+            productId: l.product!.id,
+            productName: l.product!.name,
+            unit: l.product!.unit ?? "عدد",
+            locationId: l.locationId ?? "",
+            locationPath: l.locationPath ?? "",
+            available: 0,
+            quantity: l.quantity,
+            unitPrice: l.finalPrice ?? 0,
+            discount: NO_DISCOUNT,
+            included: true,
+          }));
+          patchCart({
+            lines: rows,
+            customer: null,
+            customerLocked: false,
+            openAccountId: null,
+            discount: NO_DISCOUNT,
+            note: q.note ?? "",
+            activeRow: 0,
+            errorLine: null,
+            memory: false,
+            lastAdd: null,
+            doc: SALE_DOC,
+          });
+          setBlankQuotationId(q.id);
+          invalidateIdem();
+          toast.success(
+            `پیش‌فاکتور سفید ${toFa(q.number)} آماده‌ی انتخاب مشتری و پرداخت است`,
+          );
+          focusScan();
+        })
+        .catch(() => toast.error("بارگذاری پیش‌فاکتور سفید ناموفق بود")),
+    [patchCart, invalidateIdem, focusScan],
   );
 
   useEffect(() => {
@@ -1067,6 +1230,13 @@ export default function PosPage() {
     seededQuotation.current = true;
     void loadQuotation(id);
   }, [searchParams, loadQuotation]);
+
+  useEffect(() => {
+    const id = searchParams.get("blankQuotation");
+    if (!id || seededBlankQuotation.current) return;
+    seededBlankQuotation.current = true;
+    void loadBlankQuotation(id);
+  }, [searchParams, loadBlankQuotation]);
 
   /**
    * «کپیِ خرید قبلی» — اقلامِ یک فاکتور را در سبدِ فروشِ تازه بنشان.
@@ -1104,7 +1274,10 @@ export default function PosPage() {
           available: 0,
           quantity: l.netQuantity ?? l.quantity,
           unitPrice: l.currentUnitPrice ?? l.unitPrice ?? 0,
-          discount: { value: l.netLineDiscount ?? l.lineDiscount ?? 0, mode: "amount" } as DiscountValue,
+          discount: {
+            value: l.netLineDiscount ?? l.lineDiscount ?? 0,
+            mode: "amount",
+          } as DiscountValue,
           included: true,
         }));
       if (!rows.length) {
@@ -1133,7 +1306,12 @@ export default function PosPage() {
        * مشتریِ انتخاب‌شده روی سبدِ خالی هم «مشغول» است — فاکتورِ مشتریِ دیگر
        * نباید مشتریِ صندوق را عوض کند؛ تبِ تازه باز می‌شود.
        */
-      if (!cart.lines.length && !cart.customer && !cart.openAccountId && cart.doc.type === "sale") {
+      if (
+        !cart.lines.length &&
+        !cart.customer &&
+        !cart.openAccountId &&
+        cart.doc.type === "sale"
+      ) {
         patchCart(payload);
         focusScan();
       } else if (canAdd) {
@@ -1190,7 +1368,9 @@ export default function PosPage() {
       const data = await getReturnableLines(v.invoiceId);
       const customer =
         v.customer ??
-        (data.invoice.customer ? await getCustomer(data.invoice.customer.id) : null);
+        (data.invoice.customer
+          ? await getCustomer(data.invoice.customer.id)
+          : null);
       return { data, customer };
     },
     onSuccess: ({ data, customer: c }) => {
@@ -1228,7 +1408,12 @@ export default function PosPage() {
        * مشتریِ انتخاب‌شده روی سبدِ خالی هم «مشغول» است — فاکتورِ مشتریِ دیگر
        * نباید مشتریِ صندوق را عوض کند؛ تبِ تازه باز می‌شود.
        */
-      if (!cart.lines.length && !cart.customer && !cart.openAccountId && cart.doc.type === "sale") {
+      if (
+        !cart.lines.length &&
+        !cart.customer &&
+        !cart.openAccountId &&
+        cart.doc.type === "sale"
+      ) {
         patchCart(payload);
         focusScan();
         return;
@@ -1264,7 +1449,9 @@ export default function PosPage() {
       const data = await getAdjustableLines(v.invoiceId);
       const customer =
         v.customer ??
-        (data.invoice.customer ? await getCustomer(data.invoice.customer.id) : null);
+        (data.invoice.customer
+          ? await getCustomer(data.invoice.customer.id)
+          : null);
       return { data, customer };
     },
     onSuccess: ({ data, customer: c }, v) => {
@@ -1302,7 +1489,12 @@ export default function PosPage() {
        * مشتریِ انتخاب‌شده روی سبدِ خالی هم «مشغول» است — فاکتورِ مشتریِ دیگر
        * نباید مشتریِ صندوق را عوض کند؛ تبِ تازه باز می‌شود.
        */
-      if (!cart.lines.length && !cart.customer && !cart.openAccountId && cart.doc.type === "sale") {
+      if (
+        !cart.lines.length &&
+        !cart.customer &&
+        !cart.openAccountId &&
+        cart.doc.type === "sale"
+      ) {
         patchCart(payload);
         focusScan();
         return;
@@ -1324,7 +1516,8 @@ export default function PosPage() {
       const doc = returning!;
       const draft = returnDraft(doc, lines);
 
-      if (!draft.lines.length) throw new Error("هیچ قلمی برای برگشت انتخاب نشده");
+      if (!draft.lines.length)
+        throw new Error("هیچ قلمی برای برگشت انتخاب نشده");
       if (!refundMethod) throw new Error("روش برگشت وجه را انتخاب کنید");
 
       return createReturn({
@@ -1337,7 +1530,9 @@ export default function PosPage() {
       });
     },
     onSuccess: (r) => {
-      toast.success(`مرجوعی ${toFa(r.number)} ثبت شد — ${rial(r.refundAmount)}`);
+      toast.success(
+        `مرجوعی ${toFa(r.number)} ثبت شد — ${rial(r.refundAmount)}`,
+      );
       const cid = customer?.id;
       endLockedDoc();
       setRefundMethod("");
@@ -1368,7 +1563,11 @@ export default function PosPage() {
       const doc = adjusting!;
       const draft = adjustDraft(doc, lines);
 
-      if (!draft.returns.length && !draft.changes.length && !draft.additions.length) {
+      if (
+        !draft.returns.length &&
+        !draft.changes.length &&
+        !draft.additions.length
+      ) {
         // شاید فقط توضیح‌ها عوض شده باشند — سندِ مالی نمی‌سازند و دلیل هم نمی‌خواهند.
         if (draft.notes.length) {
           await updateInvoiceLineNotes(doc.invoiceId, draft.notes);
@@ -1403,7 +1602,7 @@ export default function PosPage() {
             ? `عملیات فاکتور ${toFa(r.invoice.number)} ثبت شد`
             : `عملیات فاکتور ${toFa(r.invoice.number)} ثبت شد — ${rial(Math.abs(diff))} ${
                 diff > 0 ? "دریافت شد" : "پرداخت شد"
-              }`
+              }`,
         );
       }
       const cid = customer?.id;
@@ -1441,7 +1640,11 @@ export default function PosPage() {
    * می‌شوند تا سرچ و فاکتور بدون ریلود، عددِ تازه را نشان دهند.
    */
   const savePrice = useMutation({
-    mutationFn: (v: { productId: string; field: "sale" | "manager"; value: number }) =>
+    mutationFn: (v: {
+      productId: string;
+      field: "sale" | "manager";
+      value: number;
+    }) =>
       setProductPrice(
         v.productId,
         v.field === "sale" ? { salePrice: v.value } : { managerPrice: v.value },
@@ -1468,7 +1671,9 @@ export default function PosPage() {
       );
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof ApiException ? e.message : "ثبت قیمت ناموفق بود"),
+      toast.error(
+        e instanceof ApiException ? e.message : "ثبت قیمت ناموفق بود",
+      ),
   });
 
   /** دریافتِ همان مبلغِ اصلاح، بدون ترکِ صندوق. */
@@ -1514,7 +1719,7 @@ export default function PosPage() {
     const invoiceId = searchParams.get("edit");
     if (!invoiceId || seededEdit.current) return;
     seededEdit.current = true;
-    getInvoice(invoiceId)
+    getInvoice(invoiceId);
     /*
      * مشتری را خودِ loadInvoice پیدا می‌کند؛ اینجا فقط وجودِ فاکتور بررسی
      * می‌شود تا لینکِ خراب پیامِ روشن بدهد نه یک صفحه‌ی خالی.
@@ -1597,6 +1802,27 @@ export default function PosPage() {
 
   const submit = useMutation({
     mutationFn: async ({ payments, dueDate }: SubmitArgs = {}) => {
+      if (blankQuotationId) {
+        await saveBlankPrices(blankQuotationId, {
+          lines: activeLines
+            .filter((l) => l.blankLineId)
+            .map((l) => ({
+              lineId: l.blankLineId!,
+              quantity: l.quantity,
+              finalPrice: l.unitPrice,
+              productId: l.productId,
+              locationId: l.locationId || null,
+              text: l.note,
+            })),
+        });
+        return convertBlankQuotation(
+          blankQuotationId,
+          payments,
+          dueDate,
+          customer?.id,
+        );
+      }
+
       /*
        * قاعده‌ی واحدِ «برد و پول نداد» — یک مکانیزم، نه دو.
        *
@@ -1650,6 +1876,7 @@ export default function PosPage() {
       });
     },
     onSuccess: (inv) => {
+      setBlankQuotationId(null);
       /*
        * رسیدِ ماندگار به‌جای toast.
        *
@@ -1673,7 +1900,9 @@ export default function PosPage() {
       if (inv.status === "OPEN") {
         qc.invalidateQueries({ queryKey: ["open-accounts"] });
         if (cart.openAccountId) {
-          qc.invalidateQueries({ queryKey: ["open-account", cart.openAccountId] });
+          qc.invalidateQueries({
+            queryKey: ["open-account", cart.openAccountId],
+          });
         }
       }
       /*
@@ -1684,7 +1913,9 @@ export default function PosPage() {
       resetCurrent();
       if (soldCustomerId) {
         qc.invalidateQueries({ queryKey: ["customer", soldCustomerId] });
-        qc.invalidateQueries({ queryKey: ["customer-today-count", soldCustomerId] });
+        qc.invalidateQueries({
+          queryKey: ["customer-today-count", soldCustomerId],
+        });
       }
       setShowPayment(false);
       setShowCheckout(false);
@@ -1700,10 +1931,12 @@ export default function PosPage() {
         const d = err!.raw as unknown as InsufficientStockError;
         setErrorLine(d.lineIndex);
         setLines((prev) =>
-          prev.map((l, j) => (j === d.lineIndex ? { ...l, available: d.available } : l))
+          prev.map((l, j) =>
+            j === d.lineIndex ? { ...l, available: d.available } : l,
+          ),
         );
         toast.error(
-          `ردیف ${toFa(d.lineIndex + 1)}: موجودی کافی نیست — فقط ${qty(d.available)} موجود است`
+          `ردیف ${toFa(d.lineIndex + 1)}: موجودی کافی نیست — فقط ${qty(d.available)} موجود است`,
         );
         // سبد باید عوض شود، پس این دیگر همان فاکتور نیست.
         invalidateIdem();
@@ -1727,7 +1960,12 @@ export default function PosPage() {
   });
 
   const saveQuotation = useMutation({
-    mutationFn: ({ validForMinutes }: { validForMinutes: number; print: boolean }) =>
+    mutationFn: ({
+      validForMinutes,
+    }: {
+      validForMinutes: number;
+      print: boolean;
+    }) =>
       createQuotation({
         warehouseId,
         customerId: customer?.id ?? null,
@@ -1749,7 +1987,8 @@ export default function PosPage() {
       toast.success(`پیش‌فاکتور ${toFa(q.number)} ثبت شد — ${rial(q.total)}`, {
         action: {
           label: "چاپ",
-          onClick: () => window.open(`/admin/print/quotation/${q.id}`, "_blank"),
+          onClick: () =>
+            window.open(`/admin/print/quotation/${q.id}`, "_blank"),
         },
         duration: 6000,
       });
@@ -1760,7 +1999,6 @@ export default function PosPage() {
     onError: () => toast.error("ثبت پیش‌فاکتور ناموفق بود"),
   });
 
-
   /**
    * ارسال سبد/کالا به گوشی کارگر به‌عنوان یک کارِ چندقلمی (به یک کارگر یا همه)
    * + پیام اختیاری. `idempotencyKey` تازه یعنی هر دکمه‌ی «ارسال» یک کارِ مستقل
@@ -1770,7 +2008,7 @@ export default function PosPage() {
     mutationFn: (args: { assignedToId: string | null; note?: string }) => {
       // یادداشتِ کاربر + فهرستِ خودکارِ همه‌ی قفسه‌ها (اگر کالا چندمکانه بود).
       const noteParts = [args.note?.trim(), workerNoteRef.current].filter(
-        (x): x is string => !!x
+        (x): x is string => !!x,
       );
       return createWorkTask({
         warehouseId,
@@ -1812,7 +2050,8 @@ export default function PosPage() {
       if (saveAdjust.isPending) return;
       const draft = adjustDraft(adjusting, lines);
       const hasFinancialWork =
-        draft.returns.length + draft.changes.length + draft.additions.length > 0;
+        draft.returns.length + draft.changes.length + draft.additions.length >
+        0;
       const notesChanged = draft.notes.length > 0;
       if (!hasFinancialWork && !notesChanged) {
         /*
@@ -1846,7 +2085,10 @@ export default function PosPage() {
     if (quoting) {
       if (!activeLines.length) return;
       if (!saveQuotation.isPending) {
-        saveQuotation.mutate({ validForMinutes: quoting.validForMinutes, print: false });
+        saveQuotation.mutate({
+          validForMinutes: quoting.validForMinutes,
+          print: false,
+        });
       }
       return;
     }
@@ -1857,7 +2099,7 @@ export default function PosPage() {
     }
     if (zeroPriceCount > 0) {
       toast.error(
-        `${toFa(zeroPriceCount)} ردیف قیمت ندارد — قبل از ثبت قیمتشان را وارد کنید`
+        `${toFa(zeroPriceCount)} ردیف قیمت ندارد — قبل از ثبت قیمتشان را وارد کنید`,
       );
       return;
     }
@@ -1871,10 +2113,23 @@ export default function PosPage() {
     }
     setShowCheckout(true);
   }, [
-    activeLines.length, noWarehouse, zeroPriceCount, cart.openAccountId,
-    returning, adjusting, quoting, submit, saveReturn,
-    saveAdjust, saveQuotation, adjustDraft, lines, adjustReason,
-    canFixPayment, settleQ.data, customer,
+    activeLines.length,
+    noWarehouse,
+    zeroPriceCount,
+    cart.openAccountId,
+    returning,
+    adjusting,
+    quoting,
+    submit,
+    saveReturn,
+    saveAdjust,
+    saveQuotation,
+    adjustDraft,
+    lines,
+    adjustReason,
+    canFixPayment,
+    settleQ.data,
+    customer,
   ]);
 
   /**
@@ -1920,14 +2175,15 @@ export default function PosPage() {
           ? [
               `این کالا در ${toFa(r.locations.length)} قفسه موجود است:`,
               ...r.locations.map(
-                (loc) => `• ${loc.path || loc.name} — موجودی ${qty(loc.quantity)}`
+                (loc) =>
+                  `• ${loc.path || loc.name} — موجودی ${qty(loc.quantity)}`,
               ),
             ].join("\n")
           : null;
       setWorkerItemCount(1);
       setShowWorkerPicker(true);
     },
-    [toFa, qty]
+    [toFa, qty],
   );
 
   /** رفتن به تبِ قبلی/بعدی، حلقه‌وار — «سند قبلی/بعدی» در زبانِ صندوق. */
@@ -1994,14 +2250,30 @@ export default function PosPage() {
    */
   const commands: CommandMap = useMemo(() => {
     return {
-      new: { run: () => { addCart(); focusScan(); }, label: "فاکتور نو" },
+      new: {
+        run: () => {
+          addCart();
+          focusScan();
+        },
+        label: "فاکتور نو",
+      },
 
       // سندِ قبلی/بعدی در صندوق یعنی تبِ قبلی/بعدی — همان مفهوم، همان کلید.
-      prev: carts.length > 1 ? { run: () => stepCart(-1), label: "تب قبلی" } : undefined,
-      next: carts.length > 1 ? { run: () => stepCart(1), label: "تب بعدی" } : undefined,
+      prev:
+        carts.length > 1
+          ? { run: () => stepCart(-1), label: "تب قبلی" }
+          : undefined,
+      next:
+        carts.length > 1
+          ? { run: () => stepCart(1), label: "تب بعدی" }
+          : undefined,
 
       find: { run: () => setShowInvoices(true) },
       quotes: { run: () => setShowQuotes(true) },
+      blankQuotes: {
+        run: () => setShowBlankQuotes(true),
+        label: "پیش‌فاکتورهای سفید",
+      },
 
       // مرجوعی قفل به فاکتور است: نه قلمی اضافه می‌شود نه حذف. در ویرایشِ
       // فاکتور، قلمِ تازه با اسکن اضافه می‌شود؛ ردیفِ موجود در حالتِ عادی با
@@ -2013,30 +2285,39 @@ export default function PosPage() {
           ? {
               run: () => removeLine(activeRow),
               /* در حالتِ حافظه ردیفِ موجود حذف نمی‌شود — برگشت با مقدار. */
-              disabled: !!adjusting && memory && lines[activeRow]?.sold !== undefined,
+              disabled:
+                !!adjusting && memory && lines[activeRow]?.sold !== undefined,
             }
           : { run: () => {}, disabled: true },
-      discount: returning || adjusting
-        ? undefined
-        : { run: () => document.getElementById("invoice-discount")?.focus() },
+      discount:
+        returning || adjusting
+          ? undefined
+          : { run: () => document.getElementById("invoice-discount")?.focus() },
 
       // توضیحِ قلمِ فعال — خانه‌اش زیرِ نامِ کالا در همان ردیف است.
-      lineNote: !returning && viewLines[viewActiveRow]
-        ? {
-            run: () => {
-              const el = document.querySelector<HTMLInputElement>(
-                `[data-line-note="${viewActiveRow}"]`,
-              );
-              el?.focus();
-              el?.select();
-            },
-          }
-        : undefined,
+      lineNote:
+        !returning && viewLines[viewActiveRow]
+          ? {
+              run: () => {
+                const el = document.querySelector<HTMLInputElement>(
+                  `[data-line-note="${viewActiveRow}"]`,
+                );
+                el?.focus();
+                el?.select();
+              },
+            }
+          : undefined,
 
       party: { run: () => setShowCustomer(true), label: "مشتری" },
       ledger: { run: () => setShowOpenAccounts(true), label: "حساب‌بازها" },
       kardex: lines[activeRow]
-        ? { run: () => window.open(`/admin/products/${lines[activeRow].productId}`, "_blank") }
+        ? {
+            run: () =>
+              window.open(
+                `/admin/products/${lines[activeRow].productId}`,
+                "_blank",
+              ),
+          }
         : { run: () => {}, disabled: true },
 
       /*
@@ -2046,7 +2327,10 @@ export default function PosPage() {
       print: lockedToInvoice
         ? {
             run: () =>
-              window.open(`/admin/print/invoice/${lockedToInvoice.invoiceId}`, "_blank"),
+              window.open(
+                `/admin/print/invoice/${lockedToInvoice.invoiceId}`,
+                "_blank",
+              ),
           }
         : undefined,
 
@@ -2056,24 +2340,31 @@ export default function PosPage() {
       addProduct: { run: () => setShowAddProduct(true) },
       shortage: { run: () => setShowShortage(true) },
 
-      dispatch: !returning && !adjusting && lines.length
-        ? { run: openWorkerForCart, pending: sendToWorker.isPending }
-        : undefined,
+      dispatch:
+        !returning && !adjusting && lines.length
+          ? { run: openWorkerForCart, pending: sendToWorker.isPending }
+          : undefined,
 
-      quote: !returning && !adjusting
-        ? {
-            run: toggleQuote,
-            label: quoting ? "برگشت به فروش" : "پیش‌فاکتور",
-            disabled: !lines.length,
-          }
-        : undefined,
+      quote:
+        !returning && !adjusting
+          ? {
+              run: toggleQuote,
+              label: quoting ? "برگشت به فروش" : "پیش‌فاکتور",
+              disabled: !lines.length,
+            }
+          : undefined,
 
       /*
        * تعویض (F10) فقط روی فروشِ عادی و وقتی مشتری روی تب است معنا دارد —
        * برگشت برای فاکتورهایِ قبلیِ همان مشتری است.
        */
       swap:
-        !returning && !adjusting && !quoting && canUseNetSwap && !!cart.customer?.id && !!warehouseId
+        !returning &&
+        !adjusting &&
+        !quoting &&
+        canUseNetSwap &&
+        !!cart.customer?.id &&
+        !!warehouseId
           ? { run: () => setShowNetSwap(true), label: "تعویض (برگشت+خرید)" }
           : undefined,
 
@@ -2081,9 +2372,19 @@ export default function PosPage() {
        * «پرداخت» فقط سرِ فروش. پیش‌فاکتور پولی نمی‌گیرد، ویرایش اختلافش را
        * در پنلِ تسویه می‌پرسد، و مرجوعی روشِ برگشتِ وجهش را در پای فرم می‌پرسد.
        */
-      pay: !returning && !adjusting && !quoting && lines.length
-        ? { run: () => setShowPayment(true) }
-        : undefined,
+      pay:
+        !returning && !adjusting && !quoting && lines.length
+          ? {
+              run: () => {
+                if (blankQuotationId && !customer) {
+                  setShowCheckout(true);
+                  toast.info("اول مشتری را انتخاب کنید");
+                  return;
+                }
+                setShowPayment(true);
+              },
+            }
+          : undefined,
 
       commit: returning
         ? {
@@ -2111,18 +2412,18 @@ export default function PosPage() {
               pending: saveAdjust.isPending,
             }
           : quoting
-          ? {
-              run: startCheckout,
-              label: "ثبت پیش‌فاکتور",
-              disabled: !activeLines.length,
-              pending: saveQuotation.isPending,
-            }
-          : {
-              run: startCheckout,
-              label: "تسویه و ثبت",
-              disabled: !canCheckout,
-              pending: submit.isPending,
-            },
+            ? {
+                run: startCheckout,
+                label: "ثبت پیش‌فاکتور",
+                disabled: !activeLines.length,
+                pending: saveQuotation.isPending,
+              }
+            : {
+                run: startCheckout,
+                label: "تسویه و ثبت",
+                disabled: !canCheckout,
+                pending: submit.isPending,
+              },
 
       // روی سندی که به فاکتور قفل است، «ابطال» یعنی رهاکردنِ همین سند.
       void: lockedToInvoice
@@ -2135,16 +2436,45 @@ export default function PosPage() {
           : undefined,
     };
   }, [
-    memory, returning, adjusting, quoting, lockedToInvoice, carts.length, viewLines,
-    viewActiveRow, activeRow, adjustHasWork, canFixPayment,
-    canCheckout, activeLines.length, returnTotal,
-    saveReturn, saveAdjust, saveQuotation.isPending, submit.isPending,
-    startCheckout, cancelEdit, toggleQuote,
-    openWorkerForCart, sendToWorker.isPending,
-    addCart, focusScan, removeLine, stepCart,
-    setShowRecent, setShowCustomer, setShowOpenAccounts, loadQuotation,
-    setShowWorkTasks, setShowAddProduct, setShowShortage,
-    warehouseId, cart.customer?.id, canUseNetSwap,
+    memory,
+    returning,
+    adjusting,
+    quoting,
+    lockedToInvoice,
+    carts.length,
+    viewLines,
+    viewActiveRow,
+    activeRow,
+    adjustHasWork,
+    canFixPayment,
+    canCheckout,
+    activeLines.length,
+    returnTotal,
+    saveReturn,
+    saveAdjust,
+    saveQuotation.isPending,
+    submit.isPending,
+    startCheckout,
+    cancelEdit,
+    toggleQuote,
+    openWorkerForCart,
+    sendToWorker.isPending,
+    addCart,
+    focusScan,
+    removeLine,
+    stepCart,
+    setShowRecent,
+    setShowCustomer,
+    setShowOpenAccounts,
+    loadQuotation,
+    setShowWorkTasks,
+    setShowAddProduct,
+    setShowShortage,
+    setShowBlankQuotes,
+    warehouseId,
+    cart.customer?.id,
+    blankQuotationId,
+    canUseNetSwap,
   ]);
 
   /*
@@ -2181,7 +2511,13 @@ export default function PosPage() {
       {
         title: "فروش",
         items: [
-          { keys: "Enter", label: "افزودن بارکد / رفتن به تسویه", primary: true },          { keys: "F2",
+          {
+            keys: "Enter",
+            label: "افزودن بارکد / رفتن به تسویه",
+            primary: true,
+          },
+          {
+            keys: "F2",
             label: returning
               ? "ثبت مرجوعی"
               : adjusting
@@ -2197,9 +2533,18 @@ export default function PosPage() {
           { keys: "Ctrl+B", label: "صدای اسکن روشن/خاموش" },
           { keys: "F8", label: "پیش‌فاکتور ↔ فروش" },
           { keys: "Alt+Q", label: "پیش‌فاکتورهای باز — بارگذاری در سبد" },
+          {
+            keys: "Alt+B",
+            label: "پیش‌فاکتورهای سفید — قیمت‌گذاری و اتصال قلم‌ها",
+            primary: true,
+          },
           { keys: "F6", label: "تخفیف فاکتور" },
           { keys: "Alt+T", label: "توضیح قلم فعال" },
-          { keys: "Alt+H", label: "دیدن حافظه فاکتور در ویرایش", primary: true },
+          {
+            keys: "Alt+H",
+            label: "دیدن حافظه فاکتور در ویرایش",
+            primary: true,
+          },
           { keys: "F9", label: "ارسال به کارگر" },
           { keys: "Alt+W", label: "کارهای انبار" },
           { keys: "Alt+A", label: "افزودن کالا" },
@@ -2242,9 +2587,21 @@ export default function PosPage() {
   );
 
   const anyDialogOpen =
-    !!pickerStock || showCustomer || showPayment || showSearch || showQuotes || showInvoices ||
-    showWorkerPicker || showWorkTasks || showRecent || showCheckout || showOpenAccounts || !!receipt ||
-    showTodayPurchases || !!adjustSettle;
+    !!pickerStock ||
+    showCustomer ||
+    showPayment ||
+    showSearch ||
+    showQuotes ||
+    showBlankQuotes ||
+    showInvoices ||
+    showWorkerPicker ||
+    showWorkTasks ||
+    showRecent ||
+    showCheckout ||
+    showOpenAccounts ||
+    !!receipt ||
+    showTodayPurchases ||
+    !!adjustSettle;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -2254,7 +2611,7 @@ export default function PosPage() {
         setShowCustomer(false);
         setShowPayment(false);
         setShowSearch(false);
-          setShowWorkerPicker(false);
+        setShowWorkerPicker(false);
         setShowWorkTasks(false);
         setShowRecent(false);
         setShowOpenAccounts(false);
@@ -2272,14 +2629,24 @@ export default function PosPage() {
       if (anyDialogOpen) return;
 
       // Alt+H — تیکِ «دیدن حافظه» در ویرایشِ فاکتور.
-      if (adjusting && e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyH") {
+      if (
+        adjusting &&
+        e.altKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        e.code === "KeyH"
+      ) {
         e.preventDefault();
         toggleMemory();
         return;
       }
 
       // Ctrl+Shift+X — جدا کردن مشتریِ قفل‌شده (همان دکمه‌ی × چیپ).
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "x") {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "x"
+      ) {
         e.preventDefault();
         if (customer) {
           setCustomer(null);
@@ -2297,7 +2664,9 @@ export default function PosPage() {
        * به برگرداندنِ ردیف می‌رسد.
        */
       if (
-        (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
         e.key.toLowerCase() === "z"
       ) {
         const target = e.target as HTMLElement | null;
@@ -2317,7 +2686,9 @@ export default function PosPage() {
        * از نوارِ اسکن (و بدون فوکوس) می‌رسد.
        */
       if (
-        (e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey &&
+        (e.ctrlKey || e.metaKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
         e.key.toLowerCase() === "b"
       ) {
         const target = e.target as HTMLElement | null;
@@ -2354,7 +2725,10 @@ export default function PosPage() {
               if (!adjustView) return Math.min(r + 1, viewLines.length - 1);
               const pos = adjustView.map.indexOf(r);
               if (pos < 0) return adjustView.map[0] ?? 0;
-              return adjustView.map[Math.min(pos + 1, adjustView.map.length - 1)] ?? 0;
+              return (
+                adjustView.map[Math.min(pos + 1, adjustView.map.length - 1)] ??
+                0
+              );
             });
           }
           break;
@@ -2374,9 +2748,30 @@ export default function PosPage() {
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [viewLines, activeRow, anyDialogOpen, submit.isPending, sendToWorker.isPending, addCart, focusScan, customer, setCustomer, invalidateIdem, adjusting, cancelEdit, startCheckout, openWorkerForCart, toggleMemory, adjustView, setActiveRow, undoLastAdd]);
+  }, [
+    viewLines,
+    activeRow,
+    anyDialogOpen,
+    submit.isPending,
+    sendToWorker.isPending,
+    addCart,
+    focusScan,
+    customer,
+    setCustomer,
+    invalidateIdem,
+    adjusting,
+    cancelEdit,
+    startCheckout,
+    openWorkerForCart,
+    toggleMemory,
+    adjustView,
+    setActiveRow,
+    undoLastAdd,
+  ]);
 
-  useEffect(() => { focusScan(); }, [focusScan]);
+  useEffect(() => {
+    focusScan();
+  }, [focusScan]);
 
   // ---------- نما ----------
 
@@ -2390,20 +2785,26 @@ export default function PosPage() {
       */}
       <DocumentShell
         title={
-          returning ? "برگشت از فروش"
+          returning
+            ? "برگشت از فروش"
             : adjusting
-              ? memory ? "ویرایش فاکتور — نمایش حافظه" : "ویرایش فاکتور فروش"
-              : quoting ? "پیش‌فاکتور"
+              ? memory
+                ? "ویرایش فاکتور — نمایش حافظه"
+                : "ویرایش فاکتور فروش"
+              : quoting
+                ? "پیش‌فاکتور"
                 : "فاکتور فروش"
         }
         number={lockedToInvoice ? toFa(lockedToInvoice.invoiceNumber) : null}
         state={
-          returning ? "قفل به فاکتور — کالا و قیمت از خودِ فاکتور می‌آید"
+          returning
+            ? "قفل به فاکتور — کالا و قیمت از خودِ فاکتور می‌آید"
             : adjusting
               ? memory
                 ? "سابقه دیده می‌شود: برگشتی‌ها کم‌رنگ با برچسب — ثبت، یک عملیاتِ اتمیک"
                 : "مثل فاکتورِ عادی ویرایش می‌شود — تیکِ حافظه سابقه را نشان می‌دهد"
-              : quoting ? "موجودی دست نمی‌خورد؛ فقط قیمت نگه داشته می‌شود"
+              : quoting
+                ? "موجودی دست نمی‌خورد؛ فقط قیمت نگه داشته می‌شود"
                 : "پیش‌نویس"
         }
         tone={lockedToInvoice || quoting ? "warning" : "normal"}
@@ -2411,294 +2812,337 @@ export default function PosPage() {
         keysEnabled={!anyDialogOpen && !showHelp}
         status={
           <>
-            <span>انبار: <b className="text-foreground">
-              {warehouses.data?.find((w) => w.id === warehouseId)?.name ?? "—"}
-            </b></span>
-            <span>تب‌های باز: <b className="text-foreground tabular-nums">{toFa(carts.length)}</b></span>
+            <span>
+              انبار:{" "}
+              <b className="text-foreground">
+                {warehouses.data?.find((w) => w.id === warehouseId)?.name ??
+                  "—"}
+              </b>
+            </span>
+            <span>
+              تب‌های باز:{" "}
+              <b className="text-foreground tabular-nums">
+                {toFa(carts.length)}
+              </b>
+            </span>
           </>
         }
       >
-    {/*
+        {/*
       هر پیکسلِ عمودی اینجا یعنی یک ردیفِ کالای بیشتر یا کمتر. p-4/gap-3
       قبلی روی هم ۴۰ پیکسل می‌خورد — تقریباً یک ردیفِ کامل.
     */}
-    <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
-      {/*
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-2">
+          {/*
         نوارِ تب‌ها فقط وقتی معنی دارد که بیش از یک فاکتور باز باشد. با یک
         سبد، آن نوار ۳۴ پیکسل می‌گیرد تا یک تبِ تنها را نشان دهد.
       */}
-      {carts.length > 1 && (
-      <CartTabs
-        carts={carts}
-        activeId={activeId}
-        canAdd={canAdd}
-        totalOf={cartTotal}
-        onSelect={(id) => { setActiveId(id); focusScan(); }}
-        onAdd={() => { addCart(); focusScan(); }}
-        onClose={closeCart}
-      />
-      )}
+          {carts.length > 1 && (
+            <CartTabs
+              carts={carts}
+              activeId={activeId}
+              canAdd={canAdd}
+              totalOf={cartTotal}
+              onSelect={(id) => {
+                setActiveId(id);
+                focusScan();
+              }}
+              onAdd={() => {
+                addCart();
+                focusScan();
+              }}
+              onClose={closeCart}
+            />
+          )}
 
-      {/*
+          {/*
         نوارِ «در حال ویرایش».
         بدونِ آن، صفحه‌ی فروش با سبدِ پُر دقیقاً شبیهِ فروشِ عادی است و یک F2
         اشتباه یعنی یک فاکتورِ دومِ ناخواسته. رنگ و متن هر دو باید از دور
         بگویند اینجا خبرِ دیگری است.
       */}
-      {/*
+          {/*
         کادرِ هشدارِ «در حال ویرایش» حذف شد — سه سطر ارتفاع می‌گرفت و وسطِ
         صفحه می‌نشست. همان پیام حالا روی نوارِ وضعیتِ خودِ پوسته است، کهربایی،
         در یک خط. «لغو» هم آیکنِ ابطال در نوار فرمان است.
       */}
-      {noWarehouse && (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive
-                        bg-destructive/10 px-4 py-3">
-          <div>
-            <p className="font-semibold text-destructive">هیچ انباری تعریف نشده</p>
-            <p className="text-sm text-muted-foreground">
-              تا وقتی یک انبار ساخته نشود، فاکتور ثبت نمی‌شود.
-            </p>
-          </div>
-          <Button asChild variant="destructive">
-            <Link href="/admin/locations">ساخت انبار</Link>
-          </Button>
-        </div>
-      )}
+          {noWarehouse && (
+            <div
+              className="flex items-center justify-between gap-3 rounded-lg border border-destructive
+                        bg-destructive/10 px-4 py-3"
+            >
+              <div>
+                <p className="font-semibold text-destructive">
+                  هیچ انباری تعریف نشده
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  تا وقتی یک انبار ساخته نشود، فاکتور ثبت نمی‌شود.
+                </p>
+              </div>
+              <Button asChild variant="destructive">
+                <Link href="/admin/locations">ساخت انبار</Link>
+              </Button>
+            </div>
+          )}
 
-      {/* نوار اسکن — همیشه فوکوس دارد. min-w-0 روی جستجو و سقفِ عرضِ چیپِ مشتری
+          {/* نوار اسکن — همیشه فوکوس دارد. min-w-0 روی جستجو و سقفِ عرضِ چیپِ مشتری
           کنار هم تضمین می‌کنند اسمِ بلندِ مشتری هرگز اسکن‌بار را له نکند؛
           flex-wrap هم پناهِ آخر برای پنجره‌های خیلی باریک است. */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/*
+          <div className="flex flex-wrap items-center gap-2">
+            {/*
           دو نشانگرِ کوچک، پیش از نوارِ اسکن:
           • نقطه‌ی اتصالِ realtime — سبز یعنی رویدادها می‌رسند و اعداد همان
             لحظه تازه می‌شوند؛ قرمزِ تپنده یعنی قطع (خودش برمی‌گردد و اعداد
             تازه می‌شوند، ولی تا آن موقع ممکن است کهنه باشند).
           • کلیدِ صدای اسکن — روشن/خاموش با کلیک یا Ctrl+B؛ انتخاب می‌ماند.
         */}
-        <div className="flex shrink-0 items-center gap-1.5">
-          <span
-            role="status"
-            title={
-              realtime.status === "up"
-                ? "اتصال زنده — اعداد همان لحظه تازه می‌شوند"
-                : realtime.status === "down"
-                  ? "اتصال زنده قطع است — خودش برمی‌گردد؛ تا آن موقع اعداد ممکن است کهنه باشند"
-                  : "در حال اتصال…"
-            }
-            className={`size-2.5 shrink-0 rounded-full ${
-              realtime.status === "up"
-                ? "bg-success"
-                : realtime.status === "down"
-                  ? "bg-destructive animate-pulse"
-                  : "bg-muted-foreground/50"
-            }`}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              const muted = toggleScanSoundMuted();
-              setScanSoundOff(muted);
-              toast.info(muted ? "صدای اسکن خاموش شد" : "صدای اسکن روشن شد");
-              focusScan();
-            }}
-            title={
-              scanSoundOff
-                ? "صدای اسکن خاموش است — روشن‌کردن با کلیک یا Ctrl+B"
-                : "صدای اسکن روشن است — خاموش‌کردن با کلیک یا Ctrl+B"
-            }
-            className={`flex size-8 items-center justify-center rounded-md border transition-colors ${
-              scanSoundOff
-                ? "text-muted-foreground hover:text-foreground"
-                : "border-primary/40 text-primary"
-            }`}
-          >
-            {scanSoundOff ? <VolumeX className="size-4" /> : <Volume2 className="size-4" />}
-          </button>
-        </div>
-        <div className="relative min-w-0 flex-1">
-          <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={scanRef}
-            id="pos-scan"
-            value={scan}
-            onChange={(e) => setScan(e.target.value)}
-            onKeyDown={(e) => {
-              // ↑↓ در لیست زنده. تا اولین ↓، هیچ ردیفی انتخاب نیست.
-              if (liveList.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
-                e.preventDefault();
-                // وگرنه همین فلش به هندلر سراسری هم می‌رسد و هم‌زمان ردیفِ
-                // فعالِ جدول را جابه‌جا می‌کند.
-                e.stopPropagation();
-                setLiveHighlight((h) =>
-                  e.key === "ArrowDown"
-                    ? Math.min(h + 1, liveList.length - 1)
-                    : Math.max(h - 1, -1)
-                );
-                return;
-              }
-
-              // Esc لیست را می‌بندد ولی متن را نگه می‌دارد — شاید بخواهد ادامه بدهد.
-              if (e.key === "Escape" && liveList.length) {
-                e.preventDefault();
-                // Esc اینجا فقط لیست را می‌بندد، نه همه‌ی دیالوگ‌های صفحه.
-                e.stopPropagation();
-                setLiveDismissed(true);
-                setLiveHighlight(-1);
-                return;
-              }
-
-              /*
-               * زنجیره‌ی کیبوردی: اسکن →Tab→ تعداد →Tab→ قیمت →Enter→ برگشت به
-               * بارکد (و اگر بارکدی زده نشود و باز Enter، می‌رود تسویه). این Tab
-               * اولْ ردیف را روی تعداد می‌گذارد؛ Shift+Tab میان‌بر مستقیم به قیمت
-               * است (وقتی تعداد همان ۱ است). بارکدخوان Tab نمی‌فرستد، پس اسکنِ
-               * پیاپی دست‌نخورده می‌ماند. فقط وقتی لیست زنده باز نیست.
-               */
-              if (e.key === "Tab" && viewLines.length && !liveList.length) {
-                e.preventDefault();
-                const col = e.shiftKey ? 1 : 0;
-                const cell = document.querySelector<HTMLInputElement>(
-                  `[data-cell="${viewActiveRow}:${col}"]`
-                );
-                cell?.focus();
-                cell?.select();
-                return;
-              }
-
-              if (e.key !== "Enter") return;
-              e.preventDefault();
-
-              // ردیفی با ↓ انتخاب شده → همان را بردار.
-              if (liveHighlight >= 0 && liveList[liveHighlight]) {
-                onPickRow(liveList[liveHighlight]);
-                return;
-              }
-
-              const typed = scan.trim();
-
-              /*
-               * عددِ کوتاه = تعدادِ ردیفِ فعال، نه بارکد.
-               *
-               * بعد از افزودن کالا، کارِ بعدیِ فروشنده تقریباً همیشه گفتن تعداد
-               * است. تا حالا باید دست از کیبورد برمی‌داشت و روی خانه‌ی تعداد
-               * کلیک می‌کرد.
-               *
-               * مرزش طولِ عدد است: بارکد هیچ‌وقت کوتاه‌تر از ۵ رقم نیست و تعداد
-               * تقریباً هیچ‌وقت بلندتر. بدون این مرز، اسکنِ یک بارکد به‌جای
-               * افزودن کالا تعداد را عوض می‌کرد.
-               */
-              const asQty = /^\d{1,4}$/.test(faToEn(typed)) ? Number(faToEn(typed)) : 0;
-              if (asQty > 0 && lines.length) {
-                /* در ویرایشِ فاکتور، معنیِ عدد با حالتِ نمایش عوض می‌شود (applyQtyInput). */
-                applyQtyInput(activeRow, asQty);
-                setScan("");
-                // بعد از تعداد، خانه‌ی قیمتِ همان ردیف؛ ترتیب طبیعیِ کار.
-                requestAnimationFrame(() => {
-                  const cell = document.querySelector<HTMLInputElement>(
-                    `[data-cell="${viewActiveRow}:1"]`
+            <div className="flex shrink-0 items-center gap-1.5">
+              <span
+                role="status"
+                title={
+                  realtime.status === "up"
+                    ? "اتصال زنده — اعداد همان لحظه تازه می‌شوند"
+                    : realtime.status === "down"
+                      ? "اتصال زنده قطع است — خودش برمی‌گردد؛ تا آن موقع اعداد ممکن است کهنه باشند"
+                      : "در حال اتصال…"
+                }
+                className={`size-2.5 shrink-0 rounded-full ${
+                  realtime.status === "up"
+                    ? "bg-success"
+                    : realtime.status === "down"
+                      ? "bg-destructive animate-pulse"
+                      : "bg-muted-foreground/50"
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const muted = toggleScanSoundMuted();
+                  setScanSoundOff(muted);
+                  toast.info(
+                    muted ? "صدای اسکن خاموش شد" : "صدای اسکن روشن شد",
                   );
-                  cell?.focus();
-                  cell?.select();
-                });
-                return;
-              }
+                  focusScan();
+                }}
+                title={
+                  scanSoundOff
+                    ? "صدای اسکن خاموش است — روشن‌کردن با کلیک یا Ctrl+B"
+                    : "صدای اسکن روشن است — خاموش‌کردن با کلیک یا Ctrl+B"
+                }
+                className={`flex size-8 items-center justify-center rounded-md border transition-colors ${
+                  scanSoundOff
+                    ? "text-muted-foreground hover:text-foreground"
+                    : "border-primary/40 text-primary"
+                }`}
+              >
+                {scanSoundOff ? (
+                  <VolumeX className="size-4" />
+                ) : (
+                  <Volume2 className="size-4" />
+                )}
+              </button>
+            </div>
+            <div className="relative min-w-0 flex-1">
+              <Search className="absolute end-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                ref={scanRef}
+                id="pos-scan"
+                value={scan}
+                onChange={(e) => setScan(e.target.value)}
+                onKeyDown={(e) => {
+                  // ↑↓ در لیست زنده. تا اولین ↓، هیچ ردیفی انتخاب نیست.
+                  if (
+                    liveList.length &&
+                    (e.key === "ArrowDown" || e.key === "ArrowUp")
+                  ) {
+                    e.preventDefault();
+                    // وگرنه همین فلش به هندلر سراسری هم می‌رسد و هم‌زمان ردیفِ
+                    // فعالِ جدول را جابه‌جا می‌کند.
+                    e.stopPropagation();
+                    setLiveHighlight((h) =>
+                      e.key === "ArrowDown"
+                        ? Math.min(h + 1, liveList.length - 1)
+                        : Math.max(h - 1, -1),
+                    );
+                    return;
+                  }
 
-              // بارکد در خانه → کالا را اضافه کن و منتظر بعدی بمان.
-              if (typed) {
-                onScan.mutate(typed);
-                return;
-              }
-              // خانه خالی و سبد پُر → یعنی «تمام شد، برو تسویه».
-              startCheckout();
-            }}
-            placeholder={
-              lines.length
-                ? "بارکد یا نام کالا… یا Enter برای تسویه"
-                : "بارکد را اسکن کنید یا نام کالا را بنویسید…"
-            }
-            /* مهم‌ترین فیلدِ کلِ سیستم است؛ باید در یک نگاه از بقیه جدا باشد:
+                  // Esc لیست را می‌بندد ولی متن را نگه می‌دارد — شاید بخواهد ادامه بدهد.
+                  if (e.key === "Escape" && liveList.length) {
+                    e.preventDefault();
+                    // Esc اینجا فقط لیست را می‌بندد، نه همه‌ی دیالوگ‌های صفحه.
+                    e.stopPropagation();
+                    setLiveDismissed(true);
+                    setLiveHighlight(-1);
+                    return;
+                  }
+
+                  /*
+                   * زنجیره‌ی کیبوردی: اسکن →Tab→ تعداد →Tab→ قیمت →Enter→ برگشت به
+                   * بارکد (و اگر بارکدی زده نشود و باز Enter، می‌رود تسویه). این Tab
+                   * اولْ ردیف را روی تعداد می‌گذارد؛ Shift+Tab میان‌بر مستقیم به قیمت
+                   * است (وقتی تعداد همان ۱ است). بارکدخوان Tab نمی‌فرستد، پس اسکنِ
+                   * پیاپی دست‌نخورده می‌ماند. فقط وقتی لیست زنده باز نیست.
+                   */
+                  if (e.key === "Tab" && viewLines.length && !liveList.length) {
+                    e.preventDefault();
+                    const col = e.shiftKey ? 1 : 0;
+                    const cell = document.querySelector<HTMLInputElement>(
+                      `[data-cell="${viewActiveRow}:${col}"]`,
+                    );
+                    cell?.focus();
+                    cell?.select();
+                    return;
+                  }
+
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+
+                  // ردیفی با ↓ انتخاب شده → همان را بردار.
+                  if (liveHighlight >= 0 && liveList[liveHighlight]) {
+                    onPickRow(liveList[liveHighlight]);
+                    return;
+                  }
+
+                  const typed = scan.trim();
+
+                  /*
+                   * عددِ کوتاه = تعدادِ ردیفِ فعال، نه بارکد.
+                   *
+                   * بعد از افزودن کالا، کارِ بعدیِ فروشنده تقریباً همیشه گفتن تعداد
+                   * است. تا حالا باید دست از کیبورد برمی‌داشت و روی خانه‌ی تعداد
+                   * کلیک می‌کرد.
+                   *
+                   * مرزش طولِ عدد است: بارکد هیچ‌وقت کوتاه‌تر از ۵ رقم نیست و تعداد
+                   * تقریباً هیچ‌وقت بلندتر. بدون این مرز، اسکنِ یک بارکد به‌جای
+                   * افزودن کالا تعداد را عوض می‌کرد.
+                   */
+                  const asQty = /^\d{1,4}$/.test(faToEn(typed))
+                    ? Number(faToEn(typed))
+                    : 0;
+                  if (asQty > 0 && lines.length) {
+                    /* در ویرایشِ فاکتور، معنیِ عدد با حالتِ نمایش عوض می‌شود (applyQtyInput). */
+                    applyQtyInput(activeRow, asQty);
+                    setScan("");
+                    // بعد از تعداد، خانه‌ی قیمتِ همان ردیف؛ ترتیب طبیعیِ کار.
+                    requestAnimationFrame(() => {
+                      const cell = document.querySelector<HTMLInputElement>(
+                        `[data-cell="${viewActiveRow}:1"]`,
+                      );
+                      cell?.focus();
+                      cell?.select();
+                    });
+                    return;
+                  }
+
+                  // بارکد در خانه → کالا را اضافه کن و منتظر بعدی بمان.
+                  if (typed) {
+                    onScan.mutate(typed);
+                    return;
+                  }
+                  // خانه خالی و سبد پُر → یعنی «تمام شد، برو تسویه».
+                  startCheckout();
+                }}
+                placeholder={
+                  lines.length
+                    ? "بارکد یا نام کالا… یا Enter برای تسویه"
+                    : "بارکد را اسکن کنید یا نام کالا را بنویسید…"
+                }
+                /* مهم‌ترین فیلدِ کلِ سیستم است؛ باید در یک نگاه از بقیه جدا باشد:
                تهِ‌رنگِ ملایمِ primary + حلقه‌ی فوکوسِ پررنگ‌تر. */
-            className="h-9 pe-10 text-sm bg-primary/5 border-primary/30 focus-visible:border-primary focus-visible:ring-primary/30"
-          />
+                className="h-9 pe-10 text-sm bg-primary/5 border-primary/30 focus-visible:border-primary focus-visible:ring-primary/30"
+              />
 
-          <InlineResults
-            rows={liveList}
-            highlight={liveHighlight}
-            loading={useLocalSearch ? false : liveResults.isFetching}
-            pickingId={pickingId}
-            canManagePrice={canManagePrice}
-            onSavePrice={(productId, field, value) => savePrice.mutate({ productId, field, value })}
-            onHover={setLiveHighlight}
-            onPick={onPickRow}
-            onSendToWorker={(r) => { openWorkerForResult(r); closeLive(); }}
-          />
-        </div>
+              <InlineResults
+                rows={liveListWithStock}
+                highlight={liveHighlight}
+                loading={useLocalSearch ? false : liveResults.isFetching}
+                pickingId={pickingId}
+                canManagePrice={canManagePrice}
+                onSavePrice={(productId, field, value) =>
+                  savePrice.mutate({ productId, field, value })
+                }
+                onHover={setLiveHighlight}
+                onPick={onPickRow}
+                onSendToWorker={(r) => {
+                  openWorkerForResult(r);
+                  closeLive();
+                }}
+              />
+            </div>
 
-        {customer && (
-          <CurrentCustomerChip
-            name={customer.fullName}
-            primaryPhone={
-              customer.phones?.find((p) => p.isPrimary)?.phone ??
-              customer.phones?.[0]?.phone ??
-              null
-            }
-            category={customer.category ?? null}
-            totalDue={customerDetail.data?.summary?.totalDue ?? 0}
-            overdue={customerDetail.data?.summary?.overdue ?? 0}
-            todayCount={customerTodayInvoices.data?.meta?.total ?? 0}
-            loading={customerTodayInvoices.isFetching}
-            locked={cart.customerLocked}
-            onToggleLock={toggleCustomerLock}
-            // کلیک روی نام = فاکتورهای همین مشتری، همین‌جا. رفتن به پرونده‌ی
-            // کامل هنوز ممکن است، ولی کارِ روزمره این است نه آن.
-            onOpen={() => setCustomerPanel("ledger")}
-            onShowToday={() => setShowTodayPurchases(true)}
-            onClear={() => { setCustomer(null); invalidateIdem(); }}
-          />
-        )}
+            {customer && (
+              <CurrentCustomerChip
+                name={customer.fullName}
+                primaryPhone={
+                  customer.phones?.find((p) => p.isPrimary)?.phone ??
+                  customer.phones?.[0]?.phone ??
+                  null
+                }
+                category={customer.category ?? null}
+                totalDue={customerDetail.data?.summary?.totalDue ?? 0}
+                overdue={customerDetail.data?.summary?.overdue ?? 0}
+                todayCount={customerTodayInvoices.data?.meta?.total ?? 0}
+                loading={customerTodayInvoices.isFetching}
+                locked={cart.customerLocked}
+                onToggleLock={toggleCustomerLock}
+                // کلیک روی نام = فاکتورهای همین مشتری، همین‌جا. رفتن به پرونده‌ی
+                // کامل هنوز ممکن است، ولی کارِ روزمره این است نه آن.
+                onOpen={() => setCustomerPanel("ledger")}
+                onShowToday={() => setShowTodayPurchases(true)}
+                onClear={() => {
+                  setCustomer(null);
+                  invalidateIdem();
+                }}
+              />
+            )}
 
-        <select
-          value={warehouseId}
-          onChange={(e) => { setWarehouseId(e.target.value); invalidateIdem(); }}
-          className="h-9 rounded-md border bg-background px-3 text-sm"
-        >
-          {warehouses.data?.map((w) => (
-            <option key={w.id} value={w.id}>{w.name}</option>
-          ))}
-        </select>
-        {/* سه دکمه‌ی «حساب باز / کارهای انبار / فاکتورهای امروز» به نوار بالای
+            <select
+              value={warehouseId}
+              onChange={(e) => {
+                setWarehouseId(e.target.value);
+                invalidateIdem();
+              }}
+              className="h-9 rounded-md border bg-background px-3 text-sm"
+            >
+              {warehouses.data?.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+            {/* سه دکمه‌ی «حساب باز / کارهای انبار / فاکتورهای امروز» به نوار بالای
             مشترک (کنار ساعت) منتقل شدند؛ اینجا فقط اسکن، چیپ مشتری و انبار
             می‌مانند تا فضای نوار اسکن بازتر شود. میان‌برهای F3 و F10 همان‌جا
             که بودند، دست‌نخورده. */}
-      </div>
+          </div>
 
-      {/*
+          {/*
         جدول، تمامِ فضای باقی‌مانده.
 
         ستونِ کناری حذف شد: مشتری در چیپِ بالای نوار اسکن است، تخفیف و توضیح و
         مبلغ در نوارِ یک‌خطیِ پایین. آن ستون ۳۲۰ پیکسل از عرضِ جدول می‌گرفت تا
         چیزهایی را نشان دهد که هرکدام یک خط بیشتر نبودند.
       */}
-      <div className="flex min-h-0 flex-1 flex-col border-y">
-        <LineItems
-          /*
-           * در حالتِ عادی، ردیفِ کاملاً برگشتی از جدول بیرون می‌ماند — سبدِ
-           * واقعی دست‌نخورده است و اندیس‌ها با نگاشتِ adjustView ترجمه می‌شوند.
-           */
-          lines={adjustView ? adjustView.lines : lines}
-          activeRow={viewIndexOf(activeRow)}
-          errorLine={errorLine == null ? null : viewIndexOf(errorLine)}
-          mode={returning ? "return" : adjusting ? "adjust" : "sale"}
-          memory={memory}
-          onActivate={(vi) => setActiveRow(realIndexOf(vi))}
-          onPatch={(vi, p) => patchLine(realIndexOf(vi), p)}
-          onRemove={(vi) => removeLine(realIndexOf(vi))}
-          onQtyOverflow={handleQtyOverflow}
-        />
-      </div>
+          <div className="flex min-h-0 flex-1 flex-col border-y">
+            <LineItems
+              /*
+               * در حالتِ عادی، ردیفِ کاملاً برگشتی از جدول بیرون می‌ماند — سبدِ
+               * واقعی دست‌نخورده است و اندیس‌ها با نگاشتِ adjustView ترجمه می‌شوند.
+               */
+              lines={adjustView ? adjustView.lines : lines}
+              activeRow={viewIndexOf(activeRow)}
+              errorLine={errorLine == null ? null : viewIndexOf(errorLine)}
+              mode={returning ? "return" : adjusting ? "adjust" : "sale"}
+              memory={memory}
+              onActivate={(vi) => setActiveRow(realIndexOf(vi))}
+              onPatch={(vi, p) => patchLine(realIndexOf(vi), p)}
+              onRemove={(vi) => removeLine(realIndexOf(vi))}
+              onQtyOverflow={handleQtyOverflow}
+            />
+          </div>
 
-      {/*
+          {/*
         نوارِ جمع — یک خط، تمامِ عرض.
 
         چهار دکمه‌ی پایین حذف شدند: هر چهارتا حالا آیکنِ نوار بالا هستند و
@@ -2706,229 +3150,264 @@ export default function PosPage() {
         تنها دکمه‌ی برچسب‌دارِ صفحه همین «ثبت» است، چون کنارِ مبلغ می‌نشیند و
         عملِ نهایی است.
       */}
-      <div className="flex shrink-0 flex-col gap-1.5 border-t bg-card px-3 py-1.5">
-        {adjusting && customer && (
-          <section className="min-w-0">
-            <div className="mb-0.5 text-[10px] font-semibold text-muted-foreground">
-              مانده حساب مشتری
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              <CustomerBalanceStrip
-                layout="row"
-                totalDue={custSummary?.totalDue ?? 0}
-                overdue={custSummary?.overdue ?? 0}
-                invoiceDue={adjustingInvoiceDue}
-                dueAfter={dueAfterAdjust}
-                chequesInHand={custSummary?.chequesInHandCount ?? 0}
-              />
-            </div>
-          </section>
-        )}
-
-        <section className="flex min-w-0 flex-wrap items-end gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
-            {adjusting && (
-              <label
-                className="flex shrink-0 cursor-pointer select-none items-center gap-1 pb-0.5 text-[10px] text-muted-foreground"
-                title="حافظه خاموش: فاکتور مثل عادی ویرایش می‌شود · حافظه روشن: برگشتی‌ها و اقلام اضافه‌شده دیده می‌شود (Alt+H)"
-              >
-                <input
-                  type="checkbox"
-                  checked={memory}
-                  onChange={toggleMemory}
-                  className="size-3 cursor-pointer accent-primary"
-                />
-                <span className={memory ? "font-semibold text-foreground" : undefined}>
-                  نمایش سابقه فاکتور
-                </span>
-              </label>
+          <div className="flex shrink-0 flex-col gap-1.5 border-t bg-card px-3 py-1.5">
+            {adjusting && customer && (
+              <section className="min-w-0">
+                <div className="mb-0.5 text-[10px] font-semibold text-muted-foreground">
+                  مانده حساب مشتری
+                </div>
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                  <CustomerBalanceStrip
+                    layout="row"
+                    totalDue={custSummary?.totalDue ?? 0}
+                    overdue={custSummary?.overdue ?? 0}
+                    invoiceDue={adjustingInvoiceDue}
+                    dueAfter={dueAfterAdjust}
+                    chequesInHand={custSummary?.chequesInHandCount ?? 0}
+                  />
+                </div>
+              </section>
             )}
 
-            {/* خلاصه سند — سه چیپِ فشرده، در همان ردیفِ آخر کنار توضیح و مبلغ */}
-            <div className="flex min-w-0 flex-wrap items-center gap-1">
-              {adjusting && adjustDraftState ? (
-                <>
-                  <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                    <span className="block text-[10px] leading-tight text-muted-foreground">ارزش مرجوعی</span>
-                    <b className="block text-xs leading-tight tabular-nums text-amber-600 dark:text-amber-400">
-                      − {money(adjustDraftState.refundAmount)}
-                    </b>
-                  </div>
-                  <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                    <span className="block text-[10px] leading-tight text-muted-foreground">ارزش افزوده</span>
-                    <b className="block text-xs leading-tight tabular-nums text-primary">
-                      + {money(adjustDraftState.additionsAmount)}
-                    </b>
-                  </div>
-                  <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                    <span className="block text-[10px] leading-tight text-muted-foreground">اثر تغییرات</span>
-                    <b
-                      className={`block text-xs leading-tight tabular-nums ${
-                        adjustDraftState.changesAdjust >= 0 ? "text-primary" : "text-success"
-                      }`}
-                    >
-                      {adjustDraftState.changesAdjust >= 0 ? "+" : "−"}{" "}
-                      {money(Math.abs(adjustDraftState.changesAdjust))}
-                    </b>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                    <span className="block text-[10px] leading-tight text-muted-foreground">جمع اقلام</span>
-                    <b className="block text-xs leading-tight tabular-nums text-foreground">
-                      {money(grossSubtotal)}
-                    </b>
-                  </div>
-                  <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                    <span className="block text-[10px] leading-tight text-muted-foreground">تخفیف ردیف‌ها</span>
-                    <b className="block text-xs leading-tight tabular-nums text-success">
-                      − {money(linesDiscountTotal)}
-                    </b>
-                  </div>
-                  <div className="w-44 shrink-0 rounded border bg-background px-1.5 py-0.5">
-                    <span className="block text-[10px] leading-tight text-muted-foreground">تخفیف فاکتور</span>
-                    <DiscountField
-                      id="invoice-discount"
-                      value={invoiceDiscountInput}
-                      base={subtotal}
-                      compact
-                      onChange={(d) => {
-                        invalidateIdem();
-                        setInvoiceDiscountInput(d);
-                      }}
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            {returning && (
-              <>
-                <label className="flex w-40 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
-                  روش برگشت وجه
-                  <select
-                    value={refundMethod}
-                    onChange={(e) => setRefundMethod(e.target.value as PaymentMethod)}
-                    disabled={returning.isOpenAccount}
-                    title="روش برگشت وجه"
-                    className="h-7 w-full rounded-md border bg-background px-2 text-xs disabled:opacity-60"
+            <section className="flex min-w-0 flex-wrap items-end gap-2">
+              <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
+                {adjusting && (
+                  <label
+                    className="flex shrink-0 cursor-pointer select-none items-center gap-1 pb-0.5 text-[10px] text-muted-foreground"
+                    title="حافظه خاموش: فاکتور مثل عادی ویرایش می‌شود · حافظه روشن: برگشتی‌ها و اقلام اضافه‌شده دیده می‌شود (Alt+H)"
                   >
-                    <option value="">انتخاب روش</option>
-                    <option value="CASH">نقدی از صندوق</option>
-                    <option value="CARD">کارت‌خوان</option>
-                    {returning.hasCustomer && <option value="CREDIT">کسر از حساب</option>}
-                  </select>
-                </label>
-                <label className="flex w-44 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
-                  دلیل مرجوعی (اختیاری)
-                  <Input
-                    value={returnReason}
-                    onChange={(e) => setReturnReason(e.target.value)}
-                    maxLength={200}
-                    placeholder="مثلاً: خرابی یا عدم تطابق"
-                    className="h-7 w-full text-xs"
-                  />
-                </label>
-              </>
-            )}
-
-            {adjusting && (                <label className="flex w-44 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
-                  دلیل عملیات (اختیاری)
-                  <Input
-                    value={adjustReason}
-                    onChange={(e) => setAdjustReason(e.target.value)}
-                    maxLength={200}
-                    placeholder="مثلاً: مرجوعی به درخواست مشتری"
-                    className="h-7 w-full text-xs"
-                  />
-                </label>
-            )}
-
-            {quoting && (
-              <label className="flex w-40 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
-                اعتبار پیش‌فاکتور
-                <select
-                  value={quoting.validForMinutes}
-                  onChange={(e) =>
-                    patchCart({ doc: { type: "quote", validForMinutes: Number(e.target.value) } })
-                  }
-                  title="تا کی این قیمت معتبر است"
-                  className="h-7 w-full rounded-md border bg-background px-2 text-xs"
-                >
-                  <option value={60}>اعتبار ۱ ساعت</option>
-                  <option value={6 * 60}>اعتبار ۶ ساعت</option>
-                  <option value={24 * 60}>اعتبار ۲۴ ساعت</option>
-                  <option value={3 * 24 * 60}>اعتبار ۳ روز</option>
-                  <option value={7 * 24 * 60}>اعتبار ۷ روز</option>
-                </select>
-              </label>
-            )}
-
-            <label className="flex w-44 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
-              توضیح روی سند
-              <Input
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                maxLength={300}
-                placeholder="این توضیح روی نسخه چاپی می‌آید"
-                className="h-7 w-full text-xs"
-              />
-            </label>
-
-            {zeroPriceCount > 0 && (
-              <span className="pb-1 text-[10px] font-semibold text-warning">
-                {toFa(zeroPriceCount)} ردیف بدون قیمت
-              </span>
-            )}
-          </div>
-
-          <div className="flex min-w-0 shrink-0 flex-wrap items-end gap-3">
-            <div className="text-end">
-              <div className="text-[10px] leading-none text-muted-foreground">
-                {returning
-                  ? "بازپرداخت به مشتری"
-                  : adjusting
-                    ? adjustDraftState?.net === 0
-                      ? "اختلاف نهایی"
-                      : adjustDraftState && adjustDraftState.net > 0
-                        ? "اختلاف نهایی · دریافت"
-                        : "اختلاف نهایی · پرداخت"
-                    : quoting
-                      ? "جمع پیش‌فاکتور"
-                      : "مبلغ نهایی"}
-              </div>
-              <div className="text-lg font-bold leading-tight tabular-nums">
-                {money(
-                  returning
-                    ? returnTotal
-                    : adjusting
-                      ? (adjustDraftState?.net ?? 0)
-                      : total
+                    <input
+                      type="checkbox"
+                      checked={memory}
+                      onChange={toggleMemory}
+                      className="size-3 cursor-pointer accent-primary"
+                    />
+                    <span
+                      className={
+                        memory ? "font-semibold text-foreground" : undefined
+                      }
+                    >
+                      نمایش سابقه فاکتور
+                    </span>
+                  </label>
                 )}
-                <span className="ms-1 text-[10px] font-normal text-muted-foreground">ریال</span>
-              </div>
-            </div>
 
-            {adjusting && customer && adjustHasWork && dueAfterAdjust !== adjustingInvoiceDue && (
-              <div className="text-[10px] font-semibold leading-4 text-warning">
-                با ثبت:<br />
-                مانده فاکتور {money(dueAfterAdjust)}<br />
-                مانده مشتری {money(balanceAfterAdjust)}
-              </div>
-            )}
+                {/* خلاصه سند — سه چیپِ فشرده، در همان ردیفِ آخر کنار توضیح و مبلغ */}
+                <div className="flex min-w-0 flex-wrap items-center gap-1">
+                  {adjusting && adjustDraftState ? (
+                    <>
+                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
+                        <span className="block text-[10px] leading-tight text-muted-foreground">
+                          ارزش مرجوعی
+                        </span>
+                        <b className="block text-xs leading-tight tabular-nums text-amber-600 dark:text-amber-400">
+                          − {money(adjustDraftState.refundAmount)}
+                        </b>
+                      </div>
+                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
+                        <span className="block text-[10px] leading-tight text-muted-foreground">
+                          ارزش افزوده
+                        </span>
+                        <b className="block text-xs leading-tight tabular-nums text-primary">
+                          + {money(adjustDraftState.additionsAmount)}
+                        </b>
+                      </div>
+                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
+                        <span className="block text-[10px] leading-tight text-muted-foreground">
+                          اثر تغییرات
+                        </span>
+                        <b
+                          className={`block text-xs leading-tight tabular-nums ${
+                            adjustDraftState.changesAdjust >= 0
+                              ? "text-primary"
+                              : "text-success"
+                          }`}
+                        >
+                          {adjustDraftState.changesAdjust >= 0 ? "+" : "−"}{" "}
+                          {money(Math.abs(adjustDraftState.changesAdjust))}
+                        </b>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
+                        <span className="block text-[10px] leading-tight text-muted-foreground">
+                          جمع اقلام
+                        </span>
+                        <b className="block text-xs leading-tight tabular-nums text-foreground">
+                          {money(grossSubtotal)}
+                        </b>
+                      </div>
+                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
+                        <span className="block text-[10px] leading-tight text-muted-foreground">
+                          تخفیف ردیف‌ها
+                        </span>
+                        <b className="block text-xs leading-tight tabular-nums text-success">
+                          − {money(linesDiscountTotal)}
+                        </b>
+                      </div>
+                      <div className="w-44 shrink-0 rounded border bg-background px-1.5 py-0.5">
+                        <span className="block text-[10px] leading-tight text-muted-foreground">
+                          تخفیف فاکتور
+                        </span>
+                        <DiscountField
+                          id="invoice-discount"
+                          value={invoiceDiscountInput}
+                          base={subtotal}
+                          compact
+                          onChange={(d) => {
+                            invalidateIdem();
+                            setInvoiceDiscountInput(d);
+                          }}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                {returning && (
+                  <>
+                    <label className="flex w-40 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
+                      روش برگشت وجه
+                      <select
+                        value={refundMethod}
+                        onChange={(e) =>
+                          setRefundMethod(e.target.value as PaymentMethod)
+                        }
+                        disabled={returning.isOpenAccount}
+                        title="روش برگشت وجه"
+                        className="h-7 w-full rounded-md border bg-background px-2 text-xs disabled:opacity-60"
+                      >
+                        <option value="">انتخاب روش</option>
+                        <option value="CASH">نقدی از صندوق</option>
+                        <option value="CARD">کارت‌خوان</option>
+                        {returning.hasCustomer && (
+                          <option value="CREDIT">کسر از حساب</option>
+                        )}
+                      </select>
+                    </label>
+                    <label className="flex w-44 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
+                      دلیل مرجوعی (اختیاری)
+                      <Input
+                        value={returnReason}
+                        onChange={(e) => setReturnReason(e.target.value)}
+                        maxLength={200}
+                        placeholder="مثلاً: خرابی یا عدم تطابق"
+                        className="h-7 w-full text-xs"
+                      />
+                    </label>
+                  </>
+                )}
 
-            <Button
-              className="h-8 shrink-0 gap-1.5 px-4 text-sm font-bold"
-              disabled={commitOff}
-              onClick={() => commitRun?.()}
-            >
-              {commitBusy ? "در حال ثبت…" : commitLabel}
-              <Key>F2</Key>
-            </Button>
+                {adjusting && (
+                  <label className="flex w-44 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
+                    دلیل عملیات (اختیاری)
+                    <Input
+                      value={adjustReason}
+                      onChange={(e) => setAdjustReason(e.target.value)}
+                      maxLength={200}
+                      placeholder="مثلاً: مرجوعی به درخواست مشتری"
+                      className="h-7 w-full text-xs"
+                    />
+                  </label>
+                )}
+
+                {quoting && (
+                  <label className="flex w-40 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
+                    اعتبار پیش‌فاکتور
+                    <select
+                      value={quoting.validForMinutes}
+                      onChange={(e) =>
+                        patchCart({
+                          doc: {
+                            type: "quote",
+                            validForMinutes: Number(e.target.value),
+                          },
+                        })
+                      }
+                      title="تا کی این قیمت معتبر است"
+                      className="h-7 w-full rounded-md border bg-background px-2 text-xs"
+                    >
+                      <option value={60}>اعتبار ۱ ساعت</option>
+                      <option value={6 * 60}>اعتبار ۶ ساعت</option>
+                      <option value={24 * 60}>اعتبار ۲۴ ساعت</option>
+                      <option value={3 * 24 * 60}>اعتبار ۳ روز</option>
+                      <option value={7 * 24 * 60}>اعتبار ۷ روز</option>
+                    </select>
+                  </label>
+                )}
+
+                <label className="flex w-44 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
+                  توضیح روی سند
+                  <Input
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    maxLength={300}
+                    placeholder="این توضیح روی نسخه چاپی می‌آید"
+                    className="h-7 w-full text-xs"
+                  />
+                </label>
+
+                {zeroPriceCount > 0 && (
+                  <span className="pb-1 text-[10px] font-semibold text-warning">
+                    {toFa(zeroPriceCount)} ردیف بدون قیمت
+                  </span>
+                )}
+              </div>
+
+              <div className="flex min-w-0 shrink-0 flex-wrap items-end gap-3">
+                <div className="text-end">
+                  <div className="text-[10px] leading-none text-muted-foreground">
+                    {returning
+                      ? "بازپرداخت به مشتری"
+                      : adjusting
+                        ? adjustDraftState?.net === 0
+                          ? "اختلاف نهایی"
+                          : adjustDraftState && adjustDraftState.net > 0
+                            ? "اختلاف نهایی · دریافت"
+                            : "اختلاف نهایی · پرداخت"
+                        : quoting
+                          ? "جمع پیش‌فاکتور"
+                          : "مبلغ نهایی"}
+                  </div>
+                  <div className="text-lg font-bold leading-tight tabular-nums">
+                    {money(
+                      returning
+                        ? returnTotal
+                        : adjusting
+                          ? (adjustDraftState?.net ?? 0)
+                          : total,
+                    )}
+                    <span className="ms-1 text-[10px] font-normal text-muted-foreground">
+                      ریال
+                    </span>
+                  </div>
+                </div>
+
+                {adjusting &&
+                  customer &&
+                  adjustHasWork &&
+                  dueAfterAdjust !== adjustingInvoiceDue && (
+                    <div className="text-[10px] font-semibold leading-4 text-warning">
+                      با ثبت:
+                      <br />
+                      مانده فاکتور {money(dueAfterAdjust)}
+                      <br />
+                      مانده مشتری {money(balanceAfterAdjust)}
+                    </div>
+                  )}
+
+                <Button
+                  className="h-8 shrink-0 gap-1.5 px-4 text-sm font-bold"
+                  disabled={commitOff}
+                  onClick={() => commitRun?.()}
+                >
+                  {commitBusy ? "در حال ثبت…" : commitLabel}
+                  <Key>F2</Key>
+                </Button>
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
-    </div>
+        </div>
       </DocumentShell>
 
       {/*
@@ -2941,9 +3420,14 @@ export default function PosPage() {
         hasCustomer
         customerCreditDays={customerDetail.data?.creditDays}
         customerChequeRateBp={customerDetail.data?.chequeRateBp}
-        customerChequeRateMode={customerDetail.data?.chequeRateMode ?? undefined}
+        customerChequeRateMode={
+          customerDetail.data?.chequeRateMode ?? undefined
+        }
         onConfirm={(payments) => takeSettlement.mutate(payments)}
-        onClose={() => { setSettle(null); focusScan(); }}
+        onClose={() => {
+          setSettle(null);
+          focusScan();
+        }}
       />
 
       {/*
@@ -2953,28 +3437,34 @@ export default function PosPage() {
           • فاکتور مشتری ندارد    ⇒ اصلاً دفتری نیست که پول رویش بنشیند.
       */}
       {settle && (settle.amount < 0 || !settle.customerId) && (
-        <div className="absolute inset-x-0 bottom-0 z-40 flex flex-wrap items-center gap-3
-                        border-t border-primary bg-primary/10 px-4 py-3">
+        <div
+          className="absolute inset-x-0 bottom-0 z-40 flex flex-wrap items-center gap-3
+                        border-t border-primary bg-primary/10 px-4 py-3"
+        >
           <span className="font-bold">
             اصلاح فاکتور {toFa(settle.invoiceNumber)} —{" "}
             {settle.amount < 0 ? (
               <>
-                <span className="text-success">{money(-settle.amount)}</span> ریال به نفع مشتری.
+                <span className="text-success">{money(-settle.amount)}</span>{" "}
+                ریال به نفع مشتری.
                 {settle.customerId
                   ? " در حسابش بستانکار شد."
                   : " روی خودِ فاکتور برگشت خورد — پول را از صندوق به مشتری بدهید."}
               </>
             ) : (
               <>
-                <span className="text-warning">{money(settle.amount)}</span> ریال بیشتر شد و
-                روی خودِ فاکتور به‌عنوان دریافت ثبت شد.
+                <span className="text-warning">{money(settle.amount)}</span>{" "}
+                ریال بیشتر شد و روی خودِ فاکتور به‌عنوان دریافت ثبت شد.
               </>
             )}
           </span>
           <Button
             variant="outline"
             className="ms-auto h-10"
-            onClick={() => { setSettle(null); focusScan(); }}
+            onClick={() => {
+              setSettle(null);
+              focusScan();
+            }}
           >
             متوجه شدم
           </Button>
@@ -2997,19 +3487,36 @@ export default function PosPage() {
           // Ctrl+Enter = ویرایش با حافظه از همان اول.
           loadAdjust.mutate({ invoiceId: id, customer: null, memory: true });
         }}
-        onClose={() => { setShowInvoices(false); focusScan(); }}
+        onClose={() => {
+          setShowInvoices(false);
+          focusScan();
+        }}
       />
 
       <OpenQuotations
         open={showQuotes}
         onPick={(id) => void loadQuotation(id)}
-        onClose={() => { setShowQuotes(false); focusScan(); }}
+        onClose={() => {
+          setShowQuotes(false);
+          focusScan();
+        }}
+      />
+
+      <BlankQuotationsPanel
+        open={showBlankQuotes}
+        onClose={() => {
+          setShowBlankQuotes(false);
+          focusScan();
+        }}
       />
 
       <ShortcutsHelp
         open={showHelp}
         groups={shortcutGroups}
-        onClose={() => { setShowHelp(false); focusScan(); }}
+        onClose={() => {
+          setShowHelp(false);
+          focusScan();
+        }}
       />
 
       {/* دیالوگ‌ها */}
@@ -3034,7 +3541,10 @@ export default function PosPage() {
           setPickerStock(null);
           if (p) addLine(p, s);
         }}
-        onClose={() => { setPickerStock(null); focusScan(); }}
+        onClose={() => {
+          setPickerStock(null);
+          focusScan();
+        }}
       />
 
       <CustomerInvoicesPanel
@@ -3058,19 +3568,28 @@ export default function PosPage() {
           invalidateIdem();
           focusScan();
         }}
-        onOpenInvoice={(invoiceId, c) => loadAdjust.mutate({ invoiceId, customer: c })}
-        onReturnInvoice={(invoiceId, c) => loadReturn.mutate({ invoiceId, customer: c })}
+        onOpenInvoice={(invoiceId, c) =>
+          loadAdjust.mutate({ invoiceId, customer: c })
+        }
+        onReturnInvoice={(invoiceId, c) =>
+          loadReturn.mutate({ invoiceId, customer: c })
+        }
         // Shift+Enter روی فاکتور = ویرایش با حافظه از همان اول.
         onAdjustInvoice={(invoiceId, c) =>
           loadAdjust.mutate({ invoiceId, customer: c, memory: true })
         }
-        onCopyInvoice={(invoiceId, c) => loadCopy.mutate({ invoiceId, customer: c })}
+        onCopyInvoice={(invoiceId, c) =>
+          loadCopy.mutate({ invoiceId, customer: c })
+        }
         // P روی فاکتور = اصلاحِ نحوهٔ پرداخت، بدون بارگذاریِ سبدِ ویرایش.
         onFixPayment={(invoiceId, c) => {
           setShowCustomer(false);
           setFixPayment({ invoiceId, customer: c });
         }}
-        onClose={() => { setCustomerPanel(null); focusScan(); }}
+        onClose={() => {
+          setCustomerPanel(null);
+          focusScan();
+        }}
       />
 
       <PaymentRecomposeDialog
@@ -3085,7 +3604,10 @@ export default function PosPage() {
           setFixPayment(null);
           setCustomerPanel("pick");
         }}
-        onClose={() => { setFixPayment(null); focusScan(); }}
+        onClose={() => {
+          setFixPayment(null);
+          focusScan();
+        }}
         onDone={() => focusScan()}
       />
 
@@ -3093,10 +3615,16 @@ export default function PosPage() {
         open={showSearch}
         initialQuery={searchSeed}
         canManagePrice={canManagePrice}
-        onSavePrice={(productId, field, value) => savePrice.mutate({ productId, field, value })}
+        onSavePrice={(productId, field, value) =>
+          savePrice.mutate({ productId, field, value })
+        }
         onPick={addFromLocate}
         onSendToWorker={openWorkerForResult}
-        onClose={() => { setShowSearch(false); setSearchSeed(""); focusScan(); }}
+        onClose={() => {
+          setShowSearch(false);
+          setSearchSeed("");
+          focusScan();
+        }}
       />
 
       <WorkerPicker
@@ -3104,7 +3632,10 @@ export default function PosPage() {
         itemCount={workerItemCount}
         pending={sendToWorker.isPending}
         onPick={(id, note) => sendToWorker.mutate({ assignedToId: id, note })}
-        onClose={() => { setShowWorkerPicker(false); focusScan(); }}
+        onClose={() => {
+          setShowWorkerPicker(false);
+          focusScan();
+        }}
       />
 
       <CheckoutFlow
@@ -3113,15 +3644,32 @@ export default function PosPage() {
         lineCount={lines.length}
         customer={customer}
         pending={submit.isPending}
-        onCustomerChange={(c) => { setCustomer(c); invalidateIdem(); }}
+        onCustomerChange={(c) => {
+          setCustomer(c);
+          invalidateIdem();
+        }}
         onSubmit={(payments) => submit.mutate({ payments })}
-        onOpenFullPayment={() => { setShowCheckout(false); setShowPayment(true); }}
-        onClose={() => { setShowCheckout(false); focusScan(); }}
+        onOpenFullPayment={() => {
+          if (blankQuotationId && !customer) {
+            toast.info("اول مشتری را انتخاب کنید");
+            return;
+          }
+          setShowCheckout(false);
+          setShowPayment(true);
+        }}
+        onClose={() => {
+          setShowCheckout(false);
+          focusScan();
+        }}
+        requireCustomer={!!blankQuotationId}
       />
 
       <OpenAccounts
         open={showOpenAccounts}
-        onClose={() => { setShowOpenAccounts(false); focusScan(); }}
+        onClose={() => {
+          setShowOpenAccounts(false);
+          focusScan();
+        }}
         // پرونده‌ی دفتری F3 هم همان قراردادِ پنل مشتری را دارد؛ پنل بسته می‌شود
         // و فاکتور در همان صفحه‌ی فروش باز می‌شود.
         onOpenInvoice={(invoiceId, c) => {
@@ -3151,7 +3699,9 @@ export default function PosPage() {
               setCustomer(c);
               patchCart({ openAccountId: account.id, customerLocked: true });
               invalidateIdem();
-              toast.success(`فروش به «${account.customerName}» روی حساب باز — جنسها را اسکن کنید`);
+              toast.success(
+                `فروش به «${account.customerName}» روی حساب باز — جنسها را اسکن کنید`,
+              );
             })
             .catch(() => toast.error("بارگذاری مشتری حساب ناموفق بود"));
         }}
@@ -3161,26 +3711,38 @@ export default function PosPage() {
         open={showRecent}
         warehouseId={warehouseId}
         tasksByInvoice={tasksByInvoice}
-        onClose={() => { setShowRecent(false); focusScan(); }}
+        onClose={() => {
+          setShowRecent(false);
+          focusScan();
+        }}
       />
 
       <WorkTasksPanel
         open={showWorkTasks}
         warehouseId={warehouseId}
-        onClose={() => { setShowWorkTasks(false); focusScan(); }}
+        onClose={() => {
+          setShowWorkTasks(false);
+          focusScan();
+        }}
       />
 
       {/* کسری: مشتریِ فعلیِ سبد همراهش می‌رود تا بعداً بشود خبرش کرد. */}
       <ShortageDialog
         open={showShortage}
-        onOpenChange={(v) => { setShowShortage(v); if (!v) focusScan(); }}
+        onOpenChange={(v) => {
+          setShowShortage(v);
+          if (!v) focusScan();
+        }}
         warehouseId={warehouseId}
         customerId={customer?.id ?? null}
       />
 
       <ProductFormDialog
         open={showAddProduct}
-        onOpenChange={(v) => { setShowAddProduct(v); if (!v) focusScan(); }}
+        onOpenChange={(v) => {
+          setShowAddProduct(v);
+          if (!v) focusScan();
+        }}
         mode="create"
       />
 
@@ -3192,7 +3754,10 @@ export default function PosPage() {
         customerChequeRateBp={customerDetail.data?.chequeRateBp}
         customerChequeRateMode={customerDetail.data?.chequeRateMode}
         onConfirm={(payments, dueDate) => submit.mutate({ payments, dueDate })}
-        onClose={() => { setShowPayment(false); focusScan(); }}
+        onClose={() => {
+          setShowPayment(false);
+          focusScan();
+        }}
       />
 
       {/*
@@ -3237,18 +3802,27 @@ export default function PosPage() {
             },
           });
         }}
-        onClose={() => { setAdjustSettle(null); focusScan(); }}
+        onClose={() => {
+          setAdjustSettle(null);
+          focusScan();
+        }}
       />
 
       <SaleReceiptDialog
         invoice={receipt}
-        onClose={() => { setReceipt(null); focusScan(); }}
+        onClose={() => {
+          setReceipt(null);
+          focusScan();
+        }}
       />
 
       <TodayPurchasesDialog
         open={showTodayPurchases}
         customer={customer}
-        onClose={() => { setShowTodayPurchases(false); focusScan(); }}
+        onClose={() => {
+          setShowTodayPurchases(false);
+          focusScan();
+        }}
       />
     </div>
   );

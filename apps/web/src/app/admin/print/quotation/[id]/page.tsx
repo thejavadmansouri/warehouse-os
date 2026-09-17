@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { getQuotation } from "@/lib/api";
@@ -19,19 +19,20 @@ export default function QuotationPrintPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const [size, setSize] = useState<PaperSize>("a5");
-
-  useEffect(() => {
+  // اندازه از کوئری‌استرینگ خوانده می‌شود — lazy init، نه effect (سبزِ lint).
+  const [size, setSize] = useState<PaperSize>(() => {
+    if (typeof window === "undefined") return "a5";
     const q = new URLSearchParams(window.location.search).get("size");
-    if (q === "a4" || q === "a5") setSize(q);
-  }, []);
+    return q === "a4" || q === "a5" ? q : "a5";
+  });
 
   const quotation = useQuery({
     queryKey: ["quotation-print", id],
     queryFn: () => getQuotation(id),
   });
 
-  if (quotation.isLoading) return <p className="p-6 text-sm">در حال آماده‌سازی…</p>;
+  if (quotation.isLoading)
+    return <p className="p-6 text-sm">در حال آماده‌سازی…</p>;
   if (quotation.isError || !quotation.data)
     return <p className="p-6 text-sm">پیش‌فاکتور پیدا نشد.</p>;
 

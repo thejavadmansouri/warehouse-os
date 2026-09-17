@@ -1,4 +1,17 @@
-import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { Role } from '@prisma/client';
 
 import { Roles } from '../auth/roles.decorator';
@@ -26,9 +39,36 @@ export class PurchasesController {
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('import/preview')
+  @UseInterceptors(FileInterceptor('file'))
+  previewImport(@UploadedFile() file: Express.Multer.File) {
+    return this.purchases.previewImport(file);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('import/confirm')
+  confirmImport(@Body() dto: CreatePurchaseDto, @Req() req: any) {
+    return this.purchases.create(dto, req.user?.userId);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Get()
   findAll(@Query() q: QueryPurchasesDto) {
     return this.purchases.findAll(q);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('import-template')
+  downloadImportTemplate(@Res() res: Response) {
+    const workbook = this.purchases.buildImportTemplate();
+    res
+      .set({
+        'Content-Type':
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition':
+          'attachment; filename="kardo-purchase-template.xlsx"',
+      })
+      .send(workbook);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)

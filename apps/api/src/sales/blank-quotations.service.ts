@@ -41,6 +41,8 @@ export type BlankQuotationView = {
   /** «منقضی» وضعیت ذخیره‌شده نیست و از تاریخ حساب می‌شود. */
   displayStatus: BlankQuotationStatus | 'EXPIRED';
   customerName: string | null;
+  /** پرونده‌ی مشتری، اگر مدیر نام را به مشتریِ موجود وصل کرده باشد. */
+  customer: { id: string; fullName: string } | null;
   note: string | null;
   validUntil: Date | null;
   convertedInvoiceId: string | null;
@@ -109,6 +111,7 @@ type RawBlank = {
   number: number;
   status: BlankQuotationStatus;
   customerName: string | null;
+  customer?: { id: string; firstName: string; lastName: string | null } | null;
   note: string | null;
   validUntil: Date | null;
   convertedInvoiceId: string | null;
@@ -170,6 +173,7 @@ export class BlankQuotationsService {
           warehouseId,
           userId: userId ?? null,
           customerName: input.customerName?.trim() || null,
+          customerId: input.customerId?.trim() || null,
           note: input.note?.trim() || null,
           validUntil,
           lines: {
@@ -241,6 +245,7 @@ export class BlankQuotationsService {
         where,
         include: {
           user: { select: { id: true, fullName: true } },
+          customer: { select: { id: true, firstName: true, lastName: true } },
           lines: {
             select: {
               id: true,
@@ -278,6 +283,7 @@ export class BlankQuotationsService {
       where: { id },
       include: {
         user: { select: { id: true, fullName: true } },
+        customer: { select: { id: true, firstName: true, lastName: true } },
         lines: { orderBy: LINE_ORDER },
       },
     });
@@ -347,6 +353,20 @@ export class BlankQuotationsService {
       }
     });
 
+    // مشتریِ وصل‌شده باید واقعاً وجود داشته باشد — همان قاعده‌ی کالا/قفسه.
+    if (input.customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: input.customerId },
+        select: { id: true },
+      });
+      if (!customer) {
+        throw new NotFoundException({
+          error: 'CUSTOMER_NOT_FOUND',
+          message: 'مشتری انتخاب‌شده پیدا نشد',
+        });
+      }
+    }
+
     // کالا/قفسه پیش از نوشتن بررسی می‌شوند: وصل کردن به شناسه‌ی ناموجود یعنی
     // تبدیل بعداً وسط راه می‌شکند، جایی که مدیر دیگر نمی‌فهمد چرا.
     for (const row of input.lines) {
@@ -380,7 +400,8 @@ export class BlankQuotationsService {
     const total = q.lines.reduce((sum, line) => {
       const row = input.lines.find((r) => r.lineId === line.id);
       const finalPrice = row?.finalPrice !== undefined ? row.finalPrice : line.finalPrice;
-      return sum + line.quantity * (finalPrice ?? 0);
+      const quantity = row?.quantity !== undefined ? row.quantity : line.quantity;
+      return sum + quantity * (finalPrice ?? 0);
     }, 0);
 
     if (total > INT4_MAX) {
@@ -399,6 +420,7 @@ export class BlankQuotationsService {
             ...(row.finalPrice !== undefined
               ? { finalPrice: row.finalPrice, pricedAt: new Date() }
               : {}),
+            ...(row.quantity !== undefined ? { quantity: row.quantity } : {}),
             // `null` یعنی «وصل را بردار»، `undefined` یعنی «دست نزن».
             ...(row.productId !== undefined ? { productId: row.productId } : {}),
             ...(row.locationId !== undefined ? { locationId: row.locationId } : {}),
@@ -418,6 +440,9 @@ export class BlankQuotationsService {
           ...(allPriced ? { status: BlankQuotationStatus.PRICED } : {}),
           ...(input.customerName !== undefined
             ? { customerName: input.customerName.trim() || null }
+            : {}),
+          ...(input.customerId !== undefined
+            ? { customerId: input.customerId?.trim() || null }
             : {}),
           ...(input.note !== undefined ? { note: input.note.trim() || null } : {}),
         },
@@ -584,8 +609,10 @@ export class BlankQuotationsService {
       {
         idempotencyKey: `blank-${q.id}`,
         warehouseId: q.warehouseId,
-        // نام آزاد مشتری رکورد Customer نمی‌سازد، پس پیوندی هم وجود ندارد.
-        customerId: undefined,
+        // اولویت با مشتریِ انتخابیِ همین درخواست است؛ نبودش، پیوندِ ذخیره‌شده‌ی
+        // برگه (اگر مدیر نام را به پرونده وصل کرده باشد) فاکتور را به مشتری
+        // می‌بندد. هر دو خالی یعنی فروشِ گذری بدون مشتری.
+        customerId: body?.customerId ?? q.customerId ?? undefined,
         note: q.note ?? undefined,
         lines: q.lines.map((l) => ({
           productId: l.productId!,
@@ -733,6 +760,14 @@ export class BlankQuotationsService {
       status: q.status,
       displayStatus: isExpired ? 'EXPIRED' : q.status,
       customerName: q.customerName,
+      customer: q.customer
+        ? {
+            id: q.customer.id,
+            fullName: [q.customer.firstName, q.customer.lastName]
+              .filter(Boolean)
+              .join(' '),
+          }
+        : null,
       note: q.note,
       validUntil: q.validUntil,
       convertedInvoiceId: q.convertedInvoiceId,

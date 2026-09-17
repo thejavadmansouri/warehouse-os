@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
+  ArrowRight,
   FileClock,
   Pencil,
   Plus,
@@ -18,12 +19,6 @@ import { LoadingState, ErrorState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -44,9 +39,22 @@ import {
 } from "@/lib/api";
 import { useAuthStore } from "@/lib/auth-store";
 import { ApiException } from "@/lib/api-error-messages";
-import { amount, faDate, faTime, money, parseNum, qty, toFa } from "@/lib/format";
+import {
+  amount,
+  faDate,
+  faTime,
+  money,
+  parseNum,
+  qty,
+  toFa,
+} from "@/lib/format";
 import { uuid } from "@/lib/uuid";
-import type { Customer, LocateResult, PaymentInput, Quotation } from "@/lib/types";
+import type {
+  Customer,
+  LocateResult,
+  PaymentInput,
+  Quotation,
+} from "@/lib/types";
 import { CustomerPicker } from "../pos/_components/customer-picker";
 import { PaymentDialog } from "../pos/_components/payment-dialog";
 import { ProductSearch } from "../pos/_components/product-search";
@@ -66,7 +74,10 @@ const STATUS_STYLE: Record<string, { label: string; className: string }> = {
   ACTIVE: { label: "معتبر", className: "border-emerald-600 text-emerald-700" },
   EXPIRED: { label: "منقضی", className: "border-amber-600 text-amber-700" },
   CONVERTED: { label: "تبدیل شد", className: "border-primary text-primary" },
-  CANCELLED: { label: "لغو شد", className: "border-destructive text-destructive" },
+  CANCELLED: {
+    label: "لغو شد",
+    className: "border-destructive text-destructive",
+  },
 };
 
 /** ردیفِ قابل‌ویرایش در پیش‌فاکتور — id برای ردیف‌های تازه‌افزوده وجود ندارد. */
@@ -104,9 +115,21 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
    * نشانش دهد و باید کل فهرست عوض شود.
    */
   const isManager = useAuthStore((s) => s.hasRole)("ADMIN", "MANAGER");
-  const [bucket, setBucket] = React.useState<"QUOTATION" | "BLANK">("QUOTATION");
+  const [bucket, setBucket] = React.useState<"QUOTATION" | "BLANK">(
+    "QUOTATION",
+  );
   const [tab, setTab] = React.useState("ACTIVE");
   const [row, setRow] = React.useState(0);
+  /*
+   * عوض‌شدنِ تب یعنی فهرست عوض می‌شود — ردیفِ فعال باید صفر شود. در حینِ
+   * رندر انجام می‌شود نه effect (setState در بدنه‌ی effect رندرِ آبشاری
+   * می‌سازد و lint را قرمز می‌کند)؛ همان الگوی pos/page.tsx.
+   */
+  const [prevTab, setPrevTab] = React.useState(tab);
+  if (tab !== prevTab) {
+    setPrevTab(tab);
+    setRow(0);
+  }
   const [openId, setOpenId] = React.useState<string | null>(null);
   /**
    * پیش‌فاکتوری که منتظر انتخاب روش پرداخت است.
@@ -114,7 +137,11 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
    * تبدیل بدون پرداخت، فاکتور را با paidAmount صفر ثبت می‌کرد — یعنی هر تبدیل
    * بی‌صدا یک بدهیِ تمام‌مبلغ می‌ساخت، حتی وقتی مشتری نقد داده بود.
    */
-  const [payingFor, setPayingFor] = React.useState<{ id: string; total: number; hasCustomer: boolean } | null>(null);
+  const [payingFor, setPayingFor] = React.useState<{
+    id: string;
+    total: number;
+    hasCustomer: boolean;
+  } | null>(null);
 
   // ---------- ویرایش ----------
   const [editing, setEditing] = React.useState(false);
@@ -125,7 +152,9 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
    * null = «صریحاً بدون مشتری»
    * Customer = مشتریِ تازه انتخاب‌شده
    */
-  const [editCustomer, setEditCustomer] = React.useState<Customer | null | undefined>(undefined);
+  const [editCustomer, setEditCustomer] = React.useState<
+    Customer | null | undefined
+  >(undefined);
   /** نامِ آزادِ مشتری (تایپ مستقیم) — مثل محسن‌فاکتور. */
   const [editCustomerName, setEditCustomerName] = React.useState("");
   const [editLines, setEditLines] = React.useState<EditLine[]>([]);
@@ -147,8 +176,11 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   };
 
   const convert = useMutation({
-    mutationFn: (v: { id: string; payments: PaymentInput[]; dueDate?: string }) =>
-      convertQuotation(v.id, v.payments, v.dueDate),
+    mutationFn: (v: {
+      id: string;
+      payments: PaymentInput[];
+      dueDate?: string;
+    }) => convertQuotation(v.id, v.payments, v.dueDate),
     onSuccess: (inv) => {
       toast.success(`فاکتور ${toFa(inv.number)} ثبت شد — ${amount(inv.total)}`);
       setPayingFor(null);
@@ -170,13 +202,20 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
   const extend = useMutation({
     mutationFn: ({ id, minutes }: { id: string; minutes: number }) =>
       extendQuotation(id, minutes),
-    onSuccess: () => { toast.success("اعتبار تمدید شد"); refresh(); },
+    onSuccess: () => {
+      toast.success("اعتبار تمدید شد");
+      refresh();
+    },
     onError: () => toast.error("تمدید ناموفق بود"),
   });
 
   const cancel = useMutation({
     mutationFn: (id: string) => cancelQuotation(id),
-    onSuccess: () => { toast.success("پیش‌فاکتور لغو شد"); setOpenId(null); refresh(); },
+    onSuccess: () => {
+      toast.success("پیش‌فاکتور لغو شد");
+      setOpenId(null);
+      refresh();
+    },
     onError: () => toast.error("لغو ناموفق بود"),
   });
 
@@ -194,7 +233,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         discount: l.discount,
-      })) ?? []
+      })) ?? [],
     );
     setEditCustomer(undefined);
     setEditCustomerName("");
@@ -212,7 +251,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       const existing = prev.find((l) => l.productId === r.id);
       if (existing) {
         return prev.map((l) =>
-          l.productId === r.id ? { ...l, quantity: l.quantity + 1 } : l
+          l.productId === r.id ? { ...l, quantity: l.quantity + 1 } : l,
         );
       }
       return [
@@ -233,7 +272,7 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
 
   const editSubtotal = editLines.reduce(
     (s, l) => s + l.quantity * l.unitPrice - l.discount,
-    0
+    0,
   );
 
   const saveEdit = useMutation({
@@ -243,12 +282,11 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
          * مشتری: یا پیوندِ انتخاب‌شده، یا نامِ آزادِ تایپ‌شده. وقتی اسم را
          * مستقیم تایپ کرده، پیوندی نمی‌فرستیم تا مشتریِ بی‌شماره ساخته نشود.
          */
-        customerId:
-          editCustomerName.trim()
-            ? null
-            : editCustomer === undefined
-              ? q!.customerId ?? null
-              : editCustomer?.id ?? null,
+        customerId: editCustomerName.trim()
+          ? null
+          : editCustomer === undefined
+            ? (q!.customerId ?? null)
+            : (editCustomer?.id ?? null),
         customerName: editCustomerName.trim() || undefined,
         discount: q!.discount,
         lines: editLines.map((l) => {
@@ -269,17 +307,19 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       refresh();
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof ApiException ? e.message : "ذخیره‌ی تغییرات ناموفق بود"),
+      toast.error(
+        e instanceof ApiException ? e.message : "ذخیره‌ی تغییرات ناموفق بود",
+      ),
   });
 
   const rows = list.data?.data ?? [];
 
   /** ردیفِ فعال همیشه باید دیده شود — کیبورد خودش اسکرول نمی‌کند. */
   React.useEffect(() => {
-    document.querySelector('[data-active-row="true"]')?.scrollIntoView({ block: "nearest" });
+    document
+      .querySelector('[data-active-row="true"]')
+      ?.scrollIntoView({ block: "nearest" });
   }, [row, rows.length]);
-
-  React.useEffect(() => setRow(0), [tab]);
 
   /*
    * قیمت‌گذاری کارِ مدیر است (روت‌های سرور هم همین را می‌گویند)، پس سطلِ
@@ -288,16 +328,20 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
    */
   const bucketSwitch = !isManager ? null : (
     <div className="flex shrink-0 overflow-hidden rounded-md border text-xs">
-      {([
-        ["QUOTATION", "پیش‌فاکتور"],
-        ["BLANK", "برگه‌ی سفید"],
-      ] as const).map(([id, label]) => (
+      {(
+        [
+          ["QUOTATION", "پیش‌فاکتور"],
+          ["BLANK", "برگه‌ی سفید"],
+        ] as const
+      ).map(([id, label]) => (
         <button
           key={id}
           type="button"
           onClick={() => setBucket(id)}
           className={`px-3 py-1.5 ${
-            bucket === id ? "bg-primary text-primary-foreground" : "bg-background"
+            bucket === id
+              ? "bg-primary text-primary-foreground"
+              : "bg-background"
           }`}
         >
           {label}
@@ -312,7 +356,9 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       <div
         className={`flex flex-col ${embedded ? "min-h-0 flex-1" : "h-[calc(100vh-2.5rem)]"}`}
       >
-        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">{bucketSwitch}</div>
+        <div className="flex shrink-0 items-center gap-2 border-b px-3 py-2">
+          {bucketSwitch}
+        </div>
         <BlankQuotationsPanel />
       </div>
     );
@@ -336,7 +382,10 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
             return;
           case "Enter":
             e.preventDefault();
-            if (rows[row]) { setOpenId(rows[row].id); setEditing(false); }
+            if (rows[row]) {
+              setOpenId(rows[row].id);
+              setEditing(false);
+            }
             return;
         }
       }}
@@ -366,7 +415,8 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
         ) : !rows.length ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
             پیش‌فاکتوری در این وضعیت نیست — از صندوق با
-            <kbd className="mx-1 rounded border px-1.5 py-0.5">F8</kbd> ساخته می‌شود.
+            <kbd className="mx-1 rounded border px-1.5 py-0.5">F8</kbd> ساخته
+            می‌شود.
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -390,10 +440,15 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
                     key={r.id}
                     data-active-row={i === row}
                     onMouseEnter={() => setRow(i)}
-                    onClick={() => { setOpenId(r.id); setEditing(false); }}
+                    onClick={() => {
+                      setOpenId(r.id);
+                      setEditing(false);
+                    }}
                     className="cursor-pointer border-b odd:bg-muted/25"
                   >
-                    <td className={`${TD} font-bold tabular-nums`}>{toFa(r.number)}</td>
+                    <td className={`${TD} font-bold tabular-nums`}>
+                      {toFa(r.number)}
+                    </td>
                     <td className={`${TD} tabular-nums text-muted-foreground`}>
                       {faDate(r.createdAt)}
                     </td>
@@ -407,12 +462,18 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
                       {toFa(r._count?.lines ?? 0)}
                     </td>
                     <td className={`${TD} text-xs`}>
-                      {r.displayStatus === "ACTIVE" ? remaining(r.remainingMinutes) : "—"}
+                      {r.displayStatus === "ACTIVE"
+                        ? remaining(r.remainingMinutes)
+                        : "—"}
                     </td>
                     <td className={TD}>
-                      <Badge variant="outline" className={st.className}>{st.label}</Badge>
+                      <Badge variant="outline" className={st.className}>
+                        {st.label}
+                      </Badge>
                     </td>
-                    <td className={`${TD} text-end font-bold tabular-nums`}>{money(r.total)}</td>
+                    <td className={`${TD} text-end font-bold tabular-nums`}>
+                      {money(r.total)}
+                    </td>
                   </tr>
                 );
               })}
@@ -422,7 +483,12 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
       </div>
 
       <div className="flex shrink-0 items-center gap-x-5 border-t bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-        {([["↑↓", "حرکت"], ["Enter", "باز کردن"]] as [string, string][]).map(([k, label]) => (
+        {(
+          [
+            ["↑↓", "حرکت"],
+            ["Enter", "باز کردن"],
+          ] as [string, string][]
+        ).map(([k, label]) => (
           <span key={k} className="flex items-center gap-1.5">
             <kbd className="rounded border bg-background px-1.5 py-0.5 font-sans text-[11px]">
               {k}
@@ -432,275 +498,354 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
         ))}
       </div>
 
-      {/* جزئیات */}
-      <Dialog
-        open={!!openId}
-        onOpenChange={(v) => { if (!v) { setOpenId(null); setEditing(false); } }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base">
-              پیش‌فاکتور {q ? toFa(q.number) : ""}
-            </DialogTitle>
-          </DialogHeader>
-
-          {detail.isLoading || !q ? (
-            <LoadingState />
-          ) : editing ? (
-            <div className="space-y-4">
-              {/* مشتری — تایپ آزاد (مثل محسن‌فاکتور) یا انتخاب از لیست */}
-              <div className="rounded-lg border p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs text-muted-foreground">مشتری</p>
-                  <div className="flex shrink-0 gap-2">
-                    <Button variant="outline" size="sm" onClick={() => setShowCustomerPicker(true)}>
-                      <UserRound className="size-4" />
-                      {editCustomerName.trim()
-                        ? "انتخاب از لیست"
-                        : q.customerName || editCustomer
-                          ? "تغییر"
-                          : "انتساب"}
-                    </Button>
-                    {(q.customerName || editCustomer || editCustomerName.trim()) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setEditCustomer(null);
-                          setEditCustomerName("");
-                        }}
-                      >
-                        حذف
-                      </Button>
-                    )}
-                  </div>
-                </div>
-                <Input
-                  dir="rtl"
-                  className="mt-2 h-9"
-                  placeholder="نام مشتری را تایپ کنید…"
-                  value={
-                    editCustomerName
-                      ? editCustomerName
-                      : editCustomer === undefined
-                        ? q.customerName ?? ""
-                        : editCustomer?.fullName ?? ""
-                  }
-                  onChange={(e) => {
-                    setEditCustomerName(e.target.value);
-                    if (e.target.value.trim()) setEditCustomer(null);
-                  }}
-                />
-              </div>
-
-              {/* اقلام — کم/زیاد/حذف */}
-              <div className="max-h-72 overflow-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-muted/60">
-                    <tr className="text-muted-foreground">
-                      <th className="p-2 text-start font-medium">کالا</th>
-                      <th className="w-24 p-2 text-start font-medium">تعداد</th>
-                      <th className="w-36 p-2 text-start font-medium">قیمت واحد</th>
-                      <th className="w-24 p-2 text-end font-medium">جمع</th>
-                      <th className="w-10 p-2" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {editLines.map((l, i) => (
-                      <tr key={l.key} className="border-t">
-                        <td className="p-2">
-                          {/* نامِ قابل‌ویرایش — مثل محسن‌فاکتور: هر قلم را می‌شود عوض کرد. */}
-                          <Input
-                            dir="rtl"
-                            className="h-8 w-full min-w-40 text-sm font-medium"
-                            value={l.productName}
-                            onChange={(e) => patchEditLine(i, { productName: e.target.value })}
-                          />
-                        </td>
-                        <td className="p-2">
-                          <Input
-                            dir="ltr"
-                            className="h-8 w-20 text-right tabular-nums"
-                            value={qty(l.quantity)}
-                            onChange={(e) =>
-                              patchEditLine(i, { quantity: parseNum(e.target.value) })
-                            }
-                          />
-                        </td>
-                        <td className="p-2">
-                          <MoneyInput
-                            className="h-8 w-32 text-right text-sm tabular-nums"
-                            value={l.unitPrice}
-                            onChange={(n) => patchEditLine(i, { unitPrice: n })}
-                          />
-                        </td>
-                        <td className="p-2 text-end font-medium tabular-nums">
-                          {money(l.quantity * l.unitPrice - l.discount)}
-                        </td>
-                        <td className="p-2 text-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            title="حذف ردیف"
-                            onClick={() => removeEditLine(l.key)}
-                          >
-                            <Trash2 className="size-4 text-destructive" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <Button variant="outline" size="sm" onClick={() => setShowProductSearch(true)}>
-                <Plus className="size-4" /> افزودن کالا
-              </Button>
-
-              <div className="flex items-center justify-between rounded-lg bg-muted p-3">
-                <span className="font-semibold">مبلغ کل</span>
-                <span className="text-lg font-bold tabular-nums">
-                  {amount(Math.max(0, editSubtotal - q.discount))}
-                </span>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  disabled={saveEdit.isPending || editLines.length === 0}
-                  onClick={() => saveEdit.mutate()}
-                >
-                  {saveEdit.isPending ? "در حال ذخیره…" : "ذخیره تغییرات"}
-                </Button>
-                <Button variant="outline" onClick={() => setEditing(false)}>
-                  انصراف
-                </Button>
-              </div>
+      {/* workspace تمام‌صفحه؛ جزئیات پیش‌فاکتور برای کار طولانی نباید در Dialog محدود شود. */}
+      {openId && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          tabIndex={-1}
+          className="fixed inset-0 z-50 flex min-h-0 flex-col bg-background outline-none"
+          onKeyDown={(e) => {
+            if (
+              e.key === "Escape" &&
+              !payingFor &&
+              !showCustomerPicker &&
+              !showProductSearch
+            ) {
+              e.preventDefault();
+              setOpenId(null);
+              setEditing(false);
+            }
+          }}
+        >
+          <div className="flex shrink-0 items-center gap-3 border-b bg-background px-4 py-3 shadow-sm">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setOpenId(null);
+                setEditing(false);
+              }}
+            >
+              <ArrowRight className="size-4" />
+              بازگشت
+            </Button>
+            <div className="min-w-0">
+              <h2 className="truncate font-semibold">
+                پیش‌فاکتور {q ? toFa(q.number) : ""}
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                مشاهده و ویرایش سند
+              </p>
             </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex flex-wrap items-center gap-3 text-sm">
-                <Badge
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-auto p-4 sm:p-6">
+            {detail.isLoading || !q ? (
+              <LoadingState />
+            ) : editing ? (
+              <div className="space-y-4">
+                {/* مشتری — تایپ آزاد (مثل محسن‌فاکتور) یا انتخاب از لیست */}
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs text-muted-foreground">مشتری</p>
+                    <div className="flex shrink-0 gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowCustomerPicker(true)}
+                      >
+                        <UserRound className="size-4" />
+                        {editCustomerName.trim()
+                          ? "انتخاب از لیست"
+                          : q.customerName || editCustomer
+                            ? "تغییر"
+                            : "انتساب"}
+                      </Button>
+                      {(q.customerName ||
+                        editCustomer ||
+                        editCustomerName.trim()) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditCustomer(null);
+                            setEditCustomerName("");
+                          }}
+                        >
+                          حذف
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                  <Input
+                    dir="rtl"
+                    className="mt-2 h-9"
+                    placeholder="نام مشتری را تایپ کنید…"
+                    value={
+                      editCustomerName
+                        ? editCustomerName
+                        : editCustomer === undefined
+                          ? (q.customerName ?? "")
+                          : (editCustomer?.fullName ?? "")
+                    }
+                    onChange={(e) => {
+                      setEditCustomerName(e.target.value);
+                      if (e.target.value.trim()) setEditCustomer(null);
+                    }}
+                  />
+                </div>
+
+                {/* اقلام — کم/زیاد/حذف */}
+                <div className="overflow-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 bg-muted/60">
+                      <tr className="text-muted-foreground">
+                        <th className="p-2 text-start font-medium">کالا</th>
+                        <th className="w-24 p-2 text-start font-medium">
+                          تعداد
+                        </th>
+                        <th className="w-36 p-2 text-start font-medium">
+                          قیمت واحد
+                        </th>
+                        <th className="w-24 p-2 text-end font-medium">جمع</th>
+                        <th className="w-10 p-2" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editLines.map((l, i) => (
+                        <tr key={l.key} className="border-t">
+                          <td className="p-2">
+                            {/* نامِ قابل‌ویرایش — مثل محسن‌فاکتور: هر قلم را می‌شود عوض کرد. */}
+                            <Input
+                              dir="rtl"
+                              className="h-8 w-full min-w-40 text-sm font-medium"
+                              value={l.productName}
+                              onChange={(e) =>
+                                patchEditLine(i, {
+                                  productName: e.target.value,
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="p-2">
+                            <Input
+                              dir="ltr"
+                              className="h-8 w-20 text-right tabular-nums"
+                              value={qty(l.quantity)}
+                              onChange={(e) =>
+                                patchEditLine(i, {
+                                  quantity: parseNum(e.target.value),
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="p-2">
+                            <MoneyInput
+                              className="h-8 w-32 text-right text-sm tabular-nums"
+                              value={l.unitPrice}
+                              onChange={(n) =>
+                                patchEditLine(i, { unitPrice: n })
+                              }
+                            />
+                          </td>
+                          <td className="p-2 text-end font-medium tabular-nums">
+                            {money(l.quantity * l.unitPrice - l.discount)}
+                          </td>
+                          <td className="p-2 text-end">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="حذف ردیف"
+                              onClick={() => removeEditLine(l.key)}
+                            >
+                              <Trash2 className="size-4 text-destructive" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <Button
                   variant="outline"
-                  className={(STATUS_STYLE[q.displayStatus] ?? STATUS_STYLE.ACTIVE).className}
+                  size="sm"
+                  onClick={() => setShowProductSearch(true)}
                 >
-                  {(STATUS_STYLE[q.displayStatus] ?? STATUS_STYLE.ACTIVE).label}
-                </Badge>
-                <span>{q.customerName ?? "بدون مشتری"}</span>
-                <span className="text-muted-foreground">
-                  اعتبار تا {faDate(q.validUntil)}
-                  {q.displayStatus === "ACTIVE" && ` — ${remaining(q.remainingMinutes)} مانده`}
-                </span>
-              </div>
+                  <Plus className="size-4" /> افزودن کالا
+                </Button>
 
-              <div className="max-h-72 overflow-auto rounded-lg border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>کالا</TableHead>
-                      <TableHead className="text-center">تعداد</TableHead>
-                      <TableHead className="text-start">قیمت واحد</TableHead>
-                      <TableHead className="text-start">جمع</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {q.lines?.map((l) => (
-                      <TableRow key={l.id}>
-                        <TableCell className="max-w-[20rem] truncate font-medium">
-                          {l.label?.trim() || l.product.name}
-                        </TableCell>
-                        <TableCell className="text-center tabular-nums">{qty(l.quantity)}</TableCell>
-                        <TableCell className="tabular-nums">{money(l.unitPrice)}</TableCell>
-                        <TableCell className="font-medium tabular-nums">
-                          {money(l.quantity * l.unitPrice - l.discount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+                <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+                  <span className="font-semibold">مبلغ کل</span>
+                  <span className="text-lg font-bold tabular-nums">
+                    {amount(Math.max(0, editSubtotal - q.discount))}
+                  </span>
+                </div>
 
-              <div className="flex items-center justify-between rounded-lg bg-muted p-3">
-                <span className="font-semibold">مبلغ کل</span>
-                <span className="text-lg font-bold tabular-nums">{amount(q.total)}</span>
-              </div>
-
-              {q.displayStatus === "EXPIRED" && (
-                <p className="rounded-md border-e-4 border-e-amber-600 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
-                  اعتبار این پیش‌فاکتور تمام شده. برای تبدیل به فاکتور باید تمدید شود —
-                  چون قیمت‌ها ممکن است از زمان صدور تغییر کرده باشند.
-                </p>
-              )}
-
-              {(q.displayStatus === "ACTIVE" || q.displayStatus === "EXPIRED") && (
-                <div className="flex flex-wrap gap-2">
-                  {q.displayStatus === "ACTIVE" && (
-                    <Button variant="outline" disabled={!q.lines?.length} onClick={startEdit}>
-                      <Pencil className="size-4" /> ویرایش
-                    </Button>
-                  )}
-
+                <div className="flex gap-2">
                   <Button
                     className="flex-1"
-                    disabled={q.displayStatus !== "ACTIVE" || convert.isPending}
-                    onClick={() =>
-                      setPayingFor({
-                        id: q.id,
-                        total: q.total,
-                        // برای نسیه لازم است: PaymentDialog بدون مشتری اجازه‌ی CREDIT نمی‌دهد.
-                        hasCustomer: !!q.customerName,
-                      })
-                    }
+                    disabled={saveEdit.isPending || editLines.length === 0}
+                    onClick={() => saveEdit.mutate()}
                   >
-                    {convert.isPending ? "در حال ثبت…" : "تبدیل به فاکتور"}
+                    {saveEdit.isPending ? "در حال ذخیره…" : "ذخیره تغییرات"}
                   </Button>
-
-                  {/* بردن به صندوق — سبد از این پیش‌فاکتور پر می‌شود و فروشنده ادامه می‌دهد. */}
-                  <Button
-                    variant="outline"
-                    onClick={() => router.push(`/admin/pos?quotation=${q.id}`)}
-                  >
-                    <ShoppingCart className="size-4" /> ادامه در صندوق
-                  </Button>
-
-                  {/* چاپ در پنجره‌ی جدا، تا این صفحه و وضعیتش سر جایش بماند. */}
-                  <Button
-                    variant="outline"
-                    onClick={() =>
-                      window.open(`/admin/print/quotation/${q.id}`, "_blank")
-                    }
-                  >
-                    <Printer className="size-4" /> چاپ
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    disabled={extend.isPending}
-                    onClick={() => extend.mutate({ id: q.id, minutes: 24 * 60 })}
-                  >
-                    تمدید ۲۴ ساعت
-                  </Button>
-
-                  <Button
-                    variant="ghost"
-                    className="text-destructive"
-                    disabled={cancel.isPending}
-                    onClick={() => cancel.mutate(q.id)}
-                  >
-                    لغو
+                  <Button variant="outline" onClick={() => setEditing(false)}>
+                    انصراف
                   </Button>
                 </div>
-              )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex flex-wrap items-center gap-3 text-sm">
+                  <Badge
+                    variant="outline"
+                    className={
+                      (STATUS_STYLE[q.displayStatus] ?? STATUS_STYLE.ACTIVE)
+                        .className
+                    }
+                  >
+                    {
+                      (STATUS_STYLE[q.displayStatus] ?? STATUS_STYLE.ACTIVE)
+                        .label
+                    }
+                  </Badge>
+                  <span>{q.customerName ?? "بدون مشتری"}</span>
+                  <span className="text-muted-foreground">
+                    اعتبار تا {faDate(q.validUntil)}
+                    {q.displayStatus === "ACTIVE" &&
+                      ` — ${remaining(q.remainingMinutes)} مانده`}
+                  </span>
+                </div>
 
-              {q.displayStatus === "CONVERTED" && (
-                <p className="text-sm text-muted-foreground">
-                  این پیش‌فاکتور به فاکتور تبدیل شده است.
-                </p>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+                <div className="overflow-auto rounded-lg border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>کالا</TableHead>
+                        <TableHead className="text-center">تعداد</TableHead>
+                        <TableHead className="text-start">قیمت واحد</TableHead>
+                        <TableHead className="text-start">جمع</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {q.lines?.map((l) => (
+                        <TableRow key={l.id}>
+                          <TableCell className="max-w-[20rem] truncate font-medium">
+                            {l.label?.trim() || l.product.name}
+                          </TableCell>
+                          <TableCell className="text-center tabular-nums">
+                            {qty(l.quantity)}
+                          </TableCell>
+                          <TableCell className="tabular-nums">
+                            {money(l.unitPrice)}
+                          </TableCell>
+                          <TableCell className="font-medium tabular-nums">
+                            {money(l.quantity * l.unitPrice - l.discount)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted p-3">
+                  <span className="font-semibold">مبلغ کل</span>
+                  <span className="text-lg font-bold tabular-nums">
+                    {amount(q.total)}
+                  </span>
+                </div>
+
+                {q.displayStatus === "EXPIRED" && (
+                  <p className="rounded-md border-e-4 border-e-amber-600 bg-amber-50 p-3 text-xs leading-6 text-amber-900">
+                    اعتبار این پیش‌فاکتور تمام شده. برای تبدیل به فاکتور باید
+                    تمدید شود — چون قیمت‌ها ممکن است از زمان صدور تغییر کرده
+                    باشند.
+                  </p>
+                )}
+
+                {(q.displayStatus === "ACTIVE" ||
+                  q.displayStatus === "EXPIRED") && (
+                  <div className="flex flex-wrap gap-2">
+                    {q.displayStatus === "ACTIVE" && (
+                      <Button
+                        variant="outline"
+                        disabled={!q.lines?.length}
+                        onClick={startEdit}
+                      >
+                        <Pencil className="size-4" /> ویرایش
+                      </Button>
+                    )}
+
+                    <Button
+                      className="flex-1"
+                      disabled={
+                        q.displayStatus !== "ACTIVE" || convert.isPending
+                      }
+                      onClick={() =>
+                        setPayingFor({
+                          id: q.id,
+                          total: q.total,
+                          // برای نسیه لازم است: PaymentDialog بدون مشتری اجازه‌ی CREDIT نمی‌دهد.
+                          hasCustomer: !!q.customerName,
+                        })
+                      }
+                    >
+                      {convert.isPending ? "در حال ثبت…" : "تبدیل به فاکتور"}
+                    </Button>
+
+                    {/* بردن به صندوق — سبد از این پیش‌فاکتور پر می‌شود و فروشنده ادامه می‌دهد. */}
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        router.push(`/admin/pos?quotation=${q.id}`)
+                      }
+                    >
+                      <ShoppingCart className="size-4" /> ادامه در صندوق
+                    </Button>
+
+                    {/* چاپ در پنجره‌ی جدا، تا این صفحه و وضعیتش سر جایش بماند. */}
+                    <Button
+                      variant="outline"
+                      onClick={() =>
+                        window.open(`/admin/print/quotation/${q.id}`, "_blank")
+                      }
+                    >
+                      <Printer className="size-4" /> چاپ
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      disabled={extend.isPending}
+                      onClick={() =>
+                        extend.mutate({ id: q.id, minutes: 24 * 60 })
+                      }
+                    >
+                      تمدید ۲۴ ساعت
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      className="text-destructive"
+                      disabled={cancel.isPending}
+                      onClick={() => cancel.mutate(q.id)}
+                    >
+                      لغو
+                    </Button>
+                  </div>
+                )}
+
+                {q.displayStatus === "CONVERTED" && (
+                  <p className="text-sm text-muted-foreground">
+                    این پیش‌فاکتور به فاکتور تبدیل شده است.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* روش پرداخت — گام اجباری پیش از تبدیل. */}
       <PaymentDialog
@@ -734,7 +879,6 @@ export function QuotationsPanel({ embedded }: { embedded?: boolean } = {}) {
     </div>
   );
 }
-
 
 /** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
 export default function QuotationsPage() {
