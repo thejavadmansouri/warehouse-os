@@ -84,14 +84,26 @@ export class ReturnsService {
       });
     }
 
-    const saleLines = await this.prisma.inventoryLog.findMany({
-      where: { invoiceId, action: 'SALE' },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        product: { select: { id: true, name: true, sku: true, unit: true } },
-        location: { select: { id: true, name: true, code: true, path: true } },
-      },
-    });
+    const [saleLines, customerBalance] = await Promise.all([
+      this.prisma.inventoryLog.findMany({
+        where: { invoiceId, action: 'SALE' },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          product: { select: { id: true, name: true, sku: true, unit: true } },
+          location: {
+            select: { id: true, name: true, code: true, path: true },
+          },
+        },
+      }),
+      /*
+       * مانده‌ی کلِ مشتری — پیش‌فرضِ روشِ برگشت با این تصمیم گرفته می‌شود، نه
+       * فقط با مانده‌ی همین فاکتور: مشتریِ حساب‌دار که چیزی پس می‌دهد، انتظارش
+       * «از حسابم کم کن» است نه طلبکار شدن. برای نقدیِ گذری (بدون مشتری) صفر.
+       */
+      invoice.customerId
+        ? this.ledger.balance(invoice.customerId)
+        : Promise.resolve(0),
+    ]);
 
     /*
      * قابل‌برگشت باید اصلاحیه‌ها را هم ببیند.
@@ -164,6 +176,12 @@ export class ReturnsService {
        * حساب» است. کلاینت با همین پرچم روش را قفل می‌کند تا نقد پیشنهاد ندهد.
        */
       isOpenAccount: invoice.status === InvoiceStatus.OPEN,
+      /**
+       * مانده‌ی کلِ مشتری — مثبت یعنی بدهکار. کلاینت مرجوعیِ مشتریِ بدهکار را
+       * به‌طور پیش‌فرض «کسر از حساب» می‌گذارد تا پولِ نقدِ فاکتورِ تسویه‌شده
+       * اشتباهی روی حسابش به‌عنوان اعتبار معلق نشود.
+       */
+      customerBalance,
       accountId: invoice.accountId,
     };
   }
@@ -613,6 +631,23 @@ export class ReturnsService {
           customer: { select: { id: true, firstName: true, lastName: true } },
           user: { select: { id: true, fullName: true } },
           _count: { select: { lines: true } },
+          /* ریز اقلام فقط برای تاریخچه‌ی یک فاکتور لازم است — در لیستِ کلی
+             بارِ اضافه است و صفحه‌ی مرجوعی‌ها را سنگین می‌کند. */
+          ...(q.invoiceId
+            ? {
+                lines: {
+                  select: {
+                    id: true,
+                    quantity: true,
+                    unitRefund: true,
+                    lineRefund: true,
+                    restock: true,
+                    product: { select: { id: true, name: true } },
+                    location: { select: { id: true, path: true } },
+                  },
+                },
+              }
+            : {}),
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,

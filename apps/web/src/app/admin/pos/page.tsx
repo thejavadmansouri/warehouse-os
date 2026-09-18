@@ -1397,8 +1397,13 @@ export default function PosPage() {
         doc: returningStateOf(data),
       };
 
-      // روی حساب باز پولی پرداخت نشده؛ تنها راهِ برگشت، کسر از حساب است.
-      setRefundMethod(data.isOpenAccount ? "CREDIT" : "");
+      // حساب باز: پولی پرداخت نشده — تنها راهِ برگشت، کسر از حساب. مشتریِ
+      // بدهکار (مانده‌ی کلِ مثبت) هم پیش‌فرضش کسر از حساب است، حتی اگر خودِ
+      // فاکتور نقدی تسویه شده باشد؛ پولش به صندوق رفته و طلبکار کردنش فقط
+      // اعتبارِ معلقِ گیج‌کننده می‌سازد.
+      setRefundMethod(
+        data.isOpenAccount || (data.customerBalance ?? 0) > 0 ? "CREDIT" : "",
+      );
       setReturnReason("");
       setShowCustomer(false);
       invalidateIdem();

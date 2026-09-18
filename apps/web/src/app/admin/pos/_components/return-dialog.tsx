@@ -1,11 +1,17 @@
 "use client";
 
+import * as React from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Undo2 } from "lucide-react";
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,10 +37,16 @@ import type { PaymentMethod } from "@/lib/types";
  */
 export function ReturnDialog({
   invoiceId,
+  initialAll = false,
   onClose,
   onDone,
 }: {
   invoiceId: string | null;
+  /**
+   * مرجوعیِ کامل — همه‌ی اقلامِ قابل‌برگشت به محضِ بازشدن انتخاب شده‌اند؛
+   * فروشنده فقط نگاه می‌کند و ثبت می‌زند (یا چیزی را کم می‌کند).
+   */
+  initialAll?: boolean;
   onClose: () => void;
   onDone?: () => void;
 }) {
@@ -56,7 +68,14 @@ export function ReturnDialog({
 
   const invoice = data.data?.invoice;
   const hasCustomer = !!invoice?.customer;
-  const owesMoney = (invoice?.dueAmount ?? 0) > 0;
+  /*
+   * مشتریِ حساب‌دار (مانده‌ی کلِ مثبت) که چیزی پس می‌دهد، پیش‌فرضش «کسر از
+   * حساب» است — حتی اگر فاکتورِ خودش نقدی تسویه شده باشد. پولِ نقدِ فاکتورِ
+   * قبلی به صندوق رفته؛ طلبکار کردنِ مشتریِ بدهکار فقط اعتبارِ معلقِ گیج‌کننده
+   * می‌سازد (همان اشتباهِ مرجوعیِ ۳۲ که ۱۵۰٬۰۰۰ روی حسابِ تبای معلق ماند).
+   * مانده‌ی کل از سرور می‌آید، نه فقط مانده‌ی همین فاکتور.
+   */
+  const customerOwes = (data.data?.customerBalance ?? 0) > 0;
   /*
    * فاکتورِ جاریِ یک حساب باز: مشتری جنس را برده و هنوز یک ریال هم نداده. پس
    * «برگشت وجه از صندوق» یعنی پول دادن بابت جنسی که پولش گرفته نشده — سرور هم
@@ -64,15 +83,30 @@ export function ReturnDialog({
    */
   const isOpenAccount = data.data?.isOpenAccount ?? false;
 
-  // پیش‌فرضِ روشِ برگشت: اگر مشتری بدهکار است → کسر از حساب؛ وگرنه نقد. بدون
-  // مشتری اصلاً «کسر از حساب» معنا ندارد.
+  // پیش‌فرضِ روشِ برگشت: مشتریِ بدهکار → کسر از حساب؛ وگرنه نقد. بدونِ مشتری
+  // اصلاً «کسر از حساب» معنا ندارد.
   const defaultMethod: PaymentMethod =
-    hasCustomer && owesMoney ? "CREDIT" : "CASH";
+    hasCustomer && customerOwes ? "CREDIT" : "CASH";
   const effectiveMethod: PaymentMethod = isOpenAccount
     ? "CREDIT"
     : ((method || defaultMethod) as PaymentMethod);
 
   const lines = data.data?.lines ?? [];
+
+  /* مرجوعیِ کامل: با رسیدنِ اقلام، همه‌ی قابل‌برگشت‌ها یک‌جا تیک می‌خورند —
+   * فقط یک‌بار، نه با هر refetch (وگرنه ویرایشِ کاربر پاک می‌شد). */
+  const preFilled = React.useRef(false);
+  React.useEffect(() => {
+    if (!initialAll || preFilled.current || lines.length === 0) return;
+    preFilled.current = true;
+    setQtyById(
+      Object.fromEntries(
+        lines
+          .filter((l) => l.returnable > 0)
+          .map((l) => [l.saleLogId, l.returnable]),
+      ),
+    );
+  }, [initialAll, lines]);
 
   const refundPreview = useMemo(() => {
     return lines.reduce((sum, l) => {
@@ -116,7 +150,9 @@ export function ReturnDialog({
       onClose();
     },
     onError: (e) => {
-      toast.error(e instanceof ApiException ? e.message : "ثبت مرجوعی ناموفق بود");
+      toast.error(
+        e instanceof ApiException ? e.message : "ثبت مرجوعی ناموفق بود",
+      );
     },
   });
 
@@ -128,7 +164,10 @@ export function ReturnDialog({
   function setQty(saleLogId: string, raw: string, max: number) {
     // ارقام فارسی/عربی اول به لاتین تبدیل شوند؛ وگرنه `\d` (که فقط 0-9 لاتین است)
     // آن‌ها را حذف می‌کرد و ورودیِ فارسی همیشه صفر می‌شد.
-    const n = Math.max(0, Math.min(max, Number(faToEn(raw).replace(/[^\d]/g, "")) || 0));
+    const n = Math.max(
+      0,
+      Math.min(max, Number(faToEn(raw).replace(/[^\d]/g, "")) || 0),
+    );
     setQtyById((m) => ({ ...m, [saleLogId]: n }));
   }
 
@@ -156,8 +195,8 @@ export function ReturnDialog({
 
         {data.data?.returnable && isOpenAccount && (
           <p className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            فاکتورِ جاریِ حساب باز — هنوز پولی پرداخت نشده، پس برگشت از بدهیِ همین
-            حساب کم می‌شود.
+            فاکتورِ جاریِ حساب باز — هنوز پولی پرداخت نشده، پس برگشت از بدهیِ
+            همین حساب کم می‌شود.
           </p>
         )}
 
@@ -169,9 +208,15 @@ export function ReturnDialog({
                 <span className="font-medium">
                   {invoice.customer?.fullName ?? "نقدی گذری"}
                 </span>
-                {owesMoney && (
+                {invoice.dueAmount > 0 && (
                   <span className="ms-3 text-amber-600">
                     مانده‌ی فاکتور: {money(invoice.dueAmount)}
+                  </span>
+                )}
+                {customerOwes && (
+                  <span className="ms-3 text-amber-600">
+                    مانده‌ی کل مشتری: {money(data.data!.customerBalance)} —
+                    برگشت پیش‌فرض از حساب کم می‌شود
                   </span>
                 )}
               </div>
@@ -187,10 +232,18 @@ export function ReturnDialog({
                   <thead className="sticky top-0 bg-muted/60 backdrop-blur">
                     <tr className="text-muted-foreground">
                       <th className="p-2 text-start font-medium">کالا</th>
-                      <th className="w-20 p-2 text-center font-medium">فروخته</th>
-                      <th className="w-24 p-2 text-center font-medium">قابل‌برگشت</th>
-                      <th className="w-28 p-2 text-center font-medium">تعداد برگشت</th>
-                      <th className="w-24 p-2 text-center font-medium">سالم؟</th>
+                      <th className="w-20 p-2 text-center font-medium">
+                        فروخته
+                      </th>
+                      <th className="w-24 p-2 text-center font-medium">
+                        قابل‌برگشت
+                      </th>
+                      <th className="w-28 p-2 text-center font-medium">
+                        تعداد برگشت
+                      </th>
+                      <th className="w-24 p-2 text-center font-medium">
+                        سالم؟
+                      </th>
                       <th className="w-28 p-2 text-end font-medium">برگشتی</th>
                     </tr>
                   </thead>
@@ -227,7 +280,11 @@ export function ReturnDialog({
                               disabled={disabled}
                               value={q ? toFa(q) : ""}
                               onChange={(e) =>
-                                setQty(l.saleLogId, e.target.value, l.returnable)
+                                setQty(
+                                  l.saleLogId,
+                                  e.target.value,
+                                  l.returnable,
+                                )
                               }
                               placeholder="۰"
                               className="h-9 text-center tabular-nums"
@@ -291,8 +348,8 @@ export function ReturnDialog({
                     </Select>
                     {effectiveMethod === "CREDIT" && (
                       <span className="text-xs text-muted-foreground">
-                        از بدهیِ مشتری کم می‌شود؛ اگر بیشتر از بدهی باشد، بستانکار
-                        می‌شود.
+                        از بدهیِ مشتری کم می‌شود؛ اگر بیشتر از بدهی باشد،
+                        بستانکار می‌شود.
                       </span>
                     )}
                   </div>

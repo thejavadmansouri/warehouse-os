@@ -36,12 +36,16 @@ const METHODS: Exclude<PaymentMethod, "CREDIT">[] = ["CASH", "CARD", "CHEQUE"];
 export function PayoutForm({
   customerId,
   creditBalance,
+  /** مانده‌ی مثبتِ مشتری (بدهی) — برای هشدار «این مشتری بدهکار است». */
+  debitBalance = 0,
   allowBeyondCredit = false,
   onDone,
 }: {
   customerId: string;
   /** قدرمطلقِ بستانکاریِ مشتری — عددِ مثبت. <=0 یعنی چیزی برای پرداخت نیست. */
   creditBalance: number;
+  /** بدهیِ فعلیِ مشتری — عددِ مثبت. صفر یعنی بدهکار نیست. */
+  debitBalance?: number;
   /**
    * پرداختِ آزاد: فرم برای مشتریِ بدونِ بستانکاری هم باز می‌شود و مبلغ می‌تواند
    * از بستانکاری بگذرد — با تأییدِ صریح، مازاد به بدهیِ مشتری اضافه می‌شود.
@@ -49,7 +53,8 @@ export function PayoutForm({
   allowBeyondCredit?: boolean;
   onDone: () => void;
 }) {
-  const [method, setMethod] = React.useState<Exclude<PaymentMethod, "CREDIT">>("CASH");
+  const [method, setMethod] =
+    React.useState<Exclude<PaymentMethod, "CREDIT">>("CASH");
   const [amount, setAmount] = React.useState(Math.max(0, creditBalance));
   const [reason, setReason] = React.useState("");
   const [note, setNote] = React.useState("");
@@ -66,7 +71,9 @@ export function PayoutForm({
    * شبکه قطع شد و کاربر دوباره زد، اعتبار مشتری دو بار مصرف نشود.
    */
   const idemRef = React.useRef<string | null>(null);
-  const resetIdem = () => { idemRef.current = null; };
+  const resetIdem = () => {
+    idemRef.current = null;
+  };
 
   const over = amount > creditBalance;
   const chequeIncomplete =
@@ -97,9 +104,11 @@ export function PayoutForm({
     onSuccess: (r) => {
       toast.success(
         <div className="flex flex-col gap-0.5">
-          <span className="text-base font-bold">پرداخت {toFa(r.number)} ثبت شد</span>
+          <span className="text-base font-bold">
+            پرداخت {toFa(r.number)} ثبت شد
+          </span>
           <span className="tabular-nums">{amountFmt(r.amount)}</span>
-        </div>
+        </div>,
       );
       setReason("");
       setNote("");
@@ -126,7 +135,10 @@ export function PayoutForm({
   /* دلیلِ پرداخت اختیاری است — تسویه نباید به تایپِ دلیل گره بخورد. */
   const overAllowed = allowBeyondCredit ? allowOver : false;
   const canSubmit =
-    amount > 0 && (!over || overAllowed) && !chequeIncomplete && !submit.isPending;
+    amount > 0 &&
+    (!over || overAllowed) &&
+    !chequeIncomplete &&
+    !submit.isPending;
 
   if (creditBalance <= 0 && !allowBeyondCredit) {
     return (
@@ -154,6 +166,13 @@ export function PayoutForm({
       </h2>
 
       <div className="flex flex-col gap-3">
+        {debitBalance > 0 && allowBeyondCredit && (
+          <p className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+            این مشتری <b>{money(debitBalance)}</b> بدهکار است — پرداختِ وجه به
+            او طلبکارتر می‌کند و بدهی‌اش سرِ جایش می‌ماند. اگر قصدتان کم‌کردن از
+            بدهی است، از «دریافت وجه» استفاده کنید.
+          </p>
+        )}
         <div className="rounded-lg border p-3">
           <div className="flex items-center gap-2">
             <div className="flex gap-1">
@@ -161,7 +180,10 @@ export function PayoutForm({
                 <button
                   key={m}
                   type="button"
-                  onClick={() => { setMethod(m); resetIdem(); }}
+                  onClick={() => {
+                    setMethod(m);
+                    resetIdem();
+                  }}
                   className={`h-9 rounded-md px-3 text-sm font-medium transition-colors ${
                     method === m
                       ? "bg-blue-600 text-white"
@@ -176,7 +198,10 @@ export function PayoutForm({
             <MoneyInput
               className="h-9 flex-1 text-right tabular-nums"
               value={amount}
-              onChange={(n) => { setAmount(n); resetIdem(); }}
+              onChange={(n) => {
+                setAmount(n);
+                resetIdem();
+              }}
             />
           </div>
 
@@ -185,16 +210,25 @@ export function PayoutForm({
               <Input
                 placeholder="شماره چک"
                 value={cheque.number}
-                onChange={(e) => { setCheque((c) => ({ ...c, number: e.target.value })); resetIdem(); }}
+                onChange={(e) => {
+                  setCheque((c) => ({ ...c, number: e.target.value }));
+                  resetIdem();
+                }}
               />
               <Input
                 placeholder="بانک"
                 value={cheque.bankName}
-                onChange={(e) => { setCheque((c) => ({ ...c, bankName: e.target.value })); resetIdem(); }}
+                onChange={(e) => {
+                  setCheque((c) => ({ ...c, bankName: e.target.value }));
+                  resetIdem();
+                }}
               />
               <JalaliDateInput
                 value={cheque.dueDate?.slice(0, 10) ?? ""}
-                onChange={(iso) => { setCheque((c) => ({ ...c, dueDate: iso })); resetIdem(); }}
+                onChange={(iso) => {
+                  setCheque((c) => ({ ...c, dueDate: iso }));
+                  resetIdem();
+                }}
               />
             </div>
           )}
@@ -204,7 +238,10 @@ export function PayoutForm({
               <input
                 type="checkbox"
                 checked={allowOver}
-                onChange={(e) => { setAllowOver(e.target.checked); resetIdem(); }}
+                onChange={(e) => {
+                  setAllowOver(e.target.checked);
+                  resetIdem();
+                }}
                 className="mt-0.5 size-4 accent-amber-600"
               />
               <span className="text-xs">
@@ -221,8 +258,8 @@ export function PayoutForm({
             </label>
           ) : over ? (
             <p className="mt-2 text-xs text-destructive">
-              مبلغ از بستانکاری ({money(creditBalance)}) بیشتر است — مشتری ناگهان
-              بدهکار می‌شود؛ کم کنید.
+              مبلغ از بستانکاری ({money(creditBalance)}) بیشتر است — مشتری
+              ناگهان بدهکار می‌شود؛ کم کنید.
             </p>
           ) : (
             creditBalance > 0 && (
@@ -244,7 +281,10 @@ export function PayoutForm({
               variant="outline"
               size="sm"
               disabled={amount === creditBalance}
-              onClick={() => { setAmount(creditBalance); resetIdem(); }}
+              onClick={() => {
+                setAmount(creditBalance);
+                resetIdem();
+              }}
             >
               کلِ بستانکاری ({money(creditBalance)})
             </Button>

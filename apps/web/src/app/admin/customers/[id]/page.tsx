@@ -27,6 +27,10 @@ import {
   MoreHorizontal,
   MessageSquare,
   Pencil,
+  Eye,
+  Undo2,
+  PencilLine,
+  CreditCard,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -44,7 +48,10 @@ import {
   deactivateCustomer,
   getCustomer,
   getCustomerStats,
+  getInvoice,
+  getInvoiceSettlement,
   getInvoices,
+  getReturns,
   getStatement,
   setOpeningBalance,
   updateCustomer,
@@ -60,6 +67,8 @@ import { PayoutForm } from "@/components/payout-form";
 import { EditCustomerDialog } from "./_components/edit-customer-dialog";
 import { SmsDialog } from "./_components/sms-dialog";
 import { StatementTable } from "./_components/statement-table";
+import { ReturnDialog } from "@/app/admin/pos/_components/return-dialog";
+import { PaymentRecomposeDialog } from "@/app/admin/pos/_components/payment-recompose-dialog";
 import { OverlayPanel } from "@/components/document/icon-bar";
 import { cn } from "@/lib/utils";
 import type { Customer, Invoice } from "@/lib/types";
@@ -147,6 +156,24 @@ export default function CustomerPage() {
   /** پیامک و ویرایش از منوی «امکانات بیشتر» باز می‌شوند — دیالوگ‌ها کنترل‌شده‌اند. */
   const [smsOpen, setSmsOpen] = React.useState(false);
   const [editOpen, setEditOpen] = React.useState(false);
+
+  /* عملیات روی فاکتورِ خاص — مشاهده (جزئیات) و مرجوعیِ کامل. ویرایش به POS
+   * می‌رود، این دو همان‌جا درونِ صفحه حل می‌شوند. */
+  const [viewing, setViewing] = React.useState<string | null>(null);
+  const [returning, setReturning] = React.useState<string | null>(null);
+  /** سندهای مرجوعی که ریزِ اقلامشان در پنل مشاهده باز شده. */
+  const [openedReturnLines, setOpenedReturnLines] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+  /** اصلاحِ نحوهٔ پرداخت — دیالوگِ تسویهٔ مجدد، روی فاکتورِ در حال مشاهده. */
+  const [fixingPayment, setFixingPayment] = React.useState(false);
+  const toggleReturnLines = (id: string) =>
+    setOpenedReturnLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   /** فوکوسِ منوی «امکانات بیشتر» — دکمه‌ی بازکننده و بدنه‌ی منو. */
   const moreBtnRef = React.useRef<HTMLButtonElement>(null);
@@ -264,6 +291,25 @@ export default function CustomerPage() {
   const [rangeFrom, setRangeFrom] = React.useState("");
   const [rangeTo, setRangeTo] = React.useState("");
   const [invPage, setInvPage] = React.useState(1);
+
+  /* جزئیاتِ فاکتور برای «مشاهده» — همان لحظه که موردی انتخاب شد. */
+  const viewedInvoice = useQuery({
+    queryKey: ["invoice", viewing],
+    queryFn: () => getInvoice(viewing!),
+    enabled: !!viewing,
+  });
+  /* تاریخچه‌ی مرجوعی‌های همان فاکتور — زیر اقلام دیده می‌شود. */
+  const viewedReturns = useQuery({
+    queryKey: ["returns", "by-invoice", viewing],
+    queryFn: () => getReturns({ invoiceId: viewing!, limit: 50 }),
+    enabled: !!viewing,
+  });
+  /* پرداخت‌های همان فاکتور با ریز روش‌ها — از endpoint تسویه. */
+  const viewedSettlement = useQuery({
+    queryKey: ["invoice-settlement", viewing],
+    queryFn: () => getInvoiceSettlement(viewing!),
+    enabled: !!viewing,
+  });
 
   const purchases = useQuery({
     queryKey: [
@@ -752,6 +798,8 @@ export default function CustomerPage() {
                     <CustomerPurchaseRows
                       key={`${purchFilter}-${invPage}-${purchaseRows.length}`}
                       onOpenInPos={openInPos}
+                      onView={(invId) => setViewing(invId)}
+                      onReturn={(invId) => setReturning(invId)}
                       invoices={purchaseRows}
                       defaultExpanded={purchFilter === "today"}
                     />
@@ -837,6 +885,337 @@ export default function CustomerPage() {
 
         {tab === "cheques" && <CustomerChequesTab customerId={id} />}
       </div>
+
+      {/* مشاهده‌ی فاکتور — پنلِ رویِ صفحه؛ جمع و اقلام همان لحظه دیده می‌شوند. */}
+      {viewing && (
+        <OverlayPanel
+          title={`فاکتور ${toFa(viewedInvoice.data?.number ?? 0)}`}
+          onClose={() => setViewing(null)}
+        >
+          {viewedInvoice.isLoading ? (
+            <LoadingState />
+          ) : viewedInvoice.data ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">مبلغ</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums">
+                    {money(viewedInvoice.data.total)}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">مانده</p>
+                  <p
+                    className={`mt-0.5 text-lg font-bold tabular-nums ${viewedInvoice.data.dueAmount > 0 ? "text-amber-600 dark:text-amber-400" : ""}`}
+                  >
+                    {viewedInvoice.data.dueAmount > 0
+                      ? money(viewedInvoice.data.dueAmount)
+                      : "—"}
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">وضعیت</p>
+                  <p className="mt-1">
+                    <StatusBadge
+                      kind="invoice"
+                      status={viewedInvoice.data.status}
+                    />
+                  </p>
+                </div>
+                <div className="rounded-lg border bg-card p-3">
+                  <p className="text-xs text-muted-foreground">تاریخ</p>
+                  <p className="mt-0.5 text-sm font-medium tabular-nums">
+                    {faDate(viewedInvoice.data.createdAt)}
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40">
+                    <tr className="text-muted-foreground">
+                      <th className="p-2 text-start font-medium">کالا</th>
+                      <th className="p-2 text-start font-medium">مکان</th>
+                      <th className="w-16 p-2 text-start font-medium">تعداد</th>
+                      <th className="w-28 p-2 text-end font-medium">
+                        قیمت واحد
+                      </th>
+                      <th className="w-28 p-2 text-end font-medium">جمع</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewedInvoice.data.lines?.map((l) => (
+                      <tr key={l.id} className="border-t">
+                        <td className="p-2 font-medium">
+                          {l.product?.name ?? "—"}
+                        </td>
+                        <td className="p-2 text-xs text-muted-foreground">
+                          {l.location?.path ?? ""}
+                        </td>
+                        <td className="p-2 tabular-nums">{toFa(l.quantity)}</td>
+                        <td className="p-2 tabular-nums">
+                          {money(l.unitPrice ?? 0)}
+                        </td>
+                        <td className="p-2 text-end font-semibold tabular-nums">
+                          {money(
+                            (l.unitPrice ?? 0) * l.quantity -
+                              (l.lineDiscount ?? 0),
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>{" "}
+              {/* پرداخت‌های همین فاکتور با ریز روش‌ها — چه‌قدر گرفته شده و چطور؟ */}
+              {viewedSettlement.data &&
+                (viewedSettlement.data.payments.length > 0 ||
+                  viewedSettlement.data.credit > 0) && (
+                  <div className="overflow-x-auto rounded-lg border border-emerald-600/30">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b bg-emerald-600/10 px-3 py-2 text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                      <span>پرداخت‌های این فاکتور</span>
+                      <span className="flex flex-wrap gap-3 text-xs font-normal">
+                        {viewedSettlement.data.byMethod.map((m) => (
+                          <span key={m.method} className="tabular-nums">
+                            {m.method === "CASH"
+                              ? "نقد"
+                              : m.method === "CARD"
+                                ? "کارتخوان"
+                                : "نسیه"}
+                            {": "}
+                            <span className="font-semibold">
+                              {money(m.amount)}
+                            </span>
+                          </span>
+                        ))}
+                      </span>
+                    </div>
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/40">
+                        <tr className="text-muted-foreground">
+                          <th className="p-2 text-start font-medium">تاریخ</th>
+                          <th className="p-2 text-start font-medium">روش</th>
+                          <th className="p-2 text-start font-medium">توضیح</th>
+                          <th className="w-32 p-2 text-end font-medium">
+                            مبلغ
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {viewedSettlement.data.payments.map((p) => (
+                          <tr key={p.id} className="border-t">
+                            <td className="p-2 text-xs text-muted-foreground">
+                              {faDate(p.createdAt)}
+                            </td>
+                            <td className="p-2 text-xs">
+                              {p.method === "CASH"
+                                ? "نقد"
+                                : p.method === "CARD"
+                                  ? "کارتخوان"
+                                  : "نسیه"}
+                            </td>
+                            <td className="p-2 text-xs text-muted-foreground">
+                              {p.note || "—"}
+                            </td>
+                            <td className="p-2 text-end font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                              {money(p.amount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              {/* تاریخچه‌ی مرجوعی‌های همین فاکتور — چرا این قلم مانده‌اش این است؟ */}
+              {!!viewedReturns.data?.data.length && (
+                <div className="overflow-x-auto rounded-lg border border-amber-600/30">
+                  <div className="border-b bg-amber-600/10 px-3 py-2 text-sm font-semibold text-amber-700 dark:text-amber-400">
+                    مرجوعی‌های این فاکتور (
+                    {toFa(viewedReturns.data.data.length)} سند)
+                  </div>{" "}
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/40">
+                      <tr className="text-muted-foreground">
+                        <th className="p-2 text-start font-medium">شماره</th>
+                        <th className="p-2 text-start font-medium">تاریخ</th>
+                        <th className="p-2 text-start font-medium">اقلام</th>
+                        <th className="p-2 text-start font-medium">
+                          روش برگشت
+                        </th>
+                        <th className="p-2 text-start font-medium">دلیل</th>
+                        <th className="w-28 p-2 text-end font-medium">مبلغ</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewedReturns.data.data.map((r) => {
+                        const open = openedReturnLines.has(r.id);
+                        return (
+                          <React.Fragment key={r.id}>
+                            <tr
+                              onClick={() => toggleReturnLines(r.id)}
+                              title={
+                                open
+                                  ? "بستن ریز اقلام"
+                                  : "دیدن ریز اقلام برگشتی"
+                              }
+                              className="cursor-pointer border-t transition-colors hover:bg-muted/30"
+                            >
+                              <td className="p-2 font-medium tabular-nums">
+                                <span className="inline-flex items-center gap-2">
+                                  {open ? (
+                                    <ChevronUp className="size-3.5" />
+                                  ) : (
+                                    <ChevronDown className="size-3.5" />
+                                  )}
+                                  {toFa(r.number)}
+                                </span>
+                              </td>
+                              <td className="p-2 text-xs text-muted-foreground">
+                                {faDate(r.createdAt)}
+                              </td>
+                              <td className="p-2 tabular-nums">
+                                {toFa(r._count?.lines ?? 0)} قلم
+                              </td>
+                              <td className="p-2 text-xs">
+                                {r.refundMethod === "CASH"
+                                  ? "نقد"
+                                  : r.refundMethod === "CARD"
+                                    ? "کارتخوان"
+                                    : "کسر از حساب"}
+                              </td>
+                              <td className="p-2 text-xs text-muted-foreground">
+                                {r.reason || "—"}
+                              </td>
+                              <td className="p-2 text-end font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                                {money(r.refundAmount)}
+                              </td>
+                            </tr>
+                            {open &&
+                              (r.lines?.length ? (
+                                <tr className="border-t bg-muted/20">
+                                  <td colSpan={6} className="p-0">
+                                    <table className="w-full text-sm">
+                                      <thead>
+                                        <tr className="text-muted-foreground">
+                                          <th className="px-4 py-1.5 text-start text-xs font-medium">
+                                            کالا
+                                          </th>
+                                          <th className="w-20 px-2 py-1.5 text-start text-xs font-medium">
+                                            مکان
+                                          </th>
+                                          <th className="w-16 px-2 py-1.5 text-start text-xs font-medium">
+                                            تعداد
+                                          </th>
+                                          <th className="w-24 px-2 py-1.5 text-center text-xs font-medium">
+                                            سالم؟
+                                          </th>
+                                          <th className="w-28 px-2 py-1.5 text-end text-xs font-medium">
+                                            مبلغ قلم
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {r.lines.map((l) => (
+                                          <tr key={l.id}>
+                                            <td className="px-4 py-1.5 font-medium">
+                                              {l.product.name}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-xs text-muted-foreground">
+                                              {l.location.path}
+                                            </td>
+                                            <td className="px-2 py-1.5 tabular-nums">
+                                              {toFa(l.quantity)}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-center text-xs">
+                                              {l.restock ? (
+                                                <span className="text-emerald-600 dark:text-emerald-400">
+                                                  سالم
+                                                </span>
+                                              ) : (
+                                                <span className="text-destructive">
+                                                  معیوب
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="px-2 py-1.5 text-end font-semibold tabular-nums">
+                                              {money(l.lineRefund)}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </td>
+                                </tr>
+                              ) : null)}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="w-fit"
+                  onClick={() =>
+                    window.open(`/admin/print/invoice/${viewing}`, "_blank")
+                  }
+                >
+                  <Printer className="size-4" /> چاپ
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-fit"
+                  onClick={() => openInPos(viewing)}
+                >
+                  <PencilLine className="size-4" /> اصلاح در صندوق
+                </Button>
+                {/* اصلاح نحوهٔ پرداخت — فقط وقتی سرور اجازه می‌دهد؛ دلیلِ خاموشی روی دکمه است. */}
+                {viewedSettlement.data && (
+                  <Button
+                    variant="outline"
+                    className="w-fit"
+                    disabled={!viewedSettlement.data.canRecompose}
+                    title={viewedSettlement.data.blockedReason ?? undefined}
+                    onClick={() => setFixingPayment(true)}
+                  >
+                    <CreditCard className="size-4" /> اصلاح نحوهٔ پرداخت
+                  </Button>
+                )}
+                {viewedInvoice.data.status === "CONFIRMED" && (
+                  <Button
+                    variant="outline"
+                    className="w-fit"
+                    onClick={() => {
+                      setReturning(viewing);
+                      setViewing(null);
+                    }}
+                  >
+                    <Undo2 className="size-4 text-amber-600" /> مرجوعی کامل
+                  </Button>
+                )}
+              </div>
+            </div>
+          ) : null}
+        </OverlayPanel>
+      )}
+
+      {/* مرجوعیِ کامل — اقلامِ فاکتور از پیش تیک‌خورده‌اند؛ جمعِ برگشتی پایینِ دیالوگ زنده است. */}
+      <ReturnDialog
+        invoiceId={returning}
+        initialAll
+        onClose={() => setReturning(null)}
+        onDone={refresh}
+      />
+
+      {/* اصلاح نحوهٔ پرداختِ فاکتورِ در حال مشاهده — مشتری از خودِ فاکتور می‌آید. */}
+      <PaymentRecomposeDialog
+        open={fixingPayment && !!viewing}
+        invoiceId={fixingPayment ? viewing : null}
+        customer={null}
+        onClose={() => setFixingPayment(false)}
+        onDone={refresh}
+      />
 
       {panel === "reports" && (
         <OverlayPanel title="گزارش‌ها" onClose={() => setPanel(null)}>
@@ -968,6 +1347,7 @@ export default function CustomerPage() {
               <PayoutForm
                 customerId={id}
                 creditBalance={Math.max(0, -totalDue)}
+                debitBalance={Math.max(0, totalDue)}
                 allowBeyondCredit
                 onDone={refresh}
               />
@@ -1069,11 +1449,17 @@ function MoreMenuItem({
  */
 function CustomerPurchaseRows({
   onOpenInPos,
+  onView,
+  onReturn,
   invoices,
   defaultExpanded,
 }: {
   /** کلیک روی ردیف — فاکتور را در صندوق برای ویرایش باز می‌کند. */
   onOpenInPos: (invoiceId: string) => void;
+  /** مشاهده — جزئیاتِ فاکتور بدون خروج از پرونده. */
+  onView: (invoiceId: string) => void;
+  /** مرجوعیِ کامل — دیالوگ مرجوعی با همه‌ی اقلامِ از پیش تیک‌خورده. */
+  onReturn: (invoiceId: string) => void;
   invoices: Invoice[];
   defaultExpanded: boolean;
 }) {
@@ -1159,18 +1545,61 @@ function CustomerPurchaseRows({
                     )}
                   </td>
                   <td className="p-2 text-end">
-                    {/* چاپ مجدد — باز شدنِ ردیف را باز نمی‌کند. */}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      title="چاپ فاکتور"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        window.open(`/admin/print/invoice/${inv.id}`, "_blank");
-                      }}
-                    >
-                      <Printer className="size-3.5" />
-                    </Button>
+                    {/* سه عملِ اصلی + چاپ — همه با stopPropagation تا باز شدنِ
+                        اقلام یا رفتنِ ردیف به صندوق اتفاق نیفتد. */}
+                    <div className="flex items-center justify-end gap-0.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="مشاهده فاکتور"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onView(inv.id);
+                        }}
+                      >
+                        <Eye className="size-3.5" />
+                      </Button>
+                      {!cancelled && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="اصلاح — باز کردن در صندوق"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenInPos(inv.id);
+                          }}
+                        >
+                          <PencilLine className="size-3.5 text-primary" />
+                        </Button>
+                      )}
+                      {!cancelled && inv.status === "CONFIRMED" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="مرجوعی کامل — همه‌ی اقلام برگردند"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onReturn(inv.id);
+                          }}
+                        >
+                          <Undo2 className="size-3.5 text-amber-600" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="چاپ فاکتور"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(
+                            `/admin/print/invoice/${inv.id}`,
+                            "_blank",
+                          );
+                        }}
+                      >
+                        <Printer className="size-3.5" />
+                      </Button>
+                    </div>
                   </td>
                 </tr>
 

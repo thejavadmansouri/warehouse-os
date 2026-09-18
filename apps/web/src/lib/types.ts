@@ -2045,6 +2045,8 @@ export interface ReturnableInvoice {
   returnable: boolean;
   /** روی حساب باز پولی پرداخت نشده — برگشت فقط «کسر از حساب». */
   isOpenAccount: boolean;
+  /** مانده‌ی کلِ مشتری — مثبت یعنی بدهکار؛ پایه‌ی پیش‌فرضِ روشِ برگشت. */
+  customerBalance: number;
   accountId: string | null;
 }
 
@@ -2106,6 +2108,16 @@ export interface SaleReturnListRow {
   } | null;
   user?: { id: string; fullName: string } | null;
   _count?: { lines: number };
+  /** ریز اقلام — فقط وقتی پرسش با invoiceId فیلتر شده باشد سرور می‌فرستد. */
+  lines?: {
+    id: string;
+    quantity: number;
+    unitRefund: number;
+    lineRefund: number;
+    restock: boolean;
+    product: { id: string; name: string };
+    location: { id: string; path: string };
+  }[];
 }
 
 // ----- اصلاحیه فاکتور -----
