@@ -49,31 +49,50 @@ export function NotificationBell() {
     });
   }, [alerts.data, overdue, cheques]);
 
-  const [seen, setSeen] = React.useState<string>("");
-  React.useEffect(() => {
-    try {
-      setSeen(localStorage.getItem(SEEN_KEY) ?? "");
-    } catch {
-      /* localStorage در دسترس نبود — بی‌خیال، فقط نشان همیشه دیده می‌شود. */
-    }
-  }, []);
+  // «آخرین وضعیتی که کاربر دید» — مستقیم از localStorage خوانده می‌شود تا بدون
+  // setState-in-effect، بعد از هیدریشن هم درست باشد (سرور: "").
+  const seen = React.useSyncExternalStore(
+    React.useCallback((onStoreChange) => {
+      const handler = (e: StorageEvent) => {
+        if (e.key === SEEN_KEY) onStoreChange();
+      };
+      window.addEventListener("storage", handler);
+      return () => window.removeEventListener("storage", handler);
+    }, []),
+    React.useCallback(() => {
+      try {
+        return localStorage.getItem(SEEN_KEY) ?? "";
+      } catch {
+        return "";
+      }
+    }, []),
+    () => "",
+  );
 
   // چیزی برای دیدن هست و با آخرین باری که کاربر «خواندم» زده فرق دارد.
   const unseen = count > 0 && signature !== "" && signature !== seen;
 
-  const markRead = () => {
-    setSeen(signature);
+  const markSeen = (value: string) => {
     try {
-      localStorage.setItem(SEEN_KEY, signature);
+      localStorage.setItem(SEEN_KEY, value);
     } catch {
       /* نادیده */
     }
   };
 
+  const markRead = () => {
+    markSeen(signature);
+  };
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative size-7" title="اعلان‌ها">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative size-7"
+          title="اعلان‌ها"
+        >
           <Bell className="size-4" />
           {unseen && (
             <span
@@ -122,7 +141,7 @@ export function NotificationBell() {
                       {toFa(overdue.customerCount)} مشتری بدهی معوق دارند
                     </span>
                     <span className="block text-xs tabular-nums text-muted-foreground">
-                      مجموع {amount(overdue.amount)}
+                      مجموع معوقِ خالص {amount(overdue.amount)}
                     </span>
                   </span>
                 </Link>
@@ -152,8 +171,8 @@ export function NotificationBell() {
                   <FileClock className="mt-0.5 size-4 shrink-0 text-warning" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-semibold text-warning">
-                      {toFa(cheques.count)} چک تا {toFa(cheques.withinDays)} روز آینده
-                      سررسید می‌شود
+                      {toFa(cheques.count)} چک تا {toFa(cheques.withinDays)} روز
+                      آینده سررسید می‌شود
                     </span>
                   </span>
                 </div>
@@ -167,7 +186,9 @@ export function NotificationBell() {
                       <span className="truncate" dir="ltr">
                         {toFa(c.number)}
                       </span>
-                      <span className="shrink-0 tabular-nums">{faDate(c.dueDate)}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {faDate(c.dueDate)}
+                      </span>
                     </li>
                   ))}
                 </ul>

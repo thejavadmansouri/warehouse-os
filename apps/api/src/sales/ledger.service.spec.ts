@@ -37,24 +37,28 @@ describe('LedgerService — accountBalances', () => {
     creditors: { customerId: string }[],
   ) {
     prisma.customerLedger.groupBy.mockImplementation(
-      async (args: {
+      (args: {
         having?: { amount?: { _sum?: { gt?: number; lt?: number } } };
       }) => {
         // دقت: مقدارِ فیلتر صفر است (gt: 0) — با truthy بودن نمی‌شود تشخیص داد.
-        const having = args.having?.amount?._sum;
+        const having = args?.having?.amount?._sum;
         if (having && 'gt' in having) {
-          return debtors.map((d) => ({
-            customerId: d.customerId,
-            _sum: { amount: 500_000 },
-          }));
+          return Promise.resolve(
+            debtors.map((d) => ({
+              customerId: d.customerId,
+              _sum: { amount: 500_000 },
+            })),
+          );
         }
         if (having && 'lt' in having) {
-          return creditors.map((c) => ({
-            customerId: c.customerId,
-            _sum: { amount: -300_000 },
-          }));
+          return Promise.resolve(
+            creditors.map((c) => ({
+              customerId: c.customerId,
+              _sum: { amount: -300_000 },
+            })),
+          );
         }
-        return [];
+        return Promise.resolve([]);
       },
     );
   }
@@ -101,7 +105,8 @@ describe('LedgerService — accountBalances', () => {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     prisma.saleInvoice.findMany.mockResolvedValue([
-      // معوقِ d1 — ۸۰۰ هزار
+      // معوقِ d1 — فاکتور ۸۰۰ هزار، ولی مانده‌ی دفتر ۵۰۰ هزار است؛ یعنی ۳۰۰ هزار
+      // اعتبار (مثلاً مرجوعیِ «کسر از حساب») روی حساب نشسته و معوقِ خالص ۵۰۰ هزار است.
       { customerId: 'd1', dueAmount: 800_000, dueDate: yesterday },
       // جاریِ d2 — ۵۰۰ هزار
       { customerId: 'd2', dueAmount: 500_000, dueDate: tomorrow },
@@ -113,7 +118,8 @@ describe('LedgerService — accountBalances', () => {
     // بدهکارِ معوق اول، بعد بدهکارِ جاری، آخر طلبکار.
     expect(rows.map((r) => r.kind)).toEqual(['debtor', 'debtor', 'creditor']);
     expect(rows[0].id).toBe('d1');
-    expect(rows[0].overdue).toBe(800_000);
+    expect(rows[0].overdue).toBe(500_000);
+    expect(rows[0].accountCredit).toBe(300_000);
     expect(rows[1].id).toBe('d2');
     expect(rows[1].overdue).toBe(0);
     expect(rows[2].id).toBe('c1');
@@ -165,6 +171,56 @@ describe('LedgerService — accountBalances', () => {
     const rows = await service.accountBalances();
     expect(rows).toEqual([]);
     expect(prisma.customer.findMany).not.toHaveBeenCalled();
+  });
+
+  it('مرجوعیِ «کسر از حساب» معوق را از مانده‌ی واقعی کم می‌کند — پرونده‌ی «تبای»', async () => {
+    // فاکتورِ معوق ۲ میلیون، مانده‌ی دفتر ۱.۸۵ میلیون (مرجوعی ۱۵۰ هزار بستانکار).
+    prisma.customerLedger.groupBy.mockResolvedValue([
+      { customerId: 'tabay', _sum: { amount: 1_850_000 } },
+    ]);
+    prisma.customer.findMany.mockResolvedValue([
+      {
+        id: 'tabay',
+        firstName: 'تبای',
+        lastName: null,
+        creditLimit: 0,
+        creditDays: 0,
+        phones: [],
+      },
+    ]);
+    const past = new Date();
+    past.setDate(past.getDate() - 1);
+    prisma.saleInvoice.findMany.mockResolvedValue([
+      { customerId: 'tabay', dueAmount: 2_000_000, dueDate: past },
+    ]);
+
+    const rows = await service.accountBalances();
+
+    // معوقِ خالص = ۲م − ۱۵۰هزار، نه ۲م — وگرنه عددِ دوگانه صندوقدار را می‌گم کرد.
+    expect(rows[0].overdue).toBe(1_850_000);
+    expect(rows[0].accountCredit).toBe(150_000);
+    // در فهرستِ حساب‌بازها فیلدِ مانده «balance» است.
+    expect(rows[0].balance).toBe(1_850_000);
+  });
+
+  it('summary هم اعتبار حساب را در سطل‌ها اعمال می‌کند', async () => {
+    mockGroups([{ customerId: 'd1' }], []);
+    prisma.customer.findMany.mockResolvedValue([]);
+    const past = new Date();
+    past.setDate(past.getDate() - 1);
+    prisma.saleInvoice.findMany.mockResolvedValue([
+      { dueAmount: 2_000_000, dueDate: past },
+    ]);
+    prisma.customerLedger.aggregate
+      .mockResolvedValueOnce({ _sum: { amount: 1_850_000 } }) // balance
+      .mockResolvedValueOnce({ _sum: { amount: 1_850_000 } }); // sum ردیف‌های دفتر در summary
+    prisma.cheque.findMany.mockResolvedValue([]);
+
+    const s = await service.summary('d1');
+
+    expect(s.totalDue).toBe(1_850_000);
+    expect(s.overdue).toBe(1_850_000);
+    expect(s.accountCredit).toBe(150_000);
   });
 
   it('گزارش مطالبات (debtors) فقط بدهکارها را می‌دهد — رفتار قبلی دست‌نخورده', async () => {

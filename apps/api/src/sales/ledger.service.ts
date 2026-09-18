@@ -11,6 +11,40 @@ import { normalizePersian } from '../engine/utils/persian-normalize';
 /** چکی که تا این تعداد روز دیگر سررسید می‌شود، در اعلان‌ها می‌آید. */
 const CHEQUE_ALERT_DAYS = 7;
 
+/**
+ * اعتبارِ آزادِ حساب — بستانکاری که در دفتر نشسته ولی روی هیچ فاکتورِ بازی
+ * ننشسته.
+ *
+ * منبع‌ها: مرجوعیِ «کسر از حساب»، پیش‌پرداخت، ADJUSTMENT بستانکار. این پول
+ * بدهیِ واقعی را کم کرده ولی در `SaleInvoice.dueAmount` دیده نمی‌شود؛ تا وقتی
+ * جدا نشود، «معوقِ» محاسبه‌شده از فاکتورها از مانده‌ی واقعیِ دفتر بیشتر در
+ * می‌آمد و صندوقدار را به شکّ می‌انداخت.
+ *
+ * فرمول از اتحادِ خودِ دفتر درمی‌آید: مانده = بدهیِ فاکتورهای باز − اعتبار،
+ * پس اعتبار = بدهیِ فاکتورها − مانده (وقتی مثبت است).
+ */
+function accountCredit(ledgerBalance: number, openInvoiceDue: number): number {
+  return Math.max(0, openInvoiceDue - ledgerBalance);
+}
+
+/**
+ * اعتبار را روی سطل‌های سنی می‌نشاند — از کهنه‌ترین (معوق) به تازه‌ترین
+ * (جاری)، همان قاعده‌ای که وصولی‌ها با آن تخصیص می‌خورند. بعد از این، جمعِ
+ * سه سطل با مانده‌ی دفتر برابر است و هیچ عددی «ناشناخته» نمی‌ماند.
+ */
+function applyCreditToBuckets(
+  buckets: { current: number; dueToday: number; overdue: number },
+  credit: number,
+) {
+  let c = credit;
+  const overdue = Math.max(0, buckets.overdue - c);
+  c = Math.max(0, c - buckets.overdue);
+  const dueToday = Math.max(0, buckets.dueToday - c);
+  c = Math.max(0, c - buckets.dueToday);
+  const current = Math.max(0, buckets.current - c);
+  return { current, dueToday, overdue };
+}
+
 /** کلاینت تراکنشی یا خودِ prisma — تا نوشتن در دفتر همیشه داخل تراکنشِ صدازننده بماند. */
 type Db = Prisma.TransactionClient | PrismaService;
 
@@ -80,11 +114,15 @@ export class LedgerService {
   }
 
   /**
-   * همان چهار عددی که مدیر باید در پنج ثانیه ببیند، به‌علاوه‌ی چک‌های وصول‌نشده.
+   * همان عددی که مدیر باید در پنج ثانیه ببیند، به‌علاوه‌ی چک‌های وصول‌نشده.
    *
    * تفکیک جاری/سررسید/معوق از `SaleInvoice.dueDate` می‌آید نه از خود دفتر، چون
    * سررسید خاصیتِ فاکتور است نه خاصیتِ حرکتِ حساب. مانده‌ی کل اما همچنان از
    * دفتر می‌آید — این دو نباید قاطی شوند.
+   *
+   * اعتبارِ آزاد (مرجوعیِ «کسر از حساب»، پیش‌پرداخت) اول از سطل‌ها کم می‌شود
+   * تا جمعِ سه سطل با مانده‌ی دفتر برابر بماند — وگرنه «معوقِ» نمایشی از
+   * مانده‌ی واقعی بیشتر می‌شد و صندوقدار عددِ دوگانه می‌دید.
    */
   async summary(customerId: string) {
     const startOfToday = new Date();
@@ -126,6 +164,7 @@ export class LedgerService {
     let current = 0;
     let dueToday = 0;
     let overdue = 0;
+    let openInvoiceDue = 0;
 
     for (const inv of openInvoices) {
       // فاکتور بدون سررسید هنوز مهلت‌دار حساب می‌شود، نه معوق — عددِ معوق
@@ -134,13 +173,21 @@ export class LedgerService {
         current += inv.dueAmount;
       else if (inv.dueDate >= startOfToday) dueToday += inv.dueAmount;
       else overdue += inv.dueAmount;
+      openInvoiceDue += inv.dueAmount;
     }
+
+    const credit = accountCredit(totalDue, openInvoiceDue);
+    ({ current, dueToday, overdue } = applyCreditToBuckets(
+      { current, dueToday, overdue },
+      credit,
+    ));
 
     return {
       totalDue,
       current,
       dueToday,
       overdue,
+      accountCredit: credit,
       chequesInHandCount: chequesInHand.length,
     };
   }
@@ -412,6 +459,7 @@ export class LedgerService {
       dueToday: number;
       overdue: number;
       nextDueDate: Date | null;
+      openInvoiceDue: number;
     };
     const aging = new Map<string, Aging>();
 
@@ -422,12 +470,14 @@ export class LedgerService {
         dueToday: 0,
         overdue: 0,
         nextDueDate: null,
+        openInvoiceDue: 0,
       };
 
       if (!inv.dueDate || inv.dueDate >= startOfTomorrow)
         a.current += inv.dueAmount;
       else if (inv.dueDate >= startOfToday) a.dueToday += inv.dueAmount;
       else a.overdue += inv.dueAmount;
+      a.openInvoiceDue += inv.dueAmount;
 
       // نزدیک‌ترین سررسیدِ باز — همان چیزی که «چقدر وقت داریم» را جواب می‌دهد.
       if (inv.dueDate && (!a.nextDueDate || inv.dueDate < a.nextDueDate)) {
@@ -453,8 +503,14 @@ export class LedgerService {
         dueToday: 0,
         overdue: 0,
         nextDueDate: null,
+        openInvoiceDue: 0,
       };
       const totalDue = balances.get(c.id) ?? 0;
+      const credit = accountCredit(totalDue, a.openInvoiceDue);
+      const buckets = applyCreditToBuckets(
+        { current: a.current, dueToday: a.dueToday, overdue: a.overdue },
+        credit,
+      );
       return {
         id: c.id,
         fullName: [c.firstName, c.lastName].filter(Boolean).join(' '),
@@ -464,7 +520,11 @@ export class LedgerService {
         totalDue,
         available: c.creditLimit > 0 ? c.creditLimit - totalDue : null,
         invoiceCount: invoiceCounts.get(c.id) ?? 0,
-        ...a,
+        accountCredit: credit,
+        current: buckets.current,
+        dueToday: buckets.dueToday,
+        overdue: buckets.overdue,
+        nextDueDate: a.nextDueDate,
       };
     });
 
@@ -552,8 +612,16 @@ export class LedgerService {
         current: acc.current + r.current,
         dueToday: acc.dueToday + r.dueToday,
         overdue: acc.overdue + r.overdue,
+        accountCredit: acc.accountCredit + (r.accountCredit ?? 0),
       }),
-      { customerCount: 0, totalDue: 0, current: 0, dueToday: 0, overdue: 0 },
+      {
+        customerCount: 0,
+        totalDue: 0,
+        current: 0,
+        dueToday: 0,
+        overdue: 0,
+        accountCredit: 0,
+      },
     );
   }
 

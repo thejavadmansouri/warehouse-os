@@ -2,7 +2,12 @@
 
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   Wallet,
@@ -107,7 +112,9 @@ export default function CustomerPage() {
    * بازکردنِ پنلِ پول با فوکوس روی همان بخش — دکمه/کلیدِ «دریافت» (F6) بخشِ
    * دریافت را جلو می‌آورد و «پرداخت» (F7) بخشِ پرداخت را.
    */
-  const [moneyFocus, setMoneyFocus] = React.useState<"receive" | "pay" | null>(null);
+  const [moneyFocus, setMoneyFocus] = React.useState<"receive" | "pay" | null>(
+    null,
+  );
   const receiveSectionRef = React.useRef<HTMLDivElement>(null);
   const paySectionRef = React.useRef<HTMLDivElement>(null);
   const openMoney = (focus: "receive" | "pay") => {
@@ -133,7 +140,9 @@ export default function CustomerPage() {
    * قاعده‌ی «یک حقیقت، یک نمایش»: این صفحه تنها جای نمایشِ کاملِ پرونده است
    * و از همه‌جا با همین شکل باز می‌شود.
    */
-  const [tab, setTab] = React.useState<"invoices" | "ledger" | "cheques">("invoices");
+  const [tab, setTab] = React.useState<"invoices" | "ledger" | "cheques">(
+    "invoices",
+  );
   const [moreOpen, setMoreOpen] = React.useState(false);
   /** پیامک و ویرایش از منوی «امکانات بیشتر» باز می‌شوند — دیالوگ‌ها کنترل‌شده‌اند. */
   const [smsOpen, setSmsOpen] = React.useState(false);
@@ -169,7 +178,7 @@ export default function CustomerPage() {
    */
   const onMoreMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const items = Array.from(
-      moreMenuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []
+      moreMenuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? [],
     );
     if (!items.length) return;
     const idx = items.indexOf(document.activeElement as HTMLButtonElement);
@@ -224,9 +233,7 @@ export default function CustomerPage() {
     },
     onError: (e) => {
       toast.error(
-        e instanceof ApiException
-          ? e.message
-          : "غیرفعال‌سازی مشتری ناموفق بود"
+        e instanceof ApiException ? e.message : "غیرفعال‌سازی مشتری ناموفق بود",
       );
     },
   });
@@ -251,14 +258,22 @@ export default function CustomerPage() {
     placeholderData: keepPreviousData,
   });
 
-  // فاکتورها و اقلام — فیلترِ پیش‌فرض «امروز» است.
-  const [purchFilter, setPurchFilter] = React.useState<InvoiceFilter>("today");
+  // فاکتورها و اقلام — فیلترِ پیش‌فرض «کلی» است: اولین چیزی که مدیر می‌بیند
+  // تاریخچه‌ی کامل مشتری است، نه فقط خریدهای امروز.
+  const [purchFilter, setPurchFilter] = React.useState<InvoiceFilter>("all");
   const [rangeFrom, setRangeFrom] = React.useState("");
   const [rangeTo, setRangeTo] = React.useState("");
   const [invPage, setInvPage] = React.useState(1);
 
   const purchases = useQuery({
-    queryKey: ["customer-purchases", id, purchFilter, rangeFrom, rangeTo, invPage],
+    queryKey: [
+      "customer-purchases",
+      id,
+      purchFilter,
+      rangeFrom,
+      rangeTo,
+      invPage,
+    ],
     queryFn: () => {
       const params: Parameters<typeof getInvoices>[0] = {
         customerId: id,
@@ -266,7 +281,7 @@ export default function CustomerPage() {
         page: invPage,
         pageSize: 50,
       };
-      if (purchFilter === "today") params.from = startOfToday();
+      if (purchFilter === "today") params.from = startOfToday(); // انتخابِ دستی کاربر
       if (purchFilter === "range") {
         if (rangeFrom) params.from = rangeFrom;
         if (rangeTo) params.to = endOfDay(rangeTo);
@@ -299,7 +314,7 @@ export default function CustomerPage() {
 
   /** فاکتورهایی که هنوز مانده دارند — منبعِ همین عددِ بدهی. */
   const openInvoices = (c.invoices ?? []).filter(
-    (i) => i.status === "CONFIRMED" && i.dueAmount > 0
+    (i) => i.status === "CONFIRMED" && i.dueAmount > 0,
   );
 
   /**
@@ -311,7 +326,11 @@ export default function CustomerPage() {
   const openInPos = (invoiceId: string) => {
     // فاکتور در همان پنجرهٔ پرونده باز نمی‌شود تا مشتری انتخاب‌شدهٔ POS
     // با مشتری پرونده قاطی نشود؛ تب مستقل همان رفتار آشنای نرم‌افزارهای حسابداری است.
-    window.open(`/admin/pos?edit=${encodeURIComponent(invoiceId)}`, "_blank", "noopener,noreferrer");
+    window.open(
+      `/admin/pos?edit=${encodeURIComponent(invoiceId)}`,
+      "_blank",
+      "noopener,noreferrer",
+    );
   };
 
   const refresh = () => {
@@ -367,27 +386,55 @@ export default function CustomerPage() {
         {(s?.overdue ?? 0) > 0 && (
           <span
             className="rounded-full bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive"
-            title="بخشی از بدهی از سررسید گذشته است"
+            title="بخشی از مانده از سررسید گذشته است (بعد از کسر اعتبار حساب)"
           >
             معوق
+          </span>
+        )}
+        {!!(s?.accountCredit ?? 0) && (
+          <span
+            className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300"
+            title="مرجوعی‌ها و پیش‌پرداخت‌هایی که روی فاکتور ننشسته و از مانده کم شده"
+          >
+            اعتبار حساب {money(s!.accountCredit!)}
           </span>
         )}
 
         <span className="mx-2 h-5 w-px bg-border" />
 
-        <Button className="h-8 bg-primary px-3 text-sm text-primary-foreground" onClick={() => router.push(`/admin/pos?customer=${encodeURIComponent(id)}`)}>
-          <ShoppingCart className="me-1.5 size-4" /> فروش <kbd className="ms-1 rounded border border-primary-foreground/40 px-1 text-[11px]">F2</kbd>
+        <Button
+          className="h-8 bg-primary px-3 text-sm text-primary-foreground"
+          onClick={() =>
+            router.push(`/admin/pos?customer=${encodeURIComponent(id)}`)
+          }
+        >
+          <ShoppingCart className="me-1.5 size-4" /> فروش{" "}
+          <kbd className="ms-1 rounded border border-primary-foreground/40 px-1 text-[11px]">
+            F2
+          </kbd>
         </Button>
-        <Button variant="outline" className="h-8 px-3 text-sm" onClick={() => openMoney("receive")}>
-          <Wallet className="me-1.5 size-4" /> دریافت <kbd className="ms-1 rounded border px-1 text-[11px]">F6</kbd>
+        <Button
+          variant="outline"
+          className="h-8 px-3 text-sm"
+          onClick={() => openMoney("receive")}
+        >
+          <Wallet className="me-1.5 size-4" /> دریافت{" "}
+          <kbd className="ms-1 rounded border px-1 text-[11px]">F6</kbd>
         </Button>
-        <Button variant="outline" className="h-8 px-3 text-sm" onClick={() => openMoney("pay")}>
-          <HandCoins className="me-1.5 size-4" /> پرداخت <kbd className="ms-1 rounded border px-1 text-[11px]">F7</kbd>
+        <Button
+          variant="outline"
+          className="h-8 px-3 text-sm"
+          onClick={() => openMoney("pay")}
+        >
+          <HandCoins className="me-1.5 size-4" /> پرداخت{" "}
+          <kbd className="ms-1 rounded border px-1 text-[11px]">F7</kbd>
         </Button>
 
         <span className="ms-auto flex items-center gap-2 text-sm">
           <span className="text-xs text-muted-foreground">مانده:</span>
-          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${totalDue > 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : totalDue < 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${totalDue > 0 ? "bg-amber-500/10 text-amber-700 dark:text-amber-300" : totalDue < 0 ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"}`}
+          >
             {totalDue > 0 ? "بدهکار" : totalDue < 0 ? "طلبکار" : "تسویه"}
           </span>
           <b className={`text-lg tabular-nums ${balanceTextClass(totalDue)}`}>
@@ -408,7 +455,7 @@ export default function CustomerPage() {
               "flex size-7 items-center justify-center rounded transition-colors",
               moreOpen
                 ? "bg-muted text-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             <MoreHorizontal className="size-4" />
@@ -433,7 +480,9 @@ export default function CustomerPage() {
                 <MoreMenuItem
                   icon={ArrowRight}
                   kbd="۱"
-                  onClick={() => { router.push("/admin/customers"); }}
+                  onClick={() => {
+                    router.push("/admin/customers");
+                  }}
                 >
                   برگشت به فهرست
                 </MoreMenuItem>
@@ -443,21 +492,30 @@ export default function CustomerPage() {
                 <MoreMenuItem
                   icon={BarChart3}
                   kbd="۲"
-                  onClick={() => { setPanel("reports"); setMoreOpen(false); }}
+                  onClick={() => {
+                    setPanel("reports");
+                    setMoreOpen(false);
+                  }}
                 >
                   گزارش‌ها و آمار
                 </MoreMenuItem>
                 <MoreMenuItem
                   icon={MessageSquare}
                   kbd="۳"
-                  onClick={() => { setSmsOpen(true); setMoreOpen(false); }}
+                  onClick={() => {
+                    setSmsOpen(true);
+                    setMoreOpen(false);
+                  }}
                 >
                   پیامک
                 </MoreMenuItem>
                 <MoreMenuItem
                   icon={Pencil}
                   kbd="۴"
-                  onClick={() => { setEditOpen(true); setMoreOpen(false); }}
+                  onClick={() => {
+                    setEditOpen(true);
+                    setMoreOpen(false);
+                  }}
                 >
                   ویرایش مشخصات
                 </MoreMenuItem>
@@ -467,21 +525,30 @@ export default function CustomerPage() {
                 <MoreMenuItem
                   icon={Printer}
                   kbd="۵"
-                  onClick={() => { window.open(`/admin/print/statement/${id}`, "_blank"); setMoreOpen(false); }}
+                  onClick={() => {
+                    window.open(`/admin/print/statement/${id}`, "_blank");
+                    setMoreOpen(false);
+                  }}
                 >
                   چاپ کارت حساب
                 </MoreMenuItem>
                 <MoreMenuItem
                   icon={ReceiptText}
                   kbd="۶"
-                  onClick={() => { setTab("ledger"); setMoreOpen(false); }}
+                  onClick={() => {
+                    setTab("ledger");
+                    setMoreOpen(false);
+                  }}
                 >
                   مشاهده دفتر حساب
                 </MoreMenuItem>
                 <MoreMenuItem
                   icon={ReceiptText}
                   kbd="۷"
-                  onClick={() => { setTab("cheques"); setMoreOpen(false); }}
+                  onClick={() => {
+                    setTab("cheques");
+                    setMoreOpen(false);
+                  }}
                 >
                   مشاهده چک‌ها
                 </MoreMenuItem>
@@ -493,7 +560,10 @@ export default function CustomerPage() {
                       icon={UserX}
                       destructive
                       kbd="۸"
-                      onClick={() => { setDeactivating(true); setMoreOpen(false); }}
+                      onClick={() => {
+                        setDeactivating(true);
+                        setMoreOpen(false);
+                      }}
                     >
                       غیرفعال‌سازی مشتری
                     </MoreMenuItem>
@@ -538,192 +608,230 @@ export default function CustomerPage() {
       */}
       <div className="min-h-0 flex-1 overflow-auto p-3">
         {tab === "ledger" && (
-        <>
-        {/* گردش حساب — صورتحساب با مانده‌ی متحرک، بازه و خروجی اکسل */}
-        <Card className="p-0">
-          <div className="border-b px-4 py-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="font-semibold">گردش حساب</h2>
-              <div className="flex flex-wrap items-end gap-3">
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">از تاریخ</label>
-                  <JalaliDateInput value={stmtFrom} onChange={setStmtFrom} />
+          <>
+            {/* گردش حساب — صورتحساب با مانده‌ی متحرک، بازه و خروجی اکسل */}
+            <Card className="p-0">
+              <div className="border-b px-4 py-3">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="font-semibold">گردش حساب</h2>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">
+                        از تاریخ
+                      </label>
+                      <JalaliDateInput
+                        value={stmtFrom}
+                        onChange={setStmtFrom}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">
+                        تا تاریخ
+                      </label>
+                      <JalaliDateInput value={stmtTo} onChange={setStmtTo} />
+                    </div>
+                    {(stmtFrom || stmtTo) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setStmtFrom("");
+                          setStmtTo("");
+                        }}
+                      >
+                        پاک‌کردن بازه
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <label className="text-xs text-muted-foreground">تا تاریخ</label>
-                  <JalaliDateInput value={stmtTo} onChange={setStmtTo} />
-                </div>
-                {(stmtFrom || stmtTo) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setStmtFrom("");
-                      setStmtTo("");
+              </div>
+
+              <div className="p-4">
+                {statement.isLoading ? (
+                  <LoadingState />
+                ) : (
+                  <StatementTable
+                    onOpenInvoice={openInPos}
+                    customerId={id}
+                    rows={statement.data?.rows.data ?? []}
+                    summary={statement.data?.summary}
+                    range={{
+                      startDate: stmtFrom || undefined,
+                      endDate: stmtTo ? endOfDay(stmtTo) : undefined,
                     }}
-                  >
-                    پاک‌کردن بازه
-                  </Button>
+                  />
                 )}
               </div>
-            </div>
-          </div>
-
-          <div className="p-4">
-            {statement.isLoading ? (
-              <LoadingState />
-            ) : (
-              <StatementTable
-              onOpenInvoice={openInPos}
-                customerId={id}
-                rows={statement.data?.rows.data ?? []}
-                summary={statement.data?.summary}
-                range={{
-                  startDate: stmtFrom || undefined,
-                  endDate: stmtTo ? endOfDay(stmtTo) : undefined,
-                }}
-              />
-            )}
-          </div>
-        </Card>
-        </>
+            </Card>
+          </>
         )}
 
         {tab === "invoices" && (
           <>
-          {/* فاکتورها و اقلام — همه‌ی خریدهای مشتری، فیلتر «امروز/کلی/بازه» */}
-          <Card className="p-0">
-            <div className="border-b px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="font-semibold">فاکتورها و اقلام خرید</h2>
-                <div className="flex gap-1">
-                  {INVOICE_FILTERS.map((f) => (
-                    <button
-                      key={f.key}
-                      onClick={() => { setPurchFilter(f.key); setInvPage(1); }}
-                      className={`h-9 rounded-md px-4 text-sm font-medium transition-colors ${
-                        purchFilter === f.key
-                          ? "bg-primary text-primary-foreground"
-                          : "border bg-background hover:bg-primary/5"
-                      }`}
-                    >
-                      {f.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {purchFilter === "range" && (
-                <div className="mt-3 flex flex-wrap items-end gap-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">از تاریخ</label>
-                    <JalaliDateInput
-                      value={rangeFrom}
-                      onChange={(v) => { setRangeFrom(v); setInvPage(1); }}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-xs text-muted-foreground">تا تاریخ</label>
-                    <JalaliDateInput
-                      value={rangeTo}
-                      onChange={(v) => { setRangeTo(v); setInvPage(1); }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4">
-              {purchases.isLoading ? (
-                <LoadingState />
-              ) : purchaseRows.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  {purchFilter === "today"
-                    ? "امروز خریدی برای این مشتری ثبت نشده"
-                    : "فاکتوری در این بازه پیدا نشد"}
-                </p>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
-                    <span className="tabular-nums">{toFa(purchaseRows.length)} فاکتور</span>
-                    <span>
-                      مجموع خرید:{" "}
-                      <span className="font-bold tabular-nums">{money(purchasesTotal)}</span>
-                    </span>
-                  </div>
-
-                  {/* key عوض‌شدن = remount = حالتِ بازشده برای فیلترِ جدید از نو ساخته می‌شود. */}
-                  <CustomerPurchaseRows
-                    key={`${purchFilter}-${invPage}-${purchaseRows.length}`}
-                    onOpenInPos={openInPos}
-                invoices={purchaseRows}
-                    defaultExpanded={purchFilter === "today"}
-                  />
-
-                  {purchasesMeta && purchasesMeta.pageCount > 1 && (
-                    <div className="flex items-center justify-center gap-3">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={invPage <= 1}
-                        onClick={() => setInvPage((p) => Math.max(1, p - 1))}
-                      >
-                        <ChevronRight className="size-4" /> قبلی
-                      </Button>
-                      <span className="text-sm text-muted-foreground tabular-nums">
-                        صفحه {toFa(purchasesMeta.page)} از {toFa(purchasesMeta.pageCount)}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={invPage >= purchasesMeta.pageCount}
-                        onClick={() => setInvPage((p) => p + 1)}
-                      >
-                        بعدی <ChevronLeft className="size-4" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* فاکتورهای باز — همان‌هایی که این بدهی از آن‌ها آمده. */}
-          {!!openInvoices.length && (
+            {/* فاکتورها و اقلام — همه‌ی خریدهای مشتری، فیلتر «امروز/کلی/بازه» */}
             <Card className="p-0">
               <div className="border-b px-4 py-3">
-                <h2 className="font-semibold">فاکتورهای باز</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="font-semibold">فاکتورها و اقلام خرید</h2>
+                  <div className="flex gap-1">
+                    {INVOICE_FILTERS.map((f) => (
+                      <button
+                        key={f.key}
+                        onClick={() => {
+                          setPurchFilter(f.key);
+                          setInvPage(1);
+                        }}
+                        className={`h-9 rounded-md px-4 text-sm font-medium transition-colors ${
+                          purchFilter === f.key
+                            ? "bg-primary text-primary-foreground"
+                            : "border bg-background hover:bg-primary/5"
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {purchFilter === "range" && (
+                  <div className="mt-3 flex flex-wrap items-end gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">
+                        از تاریخ
+                      </label>
+                      <JalaliDateInput
+                        value={rangeFrom}
+                        onChange={(v) => {
+                          setRangeFrom(v);
+                          setInvPage(1);
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-muted-foreground">
+                        تا تاریخ
+                      </label>
+                      <JalaliDateInput
+                        value={rangeTo}
+                        onChange={(v) => {
+                          setRangeTo(v);
+                          setInvPage(1);
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              <ul className="divide-y">
-                {openInvoices.map((inv) => {
-                  const overdue = inv.dueDate ? new Date(inv.dueDate) < new Date() : false;
-                  return (
-                    <li key={inv.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
-                      <span className="w-16 shrink-0 font-medium tabular-nums">
-                        #{toFa(inv.number)}
+
+              <div className="p-4">
+                {purchases.isLoading ? (
+                  <LoadingState />
+                ) : purchaseRows.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-muted-foreground">
+                    {purchFilter === "today"
+                      ? "امروز خریدی برای این مشتری ثبت نشده"
+                      : purchFilter === "range"
+                        ? "فاکتوری در این بازه پیدا نشد"
+                        : "هنوز فاکتوری برای این مشتری ثبت نشده"}
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm">
+                      <span className="tabular-nums">
+                        {toFa(purchaseRows.length)} فاکتور
                       </span>
-                      <span className="min-w-0 flex-1 text-xs text-muted-foreground">
-                        {inv.dueDate ? (
-                          <>
-                            سررسید{" "}
-                            <span className={overdue ? "font-semibold text-destructive" : ""}>
-                              {faDate(inv.dueDate)}
-                            </span>
-                            {overdue && " — معوق"}
-                          </>
-                        ) : (
-                          "بدون سررسید"
-                        )}
+                      <span>
+                        مجموع خرید:{" "}
+                        <span className="font-bold tabular-nums">
+                          {money(purchasesTotal)}
+                        </span>
                       </span>
-                      <span className="shrink-0 font-semibold tabular-nums text-amber-600">
-                        {money(inv.dueAmount)}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
+                    </div>
+
+                    {/* key عوض‌شدن = remount = حالتِ بازشده برای فیلترِ جدید از نو ساخته می‌شود. */}
+                    <CustomerPurchaseRows
+                      key={`${purchFilter}-${invPage}-${purchaseRows.length}`}
+                      onOpenInPos={openInPos}
+                      invoices={purchaseRows}
+                      defaultExpanded={purchFilter === "today"}
+                    />
+
+                    {purchasesMeta && purchasesMeta.pageCount > 1 && (
+                      <div className="flex items-center justify-center gap-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={invPage <= 1}
+                          onClick={() => setInvPage((p) => Math.max(1, p - 1))}
+                        >
+                          <ChevronRight className="size-4" /> قبلی
+                        </Button>
+                        <span className="text-sm text-muted-foreground tabular-nums">
+                          صفحه {toFa(purchasesMeta.page)} از{" "}
+                          {toFa(purchasesMeta.pageCount)}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={invPage >= purchasesMeta.pageCount}
+                          onClick={() => setInvPage((p) => p + 1)}
+                        >
+                          بعدی <ChevronLeft className="size-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </Card>
-          )}
+
+            {/* فاکتورهای باز — همان‌هایی که این بدهی از آن‌ها آمده. */}
+            {!!openInvoices.length && (
+              <Card className="p-0">
+                <div className="border-b px-4 py-3">
+                  <h2 className="font-semibold">فاکتورهای باز</h2>
+                </div>
+                <ul className="divide-y">
+                  {openInvoices.map((inv) => {
+                    const overdue = inv.dueDate
+                      ? new Date(inv.dueDate) < new Date()
+                      : false;
+                    return (
+                      <li
+                        key={inv.id}
+                        className="flex items-center gap-3 px-4 py-2.5 text-sm"
+                      >
+                        <span className="w-16 shrink-0 font-medium tabular-nums">
+                          #{toFa(inv.number)}
+                        </span>
+                        <span className="min-w-0 flex-1 text-xs text-muted-foreground">
+                          {inv.dueDate ? (
+                            <>
+                              سررسید{" "}
+                              <span
+                                className={
+                                  overdue
+                                    ? "font-semibold text-destructive"
+                                    : ""
+                                }
+                              >
+                                {faDate(inv.dueDate)}
+                              </span>
+                              {overdue && " — معوق"}
+                            </>
+                          ) : (
+                            "بدون سررسید"
+                          )}
+                        </span>
+                        <span className="shrink-0 font-semibold tabular-nums text-amber-600">
+                          {money(inv.dueAmount)}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Card>
+            )}
           </>
         )}
 
@@ -749,20 +857,41 @@ export default function CustomerPage() {
                   {money(Math.abs(totalDue))}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
-                  {totalDue > 0 ? "بدهکار" : totalDue < 0 ? "بستانکار" : "تسویه"}
+                  {totalDue > 0
+                    ? "بدهکار"
+                    : totalDue < 0
+                      ? "بستانکار"
+                      : "تسویه"}
                 </p>
               </div>
               <div className="rounded-lg border bg-card p-3">
                 <Stat label="جاری" value={s?.current ?? 0} />
               </div>
               <div className="rounded-lg border bg-card p-3">
-                <Stat label="سررسید امروز" value={s?.dueToday ?? 0} tone="amber" />
+                <Stat
+                  label="سررسید امروز"
+                  value={s?.dueToday ?? 0}
+                  tone="amber"
+                />
               </div>
               <div className="rounded-lg border bg-card p-3">
                 <Stat label="سررسید گذشته" value={s?.overdue ?? 0} tone="red" />
+                {!!(s?.accountCredit ?? 0) && (
+                  <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+                    اعتبار حساب{" "}
+                    <span className="tabular-nums text-emerald-600 dark:text-emerald-400">
+                      −{money(s!.accountCredit!)}
+                    </span>{" "}
+                    کم شد
+                  </p>
+                )}
               </div>
               <div className="rounded-lg border bg-card p-3">
-                <Stat label="چک در جریان وصول" value={s?.chequesInHandCount ?? 0} count />
+                <Stat
+                  label="چک در جریان وصول"
+                  value={s?.chequesInHandCount ?? 0}
+                  count
+                />
               </div>
             </div>
 
@@ -772,7 +901,8 @@ export default function CustomerPage() {
                 <span className="tabular-nums">
                   {money(Math.max(0, (c.creditLimit ?? 0) - totalDue))}
                 </span>
-                {(c.creditDays ?? 0) > 0 && ` · مهلت ${toFa(c.creditDays!)} روز`}
+                {(c.creditDays ?? 0) > 0 &&
+                  ` · مهلت ${toFa(c.creditDays!)} روز`}
               </p>
             )}
 
@@ -809,7 +939,6 @@ export default function CustomerPage() {
                 </div>
               ) : null}
             </div>
-
           </div>
         </OverlayPanel>
       )}
@@ -844,9 +973,7 @@ export default function CustomerPage() {
               />
             </div>
 
-            {isManager && (
-              <CreditSettings customer={c} onDone={refresh} />
-            )}
+            {isManager && <CreditSettings customer={c} onDone={refresh} />}
 
             {isManager && (
               <ManagerActions
@@ -855,19 +982,25 @@ export default function CustomerPage() {
                 onDone={refresh}
               />
             )}
-
           </div>
         </OverlayPanel>
       )}
 
       {/* دیالوگ‌هایی که از منوی «امکانات بیشتر» باز می‌شوند — کنترل‌شده، بدون دکمه‌ی خودشان. */}
       <SmsDialog customer={c} open={smsOpen} onOpenChange={setSmsOpen} />
-      <EditCustomerDialog customer={c} onDone={refresh} open={editOpen} onOpenChange={setEditOpen} />
+      <EditCustomerDialog
+        customer={c}
+        onDone={refresh}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
 
       {/* تأیید غیرفعال‌سازی — soft delete؛ سابقه‌ی فاکتورها و دفتر پاک نمی‌شود. */}
       <ConfirmDialog
         open={deactivating}
-        onOpenChange={(v) => { if (!v) setDeactivating(false); }}
+        onOpenChange={(v) => {
+          if (!v) setDeactivating(false);
+        }}
         title="غیرفعال‌سازی این مشتری؟"
         description={
           <>
@@ -884,7 +1017,6 @@ export default function CustomerPage() {
     </div>
   );
 }
-
 
 /**
  * یک ردیفِ منوی «امکانات بیشتر» — آیکن + برچسب + میانبرِ عددی.
@@ -914,7 +1046,7 @@ function MoreMenuItem({
       onClick={onClick}
       className={cn(
         "flex w-full items-center gap-2 rounded px-3 py-2 text-start text-sm transition-colors hover:bg-muted",
-        destructive && "text-destructive hover:bg-destructive/10"
+        destructive && "text-destructive hover:bg-destructive/10",
       )}
     >
       <Icon className="size-4 shrink-0" />
@@ -927,7 +1059,6 @@ function MoreMenuItem({
     </button>
   );
 }
-
 
 /**
  * ردیف‌های فاکتورِ مشتری با اقلام بازشونده.
@@ -947,7 +1078,7 @@ function CustomerPurchaseRows({
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = React.useState<Set<string>>(
-    () => new Set(defaultExpanded ? invoices.map((i) => i.id) : [])
+    () => new Set(defaultExpanded ? invoices.map((i) => i.id) : []),
   );
 
   const toggle = (id: string) =>
@@ -1050,11 +1181,21 @@ function CustomerPurchaseRows({
                         <table className="w-full text-sm">
                           <thead className="bg-muted/40">
                             <tr className="text-muted-foreground">
-                              <th className="p-2 text-start font-medium">کالا</th>
-                              <th className="p-2 text-start font-medium">مکان</th>
-                              <th className="w-16 p-2 text-start font-medium">تعداد</th>
-                              <th className="w-28 p-2 text-end font-medium">قیمت واحد</th>
-                              <th className="w-28 p-2 text-end font-medium">جمع</th>
+                              <th className="p-2 text-start font-medium">
+                                کالا
+                              </th>
+                              <th className="p-2 text-start font-medium">
+                                مکان
+                              </th>
+                              <th className="w-16 p-2 text-start font-medium">
+                                تعداد
+                              </th>
+                              <th className="w-28 p-2 text-end font-medium">
+                                قیمت واحد
+                              </th>
+                              <th className="w-28 p-2 text-end font-medium">
+                                جمع
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1066,10 +1207,17 @@ function CustomerPurchaseRows({
                                 <td className="p-2 text-xs text-muted-foreground">
                                   {l.location?.path ?? ""}
                                 </td>
-                                <td className="p-2 tabular-nums">{toFa(l.quantity)}</td>
-                                <td className="p-2 tabular-nums">{money(l.unitPrice ?? 0)}</td>
+                                <td className="p-2 tabular-nums">
+                                  {toFa(l.quantity)}
+                                </td>
+                                <td className="p-2 tabular-nums">
+                                  {money(l.unitPrice ?? 0)}
+                                </td>
                                 <td className="p-2 text-end font-semibold tabular-nums">
-                                  {money((l.unitPrice ?? 0) * l.quantity - (l.lineDiscount ?? 0))}
+                                  {money(
+                                    (l.unitPrice ?? 0) * l.quantity -
+                                      (l.lineDiscount ?? 0),
+                                  )}
                                 </td>
                               </tr>
                             ))}
@@ -1091,7 +1239,6 @@ function CustomerPurchaseRows({
     </div>
   );
 }
-
 
 /**
  * سقف اعتبار و مهلت پیش‌فرضِ مشتری.
@@ -1148,7 +1295,9 @@ function CreditSettings({
 
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <label className="mb-1 block text-sm font-medium">سقف اعتبار ({unitLabel()})</label>
+          <label className="mb-1 block text-sm font-medium">
+            سقف اعتبار ({unitLabel()})
+          </label>
           <Input
             dir="ltr"
             className="h-10 w-48 text-right tabular-nums"
@@ -1159,7 +1308,9 @@ function CreditSettings({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">مهلت پیش‌فرض (روز)</label>
+          <label className="mb-1 block text-sm font-medium">
+            مهلت پیش‌فرض (روز)
+          </label>
           <Input
             dir="ltr"
             className="h-10 w-32 text-right tabular-nums"
@@ -1191,7 +1342,9 @@ function CreditSettings({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium">نحوه‌ی محاسبه</label>
+          <label className="mb-1 block text-sm font-medium">
+            نحوه‌ی محاسبه
+          </label>
           <div className="flex gap-1">
             {(
               [
@@ -1215,20 +1368,22 @@ function CreditSettings({
           </div>
         </div>
 
-        <Button disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
+        <Button
+          disabled={!dirty || save.isPending}
+          onClick={() => save.mutate()}
+        >
           ذخیره
         </Button>
       </div>
 
       <p className="mt-2 text-xs text-muted-foreground">
         سقف صفر یعنی «سقفی تعیین نشده». عبور از سقف جلوی فروش را نمی‌گیرد، فقط
-        سرِ تسویه هشدار می‌دهد. نرخ چکِ صفر یعنی پیش‌فرضِ فروشگاه — و سود هیچ‌وقت
-        خودکار روی فاکتور نمی‌نشیند، فروشنده سرِ هر چک تأییدش می‌کند.
+        سرِ تسویه هشدار می‌دهد. نرخ چکِ صفر یعنی پیش‌فرضِ فروشگاه — و سود
+        هیچ‌وقت خودکار روی فاکتور نمی‌نشیند، فروشنده سرِ هر چک تأییدش می‌کند.
       </p>
     </Card>
   );
 }
-
 
 function PeriodStat({
   label,
@@ -1254,7 +1409,6 @@ function PeriodStat({
     </div>
   );
 }
-
 
 function Stat({
   label,
@@ -1285,7 +1439,6 @@ function Stat({
   );
 }
 
-
 /**
  * کارهای مدیر — عمداً پایین‌تر از خلاصه و جدا از آن.
  *
@@ -1314,7 +1467,9 @@ function ManagerActions({
     },
     onError: (e: unknown) =>
       toast.error(
-        e instanceof ApiException ? e.message : "ثبت مانده‌ی اول دوره ناموفق بود"
+        e instanceof ApiException
+          ? e.message
+          : "ثبت مانده‌ی اول دوره ناموفق بود",
       ),
   });
 
@@ -1327,7 +1482,9 @@ function ManagerActions({
       onDone();
     },
     onError: (e: unknown) =>
-      toast.error(e instanceof ApiException ? e.message : "اصلاح حساب ناموفق بود"),
+      toast.error(
+        e instanceof ApiException ? e.message : "اصلاح حساب ناموفق بود",
+      ),
   });
 
   return (
@@ -1384,7 +1541,9 @@ function ManagerActions({
             />
             <Button
               disabled={
-                adjustAmount === 0 || reason.trim().length < 3 || adjust.isPending
+                adjustAmount === 0 ||
+                reason.trim().length < 3 ||
+                adjust.isPending
               }
               onClick={() => adjust.mutate()}
             >

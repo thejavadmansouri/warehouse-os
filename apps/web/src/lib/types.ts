@@ -926,7 +926,13 @@ export interface CustomerSummary {
   /** هنوز مهلت دارد. */
   current: number;
   dueToday: number;
+  /** معوقِ خالص — بعد از کسرِ اعتبارِ حساب از فاکتورهای گذشته‌سررسید. */
   overdue: number;
+  /**
+   * اعتبارِ آزادِ حساب — مرجوعیِ «کسر از حساب» و پیش‌پرداخت‌هایی که روی هیچ
+   * فاکتوری ننشسته. جمعِ سطل‌ها + این عدد = مانده‌ی واقعی.
+   */
+  accountCredit: number;
   /** چکِ دریافت‌شده‌ای که هنوز وصول نشده. */
   chequesInHandCount: number;
 }
@@ -1031,6 +1037,8 @@ export interface ReceivablesSummary {
   current: number;
   dueToday: number;
   overdue: number;
+  /** مجموع اعتبار حساب‌ها در سراسر بدهکاران. */
+  accountCredit: number;
 }
 
 /** اعلان‌ها — عمداً کم و مشخص، فقط چیزهایی که کسی رویشان عمل می‌کند. */
@@ -1171,10 +1179,12 @@ export interface CustomerBalanceRow {
   /** مثبت = بدهکار (به ما بدهکار است)، منفی = طلبکار (ما به او بدهکاریم). */
   balance: number;
   kind: "debtor" | "creditor";
-  /** تفکیک سنی — فقط برای بدهکار معنا دارد. */
+  /** تفکیک سنی — فقط برای بدهکار معنا دارد؛ بعد از کسرِ اعتبارِ حساب. */
   current: number;
   dueToday: number;
   overdue: number;
+  /** اعتبارِ حساب — بستانکاری که روی فاکتور ننشسته (مرجوعی/پیش‌پرداخت). */
+  accountCredit?: number;
   /** نزدیک‌ترین سررسیدِ باز (بدهکارها). */
   nextDueDate: string | null;
   /** مانده‌ی سقف اعتبار — سقفِ تعیین‌نشده null است. */
@@ -1714,6 +1724,8 @@ export interface DebtorsReport {
     current: number;
     dueToday: number;
     overdue: number;
+    /** مجموع اعتبار حساب‌ها (مرجوعی/پیش‌پرداختِ روی فاکتور ننشسته). */
+    accountCredit?: number;
   };
   debtors: {
     data: {
