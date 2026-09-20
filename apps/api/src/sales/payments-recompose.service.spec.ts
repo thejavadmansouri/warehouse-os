@@ -30,7 +30,11 @@ import { PaymentsRecomposeService } from './payments-recompose.service';
 
 const CUSTOMER_ID = 'c1';
 
-type Row = { method: PaymentMethod; amount: number; cheque?: { id: string } | null };
+type Row = {
+  method: PaymentMethod;
+  amount: number;
+  cheque?: { id: string } | null;
+};
 
 /** وضعیتِ زنده‌ی فاکتور و ردیف‌های پرداختش — ماک‌ها روی همین می‌نویسند. */
 function makeState() {
@@ -42,9 +46,7 @@ function makeState() {
     dueDate: null as Date | null,
     customerId: CUSTOMER_ID as string | null,
     createdAt: new Date(),
-    rows: [
-      { method: PaymentMethod.CARD, amount: 100_000_000 },
-    ] as Row[],
+    rows: [{ method: PaymentMethod.CARD, amount: 100_000_000 }] as Row[],
   };
 }
 
@@ -72,6 +74,7 @@ describe('PaymentsRecomposeService', () => {
     $transaction: jest.fn(),
     $queryRaw: jest.fn(),
     saleInvoice: { findUnique: jest.fn(), update: jest.fn() },
+    customerLedger: { aggregate: jest.fn() },
     payment: { create: jest.fn(), findFirst: jest.fn(), findMany: jest.fn() },
     receiptAllocation: { count: jest.fn() },
     customer: { findUnique: jest.fn() },
@@ -206,13 +209,40 @@ describe('PaymentsRecomposeService', () => {
       ]);
     });
 
+    it('مبلغِ فاکتور همان `total` ذخیره‌شده است — هیچ جمع/کسرِ دوباره‌ای اینجا نیست', async () => {
+      /*
+       * فاکتورِ ۳۰م که ۲۰م مرجوعی خورده و ۱۰م اصلاحیه گرفته. مرجوعیِ اعتباری
+       * خودش `total` را کم کرده (returns.service)، پس عددِ ذخیره‌شده از قبل
+       * ۲۰م است و پنل باید همان را نشان بدهد. پیش‌تر اینجا دلتای مرجوعی به
+       * `total` اضافه می‌شد و فاکتور «۴۰م» دیده می‌شد.
+       */
+      state.total = 20_000_000;
+      state.paidAmount = 0;
+      state.dueAmount = 20_000_000;
+      state.rows = [];
+
+      const s = await service.settlement('inv1');
+
+      expect(s.invoice.total).toBe(20_000_000);
+      expect(s.invoice.dueAmount).toBe(20_000_000);
+      expect(s.canRecompose).toBe(true);
+    });
+
     it('فاکتورِ باطل، چکدار و رسیدخورده با دلیلِ فارسی بسته می‌شوند', async () => {
       state.status = 'CANCELLED';
-      expect((await service.settlement('inv1')).blockedReason).toContain('باطل');
+      expect((await service.settlement('inv1')).blockedReason).toContain(
+        'باطل',
+      );
 
       jest.clearAllMocks();
       state = makeState();
-      state.rows = [{ method: PaymentMethod.CARD, amount: 100_000_000, cheque: { id: 'ch1' } }];
+      state.rows = [
+        {
+          method: PaymentMethod.CARD,
+          amount: 100_000_000,
+          cheque: { id: 'ch1' },
+        },
+      ];
       expect((await service.settlement('inv1')).canRecompose).toBe(false);
       expect((await service.settlement('inv1')).blockedReason).toContain('چک');
     });
@@ -225,9 +255,18 @@ describe('PaymentsRecomposeService', () => {
 
     // تفاضل به‌ازای هر روش — نه حذفِ تاریخچه.
     expect(createdRows()).toEqual([
-      expect.objectContaining({ method: PaymentMethod.CARD, amount: -100_000_000 }),
-      expect.objectContaining({ method: PaymentMethod.CASH, amount: 30_000_000 }),
-      expect.objectContaining({ method: PaymentMethod.CREDIT, amount: 70_000_000 }),
+      expect.objectContaining({
+        method: PaymentMethod.CARD,
+        amount: -100_000_000,
+      }),
+      expect.objectContaining({
+        method: PaymentMethod.CASH,
+        amount: 30_000_000,
+      }),
+      expect.objectContaining({
+        method: PaymentMethod.CREDIT,
+        amount: 70_000_000,
+      }),
     ]);
 
     // مانده‌ی فاکتور با تقسیمِ تازه می‌خواند.
@@ -292,8 +331,14 @@ describe('PaymentsRecomposeService', () => {
     );
 
     expect(createdRows()).toEqual([
-      expect.objectContaining({ method: PaymentMethod.CARD, amount: -30_000_000 }),
-      expect.objectContaining({ method: PaymentMethod.CASH, amount: 30_000_000 }),
+      expect.objectContaining({
+        method: PaymentMethod.CARD,
+        amount: -30_000_000,
+      }),
+      expect.objectContaining({
+        method: PaymentMethod.CASH,
+        amount: 30_000_000,
+      }),
     ]);
     expect(state.paidAmount).toBe(100_000_000);
     expect(state.dueAmount).toBe(0);
@@ -307,7 +352,9 @@ describe('PaymentsRecomposeService', () => {
     await expect(
       service.recompose(
         'inv1',
-        baseDto({ payments: [{ method: PaymentMethod.CARD, amount: 100_000_000 }] }),
+        baseDto({
+          payments: [{ method: PaymentMethod.CARD, amount: 100_000_000 }],
+        }),
         'u1',
         Role.MANAGER,
       ),
@@ -334,7 +381,13 @@ describe('PaymentsRecomposeService', () => {
   });
 
   it('فاکتورِ چکدار از این مسیر اصلاح نمی‌شود', async () => {
-    state.rows = [{ method: PaymentMethod.CARD, amount: 100_000_000, cheque: { id: 'ch1' } }];
+    state.rows = [
+      {
+        method: PaymentMethod.CARD,
+        amount: 100_000_000,
+        cheque: { id: 'ch1' },
+      },
+    ];
 
     await expect(
       service.recompose('inv1', baseDto(), 'u1', Role.MANAGER),
@@ -344,7 +397,9 @@ describe('PaymentsRecomposeService', () => {
     await expect(
       service.recompose(
         'inv1',
-        baseDto({ payments: [{ method: PaymentMethod.CHEQUE, amount: 100_000_000 }] }),
+        baseDto({
+          payments: [{ method: PaymentMethod.CHEQUE, amount: 100_000_000 }],
+        }),
         'u1',
         Role.MANAGER,
       ),
@@ -409,7 +464,12 @@ describe('PaymentsRecomposeService', () => {
 
   it('مشتریِ فاکتوری که از قبل مشتری دارد عوض نمی‌شود', async () => {
     await expect(
-      service.recompose('inv1', baseDto({ customerId: 'c9' }), 'u1', Role.MANAGER),
+      service.recompose(
+        'inv1',
+        baseDto({ customerId: 'c9' }),
+        'u1',
+        Role.MANAGER,
+      ),
     ).rejects.toMatchObject({ response: { error: 'CUSTOMER_ALREADY_SET' } });
   });
 
@@ -418,7 +478,9 @@ describe('PaymentsRecomposeService', () => {
 
     await expect(
       service.recompose('inv1', baseDto(), 'u1', Role.SALES),
-    ).rejects.toMatchObject({ response: { error: 'RECOMPOSE_REQUIRES_MANAGER' } });
+    ).rejects.toMatchObject({
+      response: { error: 'RECOMPOSE_REQUIRES_MANAGER' },
+    });
 
     state.createdAt = new Date();
     await expect(
@@ -438,7 +500,9 @@ describe('PaymentsRecomposeService', () => {
     await expect(
       service.recompose(
         'inv1',
-        baseDto({ payments: [{ method: PaymentMethod.CASH, amount: 120_000_000 }] }),
+        baseDto({
+          payments: [{ method: PaymentMethod.CASH, amount: 120_000_000 }],
+        }),
         'u1',
         Role.MANAGER,
       ),
@@ -460,6 +524,8 @@ describe('PaymentsRecomposeService', () => {
         'u1',
         Role.MANAGER,
       ),
-    ).rejects.toMatchObject({ response: { error: 'CREDIT_EXCEEDS_REMAINDER' } });
+    ).rejects.toMatchObject({
+      response: { error: 'CREDIT_EXCEEDS_REMAINDER' },
+    });
   });
 });

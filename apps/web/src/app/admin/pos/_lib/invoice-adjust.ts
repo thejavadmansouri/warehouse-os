@@ -76,10 +76,13 @@ export function adjustingStateOf(data: AdjustableInvoice): Adjusting {
           returnable: l.returnable,
           note: l.lineNote ?? "",
         },
-      ])
+      ]),
     ),
     isOpenAccount: data.isOpenAccount,
     hasCustomer: !!data.invoice.customer,
+    /** مانده‌ی واقعیِ مشتری — نوارِ پایین با این عدد خالص را نشان می‌دهد. */
+    customerBalance: data.customerBalance,
+    invoiceDue: data.invoiceDue,
   };
 }
 
@@ -146,7 +149,8 @@ export function adjustDraft(doc: Adjusting, lines: PosLine[]): AdjustDraft {
           newQuantity: remaining,
           newUnitPrice: line.unitPrice,
         });
-        changesAdjust += remaining * line.unitPrice - remaining * spec.oldUnitPrice;
+        changesAdjust +=
+          remaining * line.unitPrice - remaining * spec.oldUnitPrice;
       } else if (qty > 0) {
         returns.push({
           saleLogId: spec.saleLogId,
@@ -162,7 +166,8 @@ export function adjustDraft(doc: Adjusting, lines: PosLine[]): AdjustDraft {
           newUnitPrice: line.unitPrice,
         });
         changesAdjust +=
-          spec.outstanding * line.unitPrice - spec.outstanding * spec.oldUnitPrice;
+          spec.outstanding * line.unitPrice -
+          spec.outstanding * spec.oldUnitPrice;
       }
       continue;
     }
@@ -231,6 +236,7 @@ export function offQtyToReturnQty(
   outstanding: number,
   input: number,
 ): { returnQty: number; overflow: number } {
-  if (input > outstanding) return { returnQty: 0, overflow: input - outstanding };
+  if (input > outstanding)
+    return { returnQty: 0, overflow: input - outstanding };
   return { returnQty: outstanding - Math.max(0, input), overflow: 0 };
 }

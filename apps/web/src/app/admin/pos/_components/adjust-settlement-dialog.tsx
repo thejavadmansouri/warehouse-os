@@ -29,6 +29,7 @@ export function AdjustSettlementDialog({
   afterTotal,
   paidAmount,
   hasCustomer,
+  preferCredit = false,
   pending,
   onConfirm,
   onClose,
@@ -44,6 +45,11 @@ export function AdjustSettlementDialog({
   paidAmount: number;
   /** «روی حساب» و «چک» فقط با مشتری معنا دارند — سرور بدون مشتری ردشان می‌کند. */
   hasCustomer: boolean;
+  /**
+   * مشتریِ حساب‌باز یا بدهکار — پیش‌فرضِ جهتِ PAY روی «روی حساب» می‌رود تا
+   * پولِ نقد بی‌دلیل از صندوق بیرون نرود و بدهیِ مشتری همان‌جا کم شود.
+   */
+  preferCredit?: boolean;
   pending: boolean;
   /**
    * مبلغِ ویرایش‌شده را هم برمی‌گرداند — مدیر حق دارد اختلافِ نهایی را سرِ
@@ -76,8 +82,13 @@ export function AdjustSettlementDialog({
 
   const [method, setMethod] = useState<(typeof methods)[number]>(
     // پرداختِ اضافه: «روی حساب» کم‌ریسک‌ترین انتخاب است — پول نقد کمتری جابه‌جا
-    // می‌شود و بستانکارِ مشتری سرِ تسویهٔ بعد می‌خورد. نبودِ مشتری = نقد.
-    direction === "PAY" && hasCustomer && overpaid && methods.includes("CREDIT")
+    // می‌شود و بستانکارِ مشتری سرِ تسویهٔ بعد می‌خورد. مشتریِ حساب‌باز یا
+    // بدهکار هم (از preferCredit) پیش‌فرضش روی حساب است — همان قانونِ مرجوعی.
+    // نبودِ مشتری = نقد.
+    direction === "PAY" &&
+      hasCustomer &&
+      (overpaid || preferCredit) &&
+      methods.includes("CREDIT")
       ? "CREDIT"
       : "CASH",
   );
@@ -100,14 +111,20 @@ export function AdjustSettlementDialog({
    */
   const chequeMissing =
     method === "CHEQUE" && (!cheque?.number?.trim() || !cheque?.dueDate);
-  const invalid = pending || chequeMissing || (method === "CREDIT" && !hasCustomer);
+  const invalid =
+    pending || chequeMissing || (method === "CREDIT" && !hasCustomer);
   /** تعدیلِ دستی نسبت به اختلافِ محاسبه‌شده — فقط برای نمایش. */
   const manualDelta = editedAmount - amount;
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (!invalid) onConfirm(method, method === "CHEQUE" ? cheque : undefined, editedAmount);
+      if (!invalid)
+        onConfirm(
+          method,
+          method === "CHEQUE" ? cheque : undefined,
+          editedAmount,
+        );
       return;
     }
     // ۱..۴ روش را عوض می‌کند — خانه‌ی دیگری برای تایپ نیست.
@@ -130,7 +147,10 @@ export function AdjustSettlementDialog({
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           setMethod(
-            direction === "PAY" && hasCustomer && overpaid && methods.includes("CREDIT")
+            direction === "PAY" &&
+              hasCustomer &&
+              (overpaid || preferCredit) &&
+              methods.includes("CREDIT")
               ? "CREDIT"
               : "CASH",
           );
@@ -155,8 +175,8 @@ export function AdjustSettlementDialog({
                 : "text-emerald-600 dark:text-emerald-400"
             }`}
           >
-            {direction === "COLLECT" ? "دریافت از مشتری" : "پرداخت به مشتری"} — اختلافِ
-            نهاییِ عملیات
+            {direction === "COLLECT" ? "دریافت از مشتری" : "پرداخت به مشتری"} —
+            اختلافِ نهاییِ عملیات
           </div>
           <div className="mx-auto mt-2 flex max-w-56 items-center gap-2">
             <MoneyInput
@@ -169,8 +189,15 @@ export function AdjustSettlementDialog({
           {manualDelta !== 0 && (
             <div className="mt-1 text-[11px] text-muted-foreground">
               اختلافِ محاسبه‌شده: {money(amount)} · تعدیلِ دستی{" "}
-              <span className={manualDelta > 0 ? "font-semibold text-amber-600" : "font-semibold text-emerald-600"}>
-                {manualDelta > 0 ? "+" : "−"}{money(Math.abs(manualDelta))}
+              <span
+                className={
+                  manualDelta > 0
+                    ? "font-semibold text-amber-600"
+                    : "font-semibold text-emerald-600"
+                }
+              >
+                {manualDelta > 0 ? "+" : "−"}
+                {money(Math.abs(manualDelta))}
               </span>
             </div>
           )}
@@ -187,16 +214,28 @@ export function AdjustSettlementDialog({
           {(overpaid || paidAmount > 0) && (
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="rounded-lg border bg-muted/30 px-2 py-2">
-                <div className="text-[0.7rem] text-muted-foreground">فاکتور پس از عملیات</div>
-                <div className="mt-0.5 text-sm font-bold tabular-nums">{money(afterTotal)}</div>
-              </div>
-              <div className="rounded-lg border bg-muted/30 px-2 py-2">
-                <div className="text-[0.7rem] text-muted-foreground">پرداختِ قبلی</div>
-                <div className="mt-0.5 text-sm font-bold tabular-nums">{money(paidAmount)}</div>
+                <div className="text-[0.7rem] text-muted-foreground">
+                  فاکتور پس از عملیات
+                </div>
+                <div className="mt-0.5 text-sm font-bold tabular-nums">
+                  {money(afterTotal)}
+                </div>
               </div>
               <div className="rounded-lg border bg-muted/30 px-2 py-2">
                 <div className="text-[0.7rem] text-muted-foreground">
-                  {overpaid ? "اضافه‌پرداخت" : direction === "COLLECT" ? "مانده" : "تغییر"}
+                  پرداختِ قبلی
+                </div>
+                <div className="mt-0.5 text-sm font-bold tabular-nums">
+                  {money(paidAmount)}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 px-2 py-2">
+                <div className="text-[0.7rem] text-muted-foreground">
+                  {overpaid
+                    ? "اضافه‌پرداخت"
+                    : direction === "COLLECT"
+                      ? "مانده"
+                      : "تغییر"}
                 </div>
                 <div
                   className={`mt-0.5 text-sm font-bold tabular-nums ${
@@ -205,7 +244,14 @@ export function AdjustSettlementDialog({
                       : "text-muted-foreground"
                   }`}
                 >
-                  {money(Math.max(0, overpaid ? paidAmount - afterTotal : afterTotal - paidAmount))}
+                  {money(
+                    Math.max(
+                      0,
+                      overpaid
+                        ? paidAmount - afterTotal
+                        : afterTotal - paidAmount,
+                    ),
+                  )}
                 </div>
               </div>
             </div>
@@ -213,8 +259,8 @@ export function AdjustSettlementDialog({
 
           {overpaid && (
             <p className="rounded-md bg-amber-600/10 px-3 py-2 text-xs font-medium text-amber-700 dark:bg-amber-600/10 dark:text-amber-400">
-              مشتری قبلاً بیش از مبلغِ پس‌ازعملیات پرداخت کرده — این اختلاف یا روی
-              حسابش بستانکار می‌شود، یا همان لحظه به او پرداخت می‌شود.
+              مشتری قبلاً بیش از مبلغِ پس‌ازعملیات پرداخت کرده — این اختلاف یا
+              روی حسابش بستانکار می‌شود، یا همان لحظه به او پرداخت می‌شود.
             </p>
           )}
 
@@ -232,10 +278,14 @@ export function AdjustSettlementDialog({
                       : "hover:border-primary hover:bg-primary/5"
                   }`}
                 >
-                  <span className="text-sm font-medium">{PAYMENT_LABELS[m]}</span>
+                  <span className="text-sm font-medium">
+                    {PAYMENT_LABELS[m]}
+                  </span>
                   <span
                     className={`text-[11px] ${
-                      active ? "text-primary-foreground/70" : "text-muted-foreground"
+                      active
+                        ? "text-primary-foreground/70"
+                        : "text-muted-foreground"
                     }`}
                   >
                     کلید {toFa(i + 1)}
@@ -255,8 +305,9 @@ export function AdjustSettlementDialog({
 
           {method === "CREDIT" && (
             <p className="rounded-md bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-              مبلغ روی حسابِ مشتری می‌نشیند — {direction === "COLLECT" ? "بدهکارتر می‌شود" : "بستانکار می‌شود"} و
-              در تسویه‌ی بعدی حساب می‌شود.
+              مبلغ روی حسابِ مشتری می‌نشیند —{" "}
+              {direction === "COLLECT" ? "بدهکارتر می‌شود" : "بستانکار می‌شود"}{" "}
+              و در تسویه‌ی بعدی حساب می‌شود.
             </p>
           )}
 
@@ -274,7 +325,13 @@ export function AdjustSettlementDialog({
           <button
             type="button"
             disabled={invalid}
-            onClick={() => onConfirm(method, method === "CHEQUE" ? cheque : undefined, editedAmount)}
+            onClick={() =>
+              onConfirm(
+                method,
+                method === "CHEQUE" ? cheque : undefined,
+                editedAmount,
+              )
+            }
             className="flex h-12 items-center justify-center rounded-lg bg-primary text-base
                        font-semibold text-primary-foreground transition-opacity
                        hover:opacity-90 disabled:opacity-40"

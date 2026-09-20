@@ -1372,6 +1372,14 @@ export class SalesService {
       this.prisma.saleInvoice.count({ where }),
     ]);
 
+    /*
+     * مبلغِ نمایشیِ فهرست، خودِ `total` است.
+     *
+     * مرجوعیِ اعتباری و اصلاحیه از قبل داخل `total` نشسته‌اند (returns.service
+     * و corrections.service) — همان مقدارِ کهنه‌ای که فاکتورِ ۳۰ میلیونیِ
+     * مرجوعی‌خورده را «۴۰» نشان می‌داد، دیگر وجود ندارد. پس هیچ جبرانی اینجا
+     * لازم نیست؛ اگر اضافه شود، مرجوعی دو بار کم می‌شود.
+     */
     return {
       data: data.map((inv) => ({
         ...inv,
@@ -1379,6 +1387,162 @@ export class SalesService {
         hasReturns: inv._count.returns > 0,
       })),
       meta: { total, page, pageSize, pageCount: Math.ceil(total / pageSize) },
+    };
+  }
+
+  /**
+   * سرگذشتِ یک فاکتور — «این فاکتور چه شد و چرا مانده‌اش این عدد است؟».
+   *
+   * همه‌چیز از دفتر می‌آید، نه از `paidAmount`/`dueAmount`/`total` خودِ فاکتور:
+   * آن فیلدها با ویرایش‌های بعدی (مرجوعی، اصلاحیه، برگشتِ پرداخت، اصلاحِ نحوهٔ
+   * پرداخت) همیشه هم‌گام نمی‌مانند. دفتر هر رویداد را با تاریخ و سندش ثبت
+   * کرده؛ همین است که جمعش دقیقاً به ماندهٔ نمایش‌داده‌شده می‌رسد و فروشنده
+   * می‌تواند خط‌به‌خط دنبالش کند.
+   *
+   * مرجوعیِ نقد/کارت عمداً وارد دفتر نمی‌شود (پول از صندوق برگشت، بدهی عوض
+   * نمی‌شود)؛ ولی در «سرگذشت» می‌آید تا معلوم باشد کالا برگشته، فقط اثرش
+   * روی حساب نبوده.
+   */
+  async invoiceStory(id: string) {
+    const invoice = await this.prisma.saleInvoice.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        createdAt: true,
+        customerId: true,
+        dueAmount: true,
+      },
+    });
+
+    if (!invoice) {
+      throw new NotFoundException({
+        error: 'INVOICE_NOT_FOUND',
+        message: 'فاکتور پیدا نشد',
+      });
+    }
+
+    const [rows, cashRefunds, allocations, salePayments] = await Promise.all([
+      this.prisma.customerLedger.findMany({
+        where: { invoiceId: id },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          type: true,
+          amount: true,
+          note: true,
+          createdAt: true,
+          receipt: { select: { number: true } },
+          saleReturn: { select: { number: true } },
+          correction: { select: { number: true } },
+          payout: { select: { number: true } },
+          reversal: { select: { method: true, reason: true } },
+        },
+      }),
+      /*
+       * مرجوعی‌هایی که دفتر ندیده‌اند (برگشتِ نقدی/کارتخوان) — بدون این‌ها
+       * سرگذشت ناقص می‌شود و کسی که کالا را پس داده می‌پرسد «پس چرا اینجا
+       * نیست؟». مبلغشان از مانده کم نمی‌شود، فقط نشان داده می‌شود.
+       */
+      this.prisma.saleReturn.findMany({
+        where: {
+          invoiceId: id,
+          refundMethod: { in: [PaymentMethod.CASH, PaymentMethod.CARD] },
+        },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          number: true,
+          refundAmount: true,
+          refundMethod: true,
+          createdAt: true,
+        },
+      }),
+      /*
+       * پرداخت‌های روی همین فاکتور.
+       *
+       * رسید در دفتر فقط به مشتری می‌چسبد (invoiceId ندارد)، پس تنها جایی که
+       * معلوم می‌کند «کدام پرداخت بابت کدام فاکتور بود» همین تخصیص‌هاست — بدون
+       * آن، فروشنده نمی‌فهمد چرا این فاکتور کمتر از مبلغش مانده دارد.
+       */
+      this.prisma.receiptAllocation.findMany({
+        where: { invoiceId: id },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          amount: true,
+          createdAt: true,
+          receipt: {
+            select: {
+              number: true,
+              createdAt: true,
+              payments: { select: { method: true } },
+            },
+          },
+        },
+      }),
+      /*
+       * پولِ نقد/کارتی که سرِ فروش گرفته شده (ردیف‌های مثبت و دست‌نخوردهٔ
+       * پرداخت). ردیف‌های منفی/operationKey‌دار را نمی‌آوریم: اثرشان همان ردیفِ
+       * «اصلاح نحوهٔ پرداخت» یا «برگشت پرداخت»ِ دفتر است و دو بار شمرده می‌شد.
+       */
+      this.prisma.payment.findMany({
+        where: { invoiceId: id, amount: { gt: 0 }, operationKey: null },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, amount: true, method: true, createdAt: true },
+      }),
+    ]);
+
+    const events = rows.map((row) => ({
+      id: row.id,
+      kind: row.type,
+      amount: row.amount,
+      at: row.createdAt,
+      docNumber:
+        row.receipt?.number ??
+        row.saleReturn?.number ??
+        row.correction?.number ??
+        row.payout?.number ??
+        null,
+      method: row.reversal?.method ?? null,
+      note: row.note ?? null,
+    }));
+
+    return {
+      invoice,
+      events,
+      /** پرداخت‌هایی که بابتِ همین فاکتور گرفته شده — با شمارهٔ رسید و تاریخ. */
+      payments: allocations.map((a) => ({
+        id: a.id,
+        amount: a.amount,
+        at: a.receipt.createdAt,
+        receiptNumber: a.receipt.number,
+        methods: a.receipt.payments.map((p) => p.method),
+      })),
+      /** پولِ نقد/کارتیِ سرِ فروش — توضیحِ مبلغِ کمترِ فاکتور از لحظهٔ صدور. */
+      salePayments: salePayments.map((p) => ({
+        id: p.id,
+        amount: p.amount,
+        method: p.method,
+        at: p.createdAt,
+      })),
+      /** مرجوعی‌های بیرونِ حساب (نقد/کارت) — اثرشان روی مانده صفر است. */
+      offAccountRefunds: cashRefunds.map((r) => ({
+        id: r.id,
+        number: r.number,
+        amount: r.refundAmount,
+        method: r.refundMethod,
+        at: r.createdAt,
+      })),
+      /**
+       * ماندهٔ این فاکتور = همان `dueAmount` که ستون «مانده» و صندوق نشان
+       * می‌دهند — نه جمعِ ردیف‌های دفتر: پرداخت‌های تخصیص‌یافته دفتر را به
+       * مشتری می‌چسبانند نه به فاکتور، پس جمعِ ردیف‌های فاکتور از مانده بیشتر
+       * در می‌آید. مانده در هر مسیر (فروش، رسید، مرجوعی، اصلاحیه، برگشتِ
+       * پرداخت) به‌روز می‌شود و همین عددی است که فروشنده در دو جای دیگر می‌بیند.
+       */
+      due: invoice.dueAmount,
     };
   }
 

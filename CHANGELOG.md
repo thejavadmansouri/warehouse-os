@@ -27,6 +27,62 @@
 
 ## Unreleased
 
+### SaleInvoice.total is now net of credit returns (2026-09-20)
+
+- Bug: a credit return decremented `SaleInvoice.dueAmount` but never `total`,
+  so every consumer of `total` — the payment-recompose dialog header, the
+  invoice detail page, the list — showed a stale, inflated amount. Customer
+  ۰۰۰'s invoice 69 displayed 40,000,000 for what was really a 20,000,000
+  invoice after a return and a correction.
+- Fix: `returns.service` now decrements `total` alongside `dueAmount` for
+  CREDIT returns, guarded by `WHERE total >= amount` so the field can never
+  go negative. CASH/CARD refunds still touch only `dueAmount` — the money
+  went back over the counter, the payable amount is unchanged.
+- Every display-side compensation was removed: `effectiveTotal` in
+  payments-recompose, `total − returns` in findAll and adjustments.service,
+  and `LedgerService.invoiceReturnTotals` itself. Leaving any of them in
+  place would now double-subtract. `InvoiceEffectsService.deltaByInvoice`
+  (statements/open-accounts) counts only CASH/CARD refunds, since CREDIT
+  refunds now sit inside `total`.
+- Migration `20260920120000_invoice_total_net_of_credit_returns` rewrites
+  existing invoices' `total` from their own RETURN ledger rows once
+  (`GREATEST(0, …)` guard), so the update kit fixes shipped data too.
+  Verified against all 10 affected invoices before migrating: 0 display
+  deltas between the old formula (`total − all returns`) and the new one
+  (`total` minus CASH/CARD only).
+- Regression tests lock the write rule (returns.service.spec: credit
+  decrements both fields, cash writes nothing, over-refund floors at zero;
+  invoice-effects.service.spec: the delta query excludes credit refunds).
+  API jest 329/329, web vitest 252/252.
+
+### The update kit now carries its own Prisma CLI (2026-09-16)
+
+- Found during the pre-flash check of the kit: `apply-update.ps1` runs
+  `prisma generate` and `prisma migrate deploy`, and `Find-PrismaCli` looked only
+  at the install (`app\api\node_modules`), a global `prisma` command, and the
+  dev-repo path. No Setup payload and no previous kit shipped the CLI, so on the
+  shop both steps could not run — the migrations of this very kit were
+  undeliverable, and the pre-update CHECK failed with "Prisma CLI not found".
+- `tools/build-prisma-cli-kit.ps1` (new) builds a standalone closure
+  (`prisma` + `@prisma/client` 6.19.3, download caches and sourcemaps pruned,
+  proven with `--version` and a read-only `migrate status` before it is
+  accepted) into `tools/prisma-cli-kit/node_modules` — gitignored npm output,
+  168 MB.
+- `build-update-kit.ps1` copies that closure into the kit as
+  `api\node_modules` and says so; if the closure is missing the kit still builds
+  but the gap is written into `kit-contents.txt` instead of hiding.
+- `apply-update.ps1` — three changes: `Find-PrismaCli` also looks inside the kit
+  (so the CHECK passes *before* any file is touched and the migration check can
+  actually authenticate against the database); the kit's `api\node_modules` is
+  **merged** into `app\api\node_modules`, never replaced (a wholesale replace
+  would delete the installed `@prisma/client` the running API imports); and the
+  two prisma steps lower `ErrorActionPreference` around the call, because the
+  CLI writes its deprecation chatter to stderr and under EAP=Stop a redirected
+  stderr line becomes a NativeCommandError that kills a successful command.
+- Kit grew from 42 MB to 202 MB (6787 files) with the CLI inside; CHECK on the
+  dev machine is now green end-to-end (CLI found in the kit, database
+  authenticated, 0 pending migrations).
+
 ### Post-shop-update delta — **none of this is installed in the shop** (2026-09-15)
 
 The last installer that exists is `WarehouseOS-Setup-0.4.0.exe` (2026-09-06), and the

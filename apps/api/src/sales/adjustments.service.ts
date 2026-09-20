@@ -150,11 +150,31 @@ export class AdjustmentsService {
 
     const isOpen = invoice.status === InvoiceStatus.OPEN;
 
+    /*
+     * مانده‌ی کلِ مشتری — نوارِ پایینِ ویرایش با این عدد خالصِ حساب را نشان
+     * می‌دهد، نه مانده‌ی رسمیِ فاکتور که برگشتی‌ها/اصلاحیه‌ها را نمی‌بیند.
+     */
+    const customerBalance = invoice.customerId
+      ? await this.ledger.balance(invoice.customerId)
+      : 0;
+
+    /*
+     * ماندهٔ دفتریِ همین فاکتور — SUMِ ردیف‌های دفترِ مشتریِ ساخته‌شده با این
+     * فاکتور (فاکتور، مرجوعی‌ها، اصلاحیه‌ها). فیلدِ `total` با مرجوعی تازه
+     * نمی‌شود و نمایشش فروشنده را گمراه می‌کند؛ این عدد با ماندهٔ کل هم‌خوان است.
+     */
+    const invoiceDue = await this.ledger.invoiceBalance(invoiceId);
+
     return {
       invoice: {
         id: invoice.id,
         number: invoice.number,
         status: invoice.status,
+        /*
+         * مبلغِ فاکتور، خودِ `total` است — مرجوعیِ اعتباری‌اش از قبل کم شده
+         * (returns.service)، پس دیگر اینجا جمع‌کردنِ دوبارهٔ دلتا یعنی دو بار
+         * کم‌شدنِ همان مرجوعی.
+         */
         total: invoice.total,
         paidAmount: invoice.paidAmount,
         dueAmount: invoice.dueAmount,
@@ -174,6 +194,10 @@ export class AdjustmentsService {
         invoice.status === InvoiceStatus.CONFIRMED ||
         invoice.status === InvoiceStatus.OPEN,
       isOpenAccount: isOpen,
+      /** مانده‌ی واقعیِ کلِ مشتری — پایه‌ی اعدادِ نوارِ پایینِ ویرایش. */
+      customerBalance,
+      /** ماندهٔ دفتریِ همین فاکتور — حقیقتِ نمایشیِ «همین فاکتور» در نوار پایین. */
+      invoiceDue,
     };
   }
 
@@ -284,9 +308,7 @@ export class AdjustmentsService {
           });
         }
 
-        const isOpen = invoice.status === InvoiceStatus.OPEN;
         const hasCustomer = !!invoice.customerId;
-
         const saleLines = await tx.inventoryLog.findMany({
           where: { invoiceId: invoice.id, action: 'SALE' },
         });
@@ -569,9 +591,9 @@ export class AdjustmentsService {
       }
 
       return this.loadCombined(invoiceId, operationKey);
-    } catch (err: any) {
+    } catch (err: unknown) {
       // برخوردِ همزمان روی کلیدهای فرزند: عملیاتِ قبلی را برگردان.
-      if (err?.code === 'P2002') {
+      if ((err as { code?: string })?.code === 'P2002') {
         const ret = await this.prisma.saleReturn.findUnique({
           where: { idempotencyKey: returnKey },
           select: { operationKey: true },

@@ -36,7 +36,21 @@ export default function DocumentsPage() {
       سرصفحه حذف شد: نامِ صفحه در منوی کناری هست و تکرارش فقط یک سطرِ ارتفاع
       می‌گیرد. تب‌ها خودشان می‌گویند اینجا کجاست.
     */
-    <Tabs defaultValue="invoices" className="flex h-[calc(100vh-2.5rem)] flex-col gap-0">
+    /*
+      dir="rtl" — رادیکسِ Tabs بدون آن، خودش dir=ltr می‌گذارد و همه‌ی
+      جدول‌های داخلِ تب‌ها برعکس می‌شوند (شماره چپ، مانده راست!) و متن‌ها
+      با عددشان هم‌خط نمی‌شوند.
+    */
+    /*
+      ارتفاع = صفحه منهای نوار بالا (۲.۵rem) و paddingی که main می‌دهد
+      (۲rem روی موبایل، ۳rem از sm به بالا) — وگرنه پایینِ جدول و نوارهای
+      پایین از کادر بیرون می‌زدند و دیده نمی‌شدند.
+    */
+    <Tabs
+      defaultValue="invoices"
+      dir="rtl"
+      className="flex h-[calc(100vh-4.5rem)] flex-col gap-0 sm:h-[calc(100vh-5.5rem)]"
+    >
       <TabsList className="h-8 shrink-0 justify-start rounded-none border-b bg-transparent px-2">
         <TabsTrigger value="invoices">فاکتورها</TabsTrigger>
         <TabsTrigger value="quotations">پیش‌فاکتورها</TabsTrigger>
@@ -46,28 +60,43 @@ export default function DocumentsPage() {
       </TabsList>
 
       {/* هر تب تمامِ ارتفاعِ باقی‌مانده را می‌گیرد — جدول باید تا پایین برود. */}
-      <TabsContent value="invoices" className="mt-0 flex min-h-0 flex-1 flex-col">
+      <TabsContent
+        value="invoices"
+        className="mt-0 flex min-h-0 flex-1 flex-col"
+      >
         <InvoicesPanel embedded />
       </TabsContent>
 
-      <TabsContent value="quotations" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+      <TabsContent
+        value="quotations"
+        className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto"
+      >
         <QuotationsPanel embedded />
       </TabsContent>
 
       {isManager && (
-        <TabsContent value="returns" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+        <TabsContent
+          value="returns"
+          className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto"
+        >
           <ReturnsPanel embedded />
         </TabsContent>
       )}
 
       {isManager && (
-        <TabsContent value="receipts" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+        <TabsContent
+          value="receipts"
+          className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto"
+        >
           <ReceiptsPanel embedded />
         </TabsContent>
       )}
 
       {isManager && (
-        <TabsContent value="payouts" className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto">
+        <TabsContent
+          value="payouts"
+          className="mt-0 flex min-h-0 flex-1 flex-col overflow-auto"
+        >
           <PayoutsPanel embedded />
         </TabsContent>
       )}

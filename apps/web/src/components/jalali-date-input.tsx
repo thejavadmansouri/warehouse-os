@@ -7,27 +7,10 @@ import {
   JALALI_MAX_YEAR,
   faToEn,
   isValidJalali,
-  toFaDigits,
   toGregorian,
   toJalali,
 } from "@/lib/jalali";
 import { cn } from "@/lib/utils";
-
-/** نام ماه‌های شمسی برای نمایشِ تاریخِ کامل به‌صورت متن. */
-const JALALI_MONTH_NAMES = [
-  "فروردین",
-  "اردیبهشت",
-  "خرداد",
-  "تیر",
-  "مرداد",
-  "شهریور",
-  "مهر",
-  "آبان",
-  "آذر",
-  "دی",
-  "بهمن",
-  "اسفند",
-] as const;
 
 /** پاک‌سازی ورودی کاربر: ارقام فارسی/عربی → انگلیسی و حذف هر کاراکتر غیرعددی. */
 function sanitizeDigits(input: string, maxLen: number): string {
@@ -114,10 +97,15 @@ interface JalaliDateInputProps {
 }
 
 /**
- * ورودی تاریخ شمسی با سه فیلد عددی (روز / ماه / سال) — چیدمان راست‌به‌چپ.
+ * ورودی تاریخ شمسی با سه فیلد عددی — کامپکت، در یک سطر.
+ *
+ * طرح: «۱۴۰۵/۰۶/۲۸» داخلِ یک کادر با جداکننده‌های نازک؛ عنوانِ روز/ماه/سال
+ * به‌جای لیبلِ بالای هر فیلد، placeholder داخلِ خودِ فیلدهاست (هُوَر با
+ * کیبورد و inputMode کار می‌کند). تاریخِ کاملِ معتبر با خطِ زیرینِ کوچک
+ * خودش را معرفی می‌کند؛ خطا فقط قرمزِ فیلدهاست، نه یک پاراگرافِ اضافه.
+ *
  * ارقام فارسی و انگلیسی هر دو پذیرفته می‌شوند؛ با پر شدنِ هر فیلد فوکوس
- * خودکار به فیلد بعدی می‌رود؛ فقط تاریخِ کامل و معتبر با «YYYY-MM-DD»
- * به onChange گزارش می‌شود و تاریخِ نامعتبر با حاشیه‌ی قرمز نشان داده می‌شود.
+ * خودکار به فیلد بعدی می‌رود؛ فقط تاریخِ کامل و معتبر به onChange می‌رسد.
  */
 export function JalaliDateInput({
   value,
@@ -200,100 +188,70 @@ export function JalaliDateInput({
       }
     };
 
-  // زیر فیلدها: تاریخِ کاملِ شمسی به‌صورت متن (یا پیامِ خطا).
-  let hint: string;
-  if (valid) {
-    hint = `${toFaDigits(String(dayNum))} ${JALALI_MONTH_NAMES[monthNum - 1]} ${toFaDigits(String(yearNum))}`;
-  } else if (complete) {
-    hint = "تاریخ نامعتبر است";
-  } else {
-    hint = "";
-  }
-
   const dayInputId = id;
   const monthInputId = id ? `${id}-month` : undefined;
   const yearInputId = id ? `${id}-year` : undefined;
 
   return (
-    <div dir="rtl" className="w-full">
-      <div className="flex items-end gap-2">
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={dayInputId}
-            className="text-xs text-muted-foreground"
-          >
-            روز
-          </label>
-          <Input
-            id={dayInputId}
-            ref={dayRef}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="—"
-            value={fields.day}
-            onChange={handleFieldChange("day")}
-            onFocus={(e) => e.currentTarget.select()}
-            disabled={disabled}
-            aria-invalid={dayInvalid || undefined}
-            className="w-16 rounded-md text-center tabular-nums"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={monthInputId}
-            className="text-xs text-muted-foreground"
-          >
-            ماه
-          </label>
-          <Input
-            id={monthInputId}
-            ref={monthRef}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="—"
-            value={fields.month}
-            onChange={handleFieldChange("month")}
-            onFocus={(e) => e.currentTarget.select()}
-            disabled={disabled}
-            aria-invalid={monthInvalid || undefined}
-            className="w-16 rounded-md text-center tabular-nums"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label
-            htmlFor={yearInputId}
-            className="text-xs text-muted-foreground"
-          >
-            سال
-          </label>
-          <Input
-            id={yearInputId}
-            ref={yearRef}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="—"
-            value={fields.year}
-            onChange={handleFieldChange("year")}
-            onFocus={(e) => e.currentTarget.select()}
-            disabled={disabled}
-            aria-invalid={yearInvalid || undefined}
-            className="w-24 rounded-md text-center tabular-nums"
-          />
-        </div>
+    /*
+      یک کادرِ واحد با سه خانه: روز/ماه/سال با جداکننده‌ی «/».
+      عنوانِ هر خانه داخلِ placeholder است تا سطرِ لیبلِ اضافه نداشته باشیم.
+    */
+    <div dir="rtl" className="flex w-fit items-center">
+      <div
+        className={cn(
+          "flex h-8 items-center overflow-hidden rounded-md border bg-background text-sm",
+          invalid && "border-destructive",
+        )}
+      >
+        <Input
+          id={dayInputId}
+          ref={dayRef}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="روز"
+          title="روز"
+          value={fields.day}
+          onChange={handleFieldChange("day")}
+          onFocus={(e) => e.currentTarget.select()}
+          disabled={disabled}
+          aria-invalid={dayInvalid || undefined}
+          aria-label="روز"
+          className="h-8 w-10 rounded-none border-0 bg-transparent px-1 text-center tabular-nums focus-visible:ring-0 focus-visible:ring-offset-0"
+        />
+        <span aria-hidden className="h-8 w-px bg-border" />
+        <Input
+          id={monthInputId}
+          ref={monthRef}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="ماه"
+          title="ماه"
+          value={fields.month}
+          onChange={handleFieldChange("month")}
+          onFocus={(e) => e.currentTarget.select()}
+          disabled={disabled}
+          aria-invalid={monthInvalid || undefined}
+          aria-label="ماه"
+          className="h-8 w-10 rounded-none border-0 bg-transparent px-1 text-center tabular-nums focus-visible:ring-0 focus-visible:ring-offset-0"
+        />
+        <span aria-hidden className="h-8 w-px bg-border" />
+        <Input
+          id={yearInputId}
+          ref={yearRef}
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder="سال"
+          title="سال"
+          value={fields.year}
+          onChange={handleFieldChange("year")}
+          onFocus={(e) => e.currentTarget.select()}
+          disabled={disabled}
+          aria-invalid={yearInvalid || undefined}
+          aria-label="سال"
+          className="h-8 w-14 rounded-none border-0 bg-transparent px-1 text-center tabular-nums focus-visible:ring-0 focus-visible:ring-offset-0"
+        />
       </div>
-
-      {hint ? (
-        <p
-          className={cn(
-            "mt-1.5 text-sm",
-            valid ? "text-muted-foreground" : "text-destructive",
-          )}
-        >
-          {hint}
-        </p>
-      ) : null}
     </div>
   );
 }

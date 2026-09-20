@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { PaymentMethod } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -19,9 +20,9 @@ export interface LineEffects {
  * (مرجوعی، اصلاحیه) حرکتِ جبرانیِ خودش را کنارش می‌سازد. پس `lineEffects` که
  * روی ردیف‌ها کار می‌کند همیشه باید دلتاها را سوار کند.
  *
- * ⚠️ ولی خودِ **سندِ فاکتور** append-only نیست: اصلاحیه `subtotal`/`total` را
- * در جا به‌روز می‌کند. برای همین `deltaByInvoice` عمداً فقط مرجوعی را
- * برمی‌گرداند — توضیحِ کاملش روی خودِ همان متد.
+ * ⚠️ ولی خودِ **سندِ فاکتور** append-only نیست: اصلاحیه و مرجوعیِ اعتباری
+ * `subtotal`/`total` را در جا به‌روز می‌کنند. برای همین `deltaByInvoice`
+ * عمداً فقط مرجوعیِ نقد/کارت را برمی‌گرداند — توضیحِ کاملش روی همان متد.
  *
  * چرا سرویسِ جدا: پرونده‌ی حساب باز، برگه‌ی چاپیِ حساب، و صورت‌حسابِ مشتری هر سه
  * به همین حساب نیاز دارند. با سه نسخه‌ی کپی‌شده، اولین تغییر در قاعده روی یکی
@@ -33,20 +34,28 @@ export class InvoiceEffectsService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * اثرِ اسناد روی مبلغِ هر فاکتور: اصلاحیه‌ها مثبت/منفی، مرجوعی‌ها منفی.
-   * خروجی دلتاست، نه مبلغِ نهایی — `total + delta` می‌شود آنچه باید بدهد.
+   * اثرِ مرجوعی‌های **نقد/کارت** روی مبلغِ هر فاکتور (منفی).
+   * خروجی دلتاست، نه مبلغِ نهایی — `total + delta` می‌شود ارزشِ کالای مانده.
+   *
+   * مرجوعیِ اعتباری اینجا نیست چون خودش `total` را کم کرده؛ اصلاحیه هم نیست
+   * چون `total` را در جا به‌روز می‌کند.
    */
   async deltaByInvoice(invoiceIds: string[]): Promise<Map<string, number>> {
     if (invoiceIds.length === 0) return new Map();
 
     /*
-     * ⚠️ فقط مرجوعی — اصلاحیه عمداً اینجا نیست.
+     * ⚠️ فقط مرجوعیِ **نقد/کارت** — نه اعتباری و نه اصلاحیه.
      *
-     * این دو سند رفتارِ متفاوتی با فاکتور دارند و یکی‌گرفتنشان باعثِ
+     * این اسناد رفتارِ متفاوتی با فاکتور دارند و یکی‌گرفتنشان باعثِ
      * دوباره‌شماری می‌شد:
      *
-     *   • مرجوعی فقط `dueAmount` را کم می‌کند و به `total` دست نمی‌زند
-     *     (returns.service). پس اثرش باید همین‌جا به‌صورت دلتا اضافه شود.
+     *   • مرجوعیِ **اعتباری** خودِ `total` فاکتور را در جا کم می‌کند
+     *     (returns.service) چون بدهی را کم می‌کند. پس نباید اینجا دوباره
+     *     به‌عنوان دلتا برگردد.
+     *
+     *   • مرجوعیِ **نقد/کارت** به `total` دست نمی‌زند: پول از صندوق برگشته و
+     *     مبلغِ قابلِ‌پرداختِ فاکتور عوض نشده. فقط اثرش باید همین‌جا به‌صورت
+     *     دلتا اضافه شود تا «ارزشِ کالای مانده» درست دربیاید.
      *
      *   • اصلاحیه اما `subtotal` و `total` را **در جا** به‌روز می‌کند
      *     (corrections.service — هر دو شاخه، هرجا amountAdjust ≠ 0). یعنی
@@ -63,7 +72,10 @@ export class InvoiceEffectsService {
      */
     const returns = await this.prisma.saleReturn.groupBy({
       by: ['invoiceId'],
-      where: { invoiceId: { in: invoiceIds } },
+      where: {
+        invoiceId: { in: invoiceIds },
+        refundMethod: { not: PaymentMethod.CREDIT },
+      },
       _sum: { refundAmount: true },
     });
 

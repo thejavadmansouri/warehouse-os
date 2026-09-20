@@ -2,7 +2,14 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  keepPreviousData,
+} from "@tanstack/react-query";
+
+import { InvoiceStoryStrip } from "./_components/invoice-story-strip";
 import { toast } from "sonner";
 import { Search, Undo2 } from "lucide-react";
 
@@ -14,13 +21,25 @@ import { StatusBadge } from "@/components/status-badge";
 import { InvoicePayBadge, balanceTextClass } from "@/components/finance-badges";
 import { CustomerBalanceStrip } from "@/app/admin/pos/_components/customer-balance-strip";
 import { ReceiptForm } from "@/components/receipt-form";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getCustomer } from "@/lib/api";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { ReturnDialog } from "@/app/admin/pos/_components/return-dialog";
 import { CorrectionDialog } from "@/app/admin/pos/_components/correction-dialog";
-import { getInvoices, cancelInvoice } from "@/lib/api";
-import { faDate, faTime, money, toFa, rial, INVOICE_STATUS_LABELS } from "@/lib/format";
+import { getInvoices, cancelInvoice, getInvoiceStory } from "@/lib/api";
+import {
+  faDate,
+  faTime,
+  money,
+  toFa,
+  rial,
+  INVOICE_STATUS_LABELS,
+} from "@/lib/format";
 import { useAuthStore } from "@/lib/auth-store";
 import type { Invoice } from "@/lib/types";
 
@@ -35,10 +54,12 @@ const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
 const TD = "px-2 py-1.5 whitespace-nowrap";
 
 // برچسب‌ها از دیکشنری مرکزی می‌آیند — این صفحه حقِ نسخه‌برداریِ خودش را ندارد.
-const STATUS_TABS = ["", "OPEN", "CONFIRMED", "RETURNED", "CANCELLED"].map((key) => ({
-  key,
-  label: key === "" ? "همه" : INVOICE_STATUS_LABELS[key] ?? key,
-}));
+const STATUS_TABS = ["", "OPEN", "CONFIRMED", "RETURNED", "CANCELLED"].map(
+  (key) => ({
+    key,
+    label: key === "" ? "همه" : (INVOICE_STATUS_LABELS[key] ?? key),
+  }),
+);
 
 /** امروز به‌صورت «YYYY-MM-DD» محلی — ورودیِ فیلترهای تاریخ. */
 function todayIso(): string {
@@ -72,18 +93,27 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
   // مرجوعی، اصلاحیه و ابطال — از همین‌جا روی هر فاکتوری با سرچ، نه فقط فاکتورهای امروز.
   const [returning, setReturning] = React.useState<string | null>(null);
   const [correcting, setCorrecting] = React.useState<string | null>(null);
-  const [cancelling, setCancelling] = React.useState<{ id: string; number: number; total: number } | null>(null);
+  const [cancelling, setCancelling] = React.useState<{
+    id: string;
+    number: number;
+    total: number;
+  } | null>(null);
 
   /*
    * نوارِ ماندهٔ مشتری زیرِ جدول — بخشِ دومِ طرحِ تأییدشده: هر جا حافظهٔ
    * فاکتور و وضعیت فاکتور دیده می‌شود، وضعیت مالی مشتری هم همان‌جاست.
    * ردیفِ فعال زیر نشانگر کیبورد نوار را می‌سازد؛ F6 از همان‌جا دریافت باز می‌کند.
    */
-  const [receiving, setReceiving] = React.useState<{ customerId: string; customerName: string; number: number } | null>(null);
+  const [receiving, setReceiving] = React.useState<{
+    customerId: string;
+    customerName: string;
+    number: number;
+  } | null>(null);
   const [receiptDone, setReceiptDone] = React.useState(false);
 
   const doCancel = useMutation({
-    mutationFn: (v: { id: string; reason: string }) => cancelInvoice(v.id, v.reason),
+    mutationFn: (v: { id: string; reason: string }) =>
+      cancelInvoice(v.id, v.reason),
     onSuccess: (inv) => {
       toast.success(`فاکتور ${toFa(inv.number)} باطل شد — موجودی برگشت`);
       setCancelling(null);
@@ -100,8 +130,12 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
   }, [q]);
 
   /** هر فیلتر عوض شد به صفحهٔ ۱ برگرد — در همان دست‌کاره، نه در افکت. */
-  const withPageReset = <A extends unknown[]>(fn: (...a: A) => void) =>
-    (...a: A) => { fn(...a); setPage(1); };
+  const withPageReset =
+    <A extends unknown[]>(fn: (...a: A) => void) =>
+    (...a: A) => {
+      fn(...a);
+      setPage(1);
+    };
 
   const list = useQuery({
     queryKey: ["invoices-list", debouncedQ, status, from, to, hasDue, page],
@@ -138,9 +172,24 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
   });
   const activeSummary = activeSummaryQuery.data?.summary;
 
+  /*
+   * سرگذشتِ فاکتورِ ردیفِ فعال — فاکتور/مرجوعی/اصلاحیه/دریافت با تاریخ، همه
+   * از دفتر. `keepPreviousData` تا با بالا/پایین‌رفتنِ ردیف‌ها نوار نلرزد و
+   * نوارِ قدیمی بماند تا عدد تازه بیاید.
+   */
+  const activeStoryQuery = useQuery({
+    queryKey: ["invoice-story", activeInv?.id],
+    queryFn: () => getInvoiceStory(activeInv!.id),
+    enabled: !!activeInv?.id,
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
+
   /** ردیفِ فعال همیشه باید دیده شود — کیبورد خودش اسکرول نمی‌کند. */
   React.useEffect(() => {
-    document.querySelector('[data-active-row="true"]')?.scrollIntoView({ block: "nearest" });
+    document
+      .querySelector('[data-active-row="true"]')
+      ?.scrollIntoView({ block: "nearest" });
   }, [row, rows.length]);
 
   const openInPos = (inv?: Invoice) => {
@@ -165,7 +214,11 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
           e.preventDefault();
           if (inv?.customer) {
             setReceiptDone(false);
-            setReceiving({ customerId: inv.customer.id, customerName: inv.customer.fullName ?? "", number: inv.number });
+            setReceiving({
+              customerId: inv.customer.id,
+              customerName: inv.customer.fullName ?? "",
+              number: inv.number,
+            });
           }
           return;
         }
@@ -190,8 +243,9 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
           case "Enter":
             e.preventDefault();
             // Alt+Enter = مرجوعی؛ همان قاعده‌ی پنلِ مشتری در صندوق.
-            if (e.altKey) { if (canManage && inv) setReturning(inv.id); }
-            else openInPos(inv);
+            if (e.altKey) {
+              if (canManage && inv) setReturning(inv.id);
+            } else openInPos(inv);
             return;
         }
 
@@ -211,7 +265,7 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
       }}
     >
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
-        <div className="relative min-w-56 flex-1">
+        <div className="relative order-first min-w-56 flex-1 basis-64">
           <Search className="absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
@@ -223,7 +277,9 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
 
         <select
           value={status}
-          onChange={withPageReset((e: React.ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value))}
+          onChange={withPageReset((e: React.ChangeEvent<HTMLSelectElement>) =>
+            setStatus(e.target.value),
+          )}
           aria-label="وضعیت"
           className="h-8 rounded-md border bg-background px-2 text-sm"
         >
@@ -238,7 +294,9 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
           type="button"
           onClick={withPageReset(() => setHasDue((v) => !v))}
           className={`h-8 rounded-md border px-3 text-sm font-medium ${
-            hasDue ? "border-warning bg-warning/10 text-warning" : "bg-background"
+            hasDue
+              ? "border-warning bg-warning/10 text-warning"
+              : "bg-background"
           }`}
         >
           مانده‌دار
@@ -246,7 +304,11 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
 
         <button
           type="button"
-          onClick={() => { const t = todayIso(); setFrom(t); setTo(t); }}
+          onClick={() => {
+            const t = todayIso();
+            setFrom(t);
+            setTo(t);
+          }}
           className="h-8 rounded-md border bg-background px-3 text-sm font-medium"
         >
           امروز
@@ -258,7 +320,12 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
         {(hasDue || from || to || status) && (
           <button
             type="button"
-            onClick={() => { setHasDue(false); setFrom(""); setTo(""); setStatus(""); }}
+            onClick={() => {
+              setHasDue(false);
+              setFrom("");
+              setTo("");
+              setStatus("");
+            }}
             className="h-8 rounded-md border border-dashed px-3 text-sm text-muted-foreground"
           >
             پاک‌کردن
@@ -275,7 +342,11 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
           <ErrorState onRetry={() => list.refetch()} />
         ) : !rows.length ? (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            {list.isFetching ? "…" : debouncedQ ? "فاکتوری پیدا نشد" : "هنوز فاکتوری ثبت نشده"}
+            {list.isFetching
+              ? "…"
+              : debouncedQ
+                ? "فاکتوری پیدا نشد"
+                : "هنوز فاکتوری ثبت نشده"}
           </p>
         ) : (
           <table className="w-full text-sm">
@@ -286,8 +357,18 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
                 <th className={`${TH} w-16`}>ساعت</th>
                 <th className={TH}>مشتری</th>
                 <th className={`${TH} w-28`}>وضعیت</th>
-                <th className={`${TH} w-36`}>مبلغ</th>
-                <th className={`${TH} w-36`}>مانده</th>
+                <th
+                  className={`${TH} w-32`}
+                  title="مبلغِ فعلیِ فاکتور — پس از کسرِ مرجوعی‌ها و افزودنِ اصلاحیه‌ها"
+                >
+                  مبلغ
+                </th>
+                <th
+                  className={`${TH} w-32`}
+                  title="ماندهٔ پرداخت‌نشدهٔ همین فاکتور"
+                >
+                  مانده
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -302,7 +383,9 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
                     inv.status === "CANCELLED" ? "opacity-60" : ""
                   }`}
                 >
-                  <td className={`${TD} font-bold tabular-nums`}>{toFa(inv.number)}</td>
+                  <td className={`${TD} font-bold tabular-nums`}>
+                    {toFa(inv.number)}
+                  </td>
                   <td className={`${TD} tabular-nums text-muted-foreground`}>
                     {faDate(inv.createdAt)}
                   </td>
@@ -312,20 +395,28 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
                   <td className={`${TD} max-w-0 truncate`}>
                     {inv.customer?.fullName ?? "نقدی گذری"}
                   </td>
-                  <td className={TD}>
-                    <div className="flex items-center gap-1.5">
+                  <td className={`${TD} whitespace-normal`}>
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <StatusBadge kind="invoice" status={inv.status} />
                       {/* وضعیت پرداخت — پرداخت کامل/نسیه/معوق، از دیکشنری مالی. */}
                       <InvoicePayBadge invoice={inv} />
-                      {inv.hasReturns && <Undo2 className="size-3.5 text-warning" />}
+                      {inv.hasReturns && (
+                        <Undo2 className="size-3.5 text-warning" />
+                      )}
                     </div>
                   </td>
-                  <td className={`${TD} text-end font-semibold tabular-nums`}>
+                  <td
+                    className={`${TD} font-semibold tabular-nums`}
+                    title="مبلغِ فعلیِ فاکتور — پس از کسرِ مرجوعی‌ها و افزودنِ اصلاحیه‌ها"
+                  >
                     {money(inv.total)}
                   </td>
                   <td
-                    className={`${TD} text-end font-bold tabular-nums ${
-                      inv.dueAmount > 0 ? balanceTextClass(inv.dueAmount) : "text-muted-foreground"
+                    title="ماندهٔ پرداخت‌نشدهٔ همین فاکتور"
+                    className={`${TD} font-bold tabular-nums ${
+                      inv.dueAmount > 0
+                        ? balanceTextClass(inv.dueAmount)
+                        : "text-muted-foreground"
                     }`}
                   >
                     {inv.dueAmount > 0 ? money(inv.dueAmount) : "—"}
@@ -358,13 +449,25 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
             className="ms-auto h-7 gap-1.5 px-3 text-xs font-bold"
             onClick={() => {
               setReceiptDone(false);
-              setReceiving({ customerId: activeInv.customer!.id, customerName: activeInv.customer!.fullName ?? "", number: activeInv.number });
+              setReceiving({
+                customerId: activeInv.customer!.id,
+                customerName: activeInv.customer!.fullName ?? "",
+                number: activeInv.number,
+              });
             }}
           >
             دریافت از مشتری
             <kbd className="rounded border bg-muted px-1 text-[10px]">F6</kbd>
           </Button>
         </div>
+      )}
+
+      {/* سرگذشتِ فاکتورِ فعال — «این فاکتور چه شد و چرا مانده‌اش این عدد است» */}
+      {activeInv && (
+        <InvoiceStoryStrip
+          story={activeStoryQuery.data}
+          loading={activeStoryQuery.isFetching}
+        />
       )}
 
       <div className="flex shrink-0 items-center gap-x-5 overflow-x-auto whitespace-nowrap border-t bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
@@ -425,8 +528,14 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
 
       <ConfirmDialog
         open={!!cancelling}
-        onOpenChange={(v) => { if (!v) setCancelling(null); }}
-        title={cancelling ? `ابطال فاکتور ${toFa(cancelling.number)}؟` : "ابطال فاکتور؟"}
+        onOpenChange={(v) => {
+          if (!v) setCancelling(null);
+        }}
+        title={
+          cancelling
+            ? `ابطال فاکتور ${toFa(cancelling.number)}؟`
+            : "ابطال فاکتور؟"
+        }
         description={
           cancelling
             ? `مبلغ ${rial(cancelling.total)} — موجودی کالاها به انبار برمی‌گردد. این کار برگشت‌ناپذیر است.`
@@ -438,7 +547,8 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
         confirmText="بله، باطل کن"
         loading={doCancel.isPending}
         onConfirm={(reason) =>
-          cancelling && doCancel.mutate({ id: cancelling.id, reason: reason ?? "" })
+          cancelling &&
+          doCancel.mutate({ id: cancelling.id, reason: reason ?? "" })
         }
       />
 
@@ -468,12 +578,17 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
             ) : (
               <ReceiptForm
                 customerId={receiving.customerId}
-                totalDue={Math.max(0, receiptDetail.data?.summary?.totalDue ?? 0)}
+                totalDue={Math.max(
+                  0,
+                  receiptDetail.data?.summary?.totalDue ?? 0,
+                )}
                 chequeRateBp={receiptDetail.data?.chequeRateBp}
                 chequeRateMode={receiptDetail.data?.chequeRateMode}
                 onDone={() => {
                   qc.invalidateQueries({ queryKey: ["invoices-list"] });
-                  qc.invalidateQueries({ queryKey: ["customer", receiving.customerId] });
+                  qc.invalidateQueries({
+                    queryKey: ["customer", receiving.customerId],
+                  });
                   setReceiptDone(true);
                 }}
               />
@@ -483,7 +598,6 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
     </div>
   );
 }
-
 
 /** مسیرِ مستقل — پیوندهای قدیمی نباید بشکنند. */
 export default function InvoicesPage() {

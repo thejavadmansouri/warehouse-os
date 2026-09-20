@@ -383,6 +383,10 @@ export default function PosPage() {
     afterTotal: number;
     /** آنچه مشتری تاکنون بابت همین فاکتور پرداخت کرده. */
     paidAmount: number;
+    /**
+     * مشتریِ حساب‌باز یا بدهکار — پیش‌فرضِ روشِ PAY روی «روی حساب» می‌رود.
+     */
+    preferCredit?: boolean;
   } | null>(null);
   const [showPayment, setShowPayment] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
@@ -2084,6 +2088,13 @@ export default function PosPage() {
         // totalAfter = invoice.total + net — همان که سرور بعد از ثبت می‌نویسد.
         afterTotal: adjusting.invoiceTotal + draft.net,
         paidAmount: adjusting.paidAmount,
+        /*
+         * مشتریِ حساب‌باز یا بدهکار: برگشتِ پول پیش‌فرض روی حسابش می‌نشیند
+         * نه نقد از صندوق — همان قانونِ مرجوعی، در تسویهٔ اختلافِ ویرایش.
+         */
+        preferCredit:
+          adjusting.isOpenAccount ||
+          (adjusting.customerBalance ?? 0) > 0,
       });
       return;
     }
@@ -2224,9 +2235,14 @@ export default function PosPage() {
    * صندوقِ دیگری همزمان پول گرفت، این نوار هم همان لحظه عوض می‌شود.
    */
   const custSummary = customerDetail.data?.summary;
-  /** ماندهٔ فعلیِ فاکتوری که ویرایش می‌شود = کل − پرداخت‌شده. */
+  /*
+   * ماندهٔ فعلیِ فاکتوری که ویرایش می‌شود — از ماندهٔ دفتریِ سرور می‌آید که با
+   * مرجوعی‌ها و اصلاحیه‌ها تازه شده است؛ نه از total−paid که مرجوعی را نمی‌بیند
+   * و فروشنده را با عددِ دوگانه گمراه می‌کند. هنوز نیامده باشد (پاسِ قدیمی)،
+   * برآوردِ قدیمیِ total−paid را نشان می‌دهیم.
+   */
   const adjustingInvoiceDue = adjusting
-    ? adjusting.invoiceTotal - adjusting.paidAmount
+    ? (adjusting.invoiceDue ?? adjusting.invoiceTotal - adjusting.paidAmount)
     : 0;
   /** ماندهٔ فاکتور بعد از ثبت = ماندهٔ فعلی + اختلافِ نهاییِ عملیات. */
   const dueAfterAdjust = adjustingInvoiceDue + (adjustDraftState?.net ?? 0);
@@ -3388,18 +3404,15 @@ export default function PosPage() {
                   </div>
                 </div>
 
-                {adjusting &&
-                  customer &&
-                  adjustHasWork &&
-                  dueAfterAdjust !== adjustingInvoiceDue && (
-                    <div className="text-[10px] font-semibold leading-4 text-warning">
-                      با ثبت:
-                      <br />
-                      مانده فاکتور {money(dueAfterAdjust)}
-                      <br />
-                      مانده مشتری {money(balanceAfterAdjust)}
-                    </div>
-                  )}
+                {adjusting && customer && adjustHasWork && (
+                  <div className="text-[10px] font-semibold leading-4 text-warning">
+                    با ثبت:
+                    <br />
+                    مانده فاکتور {money(dueAfterAdjust)}
+                    <br />
+                    مانده مشتری {money(balanceAfterAdjust)}
+                  </div>
+                )}
 
                 <Button
                   className="h-8 shrink-0 gap-1.5 px-4 text-sm font-bold"
@@ -3780,6 +3793,7 @@ export default function PosPage() {
         beforeTotal={adjustSettle?.beforeTotal ?? 0}
         afterTotal={adjustSettle?.afterTotal ?? 0}
         paidAmount={adjustSettle?.paidAmount ?? 0}
+        preferCredit={adjustSettle?.preferCredit ?? false}
         hasCustomer={!!customer}
         pending={saveAdjust.isPending}
         onConfirm={(method, cheque, editedAmount) => {

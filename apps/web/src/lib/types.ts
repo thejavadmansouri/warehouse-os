@@ -953,6 +953,67 @@ export type LedgerEntryType =
   | "PAYMENT_REVERSED"
   | "RECOMPOSE";
 
+/**
+ * یک رویدادِ «سرگذشت فاکتور» — فاکتور، مرجوعی، اصلاحیه، دریافت و…
+ *
+ * همه‌چیز از دفتر می‌آید؛ همان چیزی که ماندهٔ مشتری هم از آن ساخته می‌شود.
+ */
+export interface InvoiceStoryEvent {
+  id: string;
+  kind: LedgerEntryType;
+  /** مثبت = بدهی زیاد شده، منفی = کم شده. */
+  amount: number;
+  at: string;
+  /** شمارهٔ سندِ پشتِ این رویداد (رسید/مرجوعی/اصلاحیه/پرداخت). */
+  docNumber?: number | null;
+  method?: string | null;
+  note?: string | null;
+}
+
+/** پرداختی که بابتِ همین فاکتور گرفته شده (تخصیصِ یک رسید به این فاکتور). */
+export interface InvoiceStoryPayment {
+  id: string;
+  amount: number;
+  at: string;
+  receiptNumber: number;
+  methods: PaymentMethod[];
+}
+
+/** پولِ نقد/کارتیِ سرِ فروش — روی حساب مشتری ننشسته. */
+export interface InvoiceStorySalePayment {
+  id: string;
+  amount: number;
+  method: PaymentMethod;
+  at: string;
+}
+
+/** پاسخِ «سرگذشت این فاکتور» — خوراکِ نوارِ پایینِ فهرستِ فاکتورها. */
+export interface InvoiceStory {
+  invoice: {
+    id: string;
+    number: number;
+    status: InvoiceStatus;
+    createdAt: string;
+    customerId?: string | null;
+    dueAmount: number;
+  };
+  events: InvoiceStoryEvent[];
+  /** پرداخت‌های روی همین فاکتور، با شمارهٔ رسید و تاریخ. */
+  payments: InvoiceStoryPayment[];
+  /** پولِ نقد/کارتیِ سرِ فروش. */
+  salePayments: InvoiceStorySalePayment[];
+  /** مرجوعی‌های نقد/کارت که دفتر ندیده‌اند؛ روی مانده اثری ندارند. */
+  offAccountRefunds: {
+    id: string;
+    number: number;
+    amount: number;
+    method: PaymentMethod;
+    at: string;
+  }[];
+  /** ماندهٔ فعلیِ همین فاکتور — همان عددِ ستون «مانده». */
+  due: number;
+}
+
 export interface LedgerEntry {
   id: string;
   type: LedgerEntryType;
@@ -2288,6 +2349,10 @@ export interface AdjustableInvoice {
   /** نهایی و حساب باز قابلِ ویرایش‌اند؛ باطل‌شده نه. */
   adjustable: boolean;
   isOpenAccount: boolean;
+  /** مانده‌ی واقعیِ کلِ مشتری — پایه‌ی اعدادِ نوارِ پایینِ ویرایش. */
+  customerBalance: number;
+  /** ماندهٔ دفتریِ همین فاکتور — با مرجوعی/اصلاحیه تازه شده، برخلاف فیلدِ total. */
+  invoiceDue: number;
 }
 
 export interface CreateAdjustDto {

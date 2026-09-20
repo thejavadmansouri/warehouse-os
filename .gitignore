@@ -89,3 +89,6 @@ extract-err.txt
 schema-err.txt
 backup-list.txt
 options/
+
+# ── بستهٔ مستقل CLI پرایسما که کیت آپدیت حمل میکند (خروجی npm، tools/build-prisma-cli-kit.ps1 آن را میسازد) ──
+tools/prisma-cli-kit/node_modules/

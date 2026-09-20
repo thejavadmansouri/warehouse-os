@@ -92,6 +92,10 @@ export type CartDoc =
       >;
       isOpenAccount: boolean;
       hasCustomer: boolean;
+      /** مانده‌ی واقعیِ کلِ مشتری در لحظه‌ی بازکردن — پایه‌ی نوارِ پایین. */
+      customerBalance: number;
+      /** ماندهٔ دفتریِ همین فاکتور — با مرجوعی/اصلاحیه تازه شده، برخلاف فیلدِ total. */
+      invoiceDue: number;
     };
 
 export const SALE_DOC: CartDoc = { type: "sale" };
@@ -293,11 +297,11 @@ export function useCarts() {
         prev.map((c) =>
           c.id === activeRef.current
             ? { ...c, ...(typeof p === "function" ? p(c) : p) }
-            : c
-        )
+            : c,
+        ),
       );
     },
-    []
+    [],
   );
 
   const ensureIdem = useCallback(() => {

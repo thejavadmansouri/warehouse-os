@@ -76,6 +76,11 @@ function Find-Node {
 function Find-PrismaCli {
     $c = Join-Path $Root 'app\api\node_modules\prisma\build\index.js'
     if (Test-Path $c) { return $c }
+    # The kit carries its own standalone CLI (api\node_modules). Before the update
+    # it is the only one on the machine; after the file replacement it is merged
+    # into app\api\node_modules and the first path above answers.
+    $k = Join-Path $Kit 'api\node_modules\prisma\build\index.js'
+    if (Test-Path $k) { return $k }
     $g = Get-Command prisma -ErrorAction SilentlyContinue
     if ($g) { return $g.Source }
     $r = Join-Path $Root 'apps\api\node_modules\prisma\build\index.js'
@@ -464,25 +469,45 @@ Step "Replacing web, API dist and prisma" 45 {
         New-Item -ItemType Directory -Force -Path (Split-Path -Parent $dst) | Out-Null
         Copy-Item -Recurse -Force $src $dst
     }
+    # The kit's api\node_modules carries ONLY what the shop lacks - the standalone
+    # prisma CLI closure that migrations need. It is merged, not replaced: deleting
+    # app\api\node_modules outright would also delete the installed @prisma/client
+    # and every other module the running API imports.
+    $srcMods = Join-Path $Kit 'api\node_modules'
+    if (Test-Path $srcMods) {
+        $dstMods = Join-Path $Root 'app\api\node_modules'
+        New-Item -ItemType Directory -Force -Path $dstMods | Out-Null
+        Copy-Item (Join-Path $srcMods '*') $dstMods -Recurse -Force
+        Log "Prisma CLI modules merged into app\api\node_modules"
+    }
     Log "Files replaced from kit"
 }
 
 Step "Regenerating Prisma client (installed)" 52 {
     Push-Location (Join-Path $Root 'app\api')
+    # The prisma CLI writes its deprecation chatter to stderr; under EAP=Stop a
+    # redirected stderr line becomes a NativeCommandError and kills the step even
+    # when the command itself succeeds. The exit code is the judge here, not stderr.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         & $nodePath $prismaCli generate *>> $logFile
         if ($LASTEXITCODE -ne 0) { throw "prisma generate failed (exit $LASTEXITCODE)" }
     } finally {
+        $ErrorActionPreference = $prevEap
         Pop-Location
     }
 }
 
 Step "Applying pending migrations" 62 {
     Push-Location (Join-Path $Root 'app\api')
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         & $nodePath $prismaCli migrate deploy *>> $logFile
         if ($LASTEXITCODE -ne 0) { throw "prisma migrate deploy failed (exit $LASTEXITCODE)" }
     } finally {
+        $ErrorActionPreference = $prevEap
         Pop-Location
     }
 }

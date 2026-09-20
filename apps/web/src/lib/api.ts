@@ -1484,6 +1484,17 @@ export function getInvoices(
   return apiFetch(`/sales/invoices?${qs.toString()}`);
 }
 
+/**
+ * سرگذشتِ یک فاکتور — فاکتور، مرجوعی‌ها، اصلاحیه‌ها و دریافت‌ها با تاریخ.
+ * نوارِ پایینِ فهرستِ فاکتورها از اینجا پر می‌شود تا معلوم باشد مانده چرا
+ * این عدد است (و با اعدادِ کهنهٔ خودِ فاکتور قاطی نشود).
+ */
+export function getInvoiceStory(id: string): Promise<T.InvoiceStory> {
+  return apiFetch<T.InvoiceStory>(
+    `/sales/invoices/${encodeURIComponent(id)}/story`,
+  );
+}
+
 export function cancelInvoice(id: string, reason: string): Promise<T.Invoice> {
   return apiFetch<T.Invoice>(
     `/sales/invoices/${encodeURIComponent(id)}/cancel`,

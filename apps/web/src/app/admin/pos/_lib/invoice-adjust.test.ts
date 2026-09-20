@@ -51,6 +51,8 @@ const doc: Adjusting = {
   },
   isOpenAccount: false,
   hasCustomer: true,
+  customerBalance: 0,
+  invoiceDue: 1_450_000,
 };
 
 function line(over: Partial<PosLine> & { key: string }): PosLine {
@@ -83,6 +85,8 @@ describe("invoiceToAdjustLines", () => {
     },
     adjustable: true,
     isOpenAccount: false,
+    customerBalance: 0,
+    invoiceDue: 1_450_000,
     lines: [
       {
         saleLogId: "a",
@@ -146,7 +150,9 @@ describe("adjustDraft", () => {
     const d = adjustDraft(doc, [
       line({ key: "c", quantity: 2, restock: false, unitPrice: 50_000 }),
     ]);
-    expect(d.returns).toEqual([{ saleLogId: "c", quantity: 2, restock: false }]);
+    expect(d.returns).toEqual([
+      { saleLogId: "c", quantity: 2, restock: false },
+    ]);
     expect(d.refundAmount).toBe(100_000);
   });
 
@@ -159,8 +165,12 @@ describe("adjustDraft", () => {
   });
 
   it("تغییر قیمتِ ردیفِ موجود سندِ changes می‌سازد", () => {
-    const d = adjustDraft(doc, [line({ key: "a", quantity: 0, unitPrice: 120_000 })]);
-    expect(d.changes).toEqual([{ saleLogId: "a", newQuantity: 10, newUnitPrice: 120_000 }]);
+    const d = adjustDraft(doc, [
+      line({ key: "a", quantity: 0, unitPrice: 120_000 }),
+    ]);
+    expect(d.changes).toEqual([
+      { saleLogId: "a", newQuantity: 10, newUnitPrice: 120_000 },
+    ]);
     expect(d.changesAdjust).toBe(200_000);
     expect(d.net).toBe(200_000);
   });
@@ -186,10 +196,22 @@ describe("adjustDraft", () => {
   it("سناریوی کامل: ۳ چراغ و ۳ لنت برمی‌گردد، ۲ کاسه‌نمد و ۱ سرسیلندر اضافه می‌شود", () => {
     const d = adjustDraft(doc, [
       line({ key: "a", quantity: 3, unitPrice: 100_000 }), // ۳ لنت برمی‌گردد
-      line({ key: "b", unitPrice: 200_000 }),              // روغن دست نمی‌خورد
-      line({ key: "c", quantity: 3, unitPrice: 50_000 }),  // ۳ چراغ برمی‌گردد
-      line({ key: "new-1", productId: "p9", productName: "کاسه‌نمد", quantity: 2, unitPrice: 30_000 }),
-      line({ key: "new-2", productId: "p8", productName: "سرسیلندر", quantity: 1, unitPrice: 200_000 }),
+      line({ key: "b", unitPrice: 200_000 }), // روغن دست نمی‌خورد
+      line({ key: "c", quantity: 3, unitPrice: 50_000 }), // ۳ چراغ برمی‌گردد
+      line({
+        key: "new-1",
+        productId: "p9",
+        productName: "کاسه‌نمد",
+        quantity: 2,
+        unitPrice: 30_000,
+      }),
+      line({
+        key: "new-2",
+        productId: "p8",
+        productName: "سرسیلندر",
+        quantity: 1,
+        unitPrice: 200_000,
+      }),
     ]);
     expect(d.returns).toEqual([
       { saleLogId: "a", quantity: 3, restock: true },
@@ -208,7 +230,9 @@ describe("adjustDraft", () => {
     // ۲ چراغ برمی‌گردد (۲×۵۰هزار) و ۳ مانده با قیمتِ تازه ۶۰هزار (۳×۱۰هزار).
     expect(d.returns).toEqual([{ saleLogId: "c", quantity: 2, restock: true }]);
     expect(d.refundAmount).toBe(100_000);
-    expect(d.changes).toEqual([{ saleLogId: "c", newQuantity: 3, newUnitPrice: 60_000 }]);
+    expect(d.changes).toEqual([
+      { saleLogId: "c", newQuantity: 3, newUnitPrice: 60_000 },
+    ]);
     expect(d.changesAdjust).toBe(30_000);
     expect(d.net).toBe(30_000 - 100_000);
   });
@@ -233,13 +257,23 @@ describe("adjustDraft", () => {
   });
 
   it("adjustNetQty — مانده منهای برگشتیِ همین جلسه", () => {
-    expect(adjustNetQty(line({ key: "c", quantity: 2, outstanding: 5 }))).toBe(3);
-    expect(adjustNetQty(line({ key: "c", quantity: 5, outstanding: 5 }))).toBe(0);
+    expect(adjustNetQty(line({ key: "c", quantity: 2, outstanding: 5 }))).toBe(
+      3,
+    );
+    expect(adjustNetQty(line({ key: "c", quantity: 5, outstanding: 5 }))).toBe(
+      0,
+    );
   });
 
   it("ردیفِ تیک‌براشته‌شده‌ی تازه فرستاده نمی‌شود", () => {
     const d = adjustDraft(doc, [
-      line({ key: "new-1", productId: "p9", quantity: 2, unitPrice: 30_000, included: false }),
+      line({
+        key: "new-1",
+        productId: "p9",
+        quantity: 2,
+        unitPrice: 30_000,
+        included: false,
+      }),
     ]);
     expect(d.additions).toEqual([]);
     expect(d.net).toBe(0);

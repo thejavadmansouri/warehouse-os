@@ -102,6 +102,16 @@ export class PaymentsRecomposeService {
       });
     }
 
+    /*
+     * مبلغِ فاکتور، خودِ `total` است.
+     *
+     * مرجوعیِ اعتباری و اصلاحیه از قبل داخل `total` نشسته‌اند (returns.service
+     * و corrections.service)؛ پیش‌تر همین‌جا دلتای مرجوعی به `total` اضافه
+     * می‌شد و فاکتورِ ۲۰ میلیونی «۴۰» نشان می‌داد. حالا فیلد خودش درست است و
+     * هیچ جبرانی لازم نیست.
+     */
+    const total = invoice.total;
+
     const byMethod = new Map<PaymentMethod, number>();
     for (const p of invoice.payments) addTo(byMethod, p.method, p.amount);
 
@@ -125,7 +135,7 @@ export class PaymentsRecomposeService {
         id: invoice.id,
         number: invoice.number,
         status: invoice.status,
-        total: invoice.total,
+        total,
         paidAmount: invoice.paidAmount,
         dueAmount: invoice.dueAmount,
         dueDate: invoice.dueDate,
@@ -225,7 +235,11 @@ export class PaymentsRecomposeService {
 
       const rows = await tx.payment.findMany({
         where: { invoiceId },
-        select: { method: true, amount: true, cheque: { select: { id: true } } },
+        select: {
+          method: true,
+          amount: true,
+          cheque: { select: { id: true } },
+        },
       });
       if (rows.some((r) => !!r.cheque)) {
         throw new BadRequestException({
@@ -264,7 +278,8 @@ export class PaymentsRecomposeService {
       ) {
         throw new ConflictException({
           error: 'CUSTOMER_ALREADY_SET',
-          message: 'این فاکتور از قبل مشتری دارد — مشتری‌اش از اینجا عوض نمی‌شود',
+          message:
+            'این فاکتور از قبل مشتری دارد — مشتری‌اش از اینجا عوض نمی‌شود',
         });
       }
       const customerId = invoice.customerId ?? dto.customerId ?? null;
@@ -276,15 +291,25 @@ export class PaymentsRecomposeService {
         });
       }
 
-      /* ---- عددها ---- */
+      /* ---- عددها ----
+       *
+       * پایه، خودِ `total` فاکتور است؛ مرجوعیِ اعتباری و اصلاحیه از قبل
+       * داخلش نشسته‌اند.
+       *
+       * سقفِ پرداخت عمداً `max(total, پرداختِ فعلی)` است: فاکتوری که بعدش
+       * مرجوعیِ اعتباری خورده و پولش قبلاً گرفته شده، پرداختِ ثبت‌شده‌اش از
+       * `total` بیشتر است و باید بتوان تقسیمش را اصلاح کرد، نه اینکه قفل شود.
+       */
+      const total = invoice.total;
       const newPaid = nonCreditTotal(wanted);
-      if (newPaid > invoice.total) {
+      const ceiling = Math.max(total, oldPaid);
+      if (newPaid > ceiling) {
         throw new BadRequestException({
           error: 'OVERPAYMENT',
           message: 'مجموعِ پرداخت‌ها از مبلغ فاکتور بیشتر است',
         });
       }
-      const debtAfter = invoice.total - newPaid;
+      const debtAfter = Math.max(0, total - newPaid);
       const creditUsed = wanted.get(PaymentMethod.CREDIT) ?? 0;
       if (creditUsed > debtAfter) {
         throw new BadRequestException({
@@ -311,7 +336,8 @@ export class PaymentsRecomposeService {
         // `paidAmount`/`dueAmount` از آن حساب نمی‌شوند.
         if (method === PaymentMethod.CREDIT) continue;
 
-        const delta = (wanted.get(method) ?? 0) - (oldByMethod.get(method) ?? 0);
+        const delta =
+          (wanted.get(method) ?? 0) - (oldByMethod.get(method) ?? 0);
         if (delta === 0) continue;
         changed = true;
 
@@ -427,7 +453,11 @@ export class PaymentsRecomposeService {
         where: { id: invoiceId },
         select: { paidAmount: true, dueAmount: true },
       });
-      if (!after || after.paidAmount !== newPaid || after.dueAmount !== debtAfter) {
+      if (
+        !after ||
+        after.paidAmount !== newPaid ||
+        after.dueAmount !== debtAfter
+      ) {
         throw new ConflictException({
           error: 'RECOMPOSE_STATE_MISMATCH',
           message:

@@ -373,6 +373,41 @@ Copy-Item (Join-Path $srcDist '*')   (Join-Path $apiOut 'dist')   -Recurse -Forc
 Copy-Item (Join-Path $srcPrisma '*') (Join-Path $apiOut 'prisma') -Recurse -Force
 
 <#
+    Ship a standalone Prisma CLI into api\node_modules.
+
+    WHY
+      apply-update.ps1 runs `prisma generate` and `prisma migrate deploy` with
+      the node of the install and a CLI it looks for under app\api\node_modules.
+      No Setup payload and no previous kit ever carried the CLI, so on the shop
+      both steps could not run and the pre-update CHECK reported
+      "Prisma CLI (for migrations) not found". A migrations folder without a way
+      to apply it is a half-delivery.
+
+    WHERE IT COMES FROM
+      The closure is built ONCE into tools\prisma-cli-kit\ by tools\build-prisma-cli-kit.ps1
+      (npm install of the pinned versions, download caches and sourcemaps pruned,
+      proven standalone before it is trusted). If that folder is missing the kit
+      is still built, but the CHECK on the shop will fail on migrations - said
+      out loud here so the gap cannot hide.
+#>
+$cliKit = Join-Path $Repo 'tools\prisma-cli-kit\node_modules'
+$kitNotes = New-Object System.Collections.ArrayList
+if (Test-Path (Join-Path $cliKit 'prisma\build\index.js')) {
+    Say '  Copying the standalone prisma CLI (migrations on the shop need it)'
+    New-Item -ItemType Directory -Force -Path (Join-Path $apiOut 'node_modules') | Out-Null
+    Copy-Item (Join-Path $cliKit '*') (Join-Path $apiOut 'node_modules') -Recurse -Force
+    $cliVer = ''
+    $cliPkg = Join-Path $cliKit 'prisma\package.json'
+    if (Test-Path $cliPkg) {
+        try { $cliVer = (Get-Content $cliPkg -Raw | ConvertFrom-Json).version } catch { $cliVer = '' }
+    }
+    Say ("    prisma CLI: {0}" -f ($(if ($cliVer) { $cliVer } else { 'copied (version not readable on this machine)' })))
+} else {
+    Say '  [warn] no standalone prisma CLI at tools\prisma-cli-kit - the shop will FAIL the migrations check'
+    [void]$kitNotes.Add('prisma CLI closure missing (tools\prisma-cli-kit) - the shop cannot run prisma generate / migrate deploy')
+}
+
+<#
     Stamp the copy that will actually run.
 
     apps\api\dist\build-info.json is written by the api build (write-build-info.cjs)
@@ -437,6 +472,11 @@ $lines = New-Object System.Collections.ArrayList
 [void]$lines.Add(('files      : {0}' -f $files.Count))
 [void]$lines.Add(('size       : {0:N1} MB' -f ($size / 1MB)))
 [void]$lines.Add('')
+if ($kitNotes.Count -gt 0) {
+    [void]$lines.Add('kit notes:')
+    foreach ($kn in $kitNotes) { [void]$lines.Add(('  ! {0}' -f $kn)) }
+    [void]$lines.Add('')
+}
 [void]$lines.Add('artifacts (artifact time vs newest source that feeds it):')
 foreach ($a in $artifacts) {
     $srcText = 'no sources found'

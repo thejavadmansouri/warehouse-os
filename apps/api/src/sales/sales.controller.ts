@@ -368,6 +368,16 @@ export class SalesController {
     return this.sales.findOne(id);
   }
 
+  /**
+   * سرگذشتِ یک فاکتور: فاکتور، مرجوعی‌ها، اصلاحیه‌ها، دریافت‌ها و… با تاریخ —
+   * خوراکِ نوارِ پایینِ فهرست تا معلوم باشد مانده چرا این عدد است.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Get('invoices/:id/story')
+  getInvoiceStory(@Param('id') id: string) {
+    return this.sales.invoiceStory(id);
+  }
+
   // ابطال فاکتور — فروشنده اجازه ندارد، فقط مدیر.
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('invoices/:id/cancel')
