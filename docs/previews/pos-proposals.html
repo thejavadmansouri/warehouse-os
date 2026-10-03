@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پیش‌نمایش پیشنهادها برای صندوق فروش — هیچ تغییری در برنامه اعمال نشده</title>
+<style>
+  :root{
+    --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --muted:#64748b; --fg:#0f172a;
+    --primary:#2563eb; --primary-soft:#eff6ff; --amber:#b45309; --amber-bg:#fef3c7;
+    --ok:#16a34a; --ok-bg:#dcfce7; --red:#dc2626; --row:#eff6ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font-family:"Vazirmatn","Segoe UI",Tahoma,sans-serif;font-size:14px}
+  .wrap{max-width:1180px;margin:0 auto;padding:14px 16px 40px}
+
+  /* بنرِ بالای صفحه */
+  .banner{display:flex;align-items:center;gap:10px;background:var(--amber-bg);
+    border:1px solid #fcd34d;border-radius:10px;padding:8px 14px;margin-bottom:12px}
+  .banner b{color:var(--amber)}
+  .toggle{margin-inline-start:auto;display:flex;gap:6px}
+  .toggle button{border:1px solid var(--border);background:#fff;border-radius:8px;
+    padding:5px 12px;font:inherit;font-size:12.5px;cursor:pointer}
+  .toggle button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+
+  /* کرومِ برنامه */
+  .chrome{display:flex;align-items:center;gap:14px;color:var(--muted);font-size:13px;
+    padding:6px 4px 10px;border-bottom:1px solid var(--border)}
+  .chrome .clock{font-weight:700;color:var(--fg);font-variant-numeric:tabular-nums}
+  .chrome .spacer{flex:1}
+  .burger{width:18px}
+  .burger i{display:block;height:2px;background:#334155;margin:3px 0;border-radius:2px}
+
+  /* نوار فرمان سند */
+  .shell{display:flex;align-items:center;gap:10px;padding:10px 2px}
+  .pill{border:1px solid var(--border);border-radius:8px;padding:5px 14px;background:#fff;font-size:13px}
+  .pill.active{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:700}
+  .shell .st{color:var(--muted);font-size:12.5px}
+  .shell .st b{color:var(--fg)}
+  .shell .spacer{flex:1}
+
+  /* نوار اسکن */
+  .scanrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--ok);flex:none}
+  .spk{width:30px;height:30px;border-radius:8px;border:1.5px solid rgba(37,99,235,.4);
+    color:var(--primary);display:flex;align-items:center;justify-content:center;flex:none;font-size:14px}
+  .scanbox{position:relative;flex:1;min-width:260px}
+  .scanbox input{width:100%;height:34px;border:1px solid rgba(37,99,235,.3);border-radius:8px;
+    background:var(--primary-soft);padding:0 38px 0 12px;font:inherit;font-size:13px}
+  .scanbox .mag{position:absolute;inset-inline-end:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
+  .chip{display:flex;align-items:center;gap:8px;border:1px solid var(--border);border-radius:10px;
+    padding:4px 10px;background:#fff;flex:none}
+  .chip b{font-size:13px}
+  .chip .due{color:var(--amber);font-size:12px;font-variant-numeric:tabular-nums}
+  .wh{height:32px;border:1px solid var(--border);border-radius:8px;background:#fff;
+    padding:0 10px;font:inherit;font-size:13px}
+  select.mock{appearance:none}
+
+  /* برچسبِ پیشنهاد */
+  .prop{outline:2px dashed #f59e0b;outline-offset:2px;border-radius:8px;position:relative}
+  .tag{position:absolute;top:-9px;inset-inline-start:-6px;background:var(--amber);color:#fff;
+    font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;z-index:3;white-space:nowrap}
+  .done-tag{position:absolute;top:-9px;inset-inline-start:-6px;background:var(--ok);color:#fff;
+    font-size:10.5px;font-weight:700;border-radius:6px;padding:1px 6px;z-index:3;white-space:nowrap}
+
+  /* جدول */
+  table{width:100%;border-collapse:collapse;background:var(--card);
+    border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--border);font-size:13px}
+  thead th{background:#f1f5f9;font-weight:700;font-size:12.5px}
+  tbody tr.sel{background:var(--row)}
+  td.num{font-variant-numeric:tabular-nums}
+  .cell{height:28px;border:1px solid #cbd5e1;border-radius:7px;background:#fff;
+    display:flex;align-items:center;justify-content:center;padding:0 8px;min-width:74px}
+  .cell.empty{background:#f8fafc;color:#94a3b8}
+  .qty{width:64px}
+  .trash{color:var(--red);text-align:center}
+  .stepper{display:inline-flex;gap:4px;align-items:center}
+  .stepper .n{width:26px;height:22px;border:1px solid var(--border);border-radius:6px;
+    display:inline-flex;align-items:center;justify-content:center;color:var(--muted);font-size:11px}
+  .warn{display:inline-block;background:var(--amber-bg);color:var(--amber);
+    border-radius:6px;padding:1px 6px;font-size:11px;margin-inline-start:6px}
+
+  /* شماره‌های زنجیره روی ستون‌ها */
+  .chain{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;
+    border-radius:50%;background:var(--primary);color:#fff;font-size:11px;font-weight:700;margin-inline-start:6px}
+  .chain.new{background:var(--amber)}
+
+  /* نوار زنجیره */
+  .chainbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;
+    border:1px dashed #f59e0b;border-radius:10px;padding:6px 12px;background:#fffbeb;font-size:12.5px}
+  .kbd{border:1px solid #cbd5e1;border-bottom-width:2px;border-radius:6px;background:#fff;
+    padding:1px 7px;font-size:11.5px;font-family:inherit}
+  .arr{color:var(--amber);font-weight:700}
+
+  /* نوار جمع */
+  .totalbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+    border:1px solid var(--border);border-radius:10px;background:var(--card);
+    padding:8px 12px;margin-top:10px}
+  .totalbar .lbl{color:var(--muted);font-size:12.5px}
+  .totalbar input{height:30px;border:1px solid var(--border);border-radius:8px;padding:0 8px;
+    font:inherit;font-size:13px;width:130px}
+  .cta{margin-inline-start:auto;display:flex;align-items:center;gap:8px}
+  .btn{background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 22px;
+    font:inherit;font-weight:700;cursor:pointer}
+  .hint{color:var(--muted);font-size:12px}
+  .money{color:var(--amber);font-weight:700}
+
+  /* راهنمای پیشنهادها */
+  .legend{margin-top:18px;border:1px solid var(--border);border-radius:12px;background:var(--card);padding:12px 16px}
+  .legend h3{margin:2px 0 10px;font-size:14.5px}
+  .legend ol{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:7px 24px}
+  .legend li{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.6}
+  .st{flex:none;width:20px;text-align:center;border-radius:6px;font-size:11px;font-weight:700;padding:1px 0}
+  .st.done{background:var(--ok-bg);color:var(--ok)}
+  .st.todo{background:var(--amber-bg);color:var(--amber)}
+  .legend .note{margin-top:10px;color:var(--muted);font-size:12.5px}
+
+  /* حالتِ «فقط وضعیت فعلی» */
+  body.current-only .prop{outline:none}
+  body.current-only .prop .tag{display:none}
+  body.current-only .chainbar{display:none}
+  body.current-only .warn{display:none}
+  body.current-only .chain.new{display:none}
+  body.current-only .extrabadge{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <b>⚠️ فقط پیش‌نمایش</b>
+    <span>این یک ماکاپِ مستقل است — <u>هیچ تغییری در صندوق فروش اعمال نشده</u>. چیزهای نقطه‌چینِ کهربایی = پیشنهادهای در انتظار تأیید شما؛ چیزهای سبز ✅ = همین حالا در برنامه هستند.</span>
+    <span class="toggle">
+      <button id="btnProp" class="on">با پیشنهادها</button>
+      <button id="btnCur">فقط وضعیت فعلی</button>
+    </span>
+  </div>
+
+  <!-- کروم -->
+  <div class="chrome">
+    <div class="burger"><i></i><i></i><i></i></div>
+    <span class="clock">۱۴:۵۳:۰۵</span>
+    <span>۱۴۰۵/۰۶/۰۹ دوشنبه</span>
+    <span class="spacer"></span>
+    <span>🔔</span><span>🌙</span><span>🔲</span>
+  </div>
+
+  <!-- نوار فرمان سند -->
+  <div class="shell">
+    <span class="pill active">فاکتور فروش</span>
+    <span class="pill">پیش‌نویس</span>
+    <span class="st">انبار: <b>انبار مرکزی</b></span>
+    <span class="st">تب‌های باز: <b>۱</b></span>
+    <span class="spacer"></span>
+    <span class="st">⌘ 🧾 💬 👁 🖨 📦</span>
+  </div>
+
+  <!-- نوار اسکن -->
+  <div class="scanrow">
+    <span class="dot" title="اتصال زنده — اعداد همان لحظه تازه می‌شوند"></span>
+    <span class="spk" title="صدای اسکن روشن است — خاموش با Ctrl+B">🔊</span>
+    <div class="scanbox">
+      <input value="" placeholder="بارکد یا نام کالا…  ۳*۴۵۰۰۰۰  ·  ‎+۳ = افزودن به ردیفِ فعال">
+      <span class="mag">🔍</span>
+      <span class="prop" style="position:absolute;inset:-4px;pointer-events:none">
+        <span class="tag">پیشنهاد ۶ — دستور ۳*۴۵۰۰۰۰ و ‎+۳</span>
+      </span>
+    </div>
+    <div class="chip">
+      <span>👤</span>
+      <b>رضا محمدی</b>
+      <span class="due">مانده: ۲٬۴۰۰٬۰۰۰</span>
+      <span class="pill" style="padding:2px 8px;font-size:11px">🔒 قفل</span>
+    </div>
+    <span class="prop" style="border-radius:8px">
+      <select class="wh mock"><option>انبار مرکزی ▼</option></select>
+      <span class="extrabadge tag" style="inset-inline-start:auto;inset-inline-end:-6px">F9 سوییچ سریع</span>
+    </span>
+  </div>
+
+  <!-- جدول -->
+  <div style="margin-top:12px">
+  <table>
+    <thead>
+      <tr>
+        <th style="width:34px">🗑</th>
+        <th>کالا<span class="chain">۱</span></th>
+        <th style="width:150px">تعداد<span class="chain">۲</span></th>
+        <th style="width:190px">قیمت واحد (ریال)<span class="chain">۳</span></th>
+        <th style="width:150px">
+          <span class="prop" style="display:inline-block"><span class="tag">پیشنهاد ۴</span></span>
+          تخفیف<span class="chain new">۴</span>
+        </th>
+        <th style="width:150px">جمع</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="sel">
+        <td class="trash">🗑</td>
+        <td>
+          <span class="prop" style="display:inline-block"><span class="tag">پیشنهاد ۹</span></span>
+          لنت جلو پراید<span class="warn">۳ مانده</span>
+          <div style="color:var(--muted);font-size:11px">قفسه A12 · انبار مرکزی</div>
+        </td>
+        <td>
+          <div style="display:flex;gap:6px;align-items:center">
+            <span class="stepper"><span class="n">−</span></span>
+            <span class="cell qty num">۴</span>
+            <span class="stepper"><span class="n">+</span></span>
+          </div>
+        </td>
+        <td><span class="cell num">۴۵۰٬۰۰۰</span></td>
+        <td>
+          <span class="prop" style="display:inline-block"><span class="tag">وارد زنجیره شود</span></span>
+          <span class="cell num" style="min-width:110px">۰</span>
+        </td>
+        <td class="num" style="font-weight:700">۱٬۸۰۰٬۰۰۰</td>
+      </tr>
+      <tr>
+        <td class="trash" style="color:#94a3b8">＋</td>
+        <td colspan="4" style="color:#94a3b8;font-size:12.5px">
+          <span class="prop" style="display:inline-block"><span class="tag">پیشنهاد ۵</span></span>
+          <span class="kbd">Ctrl+D</span> تکرارِ همین کالا در ردیفِ نو
+          &nbsp;·&nbsp; <span class="kbd">Enter</span> در تعداد ← تعدادِ ردیفِ بعدی
+        </td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- نوار زنجیره -->
+  <div class="chainbar">
+    <b>زنجیره‌ی کیبورد (پیشنهاد ۴):</b>
+    <span class="chain">۱</span> کالا (اسکن)
+    <span class="arr">←</span><span class="kbd">Tab</span>
+    <span class="chain">۲</span> تعداد
+    <span class="arr">←</span><span class="kbd">Tab</span>
+    <span class="chain">۳</span> قیمت
+    <span class="arr">←</span><span class="kbd">Tab</span>
+    <span class="chain new">۴</span> تخفیف
+    <span class="arr">←</span><span class="kbd">Tab</span> اسکنِ بعدی
+    <span style="margin-inline-start:auto;color:var(--muted)">Shift+Tab برعکس · Enter داخلِ خانه = ادامه‌ی زنجیره</span>
+  </div>
+
+  <!-- نوار جمع -->
+  <div class="totalbar">
+    <span class="lbl">جمع اقلام</span><b class="num">۱٬۸۰۰٬۰۰۰</b>
+    <span class="lbl">تخفیف</span><input value="۰">
+    <span class="lbl">توضیح روی سند</span><input placeholder="—">
+    <span class="cta">
+      <span class="prop" style="border-radius:9px">
+        <button class="btn">رسید ۸۰mm</button>
+        <span class="extrabadge tag">پیشنهاد ۷</span>
+      </span>
+      <span class="hint">Enter — تسویه</span>
+      <button class="btn">تسویه نهایی</button>
+    </span>
+  </div>
+  </div>
+
+  <!-- راهنما -->
+  <div class="legend">
+    <h3>فهرست پیشنهادها — کدام‌ها اجرا شده، کدام‌ها در انتظار شما</h3>
+    <ol>
+      <li><span class="st done">✅</span><span><b>حذف نشانِ DEV</b> — از پایینِ صفحه پاک شد.</span></li>
+      <li><span class="st done">✅</span><span><b>بیپِ اسکن</b> — موفق یک بیپِ بلند، خطا دوبیپِ بم؛ <span class="kbd">Ctrl+B</span> خاموش/روشن.</span></li>
+      <li><span class="st done">✅</span><span><b>نشانگرِ اتصالِ realtime</b> — نقطه‌ی سبز/قرمز کنار اسکن + جبرانِ رویدادهای گم‌شده بعد از قطعی.</span></li>
+      <li><span class="st todo">۴</span><span><b>زنجیره‌ی ستون‌ها ۱→۲→۳→۴</b> — تخفیف هم وارد پیمایش شود (الان فقط تا قیمت می‌رود).</span></li>
+      <li><span class="st todo">۵</span><span><b>Ctrl+D</b> تکرارِ ردیفِ فعال + Enter در تعداد ← ردیفِ بعدی.</span></li>
+      <li><span class="st todo">۶</span><span><b>دستور ۳*۴۵۰۰۰۰</b> در نوار اسکن + ‎+۳ برای افزودن به تعدادِ فعال.</span></li>
+      <li><span class="st todo">۷</span><span><b>رسید حرارتی ۸۰mm</b> — برگه‌ی فشرده برای فروشِ گذری + چاپِ خودکارِ اختیاری.</span></li>
+      <li><span class="st todo">۸</span><span><b>قیمت عمده</b> برای دسته‌ی عمده + برچسب روی ردیف + <span class="kbd">Alt+P</span> برگشت به خرده.</span></li>
+      <li><span class="st todo">۹</span><span><b>هشدارِ موجودیِ کم</b> — فقط وقتی کم است: زردِ کوچکِ «۳ مانده» کنار نام کالا.</span></li>
+      <li><span class="st todo">۱۰</span><span><b>سوییچِ سریع انبار</b> — اگر بیش از یک انبار دارید، <span class="kbd">F9</span> بین انبارها.</span></li>
+    </ol>
+    <p class="note">اعداد ۱..۴ که روی ستون‌ها کشیدید را همین‌طور خواندم: کالا ← تعداد ← قیمت ← تخفیف — پیشنهاد ۴ دقیقاً همان است. اگر منظورتان چیز دیگری بود، بگویید.</p>
+  </div>
+
+</div>
+
+<script>
+  var bProp = document.getElementById('btnProp');
+  var bCur = document.getElementById('btnCur');
+  bProp.onclick = function(){ document.body.classList.remove('current-only'); bProp.classList.add('on'); bCur.classList.remove('on'); };
+  bCur.onclick = function(){ document.body.classList.add('current-only'); bCur.classList.add('on'); bProp.classList.remove('on'); };
+</script>
+</body>
+</html>

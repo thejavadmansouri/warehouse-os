@@ -1,0 +1,6 @@
+#!/bin/sh
+# Warehouse OS guard — see guard.mjs for what it checks.
+# Activate once per clone:  git config core.hooksPath .githooks
+# Emergency override:       git push --no-verify
+cd "$(git rev-parse --show-toplevel)" || exit 0
+exec node .githooks/guard.mjs push "$1"

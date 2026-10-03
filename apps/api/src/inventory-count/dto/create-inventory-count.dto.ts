@@ -1,7 +1,6 @@
 import { IsString, IsOptional } from 'class-validator';
 
 export class CreateInventoryCountDto {
-
   @IsString()
   sessionId: string;
 
@@ -11,5 +10,4 @@ export class CreateInventoryCountDto {
   @IsOptional()
   @IsString()
   userId?: string;
-
 }

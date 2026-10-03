@@ -1,10 +1,23 @@
-import { Controller, Get, Post, Param, Query, Body } from '@nestjs/common';
-import { LocationsService } from './locations.service';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Param,
+  Query,
+  Body,
+  Req,
+} from '@nestjs/common';
+import { Role } from '@prisma/client';
+import { Roles } from '../auth/roles.decorator';
+import { LocationsService, RemoveLocationOptions } from './locations.service';
 import { CreateLocationDto } from './dto/create-location.dto';
 
 @Controller('locations')
 export class LocationsController {
   constructor(private readonly service: LocationsService) {}
+
+  // ---- خواندن: برای همه‌ی کاربران احرازشده (کارگر هم موقعیت‌ها را می‌بیند) ----
 
   @Get()
   findAll() {
@@ -12,8 +25,11 @@ export class LocationsController {
   }
 
   @Get('children')
-  findChildren(@Query('parentId') parentId?: string) {
-    return this.service.findChildren(parentId ?? null);
+  findChildren(
+    @Query('parentId') parentId?: string,
+    @Query('warehouseId') warehouseId?: string,
+  ) {
+    return this.service.findChildren(parentId ?? null, warehouseId);
   }
 
   @Get('resolve/:barcode')
@@ -26,8 +42,38 @@ export class LocationsController {
     return this.service.getPath(id);
   }
 
+  @Get(':id/subtree-stats')
+  subtreeStats(@Param('id') id: string) {
+    return this.service.getSubtreeStats(id);
+  }
+
+  // ---- تغییر ساختار: فقط مدیر/ادمین ----
+
+  @Roles(Role.ADMIN, Role.MANAGER)
   @Post()
   create(@Body() dto: CreateLocationDto) {
     return this.service.create(dto);
+  }
+
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post('bulk-delete')
+  bulkDelete(
+    @Body() dto: { ids: string[] } & RemoveLocationOptions,
+    @Req() req: any,
+  ) {
+    const { ids, ...stockOpts } = dto ?? { ids: [] };
+    return this.service.bulkRemove(ids ?? [], stockOpts, req.user?.userId);
+  }
+
+  // بدنه اختیاری است: حذفِ خالی همان DELETE سابق را می‌خواهد؛ حذفِ قفسه‌ی
+  // دارای موجودی باید stockAction (transfer/writeoff) بفرستد.
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Delete(':id')
+  remove(
+    @Param('id') id: string,
+    @Body() body: RemoveLocationOptions | undefined,
+    @Req() req: any,
+  ) {
+    return this.service.remove(id, body, req.user?.userId);
   }
 }

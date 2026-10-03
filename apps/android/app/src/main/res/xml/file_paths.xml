@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Only the two photo directories are shared, and only with the camera app that
+     receives an explicit per-capture grant. Nothing else in app storage is
+     reachable through this provider. -->
+<paths>
+    <!-- Full-resolution camera output, deleted right after compression. -->
+    <cache-path name="captures" path="captures/" />
+    <!-- Compressed photos awaiting upload. -->
+    <files-path name="photos" path="photos/" />
+</paths>

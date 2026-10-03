@@ -1,0 +1,277 @@
+mod config;
+mod printer;
+
+use config::{load_config, normalize_server_url, save_config, AppConfig};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    webview::NewWindowResponse,
+    AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+};
+
+/// وقتی صفحه اجازه‌ی بستن داد، دفعه‌ی بعد جلوی بسته شدن گرفته نمی‌شود.
+/// بدون این، حلقه‌ی بی‌پایان می‌شد: بستن → جلوگیری → بستن → …
+static CLOSE_APPROVED: AtomicBool = AtomicBool::new(false);
+
+/// شمارنده‌ی پنجره‌های بازشده (window.open).
+///
+/// هر پنجره‌ی بازشده به یک label یکتا نیاز دارد — اگر label تکراری باشد،
+/// ساختن پنجره شکست می‌خورد. این شمارنده ساده همان یکتایی را می‌دهد.
+static POPUP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// اسکریپتی که پیش از بارگذاری صفحه تزریق می‌شود.
+///
+/// F11 و Ctrl+R را اینجا می‌گیریم، نه با global shortcut — میانبر سراسری کلید را
+/// از کل ویندوز می‌دزدد، حتی وقتی برنامه‌ی ما فوکوس ندارد.
+const KEY_HANDLER: &str = r#"
+document.addEventListener('keydown', function (e) {
+  if (e.key === 'F11') {
+    e.preventDefault();
+    window.__TAURI__.core.invoke('toggle_fullscreen');
+  } else if ((e.ctrlKey || e.metaKey) && (e.key === 'r' || e.key === 'R')) {
+    e.preventDefault();
+    location.reload();
+  }
+});
+"#;
+
+#[tauri::command]
+fn get_server_url(app: AppHandle) -> String {
+    load_config(&app).server_url
+}
+
+#[tauri::command]
+fn get_config(app: AppHandle) -> AppConfig {
+    load_config(&app)
+}
+
+/// ذخیره‌ی آدرس سرور و بارگذاری دوباره‌ی پنجره‌ی اصلی روی آدرس جدید.
+#[tauri::command]
+fn update_server_url(app: AppHandle, url: String) -> Result<String, String> {
+    let normalized = normalize_server_url(&url)?;
+
+    let mut cfg = load_config(&app);
+    cfg.server_url = normalized.clone();
+    save_config(&app, &cfg)?;
+
+    // اگر پنجره‌ی اصلی باز است، همان‌جا به آدرس جدید برود؛ وگرنه ساخته شود.
+    match app.get_webview_window("main") {
+        Some(win) => {
+            let parsed: tauri::Url = normalized
+                .parse()
+                .map_err(|_| "آدرس معتبر نیست".to_string())?;
+            win.navigate(parsed)
+                .map_err(|e| format!("بارگذاری آدرس جدید ناموفق بود: {e}"))?;
+            let _ = win.set_focus();
+        }
+        None => {
+            open_main_window(&app, &normalized)
+                .map_err(|e| format!("باز کردن پنجره ناموفق بود: {e}"))?;
+        }
+    }
+
+    // پنجره‌ی تنظیمات دیگر لازم نیست.
+    if let Some(setup) = app.get_webview_window("setup") {
+        let _ = setup.close();
+    }
+
+    Ok(normalized)
+}
+
+#[tauri::command]
+fn set_printer_name(app: AppHandle, name: String) -> Result<(), String> {
+    let mut cfg = load_config(&app);
+    cfg.printer_name = name;
+    save_config(&app, &cfg)
+}
+
+#[tauri::command]
+fn set_label_printer_name(app: AppHandle, name: String) -> Result<(), String> {
+    let mut cfg = load_config(&app);
+    cfg.label_printer_name = name;
+    save_config(&app, &cfg)
+}
+
+#[tauri::command]
+fn toggle_fullscreen(app: AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        let now = win.is_fullscreen().unwrap_or(false);
+        win.set_fullscreen(!now)
+            .map_err(|e| format!("تغییر حالت تمام‌صفحه ناموفق بود: {e}"))?;
+    }
+    Ok(())
+}
+
+/// صفحه پس از تصمیم کاربر (بک‌آپ گرفت یا بی‌خیال شد) این را صدا می‌زند.
+#[tauri::command]
+fn approve_close(app: AppHandle) {
+    CLOSE_APPROVED.store(true, Ordering::SeqCst);
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.close();
+    }
+}
+
+#[tauri::command]
+fn open_settings(app: AppHandle) -> Result<(), String> {
+    open_setup_window(&app).map_err(|e| format!("باز کردن تنظیمات ناموفق بود: {e}"))
+}
+
+fn open_main_window(app: &AppHandle, url: &str) -> tauri::Result<()> {
+    let parsed: tauri::Url = url
+        .parse()
+        .unwrap_or_else(|_| "http://localhost:3001".parse().unwrap());
+
+    // برای پنجره‌های بازشده باید یک AppHandle مالکانه داشته باشیم — closure
+    // باید 'static باشد و نمی‌تواند از مرجعِ تابع قرض بگیرد.
+    let app_owned = app.clone();
+
+    let mut builder = WebviewWindowBuilder::new(app, "main", WebviewUrl::External(parsed))
+        .title("Warehouse OS — فروش")
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(1024.0, 700.0)
+        .center()
+        // روی دستگاهِ پیشخوان پنجره باید کلِ صفحه را بگیرد.
+        //
+        // maximized و نه fullscreen: نوارِ ویندوز باید در دسترس بماند (چاپگر،
+        // فایل‌ها، خودِ سرور). تمام‌صفحه‌ی واقعی با همان کلیدِ F11 و دکمه‌ی
+        // داخلِ برنامه در دسترس است، وقتی کسی واقعاً بخواهد.
+        .maximized(true)
+        .resizable(true)
+        .initialization_script(KEY_HANDLER)
+        // پنجره‌های بازشده (window.open) — چاپ فاکتور، پیش‌فاکتور، صورت‌حساب،
+        // کاردکس و… — باید واقعاً باز شوند.
+        //
+        // بدون این handler، wry درخواستِ پنجره‌ی جدید را بی‌صدا می‌بلعد
+        // (SetHandled(true) و هیچ چیز باز نمی‌شود) و دکمه‌ی «چاپ» انگار کار
+        // نمی‌کند. این همان باگِ گزارش‌شده بود: در مرورگر چاپ باز می‌شد، در
+        // اپ فروشنده نه.
+        .on_new_window(move |url, features| {
+            let label = format!("popup-{}", POPUP_COUNTER.fetch_add(1, Ordering::SeqCst));
+            let app = app_owned.clone();
+            let mut builder = WebviewWindowBuilder::new(&app, label, WebviewUrl::External(url))
+                .title("Warehouse OS")
+                .inner_size(1100.0, 800.0)
+                .min_inner_size(640.0, 480.0)
+                .center()
+                .resizable(true);
+
+            // ابعاد پیشنهادیِ صفحه (اگر window.open ابعاد خواسته باشد) را
+            // منتقل می‌کنیم؛ وگرنه پیش‌فرضِ بالایی می‌ماند.
+            builder = builder.window_features(features);
+
+            match builder.build() {
+                Ok(window) => NewWindowResponse::Create { window },
+                Err(_) => NewWindowResponse::Deny,
+            }
+        });
+
+    // پورتِ دیباگِ WebView2 — فقط برای پشتیبانی و تست.
+    //
+    // wry همیشه آرگومان‌های مرورگر را برنامه‌نویسی‌شده ست می‌کند، پس متغیرِ
+    // محیطیِ WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS هیچ‌وقت اعمال نمی‌شود؛
+    // تنها راهِ رسمی همین هوک است. در نصبِ عادی این شاخه اجرا نمی‌شود و
+    // آرگومان‌های پیش‌فرضِ wry دست‌نخورده می‌مانند.
+    let devtools_port = std::env::var("WOOS_DEVTOOLS_PORT").ok().filter(|p| !p.trim().is_empty());
+    if let Some(port) = devtools_port {
+        builder = builder.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+        ));
+    }
+
+    let window = builder.build()?;
+
+    // پیش از بستن، از صفحه بپرس آیا بک‌آپ لازم است.
+    //
+    // چرا از صفحه و نه از خود Rust: توکن ورود فقط در صفحه‌ی وب هست، پس تنها
+    // آنجاست که می‌شود وضعیت بک‌آپ را از سرور پرسید. Rust بستن را نگه می‌دارد
+    // و تصمیم را به صفحه می‌سپارد.
+    let handle = app.clone();
+    window.on_window_event(move |event| {
+        if let WindowEvent::CloseRequested { api, .. } = event {
+            if CLOSE_APPROVED.load(Ordering::SeqCst) {
+                return; // کاربر قبلاً تصمیم گرفته؛ بگذار بسته شود
+            }
+            api.prevent_close();
+            if let Some(win) = handle.get_webview_window("main") {
+                // اگر صفحه به هر دلیل پاسخ ندهد، کاربر در بن‌بست نمی‌ماند:
+                // از منو می‌تواند خارج شود و emit شکست‌خورده نادیده گرفته می‌شود.
+                let _ = win.emit("app-close-requested", ());
+            }
+        }
+    });
+
+    Ok(())
+}
+
+/// صفحه‌ی تنظیمات، از فایل‌های محلیِ بسته‌بندی‌شده بارگذاری می‌شود.
+///
+/// این پاسخِ مسئله‌ی «اولین اجرا» است: پیش از آنکه آدرس سرور معلوم باشد،
+/// هیچ صفحه‌ای برای نمایش وجود ندارد. یک صفحه‌ی محلی کوچک این بن‌بست را باز می‌کند.
+fn open_setup_window(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(win) = app.get_webview_window("setup") {
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    WebviewWindowBuilder::new(app, "setup", WebviewUrl::App("setup.html".into()))
+        .title("تنظیمات اتصال")
+        .inner_size(560.0, 520.0)
+        .resizable(false)
+        .center()
+        .build()?;
+
+    Ok(())
+}
+
+fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    // منوی حداقلی — کاربر فروشنده است، نه توسعه‌دهنده.
+    let settings = MenuItem::with_id(app, "settings", "تنظیمات اتصال و پرینتر", true, None::<&str>)?;
+    let quit = PredefinedMenuItem::quit(app, Some("خروج"))?;
+    let file = Submenu::with_items(app, "برنامه", true, &[&settings, &quit])?;
+    Menu::with_items(app, &[&file])
+}
+
+pub fn run() {
+    tauri::Builder::default()
+        .setup(|app| {
+            let handle = app.handle().clone();
+
+            let menu = build_menu(&handle)?;
+            app.set_menu(menu)?;
+
+            let cfg = load_config(&handle);
+
+            // در حالت توسعه همیشه به سرور محلی Next.js وصل شو.
+            // در حالت انتشار، آدرس تنظیم‌شده — و اگر تنظیم نشده، صفحه‌ی تنظیمات.
+            if cfg!(debug_assertions) {
+                open_main_window(&handle, "http://localhost:3001")?;
+            } else if cfg.server_url.trim().is_empty() {
+                open_setup_window(&handle)?;
+            } else {
+                open_main_window(&handle, &cfg.server_url)?;
+            }
+
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            if event.id() == "settings" {
+                let _ = open_setup_window(app);
+            }
+        })
+        .invoke_handler(tauri::generate_handler![
+            get_server_url,
+            get_config,
+            update_server_url,
+            set_printer_name,
+            toggle_fullscreen,
+            open_settings,
+            approve_close,
+            printer::list_printers,
+            printer::print_receipt,
+            printer::print_tsp_label,
+            printer::test_print,
+            set_label_printer_name,
+        ])
+        .run(tauri::generate_context!())
+        .expect("اجرای برنامه‌ی Tauri با خطا مواجه شد");
+}

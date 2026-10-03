@@ -11,3 +11,84 @@ build/
 coverage/
 .turbo/
 *.tsbuildinfo
+
+# Runtime-generated storage (uploaded images, generated label PNGs)
+apps/api/storage/
+
+# دامپ‌های دیتابیس — داده‌ی واقعی است و در گیت جایی ندارد
+backup/*.dump
+backup/*.sql
+backup/*.tar.gz
+backup/*.bak
+
+# نمونه‌ی تنظیمات باید کامیت شود؛ فقط مقادیر واقعی نه.
+!.env.example
+
+# ابزار جانبی — نباید کامیت شود
+.freebuff/
+backup_before_seed.sql
+backup/*.jsonl
+apps/api/.cs.tmp.ts
+apps/api/.kardo_verify.cjs
+
+# حذف کامل از تاریخچه — الگوهای سراسری
+*.dump
+storage/
+
+# Locally produced installers/APKs — build artifacts, not source.
+build-output/
+
+# فایل‌های حساس و حجیم — نباید در Git باشند
+apps/vpnwatch/
+prisma/migrations_backup/
+docs/refrence-ui/
+apps/web/docs/
+
+# ── خروجی بیلد Rust — چند گیگابایت، بازتولیدشدنی با cargo build ──
+target/
+
+# ── نصب‌کننده‌ها و پیلود ویندوز — ساخت‌نیافتنی نیستند، ولی صدها مگابایت‌اند ──
+# Output/ = Setup.exe ها (~330MB هر کدام)، payload/ = node + pgsql + node_modules،
+# updates/kits/ = کیت‌های آپدیت که با build-update-kit.ps1 از نو ساخته می‌شوند.
+deploy/windows/Output/
+deploy/windows/payload/
+deploy/windows/updates/kits/
+
+# ── توکن و نشست محلی — مخزن عمومی است، این سه فایل هیچ‌وقت نباید کامیت شوند ──
+login.json
+token.txt
+net-token.txt
+
+# ── باینری‌های اجرایی — خروجی بیلد‌اند، نه سورس (هیچ exe در مخزن track نیست) ──
+*.exe
+
+# ── ابزار یک‌بارمصرف و داده‌ی محلی ریشه ──
+# این‌ها روی همین دستگاه و برای یک بررسی مشخص ساخته شده‌اند: مسیر مطلق
+# C:\WarehouseOS\backups و نام یک دامپ تاریخ‌دار داخلشان هاردکد است، و دو
+# فایل .sql خروجی pg_dump از دیتابیس واقعی‌اند، نه سورس.
+/uia-login2.ps1
+/fresh-login.ps1
+/walk2.ps1
+/wmclose2.ps1
+/backup-and-restore.bat
+/backup-inspect.bat
+/check-backups.bat
+/check-price-source.bat
+/extract-price-check.bat
+/extract-price2.bat
+/backup-prices.sql
+/backup-price-schema.sql
+
+# ── هارنس موقت (پروب bisect) — ابزار لحظه‌ای، نه سورس ──
+.tmp-bisect/
+
+# ── داده و پیش‌نویس محلی ──
+*.xls
+.parsian-help-extracted.txt
+extract-err.txt
+schema-err.txt
+backup-list.txt
+options/
+
+# ── بستهٔ مستقل CLI پرایسما که کیت آپدیت حمل میکند (خروجی npm، tools/build-prisma-cli-kit.ps1 آن را میسازد) ──
+tools/prisma-cli-kit/node_modules/

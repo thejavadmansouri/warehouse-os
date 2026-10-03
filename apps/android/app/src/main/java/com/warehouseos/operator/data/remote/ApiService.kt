@@ -1,0 +1,197 @@
+package com.warehouseos.operator.data.remote
+
+import com.warehouseos.operator.data.remote.dto.AuthMeResponse
+import com.warehouseos.operator.data.remote.dto.BlankQuotationCreated
+import com.warehouseos.operator.data.remote.dto.CatalogPageDto
+import com.warehouseos.operator.data.remote.dto.CreateBlankQuotationRequest
+import com.warehouseos.operator.data.remote.dto.MyBlankQuotationsResponse
+import com.warehouseos.operator.data.remote.dto.CountStartRequest
+import com.warehouseos.operator.data.remote.dto.LinkBarcodeRequest
+import com.warehouseos.operator.data.remote.dto.LinkBarcodeResponse
+import com.warehouseos.operator.data.remote.dto.CountStartResponse
+import com.warehouseos.operator.data.remote.dto.CountVoiceRequest
+import com.warehouseos.operator.data.remote.dto.CountVoiceResponse
+import com.warehouseos.operator.data.remote.dto.LocateResultDto
+import com.warehouseos.operator.data.remote.dto.LocationDto
+import com.warehouseos.operator.data.remote.dto.LoginRequest
+import com.warehouseos.operator.data.remote.dto.LoginResponse
+import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
+import com.warehouseos.operator.data.remote.dto.ProductDto
+import com.warehouseos.operator.data.remote.dto.ProductRequestResult
+import com.warehouseos.operator.data.remote.dto.ReviewConfirmRequest
+import com.warehouseos.operator.data.remote.dto.MyWorkResponse
+import com.warehouseos.operator.data.remote.dto.PhotoUploadResponse
+import com.warehouseos.operator.data.remote.dto.ReviewItemDto
+import com.warehouseos.operator.data.remote.dto.ShelfStockDto
+import com.warehouseos.operator.data.remote.dto.TransferRequest
+import com.warehouseos.operator.data.remote.dto.SyncOperationsRequest
+import com.warehouseos.operator.data.remote.dto.SyncOperationsResponse
+import com.warehouseos.operator.data.remote.dto.VoiceConfirmRequest
+import com.warehouseos.operator.data.remote.dto.VoiceConfirmResponse
+import com.warehouseos.operator.data.remote.dto.VoiceInputRequest
+import com.warehouseos.operator.data.remote.dto.VoiceResponseDto
+import com.warehouseos.operator.data.remote.dto.VoiceSessionDto
+import com.warehouseos.operator.data.remote.dto.VoiceSessionStartRequest
+import com.warehouseos.operator.data.remote.dto.WorkTaskDto
+import com.warehouseos.operator.data.remote.dto.WorkTaskSyncRequest
+import com.warehouseos.operator.data.remote.dto.WorkTaskSyncResponse
+import okhttp3.MultipartBody
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.Multipart
+import retrofit2.http.POST
+import retrofit2.http.Part
+import retrofit2.http.Path
+import retrofit2.http.Query
+
+/**
+ * Retrofit contract for the existing NestJS backend. Endpoints and payloads
+ * match the API exactly — the Android app introduces no new backend surface.
+ * Paths are relative (no leading slash); the base URL carries the trailing slash.
+ *
+ * All calls are suspend and return the body directly; error/status handling is
+ * done by [safeApiCall] and the OkHttp interceptors, not here.
+ */
+interface ApiService {
+
+    // ---- Auth ----
+    @POST("auth/login")
+    suspend fun login(@Body body: LoginRequest): LoginResponse
+
+    @GET("auth/me")
+    suspend fun me(): AuthMeResponse
+
+    // ---- Locations ----
+    @GET("locations/resolve/{barcode}")
+    suspend fun resolveLocation(@Path("barcode") barcode: String): LocationDto
+
+    // ---- Session ----
+    @POST("inventory-session/start")
+    suspend fun startSession(@Body body: VoiceSessionStartRequest): VoiceSessionDto
+
+    // ---- Voice stock-in ----
+    // Preview: parse + match, NO commit — used for the propose→confirm flow.
+    @POST("inventory/voice/preview")
+    suspend fun previewVoice(@Body body: VoiceInputRequest): VoiceResponseDto
+
+    @POST("inventory/voice")
+    suspend fun submitVoice(@Body body: VoiceInputRequest): VoiceResponseDto
+
+    @POST("inventory/voice/confirm")
+    suspend fun confirmVoice(@Body body: VoiceConfirmRequest): VoiceConfirmResponse
+
+    // ---- Product search ----
+    @GET("products/search")
+    suspend fun searchProducts(@Query("q") query: String): List<ProductDto>
+
+    // ---- Offline catalog (worker) ----
+    // کاتالوگ سبک برای دانلود آفلاین — searchTokens همان توکن‌های سرور است.
+    @GET("products/catalog")
+    suspend fun catalog(
+        @Query("page") page: Int,
+        @Query("limit") limit: Int = 1000,
+        @Query("updatedSince") updatedSince: String? = null,
+    ): CatalogPageDto
+
+    // «یافتن کالا» — سرچ + آدرس دقیقِ موجودی (همه‌ی نقش‌ها)
+    @GET("products/locate")
+    suspend fun locateProducts(@Query("q") query: String): List<LocateResultDto>
+
+    // ---- Shelf transfer (انتقال بین قفسه) ----
+    // موجودیِ فعلیِ یک قفسه — بارکد را سرور resolve می‌کند؛ items فقط ردیف‌های
+    // با موجودی مثبت است.
+    @GET("mobile/shelf/{barcode}/stock")
+    suspend fun shelfStock(@Path("barcode") barcode: String): ShelfStockDto
+
+    // جابه‌جایی موجودی از یک موقعیت به موقعیت دیگر (همان POST /inventory-transfer).
+    @POST("inventory-transfer")
+    suspend fun transfer(@Body body: TransferRequest)
+
+
+
+
+    // نشست سمت سرور را آزاد می‌کند. هر حساب هم‌زمان فقط روی یک دستگاه فعال است،
+    // پس خروجِ صریح باید جای خودش را هم پس بدهد.
+    @POST("auth/logout")
+    suspend fun logout()
+
+    // ---- Work tasks (worker warehouse jobs with live progress) ----
+    // صف کارهای انبار همین کارگر — تخصیصی + بدون‌تخصیص، با پیشرفت done/total.
+    @GET("work-tasks/mine")
+    suspend fun workTasksMine(): List<WorkTaskDto>
+
+    // جزئیات کامل یک کار — قلم‌ها + وضعیت هر قلم.
+    @GET("work-tasks/{id}")
+    suspend fun workTaskDetail(@Path("id") id: String): WorkTaskDto
+
+    // تیک‌های آفلاین کارگر — batch با idempotency؛ موجودی دست نمی‌خورد.
+    @POST("work-tasks/sync")
+    suspend fun syncWorkTaskMutations(@Body body: WorkTaskSyncRequest): WorkTaskSyncResponse
+
+
+
+    // ---- New-product request (worker → manager review) ----
+
+    /** چسباندنِ بارکدِ جعبه به کالا — کارگر همان کسی است که جعبه دستش است. */
+    @POST("barcode/link")
+    suspend fun linkBarcode(@Body body: LinkBarcodeRequest): LinkBarcodeResponse
+
+    @POST("product-requests")
+    suspend fun createProductRequest(@Body body: CreateProductRequestBody): ProductRequestResult
+
+    // ---- Inventory count ----
+    @POST("mobile/count/start")
+    suspend fun startCount(@Body body: CountStartRequest): CountStartResponse
+
+    @POST("mobile/count/{countId}/voice")
+    suspend fun countVoice(
+        @Path("countId") countId: String,
+        @Body body: CountVoiceRequest,
+    ): CountVoiceResponse
+
+    // ---- پیش‌فاکتور سفید (برگه‌ی قیمت از گوشی) ----
+    //
+    // چرا این دو در مجموعه‌ی `mobile` هستند و نه `sales`: سازندهٔ برگه می‌تواند
+    // کارگر (STAFF) باشد و کل سطح فروش برای کارگر بسته است. انبار را هم سرور
+    // انتخاب می‌کند، چون گوشی هیچ‌وقت warehouseId ندارد.
+
+    @POST("mobile/blank-quotations")
+    suspend fun createBlankQuotation(@Body body: CreateBlankQuotationRequest): BlankQuotationCreated
+
+    /** برگه‌های همین کاربر — بعد از سینک معلوم می‌شود قیمت خورده یا نه. */
+    @GET("mobile/blank-quotations/mine")
+    suspend fun myBlankQuotations(@Query("limit") limit: Int = 20): MyBlankQuotationsResponse
+
+    // ---- Offline sync ----
+    // Batch-upload the local outbox; server dedupes by clientRequestId and lands
+    // each op as PENDING for manager approval.
+    @POST("sync/operations")
+    suspend fun syncOperations(@Body body: SyncOperationsRequest): SyncOperationsResponse
+
+    /**
+     * Photo for an already-synced operation, keyed by the same clientRequestId.
+     * The server dedupes on (operation, sha256), so a retried upload attaches to
+     * the same operation instead of creating a second asset. Returns 404 while
+     * the operation itself hasn't been synced yet.
+     */
+    @Multipart
+    @POST("uploads/pending-operation/{clientRequestId}/photo")
+    suspend fun uploadOperationPhoto(
+        @Path("clientRequestId") clientRequestId: String,
+        @Part file: MultipartBody.Part,
+    ): PhotoUploadResponse
+
+    // ---- Review ----
+    @GET("mobile/review/pending")
+    suspend fun pendingReview(): List<ReviewItemDto>
+
+    // کارهای من — کارگر کارهای خودش و تصمیم مدیر را می‌بیند.
+    @GET("mobile/my-work")
+    suspend fun myWork(): MyWorkResponse
+
+    @POST("mobile/review/{itemId}/confirm")
+    suspend fun confirmReview(
+        @Path("itemId") itemId: String,
+        @Body body: ReviewConfirmRequest,
+    ): ReviewItemDto
+}

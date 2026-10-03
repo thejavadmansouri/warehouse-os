@@ -1,0 +1,77 @@
+/* ============================================
+   Warehouse OS — Storefront Design Tokens
+   Automotive parts shop, not AI template
+   ============================================ */
+
+:root {
+  /* -- Palette: Industrial warm灰 + accent قرمز -- */
+  --c-bg:        #f5f3ef;
+  --c-surface:   #ffffff;
+  --c-surface-2: #eae7e1;
+  --c-border:    #d4d0c9;
+  --c-text:      #1a1a1a;
+  --c-text-2:    #5c5c5c;
+  --c-text-3:    #9a9a9a;
+  --c-accent:    #c0392b;
+  --c-accent-hover: #a93226;
+  --c-success:   #27ae60;
+  --c-warning:   #f39c12;
+  --c-badge:     #e74c3c;
+
+  /* -- Typography -- */
+  --ff: 'Vazirmatn', 'Tahoma', sans-serif;
+  --fs-xs:  0.75rem;
+  --fs-sm:  0.875rem;
+  --fs-md:  1rem;
+  --fs-lg:  1.125rem;
+  --fs-xl:  1.5rem;
+  --fs-2xl: 2rem;
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-bold:   700;
+  --fw-black:  900;
+
+  /* -- Spacing scale (4px base) -- */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.25rem;
+  --sp-6: 1.5rem;
+  --sp-8: 2rem;
+  --sp-10: 2.5rem;
+  --sp-12: 3rem;
+  --sp-16: 4rem;
+
+  /* -- Radii -- */
+  --r-sm: 4px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
+  --r-full: 9999px;
+
+  /* -- Shadows: subtle, industrial -- */
+  --sh-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --sh-md: 0 2px 8px rgba(0,0,0,0.08);
+  --sh-lg: 0 4px 16px rgba(0,0,0,0.10);
+  --sh-xl: 0 8px 32px rgba(0,0,0,0.12);
+
+  /* -- Layout -- */
+  --max-w: 1280px;
+  --sidebar-w: 260px;
+  --header-h: 64px;
+  --cart-w: 380px;
+}
+
+/* -- Dark mode prep (not active yet) -- */
+@media (prefers-color-scheme: dark) {
+  :root.auto-dark {
+    --c-bg: #121212;
+    --c-surface: #1e1e1e;
+    --c-surface-2: #2a2a2a;
+    --c-border: #333;
+    --c-text: #e0e0e0;
+    --c-text-2: #aaa;
+    --c-text-3: #666;
+  }
+}

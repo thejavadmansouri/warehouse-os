@@ -1,106 +1,115 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
-import Link from "next/link";
+import * as React from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/auth-store";
+import { AdminSidebar } from "@/components/layout/admin-sidebar";
+import { AdminTopbar } from "@/components/layout/admin-topbar";
+import { LoadingState } from "@/components/states";
+import { cn } from "@/lib/utils";
+import { BackupCloseGuard } from "@/components/backup-close-guard";
+import { ConnectionBanner } from "@/components/connection-banner";
+import { isSalesFocused } from "@/lib/nav";
+import { CartsProvider } from "@/app/admin/pos/_lib/carts-context";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const isPos = pathname === "/admin/pos";
+  const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.user?.role);
+  const [hydrated, setHydrated] = React.useState(false);
+  /**
+   * برای فروشنده، پنل یک ابزار فروش است نه پنل مدیریت.
+   *
+   * سایدبار روی ویندوزِ پیشخوان فقط عرض می‌گیرد و حواس را پرت می‌کند، پس
+   * پیش‌فرض جمع است. باز کردنش ممکن است — قفل نیست، فقط از سر راه کنار رفته.
+   */
+  const [collapsed, setCollapsed] = React.useState(false);
+  const [appliedRoleDefault, setAppliedRoleDefault] = React.useState(false);
 
-  useEffect(() => {
-    const token = localStorage.getItem("wos_token");
-    const userData = localStorage.getItem("wos_user");
+  React.useEffect(() => {
+    if (!hydrated || appliedRoleDefault || !role) return;
+    if (isSalesFocused(role)) setCollapsed(true);
+    setAppliedRoleDefault(true);
+  }, [hydrated, role, appliedRoleDefault]);
 
-    if (!token || !userData) {
-      router.push("/login");
-      return;
+  React.useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  React.useEffect(() => {
+    if (hydrated && !token) {
+      router.replace("/login");
     }
+  }, [hydrated, token, router]);
 
-    setUser(JSON.parse(userData));
-    setLoading(false);
-  }, [router]);
+  /*
+   * صفحه‌های چاپ، پوسته‌ی پنل را اصلاً نمی‌گیرند.
+   *
+   * در App Router لایه‌ی فرزند نمی‌تواند لایه‌ی والد را حذف کند، پس نوار بالا و
+   * سایدبار روی برگه‌ی چاپی هم می‌آمدند — و روی کاغذ چاپ می‌شدند. پنهان‌کردنشان
+   * با CSS هم فضای مرده و صفحه‌ی دوم می‌ساخت. اینجا از ریشه رندر نمی‌شوند.
+   *
+   * بررسی نشست سرِ جایش می‌ماند: برگه‌ی چاپ هم بدون ورود باز نمی‌شود.
+   */
+  const isPrint = pathname.startsWith("/admin/print");
 
-  const handleLogout = () => {
-    localStorage.removeItem("wos_token");
-    localStorage.removeItem("wos_user");
-    document.cookie = "wos_token=; path=/; max-age=0";
-    router.push("/login");
-  };
-
-  if (loading) {
+  if (!hydrated || !token) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-sm">
-        در حال بررسی دسترسی...
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <LoadingState label="در حال بررسی نشست..." />
       </div>
     );
   }
 
-  const menuItems = [
-    { name: "داشبورد مدیریت", href: "/admin", icon: "📊" },
-    { name: "مدیریت محصولات", href: "/admin/products", icon: "📦" },
-    { name: "موقعیت‌های انبار", href: "/admin/locations", icon: "📍" },
-    { name: "موجودی و گردش انبار", href: "/admin/inventory", icon: "🔄" },
-    ...(user?.role === "ADMIN" ? [{ name: "پرسنل و دسترسی‌ها", href: "/admin/users", icon: "👥" }] : []),
-  ];
+  if (isPrint) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-slate-900 flex" dir="rtl">
-      {/* سایدبار استاندارد */}
-      <aside className="w-64 bg-slate-950 border-l border-slate-800 flex flex-col justify-between p-6">
-        <div className="space-y-8">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-amber-400 rounded-xl flex items-center justify-center font-black text-slate-950 text-lg shadow-lg">
-              W
-            </div>
-            <div>
-              <h2 className="text-sm font-black text-white">انبارداری هوشمند</h2>
-              <span className="text-[10px] text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded-md border border-amber-400/20">
-                {user?.role === "ADMIN" ? "مدیر کل سیستم" : user?.role === "MANAGER" ? "مدیر انبار" : "کاربر انبار"}
-              </span>
-            </div>
-          </div>
+    <CartsProvider>
+    <div className="flex min-h-screen bg-background">
+      {/*
+        سایدبار ثابت سمت راست (RTL: اولین فرزند flex در راست قرار می‌گیرد).
 
-          <nav className="space-y-2">
-            {menuItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-xs font-bold transition-all ${
-                    isActive
-                      ? "bg-amber-400 text-slate-950 shadow-lg shadow-amber-400/20"
-                      : "text-slate-300 hover:bg-slate-900 hover:text-white"
-                  }`}
-                >
-                  <span className="text-base">{item.icon}</span>
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+        روی صندوق اصلاً رندر نمی‌شود. صندوق یک ابزارِ تمام‌صفحه است، نه یک صفحه
+        داخل پنل: هر پیکسلی که سایدبار می‌گیرد یعنی یک ردیف کالای کم‌تر در سبد.
+        دسترسی به منو از دست نمی‌رود — دکمه‌ی «منو» در نوار بالا آن را به‌صورت
+        روکش باز می‌کند.
+      */}
+      {!isPos && (
+        <aside
+          className={cn(
+            "sticky top-0 hidden h-screen shrink-0 border-l bg-sidebar transition-[width] duration-200 lg:block",
+            collapsed ? "w-[72px]" : "w-64"
+          )}
+        >
+          <AdminSidebar collapsed={collapsed} />
+        </aside>
+      )}
 
-        <div className="pt-6 border-t border-slate-800 space-y-4">
-          <div className="text-xs text-slate-200 font-bold truncate">
-            👤 {user?.fullName || user?.username}
-          </div>
-          <button
-            onClick={handleLogout}
-            className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 text-xs font-bold py-2.5 rounded-xl transition-all"
-          >
-            خروج از حساب کاربری
-          </button>
-        </div>
-      </aside>
+      {/* محتوای اصلی */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* بالاتر از نوار بالا می‌نشیند: وقتی سرور نیست، این اولین چیزی است
+            که باید دیده شود. */}
+        <ConnectionBanner />
 
-      {/* محتوای اصلی پنل */}
-      <main className="flex-1 p-8 overflow-y-auto">
-        {children}
-      </main>
+        <AdminTopbar
+          collapsed={collapsed}
+          onToggleCollapse={() => setCollapsed((c) => !c)}
+        />
+        {/*
+          صندوق فروش خودش ارتفاع کامل را مدیریت می‌کند و padding بیرونی از
+          ارتفاعِ در دسترسش کم می‌کند. بقیه‌ی صفحه‌ها padding عادی می‌گیرند.
+        */}
+        <main className={cn("flex-1", isPos ? "p-0" : "p-4 sm:p-6")}>{children}</main>
+        {/* در مرورگر بی‌اثر است؛ فقط داخل قاب دسکتاپ فعال می‌شود. */}
+        <BackupCloseGuard />
+      </div>
     </div>
+    </CartsProvider>
   );
 }

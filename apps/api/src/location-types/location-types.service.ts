@@ -1,16 +1,18 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { LocationLevel } from '@prisma/client';
 
 @Injectable()
 export class LocationTypesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
-    return this.prisma.locationType.findMany({ orderBy: { level: 'asc' } });
+  findAll(warehouseId?: string) {
+    return this.prisma.locationType.findMany({
+      where: warehouseId ? { warehouseId } : undefined,
+      orderBy: { depth: 'asc' },
+    });
   }
 
-  create(data: { name: string; level: LocationLevel }) {
+  create(data: { warehouseId: string; name: string; depth: number }) {
     return this.prisma.locationType.create({ data });
   }
 }

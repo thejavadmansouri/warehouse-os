@@ -3,43 +3,30 @@ import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class BrandsService {
+  constructor(private prisma: PrismaService) {}
 
-  constructor(
-    private prisma: PrismaService
-  ){}
-
-  findAll(){
+  findAll() {
     return this.prisma.brand.findMany();
   }
 
-
-  create(dto:any){
-
+  create(dto: any) {
     return this.prisma.brand.create({
-      data:{
-        name:dto.name
-      }
+      data: {
+        name: dto.name,
+      },
     });
-
   }
 
-
-  update(id:string, dto:any){
-
+  update(id: string, dto: any) {
     return this.prisma.brand.update({
-      where:{ id },
-      data:{ name:dto.name }
+      where: { id },
+      data: { name: dto.name },
     });
-
   }
 
-
-  remove(id:string){
-
+  remove(id: string) {
     return this.prisma.brand.delete({
-      where:{ id }
+      where: { id },
     });
-
   }
-
 }

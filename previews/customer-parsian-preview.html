@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>پیش‌نمایش — پرونده مشتری</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --primary:#2563EB; --success:#1A9951; --danger:#E30117; --warning:#B45309; --info:#7C3AED;
+    --text:#0F172A; --muted:#64748B; --bg:#F8FAFC; --surface:#fff; --border:#E2E8F0; --alt:#F1F5F9;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Vazirmatn',Tahoma,sans-serif;background:var(--bg);color:var(--text);font-size:13.5px}
+  .tab{font-variant-numeric:tabular-nums}
+  .muted{color:var(--muted)}
+
+  .notice{background:#312e81;color:#e0e7ff;text-align:center;padding:5px 10px;font-size:11.5px}
+  .notice b{color:#fff}
+  .chip{display:inline-block;border-radius:999px;padding:0 8px;font-size:10px;font-weight:700;border:1px solid}
+  .chip-a{border-color:#93c5fd;color:#dbeafe}
+  .chip-p{border-color:#c4b5fd;color:#ede9fe;margin-inline-start:6px}
+
+  .page{max-width:1120px;margin:12px auto;padding:0 12px;display:flex;flex-direction:column;gap:10px}
+
+  /* نوار مشتری */
+  .bar{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 16px;flex-wrap:wrap}
+  .bar h1{font-size:16px;font-weight:800}
+  .badge{border-radius:999px;padding:2px 9px;font-size:11px;font-weight:600}
+  .b-blue{background:#dbeafe;color:#1d4ed8}.b-amber{background:#fef3c7;color:#92400e}.b-red{background:#fee2e2;color:#b91c1c}
+  .btn{display:inline-flex;align-items:center;gap:5px;height:32px;border-radius:8px;padding:0 12px;font-size:13px;font-weight:600;border:1px solid var(--border);background:var(--surface);font-family:inherit}
+  .btn-p{background:var(--primary);color:#fff;border-color:var(--primary)}
+  kbd{font-family:inherit;border:1px solid currentColor;border-radius:4px;padding:0 5px;font-size:10px;opacity:.75}
+  .bal{margin-inline-start:auto;display:flex;align-items:baseline;gap:8px}
+  .bal .sum{font-size:19px;font-weight:800;color:var(--warning)}
+
+  /* سه ریزآمار */
+  .mini{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .m{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:9px 14px;display:flex;align-items:baseline;gap:9px}
+  .m .l{font-size:11.5px;color:var(--muted)}
+  .m .v{font-size:15px;font-weight:800}
+  .m .s{font-size:10.5px;color:var(--muted);margin-inline-start:auto}
+
+  /* دو ستون */
+  .grid{display:grid;grid-template-columns:270px 1fr;gap:10px;align-items:start}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:12px}
+  .head{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--border)}
+  .head h2{font-size:13px;font-weight:700}
+  .ps-tag{font-size:10px;font-weight:700;color:var(--info);background:#f5f3ff;border:1px solid #ddd6fe;border-radius:5px;padding:1px 7px}
+  .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:12px 14px;font-size:12px}
+  .kv .k{color:var(--muted);font-size:10.5px}
+  .kv .v{font-weight:600}
+  .kv code{background:var(--alt);border:1px solid var(--border);border-radius:5px;padding:0 6px;font-family:inherit;font-size:10.5px}
+  .sec{padding:10px 14px 12px;border-top:1px solid var(--border);font-size:11.5px;color:var(--muted)}
+  .bar2{height:7px;border-radius:99px;background:var(--alt);overflow:hidden;margin:5px 0 3px}
+  .bar2>div{height:100%;border-radius:99px;background:linear-gradient(90deg,#b45309,#f59e0b)}
+  .cm{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted)}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:99px;margin-inline-end:5px;vertical-align:1px}
+
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  th{background:var(--alt);color:var(--muted);font-weight:600;text-align:start;padding:7px 10px;font-size:11px}
+  td{padding:8px 10px;border-top:1px solid var(--border)}
+  .r{text-align:end}
+  .debt{color:var(--warning);font-weight:700}
+  .sum-row td{background:var(--alt);font-weight:700}
+  .items{background:#f8fafc}
+  .items li{list-style:none;display:flex;gap:8px;align-items:center;padding:6px 24px;border-top:1px solid var(--border);font-size:12px}
+  .items li:first-child{border-top:none}
+  .items .q{width:42px;text-align:center;font-weight:700;background:var(--alt);border-radius:6px;padding:1px 0}
+  .items .nm{flex:1}
+  .ret{opacity:.55}
+  .ret .q{text-decoration:line-through;color:#b45309}
+  .rb{font-size:10px;border-radius:5px;padding:1px 6px;font-weight:600;background:#fef3c7;color:#92400e}
+  .foot{text-align:center;color:var(--muted);font-size:11px;padding:2px 0 10px}
+</style>
+</head>
+<body>
+
+<div class="notice">
+  پیش‌نمایش — ترکیب اپ خودمان با امکانات پارسیان · هیچ کدی تغییر نکرده
+  <span class="chip chip-a">طراحی خودمان</span>
+  <span class="chip chip-p">از پارسیان</span>
+</div>
+
+<div class="page">
+
+  <!-- نوار مشتری -->
+  <div class="bar">
+    <h1>پیمان رستمی</h1>
+    <span class="muted tab" dir="ltr">۰۹۱۲ ۳۴۵ ۶۷۸۹</span>
+    <span class="badge b-blue">عمده‌فروش</span>
+    <span class="badge b-red">معوق</span>
+    <span style="flex:1"></span>
+    <button class="btn btn-p">فروش <kbd>F2</kbd></button>
+    <button class="btn">دریافت <kbd>F6</kbd></button>
+    <div class="bal">
+      <span class="muted" style="font-size:12px">مانده:</span>
+      <span class="sum tab">۱۴٬۰۴۰٬۰۰۰ تومان</span>
+      <span class="badge b-amber">بدهکار</span>
+    </div>
+  </div>
+
+  <!-- ریزآمار -->
+  <div class="mini">
+    <div class="m"><span class="l">جاری</span><b class="v tab">۸٬۲۴۰٬۰۰۰</b><span class="s">فاکتور ۲۴۳۷</span></div>
+    <div class="m"><span class="l">سررسید امروز</span><b class="v tab" style="color:#b45309">۲٬۶۰۰٬۰۰۰</b><span class="s">فاکتور ۲۴۳۲</span></div>
+    <div class="m"><span class="l">معوق</span><b class="v tab" style="color:#dc2626">۳٬۲۰۰٬۰۰۰</b><span class="s">فاکتور ۲۴۲۸</span></div>
+  </div>
+
+  <div class="grid">
+
+    <!-- ستون مالی (پارسیان) -->
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="card">
+        <div class="head"><h2>مشخصات مالی</h2><span class="ps-tag">پارسیان</span></div>
+        <div class="kv">
+          <div><div class="k">کد مشتری</div><div class="v tab"><code>۱۰۰۱</code></div></div>
+          <div><div class="k">نوع شخص</div><div class="v">حقیقی</div></div>
+          <div><div class="k">گروه</div><div class="v">عمده‌فروش</div></div>
+          <div><div class="k">نماینده</div><div class="v">محمدی</div></div>
+          <div style="grid-column:1/-1"><div class="k">حساب دریافتنی</div><div class="v tab"><code>۱۱۰۱ » ۱۰ » ۲۵</code></div></div>
+        </div>
+        <div class="sec">
+          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--text)">
+            <span class="muted">سقف اعتبار</span><b class="tab">۵۰٬۰۰۰٬۰۰۰</b>
+          </div>
+          <div class="bar2"><div style="width:28%"></div></div>
+          <div class="cm"><span>مصرف: <b class="tab" style="color:var(--text)">۲۸٪</b></span><span>باقی: <b class="tab" style="color:var(--text)">۳۵٬۹۶۰٬۰۰۰</b></span></div>
+          <div style="margin-top:8px;display:flex;justify-content:space-between;align-items:center">
+            <span>سند خودکار</span>
+            <b style="color:var(--success);font-size:11px"><span class="dot" style="background:var(--success)"></span>روشن · آخرین: <span class="tab">س-۱۰۰۸</span></b>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- فاکتورها (طراحی خودمان) -->
+    <div class="card">
+      <div class="head">
+        <h2>فاکتورها</h2>
+        <div style="display:flex;gap:5px">
+          <span class="btn" style="height:27px;font-size:11.5px;background:var(--primary);color:#fff;border-color:var(--primary)">امروز</span>
+          <span class="btn" style="height:27px;font-size:11.5px">کلی</span>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th>شماره</th><th>تاریخ</th><th>وضعیت</th><th class="r">مبلغ</th><th class="r">مانده</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b class="tab">۲۴۳۷</b></td><td class="muted tab">امروز ۱۴:۰۲</td>
+            <td><span class="muted"><span class="dot" style="background:var(--primary)"></span>نسیه</span></td>
+            <td class="r tab">۸٬۲۴۰٬۰۰۰</td><td class="r debt tab">۸٬۲۴۰٬۰۰۰</td>
+          </tr>
+          <tr class="items"><td colspan="5" style="padding:0">
+            <ul>
+              <li><span class="q tab">۱۰</span><span class="nm">لنت جلو دنا سمند</span><span class="muted tab">۳۲۰٬۰۰۰ × ۱۰</span><b class="tab">۳٬۲۰۰٬۰۰۰</b></li>
+              <li><span class="q tab">۱</span><span class="nm">روغن موتور ۵W-30</span><span class="muted tab">۵۴۰٬۰۰۰ × ۱</span><b class="tab">۵۴۰٬۰۰۰</b></li>
+              <li><span class="q tab">۵</span><span class="nm">چراغ جلو دنا مدرن</span><span class="muted tab">۹۰۰٬۰۰۰ × ۵</span><b class="tab">۴٬۵۰۰٬۰۰۰</b></li>
+            </ul>
+          </td></tr>
+          <tr>
+            <td><b class="tab">۲۴۳۶</b></td><td class="muted tab">دیروز ۱۷:۳۵</td>
+            <td><span class="muted"><span class="dot" style="background:var(--success)"></span>نقد — تسویه</span></td>
+            <td class="r tab">۵٬۶۰۰٬۰۰۰</td><td class="r muted tab">—</td>
+          </tr>
+          <tr>
+            <td><b class="tab">۲۴۲۹</b></td><td class="muted tab">۱۴۰۵/۰۵/۰۱</td>
+            <td><span class="muted"><span class="dot" style="background:var(--success)"></span>تسویه</span> <span class="rb">مرجوعی دارد</span></td>
+            <td class="r tab">۱۲٬۴۰۰٬۰۰۰</td><td class="r muted tab">—</td>
+          </tr>
+          <tr class="items ret"><td colspan="5" style="padding:0">
+            <ul>
+              <li><span class="q tab">۱</span><span class="nm">سرسیلندر پژو ۴۰۵</span><b class="tab">۴٬۵۰۰٬۰۰۰</b></li>
+              <li><span class="q q tab">۳</span><span class="nm">چراغ جلو — <span class="rb">۳ عدد مرجوع</span></span><span class="muted tab">برگشت ۲٬۷۰۰٬۰۰۰</span></li>
+            </ul>
+          </td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- گردش حساب خلاصه (پارسیان) -->
+  <div class="card">
+    <div class="head"><h2>کارت حساب</h2><span class="ps-tag">پارسیان</span></div>
+    <table>
+      <thead><tr><th>تاریخ</th><th>شرح</th><th class="r">بدهکار</th><th class="r">بستانکار</th><th class="r">مانده</th></tr></thead>
+      <tbody>
+        <tr><td class="muted tab">۱۴۰۵/۰۵/۱۵</td><td>فاکتور ۲۴۲۸</td><td class="r debt tab">۶٬۴۰۰٬۰۰۰</td><td class="r muted">—</td><td class="r tab">۶٬۴۰۰٬۰۰۰</td></tr>
+        <tr><td class="muted tab">۱۴۰۵/۰۵/۱۵</td><td>دریافت کارت‌خوان</td><td class="r muted">—</td><td class="r tab" style="color:var(--success)">۳٬۲۰۰٬۰۰۰</td><td class="r tab">۳٬۲۰۰٬۰۰۰</td></tr>
+        <tr><td class="muted tab">۱۴۰۵/۰۵/۱۹</td><td>فاکتور ۲۴۳۲</td><td class="r debt tab">۴٬۶۰۰٬۰۰۰</td><td class="r muted">—</td><td class="r tab">۷٬۸۰۰٬۰۰۰</td></tr>
+        <tr><td class="muted tab">۱۴۰۵/۰۵/۲۰</td><td>دریافت نقدی</td><td class="r muted">—</td><td class="r tab" style="color:var(--success)">۲٬۰۰۰٬۰۰۰</td><td class="r tab">۵٬۸۰۰٬۰۰۰</td></tr>
+        <tr><td class="muted tab">۱۴۰۵/۰۵/۲۱</td><td>فاکتور ۲۴۳۷</td><td class="r debt tab">۸٬۲۴۰٬۰۰۰</td><td class="r muted">—</td><td class="r tab">۱۴٬۰۴۰٬۰۰۰</td></tr>
+        <tr class="sum-row"><td colspan="2">جمع</td><td class="r tab">۱۹٬۲۴۰٬۰۰۰</td><td class="r tab">۵٬۲۰۰٬۰۰۰</td><td class="r debt tab">۱۴٬۰۴۰٬۰۰۰</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="foot">بنفش = الگوبرداری‌شده از پارسیان (کدینگ، حساب دریافتنی، سقف اعتبار، سند خودکار، کارت حساب دوطرفه) — بقیه همان طراحی فعلی است.</div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "_what": "Input for set-label-settings.cjs, the 68% step of apply-update.ps1.",
+  "_modes": {
+    "seed": "DEFAULT. Make sure the LabelSettings row exists (schema defaults if it was missing) and print what is configured. Existing values are never changed.",
+    "force": "Write exactly the numbers in \"values\" over whatever is there. Only use this when you have decided the shop's label geometry on purpose - it is one singleton row shared by product labels (TSC, 105 mm roll, 2 x 51x32) and shelf labels (roll width chosen in the panel)."
+  },
+  "_rolls": {
+    "product_labels": "TSC TTP-244 Pro: mediaWidthMm 105, widthMm 51, heightMm 32 -> 2 labels per row (6 labels per A4 sheet path is unrelated).",
+    "shelf_labels": "Measured roll: mediaWidthMm 104 with widthMm 34, heightMm 25 -> 3 labels per row, 36 rows for 108 labels. widthMm must stay <= 34, because the column count is floor(mediaWidthMm / widthMm) and 35 gives 2."
+  },
+  "mode": "seed",
+  "seed": {},
+  "values": {
+    "mediaWidthMm": 104,
+    "widthMm": 34,
+    "heightMm": 25,
+    "gapMm": 2
+  }
+}

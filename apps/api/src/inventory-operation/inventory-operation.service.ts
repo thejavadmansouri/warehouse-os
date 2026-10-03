@@ -1,127 +1,598 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsGateway } from '../realtime/events.gateway';
 
 @Injectable()
 export class InventoryOperationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private realtime: EventsGateway,
+  ) {}
 
-  async execute(dto: any): Promise<any> {
-    const { type, productId, locationId, toLocationId, note, userId, sessionId, voiceRecordId } = dto;
+  /**
+   * پوششِ نازکِ realtime دورِ تک‌نقطه‌ی تغییر موجودی.
+   *
+   * هر حرکتِ موجودی (IN/OUT/SALE/RETURN/TRANSFER/ADJUST/COUNT) از هر مسیری —
+   * فروش، مرجوعی، دستی، صوتی، sync موبایل — از همین‌جا رد می‌شود، پس یک اعلانِ
+   * `stock.changed` اینجا همه را realtime می‌کند.
+   *
+   * فقط وقتی خودمان تراکنش را مدیریت کرده‌ایم (txClient نداریم، یعنی commit قطعی
+   * شده) اعلان می‌دهیم. اگر تراکنش از بیرون آمده (فاکتور فروش/مرجوعی)، صاحبِ آن
+   * تراکنش بعد از commitِ خودش اعلانِ دامنه‌ایِ خودش را می‌فرستد؛ این‌طوری روی
+   * تراکنشی که ممکن است بعداً rollback شود، زودهنگام اعلان نمی‌دهیم.
+   */
+  async execute(dto: any, txClient?: Prisma.TransactionClient): Promise<any> {
+    const result = await this.runOperation(dto, txClient);
+    if (!txClient) {
+      this.realtime.broadcast({
+        type: 'stock.changed',
+        productId: dto?.productId ?? null,
+      });
+    }
+    return result;
+  }
 
-    // اگر sessionId فرستاده شده، باید از قبل واقعاً ساخته شده باشه (با InventorySessionService.start)
-    // دیگه اینجا به‌صورت خاموش سشن جعلی ساخته نمی‌شه چون warehouseId/متادیتای درست نداره
-    // و مخفی‌کردن این خطا باعث گم‌شدن باگ‌های واقعی توی جریان کار می‌شه.
+  /**
+   * تک‌نقطه‌ی تغییر موجودی (قانون ۱).
+   *
+   * @param txClient اختیاری. اگر داده شود، عملیات داخل همان تراکنشِ صداکننده
+   *   اجرا می‌شود بجای اینکه خودش تراکنش جدید باز کند. برای عملیات چندردیفی
+   *   مثل فاکتور فروش لازم است: بدون آن هر ردیف تراکنش جداگانه دارد و اگر
+   *   ردیف چهارم موجودی کم بیاورد، سه ردیف اول از انبار کم شده باقی می‌مانند.
+   *
+   *   وقتی داده نشود رفتار دقیقاً مثل قبل است — همه‌ی صداکننده‌های موجود
+   *   (voice، count، transfer، pending-operations، product-requests و …)
+   *   بدون تغییر کار می‌کنند.
+   */
+  /**
+   * موجودیِ منفیِ یک کالا را در همان انبار به صفر می‌رساند.
+   *
+   * دامنه‌اش عمداً «همان انبار» است نه «همان قفسه»: منفی تقریباً همیشه روی
+   * «موجودی ثبت‌نشده» می‌نشیند، نه روی قفسه‌ای که کارگر دارد جنس را رویش ثبت
+   * می‌کند. محدودکردن به همان قفسه یعنی این قاعده هیچ‌وقت اجرا نمی‌شد.
+   *
+   * ردیف‌ها با ترتیبِ ثابت قفل می‌شوند (همان قاعده‌ی `inLockOrder`) — دو کارگر
+   * که هم‌زمان دو کالا را روی یک قفسه ثبت می‌کنند نباید به deadlock بخورند.
+   */
+  private async zeroOutNegatives(
+    tx: Prisma.TransactionClient,
+    productId: string,
+    locationId: string,
+    logBase: Omit<
+      Prisma.InventoryLogUncheckedCreateInput,
+      'locationId' | 'quantity' | 'action'
+    >,
+  ): Promise<void> {
+    const target = await tx.location.findUnique({
+      where: { id: locationId },
+      select: { warehouseId: true },
+    });
+
+    if (!target?.warehouseId) return;
+
+    const negatives = await tx.inventory.findMany({
+      where: {
+        productId,
+        quantity: { lt: 0 },
+        location: { warehouseId: target.warehouseId },
+      },
+      select: { locationId: true, quantity: true },
+      orderBy: { locationId: 'asc' },
+    });
+
+    for (const row of negatives) {
+      await tx.inventory.update({
+        where: {
+          productId_locationId: { productId, locationId: row.locationId },
+        },
+        data: { quantity: 0 },
+      });
+
+      await tx.inventoryLog.create({
+        data: {
+          ...logBase,
+          locationId: row.locationId,
+          // منفی بود، پس قرینه‌اش مثبت است — همان قراردادِ ADJUST که دلتا ثبت می‌کند.
+          quantity: -row.quantity,
+          action: 'ADJUST',
+          note:
+            (logBase.note ? `${logBase.note} — ` : '') +
+            'صفرکردن کسریِ پیش از ثبت، هنگام ورود کالا',
+        },
+      });
+    }
+  }
+
+  private async runOperation(
+    dto: any,
+    txClient?: Prisma.TransactionClient,
+  ): Promise<any> {
+    // وقتی تراکنش بیرونی داریم از همان استفاده کن، وگرنه تراکنش خودت را باز کن.
+    const db: Prisma.TransactionClient | PrismaService =
+      txClient ?? this.prisma;
+
+    const runInTx = <T>(
+      fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    ): Promise<T> => (txClient ? fn(txClient) : this.prisma.$transaction(fn));
+
+    const {
+      type,
+      productId,
+      locationId,
+      toLocationId,
+      note,
+      userId,
+      sessionId,
+      voiceRecordId,
+      unitPrice,
+      lineDiscount,
+      lineNote,
+      allowNegative,
+      invoiceId,
+      saleReturnId,
+      purchaseId,
+      correctionId,
+    } = dto;
+
     if (sessionId) {
-      const session = await this.prisma.inventorySession.findUnique({ where: { id: sessionId } });
+      const session = await db.inventorySession.findUnique({
+        where: {
+          id: sessionId,
+        },
+      });
+
       if (!session) {
-        throw new NotFoundException({ error: 'SESSION_NOT_FOUND', message: 'سشن انبارگردانی معتبر نیست؛ ابتدا سشن را استارت کنید' });
+        throw new NotFoundException({
+          error: 'SESSION_NOT_FOUND',
+          message: 'سشن انبارگردانی معتبر نیست',
+        });
       }
     }
 
-    // منبع عملیات (SALE، MANUAL_TRANSFER و ...) دیگه به MANUAL تبدیل نمی‌شه؛
-    // چون فیلد source روی InventoryLog یک String سادست (نه enum محدود)، مقدار واقعی نگه داشته می‌شه
-    // تا در لاگ فعالیت‌ها منبع دقیق عملیات قابل ردیابی بمونه.
     const source = dto.source || 'MANUAL';
+
     const quantity = Number(dto.quantity);
 
+    /*
+     * تعداد باید عددِ صحیح باشد — برای **همه‌ی** حرکت‌ها، حتی ADJUST.
+     *
+     * چرا: ستون `quantity` از نوع INT4 است. یک `2.5` که تا اینجا برسد، در
+     * پستگرس بی‌صدا به `2` گرد می‌شود، در حالی که مبلغِ فاکتور در جاوااسکریپت
+     * با همان `2.5` حساب شده — یعنی مشتری بابتِ ۲.۵ عدد پول می‌دهد و از انبار
+     * ۲ عدد کم می‌شود. اختلاف بی‌صداست و هیچ‌جا گزارش نمی‌شود.
+     *
+     * مسیرِ HTTP با `@IsInt()` محافظت می‌شود، ولی این تک‌نقطه‌ی تغییرِ موجودی
+     * صداکننده‌های دیگری هم دارد (صفِ آفلاینِ موبایل، sync، صوت) که از آن پایپ
+     * رد نمی‌شوند. گارد باید همین‌جا باشد، نه فقط در لبه.
+     *
+     * `Number.isInteger` هم `NaN` را می‌گیرد — که برای ADJUST از فیلترِ پایین
+     * رد می‌شد.
+     */
+    if (!Number.isInteger(quantity)) {
+      throw new BadRequestException({
+        error: 'INVALID_QUANTITY',
+        quantity: dto.quantity,
+        message: 'تعداد باید عدد صحیح باشد',
+      });
+    }
+
     if (type !== 'ADJUST' && (!quantity || quantity <= 0)) {
-      throw new BadRequestException({ error: 'INVALID_QUANTITY', message: 'تعداد نامعتبر است' });
+      throw new BadRequestException({
+        error: 'INVALID_QUANTITY',
+      });
     }
 
     const logBase = {
       productId,
+
       userId: userId ?? null,
+
       sessionId: sessionId ?? null,
+
       voiceRecordId: voiceRecordId ?? null,
+
       source,
+
       note: note ?? null,
+
+      // قیمت واحد برای دو حرکت معنا دارد: فروش (قیمت فروش) و ورودِ ناشی از
+      // فاکتور خرید (قیمت خرید). برای بقیه null می‌ماند — یک ورودِ دستی یا
+      // برگشتی قیمتی ندارد که ثبت شود.
+      unitPrice:
+        (type === 'SALE' || (type === 'IN' && purchaseId)) && unitPrice != null
+          ? Number(unitPrice)
+          : null,
+
+      // تخفیف ردیف هم فقط برای فروش. بدون این، فاکتور چاپی نمی‌تواند نشان دهد
+      // تخفیف روی کدام قلم بوده و جمع ردیف‌ها با مبلغ فاکتور نمی‌خواند.
+      lineDiscount:
+        type === 'SALE' && lineDiscount != null ? Number(lineDiscount) : null,
+
+      // توضیحِ دستیِ فروشنده روی همین قلم — فقط برای فروش، و فقط برای چاپ.
+      lineNote: type === 'SALE' && lineNote ? String(lineNote) : null,
+
+      // ردیف فاکتور فروش (یا ردیف RETURN جبرانیِ ابطال/مرجوعی). برای بقیه null.
+      invoiceId: invoiceId ?? null,
+
+      // سند مرجوعی که این حرکتِ RETURN را ساخته — فقط از مسیر برگشت از فروش
+      // پر می‌شود؛ برای فروش، ابطال، و بقیه‌ی حرکت‌ها null می‌ماند.
+      saleReturnId: saleReturnId ?? null,
+
+      // فاکتور خریدی که این ردیفِ IN را ساخته. مثل فروش، ردیف‌های سند خرید
+      // همین رکوردهای لجرند؛ برای ورودِ دستی و صوتی و اسکن null می‌ماند.
+      purchaseId: purchaseId ?? null,
+
+      // اصلاحیه‌ای که این حرکتِ جبرانی را ساخته — فقط حرکاتِ اصلاحیه. برای بقیه null.
+      correctionId: correctionId ?? null,
     };
 
-    if (type === 'IN') {
-      return this.prisma.$transaction(async (tx) => {
+    // =========================
+    // IN / RETURN
+    // =========================
+    // RETURN همان افزایش موجودی است، فقط در لجر با action دیگری ثبت می‌شود.
+    // برای ابطال فاکتور استفاده می‌شود: ردیف فروش حذف نمی‌شود، یک حرکت جبرانی
+    // ثبت می‌شود تا لجر append-only بماند (قانون ۲).
+
+    if (type === 'IN' || type === 'RETURN') {
+      return runInTx(async (tx) => {
+        /*
+         * پیش از افزودن، بدهیِ موجودیِ منفیِ همین کالا صفر می‌شود.
+         *
+         * چرا: انبار پیش از دیجیتالی‌شدن می‌فروخت. هر فروشِ کالایی که هنوز ثبت
+         * نشده بود روی «موجودی ثبت‌نشده» منفی می‌نشیند. وقتی کارگر بالاخره همان
+         * کالا را می‌شمارد و وارد می‌کند، **عددِ او حقیقت است** — چیزی که روی
+         * قفسه است. آن منفی یک بدهیِ واقعی نیست، رَدِّ فروشی است که سندش از
+         * قبل در لجر هست.
+         *
+         * پس منفی صفر می‌شود و بعد عددِ کارگر اضافه می‌شود؛ نه اینکه از آن کم
+         * شود. اگر کم می‌شد، کارگری که ۲۰ عدد می‌بیند و وارد می‌کند، در سیستم
+         * ۱۲ تا می‌دید و دوباره می‌شمرد.
+         *
+         * صفرکردن با ADJUST ثبت می‌شود نه IN: جنسی وارد نشده، یک تصحیح انجام
+         * شده — و لجر باید بتواند این دو را از هم جدا کند.
+         *
+         * ⚠️ فاکتور خرید عمداً بیرون است (`purchaseId`): عددِ روی برگه‌ی
+         * فروشنده «چه چیزی رسید» است، نه «چه چیزی روی قفسه است».
+         */
+        if (type === 'IN' && !purchaseId && dto.clearNegative !== false) {
+          await this.zeroOutNegatives(tx, productId, locationId, logBase);
+        }
+
         const updated = await tx.inventory.upsert({
-          where: { productId_locationId: { productId, locationId } },
-          update: { quantity: { increment: quantity } },
-          create: { productId, locationId, quantity },
+          where: {
+            productId_locationId: {
+              productId,
+              locationId,
+            },
+          },
+
+          update: {
+            quantity: {
+              increment: quantity,
+            },
+          },
+
+          create: {
+            productId,
+            locationId,
+            quantity,
+          },
         });
-        await tx.inventoryLog.create({ data: { ...logBase, locationId, quantity, action: 'IN' } });
-        return updated;
+
+        const log = await tx.inventoryLog.create({
+          data: {
+            ...logBase,
+            locationId,
+            quantity,
+            action: type === 'RETURN' ? 'RETURN' : 'IN',
+          },
+        });
+
+        // Return the stock row plus the created ledger id. Additive: existing IN
+        // callers read the inventory fields and ignore inventoryLogId; approve()
+        // uses it to back-link the pending op and its photo(s) to the ledger row.
+        return { ...updated, inventoryLogId: log.id };
       });
     }
+
+    // =========================
+    // OUT / SALE
+    // =========================
 
     if (type === 'OUT' || type === 'SALE') {
-      return this.prisma.$transaction(async (tx) => {
-        // چک موجودی و کم‌کردنش داخل همون تراکنش انجام می‌شه تا زیر بار همزمان چند کاربر
-        // (چند کارگر انبار که هم‌زمان روی یک کالا کار می‌کنن) race condition و موجودی منفی رخ نده
-        const inventory = await tx.inventory.findUnique({
-          where: { productId_locationId: { productId, locationId } },
-        });
-        if (!inventory || inventory.quantity < quantity) {
-          throw new BadRequestException({ error: 'INSUFFICIENT_STOCK', available: inventory?.quantity ?? 0 });
+      return runInTx(async (tx) => {
+        /*
+          کسر اتمیک.
+
+          حالت عادی: فقط وقتی کم کن که موجودی کافی باشد — این جلوی race
+          condition بین دو برداشتِ هم‌زمان را می‌گیرد.
+
+          allowNegative فقط از مسیر فروش می‌آید. دلیلش این است که در دوره‌ی
+          راه‌اندازی، جنس فیزیکاً در انبار هست ولی هنوز در نرم‌افزار ثبت نشده؛
+          عددِ صفرِ سیستم غلط است، نه واقعیت. جلوگیری از فروش در این حالت یعنی
+          نرم‌افزار جلوی کسب‌وکار را بگیرد. برداشت انباردار (OUT) همچنان محدود
+          می‌ماند، چون آنجا صفر یعنی واقعاً چیزی روی قفسه نیست.
+
+          موجودیِ منفی خودش اطلاعات است: یعنی «این تعداد فروخته شد پیش از آنکه
+          ثبت شود». وقتی جنس واقعاً ثبت شود، منفی جبران می‌شود.
+        */
+
+        if (allowNegative) {
+          await tx.inventory.upsert({
+            where: {
+              productId_locationId: { productId, locationId },
+            },
+            // ردیف موجودی وجود ندارد → یعنی هیچ‌وقت ثبت نشده؛ از صفر منفی می‌شود.
+            create: { productId, locationId, quantity: -quantity },
+            update: { quantity: { decrement: quantity } },
+          });
+        } else {
+          const result = await tx.inventory.updateMany({
+            where: {
+              productId,
+
+              locationId,
+
+              quantity: {
+                gte: quantity,
+              },
+            },
+
+            data: {
+              quantity: {
+                decrement: quantity,
+              },
+            },
+          });
+
+          if (result.count === 0) {
+            const current = await tx.inventory.findUnique({
+              where: {
+                productId_locationId: {
+                  productId,
+                  locationId,
+                },
+              },
+            });
+
+            throw new BadRequestException({
+              error: 'INSUFFICIENT_STOCK',
+
+              available: current?.quantity ?? 0,
+            });
+          }
         }
-        const updated = await tx.inventory.update({
-          where: { productId_locationId: { productId, locationId } },
-          data: { quantity: { decrement: quantity } },
+
+        const updated = await tx.inventory.findUnique({
+          where: {
+            productId_locationId: {
+              productId,
+              locationId,
+            },
+          },
         });
-        await tx.inventoryLog.create({
-          data: { ...logBase, locationId, quantity, action: type === 'SALE' ? 'SALE' : 'OUT' },
+
+        const log = await tx.inventoryLog.create({
+          data: {
+            ...logBase,
+
+            locationId,
+
+            quantity,
+
+            action: type === 'SALE' ? 'SALE' : 'OUT',
+          },
         });
-        return updated;
+
+        /*
+           شناسه‌ی لاگ هم برمی‌گردد — افزودنی، مثل شاخه‌ی IN.
+
+           صداکننده‌های قبلی فقط فیلدهای موجودی را می‌خوانند و این را نادیده
+           می‌گیرند. اصلاحیه لازمش دارد: وقتی قلمِ تازه‌ای به فاکتورِ ثبت‌شده
+           اضافه می‌شود، ردیفِ اصلاحیه باید به همین لاگِ SALE قفل شود.
+        */
+        return { ...updated, inventoryLogId: log.id };
       });
     }
 
+    // =========================
+    // TRANSFER
+    // =========================
+
     if (type === 'TRANSFER') {
-      if (!toLocationId) throw new BadRequestException({ error: 'DESTINATION_REQUIRED' });
-      const result = await this.prisma.$transaction(async (tx) => {
-        const inventory = await tx.inventory.findUnique({
-          where: { productId_locationId: { productId, locationId } },
+      if (!toLocationId) {
+        throw new BadRequestException({
+          error: 'DESTINATION_REQUIRED',
         });
-        if (!inventory || inventory.quantity < quantity) {
-          throw new BadRequestException({ error: 'INSUFFICIENT_STOCK', available: inventory?.quantity ?? 0 });
+      }
+
+      const result = await runInTx(async (tx) => {
+        /*
+             کم کردن از مبدا به صورت atomic
+          */
+
+        const removed = await tx.inventory.updateMany({
+          where: {
+            productId,
+
+            locationId,
+
+            quantity: {
+              gte: quantity,
+            },
+          },
+
+          data: {
+            quantity: {
+              decrement: quantity,
+            },
+          },
+        });
+
+        if (removed.count === 0) {
+          const current = await tx.inventory.findUnique({
+            where: {
+              productId_locationId: {
+                productId,
+                locationId,
+              },
+            },
+          });
+
+          throw new BadRequestException({
+            error: 'INSUFFICIENT_STOCK',
+
+            available: current?.quantity ?? 0,
+          });
         }
-        await tx.inventory.update({
-          where: { productId_locationId: { productId, locationId } },
-          data: { quantity: { decrement: quantity } },
-        });
+
         const destination = await tx.inventory.upsert({
-          where: { productId_locationId: { productId, locationId: toLocationId } },
-          update: { quantity: { increment: quantity } },
-          create: { productId, locationId: toLocationId, quantity },
+          where: {
+            productId_locationId: {
+              productId,
+              locationId: toLocationId,
+            },
+          },
+
+          update: {
+            quantity: {
+              increment: quantity,
+            },
+          },
+
+          create: {
+            productId,
+
+            locationId: toLocationId,
+
+            quantity,
+          },
         });
+
         await tx.inventoryLog.createMany({
           data: [
-            { ...logBase, locationId, quantity, action: 'TRANSFER', note: `TRANSFER OUT -> ${toLocationId}` },
-            { ...logBase, locationId: toLocationId, quantity, action: 'TRANSFER', note: `TRANSFER IN <- ${locationId}` },
+            {
+              ...logBase,
+
+              locationId,
+
+              quantity,
+
+              action: 'TRANSFER',
+
+              note: `TRANSFER OUT -> ${toLocationId}`,
+            },
+
+            {
+              ...logBase,
+
+              locationId: toLocationId,
+
+              quantity,
+
+              action: 'TRANSFER',
+              note: `TRANSFER IN <- ${locationId}`,
+            },
           ],
         });
+
         return destination;
       });
-      return { success: true, operation: 'TRANSFER', quantity, inventory: result };
+
+      return {
+        success: true,
+
+        operation: 'TRANSFER',
+
+        quantity,
+
+        inventory: result,
+      };
     }
+
+    // =========================
+    // ADJUST
+    // =========================
 
     if (type === 'ADJUST') {
       const targetQty = Number(dto.targetQuantity);
+
       if (isNaN(targetQty) || targetQty < 0) {
-        throw new BadRequestException({ error: 'INVALID_TARGET_QUANTITY' });
+        throw new BadRequestException({
+          error: 'INVALID_TARGET_QUANTITY',
+        });
       }
-      return this.prisma.$transaction(async (tx) => {
+
+      return runInTx(async (tx) => {
         const inventory = await tx.inventory.findUnique({
-          where: { productId_locationId: { productId, locationId } },
+          where: {
+            productId_locationId: {
+              productId,
+              locationId,
+            },
+          },
         });
+
         const oldQty = inventory?.quantity ?? 0;
+
         const diff = targetQty - oldQty;
+
         const updated = await tx.inventory.upsert({
-          where: { productId_locationId: { productId, locationId } },
-          update: { quantity: targetQty },
-          create: { productId, locationId, quantity: targetQty },
+          where: {
+            productId_locationId: {
+              productId,
+              locationId,
+            },
+          },
+
+          update: {
+            quantity: targetQty,
+          },
+
+          create: {
+            productId,
+            locationId,
+            quantity: targetQty,
+          },
         });
+
         if (diff !== 0) {
-          await tx.inventoryLog.create({ data: { ...logBase, locationId, quantity: diff, action: 'ADJUST' } });
+          await tx.inventoryLog.create({
+            data: {
+              ...logBase,
+
+              locationId,
+
+              quantity: diff,
+
+              action: 'ADJUST',
+            },
+          });
         }
-        return { success: true, operation: 'ADJUST', oldQty, newQty: targetQty, diff, inventory: updated };
+
+        return {
+          success: true,
+
+          operation: 'ADJUST',
+
+          oldQty,
+
+          newQty: targetQty,
+
+          diff,
+
+          inventory: updated,
+        };
       });
     }
 
-    throw new BadRequestException({ error: 'INVALID_OPERATION_TYPE' });
+    throw new BadRequestException({
+      error: 'INVALID_OPERATION_TYPE',
+    });
   }
 }

@@ -1,0 +1,31 @@
+Warehouse OS - how to ship and apply a future update
+====================================================
+
+The release artifact is ONE file: WarehouseOS-Setup-<version>.exe
+It carries the API, the web panel, the seller shell and the bundled runtimes.
+
+On the laptop (build machine)
+-----------------------------
+1. Make the code changes; run the test suites.
+2. Bump the version in deploy\windows\installer.iss (#define AppVersion).
+3. Run deploy\windows\BUILD-ALL.ps1  ->  Output\WarehouseOS-Setup-<version>.exe
+4. Copy the exe into this "updates" folder on the flash.
+
+On the shop SERVER machine (as administrator)
+---------------------------------------------
+Either of these works:
+
+  a) Run the new Setup.exe by hand. It replaces the app files and first-run
+     skips itself (config\.env exists), BUT it does NOT migrate the database.
+     Finish with:
+        C:\WarehouseOS\scripts\update.ps1 -SkipSetup
+
+  b) One command that does everything (recommended -- it also takes a backup
+     first and keeps a rollback copy of the previous app folder):
+        C:\WarehouseOS\scripts\update.ps1 -Setup <path to the new Setup.exe>
+
+After the update: RUN-CHECK-SYSTEM.bat must be all green. Rollback copies
+live in C:\WarehouseOS\versions (the two most recent are kept).
+
+If a service does not come back after an update, run:
+  3-scripts\RUN-FINISH-BROKEN-INSTALL.bat

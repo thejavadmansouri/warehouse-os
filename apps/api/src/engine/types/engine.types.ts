@@ -51,35 +51,84 @@ export interface DomainDictionaryConfig {
   }>;
 
   brands: Record<string, string>;
+
   engines: Record<string, string>;
+
   gearboxes: Record<string, string>;
+
   units: Record<string, string>;
+
   colors: Record<string, string>;
+
   sides: Record<string, string>;
+
   positions: Record<string, string>;
+
   conditions: Record<string, string>;
+
   actions: Record<string, string>;
+
   locations: Record<string, string>;
+
   packaging: Record<string, string>;
+
   speechErrors: Record<string, string>;
 }
 
 export interface ParseExplanation {
-  matchedProduct?: string;
-  matchedVehicleFamily?: string;
-  matchedVehicleVariant?: string;
-  matchedBrand?: string;
-  matchedEngine?: string;
-  matchedGearbox?: string;
-  matchedPosition?: string;
-  matchedSide?: string;
-  matchedCondition?: string;
-  matchedQuantity?: number;
+  // Pipeline Debug
+
+  tokens?: string[];
+
+  normalized?: string;
+
+  correctedTokens?: string[];
+
+  numbers?: any[];
+
+  numberResults?: any[];
+
+  matched?: any;
+
+  classified?: any;
+
+  validation?: any;
+
+  context?: any;
+
+  confidenceResult?: any;
+
+  // Matched Data
+
+  matchedProduct?: string | null;
+
+  matchedVehicleFamily?: string | null;
+
+  matchedVehicleVariant?: string | null;
+
+  matchedBrand?: string | null;
+
+  matchedEngine?: string | null;
+
+  matchedGearbox?: string | null;
+
+  matchedPosition?: string | null;
+
+  matchedSide?: string | null;
+
+  matchedCondition?: string | null;
+
+  matchedQuantity?: number | null;
+
+  // Quantity
 
   goodQuantity: number;
+
   badQuantity: number;
 
-  year?: number;
+  year?: number | null;
+
+  // Validation
 
   unknownTokens: string[];
 
@@ -87,9 +136,13 @@ export interface ParseExplanation {
 
   validationMessages: string[];
 
+  // Confidence
+
   confidence: number;
 
-  matchedDetails: Record<string, string>;
+  // Details
+
+  matchedDetails: Record<string, string | null>;
 }
 
 export interface ParseResult {
@@ -97,18 +150,34 @@ export interface ParseResult {
 
   data: {
     productName: string | null;
+
     productCategory: string | null;
+
     brand: string | null;
+
     vehicleFamily: string | null;
+
+    // فقط اگر کارگر مدل را صریح گفته باشد؛ در غیر این صورت null (هرگز حدس زده نمی‌شود)
+    vehicleModel: string | null;
+
     vehicleVariant: string | null;
+
     engine: string | null;
+
     gearbox: string | null;
+
     position: string | null;
+
     side: string | null;
+
     condition: string | null;
+
     year: number | null;
+
     quantity: number | null;
+
     goodQuantity: number;
+
     badQuantity: number;
   };
 

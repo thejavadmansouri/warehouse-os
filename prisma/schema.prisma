@@ -257,6 +257,7 @@ model InventoryCount {
 }
 
 model InventoryItem {
+  reviewStatus       String         @default("NEEDS_REVIEW")
   id                 String         @id @default(uuid())
   countId            String
   productId          String?
@@ -385,7 +386,6 @@ enum BarcodeStatus {
   UNKNOWN
 }
 
-
 enum ImportRowStatus {
   READY
   NEW_BRAND
@@ -395,44 +395,42 @@ enum ImportRowStatus {
   FAILED
 }
 
-
 model ImportJob {
-  id          String       @id @default(uuid())
+  id          String      @id @default(uuid())
   fileName    String?
-  status      String       @default("PENDING")
-  totalRows   Int          @default(0)
-  successRows Int          @default(0)
-  failedRows  Int          @default(0)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  status      String      @default("PENDING")
+  totalRows   Int         @default(0)
+  successRows Int         @default(0)
+  failedRows  Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
   rows        ImportRow[]
 }
 
-
 model ImportRow {
-  id                String           @id @default(uuid())
-  jobId             String
-  rowNumber         Int
+  id        String @id @default(uuid())
+  jobId     String
+  rowNumber Int
 
-  productName       String?
-  brandName         String?
-  vehicleModelName  String?
-  partNumber        String?
-  unit              String?
+  productName      String?
+  brandName        String?
+  vehicleModelName String?
+  partNumber       String?
+  unit             String?
 
-  purchasePrice     Float?
-  salePrice         Float?
-  wholesalePrice    Float?
+  purchasePrice  Float?
+  salePrice      Float?
+  wholesalePrice Float?
 
-  matchedBrandId    String?
-  matchedCatalogId  String?
-  matchedVehicleId  String?
+  matchedBrandId   String?
+  matchedCatalogId String?
+  matchedVehicleId String?
 
-  rawData           Json?
-  status            ImportRowStatus @default(READY)
-  error             String?
+  rawData Json?
+  status  ImportRowStatus @default(READY)
+  error   String?
 
-  createdAt         DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  job               ImportJob @relation(fields:[jobId], references:[id], onDelete:Cascade)
+  job ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }

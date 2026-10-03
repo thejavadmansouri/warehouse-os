@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پیش‌نمایش — پروفایل مشتری واحد (فاز ۳ طرح یکدست‌سازی)</title>
+<style>
+  :root{
+    --bg:#f1f5f9; --card:#fff; --border:#e2e8f0; --muted:#64748b; --fg:#0f172a;
+    --primary:#2563eb; --primary-soft:#eff6ff;
+    --amber:#b45309; --amber-bg:#fef3c7; --amber-bd:#fde68a;
+    --ok:#15803d; --ok-bg:#dcfce7; --ok-bd:#bbf7d0;
+    --red:#dc2626; --red-bg:#fee2e2; --red-bd:#fecaca;
+    --gray-bg:#f8fafc;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+       font-family:Vazirmatn,"Segoe UI",Tahoma,sans-serif;font-size:14px}
+  .wrap{max-width:1080px;margin:0 auto;padding:16px 16px 60px}
+  .banner{background:#1e293b;color:#f8fafc;border-radius:10px;padding:10px 16px;margin-bottom:14px;
+          display:flex;gap:10px;align-items:center;font-size:13px}
+  .banner b{color:#fbbf24}
+  .banner .tag{background:#fbbf24;color:#1e293b;border-radius:6px;padding:2px 8px;font-weight:700;font-size:12px}
+
+  /* ===== identity header ===== */
+  .head{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-bottom:14px}
+  .idcard{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;flex:1 1 380px}
+  .idcard h1{margin:0 0 4px;font-size:19px;display:flex;align-items:center;gap:8px}
+  .idcard .sub{color:var(--muted);font-size:13px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .chip{border:1px solid var(--border);border-radius:999px;padding:3px 10px;font-size:12px;background:var(--gray-bg)}
+  .chip.blue{background:var(--primary-soft);border-color:#bfdbfe;color:#1d4ed8}
+  .balances{display:flex;gap:10px;flex:2 1 420px}
+  .bal{flex:1;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;
+       display:flex;flex-direction:column;justify-content:center;gap:4px}
+  .bal .lbl{font-size:12px;color:var(--muted)}
+  .bal .val{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .bal.deb{background:var(--amber-bg);border-color:var(--amber-bd)}   .bal.deb .val{color:var(--amber)}
+  .bal.cred{background:var(--ok-bg);border-color:var(--ok-bd)}        .bal.cred .val{color:var(--ok)}
+  .bal.neutral .val{color:var(--fg)}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+  .btn{border:1px solid var(--border);background:var(--card);border-radius:8px;padding:8px 14px;cursor:pointer;
+       font:inherit;font-size:13px;display:inline-flex;gap:6px;align-items:center}
+  .btn.primary{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:700}
+  .btn kbd{background:rgba(255,255,255,.25);border-radius:4px;padding:0 5px;font-size:11px}
+  .btn:not(.primary) kbd{background:var(--gray-bg);border:1px solid var(--border);border-radius:4px;padding:0 5px;font-size:11px}
+
+  /* ===== tabs ===== */
+  .tabs{display:flex;gap:4px;background:var(--card);border:1px solid var(--border);border-radius:12px 12px 0 0;
+        padding:6px 8px 0;border-bottom:none}
+  .tab{padding:9px 18px;border-radius:8px 8px 0 0;cursor:pointer;font-weight:600;color:var(--muted);font-size:14px;
+       border:1px solid transparent;border-bottom:none;display:flex;gap:6px;align-items:center}
+  .tab.active{color:var(--primary);background:var(--bg);border-color:var(--border)}
+  .tab .n{background:var(--gray-bg);border:1px solid var(--border);border-radius:6px;padding:0 7px;font-size:12px}
+  .tab.active .n{background:var(--primary-soft);border-color:#bfdbfe}
+  .panel{background:var(--card);border:1px solid var(--border);border-radius:0 12px 12px 12px;padding:0;overflow:hidden}
+  .toolbar{display:flex;gap:8px;padding:12px;border-bottom:1px solid var(--border);background:var(--gray-bg);
+           align-items:center;flex-wrap:wrap}
+  .toolbar .search{flex:1;min-width:220px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;
+                   background:#fff;color:var(--muted);font-size:13px}
+  .toolbar .hint{font-size:12px;color:var(--muted)}
+  .toolbar .hint kbd{background:#fff;border:1px solid var(--border);border-radius:4px;padding:1px 6px}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th{background:var(--gray-bg);color:var(--muted);font-weight:600;text-align:right;padding:9px 12px;
+     border-bottom:1px solid var(--border);font-size:12.5px;white-space:nowrap}
+  td{padding:9px 12px;border-bottom:1px solid #f1f5f9;font-variant-numeric:tabular-nums;white-space:nowrap}
+  tr:hover td{background:#fafcff}
+  .num{font-variant-numeric:tabular-nums}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  .muted{color:var(--muted)}
+
+  .badge{display:inline-block;border-radius:999px;padding:2px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+  .b-ok{background:var(--ok-bg);color:var(--ok);border:1px solid var(--ok-bd)}
+  .b-debt{background:var(--amber-bg);color:var(--amber);border:1px solid var(--amber-bd)}
+  .b-over{background:var(--red-bg);color:var(--red);border:1px solid var(--red-bd)}
+  .b-gray{background:var(--gray-bg);color:var(--muted);border:1px solid var(--border)}
+  .b-blue{background:var(--primary-soft);color:#1d4ed8;border:1px solid #bfdbfe}
+
+  .rowlink{color:var(--primary);cursor:pointer;text-decoration:none;font-weight:600}
+  .faded{opacity:.55;background:repeating-linear-gradient(45deg,transparent,transparent 6px,#f8fafc 6px,#f8fafc 7px)}
+  .icon-btn{border:1px solid var(--border);background:#fff;border-radius:6px;padding:3px 8px;font-size:12px;cursor:pointer;color:var(--muted)}
+  .icon-btn.warn{color:var(--red);border-color:var(--red-bd);background:var(--red-bg)}
+
+  /* ledger */
+  .ledger-note{background:var(--primary-soft);border:1px solid #bfdbfe;color:#1d4ed8;border-radius:8px;
+               padding:8px 12px;margin:12px;font-size:12.5px}
+  td.dr{color:var(--amber);font-weight:700}
+  td.cr{color:var(--ok);font-weight:700}
+  .tfoot td{background:var(--gray-bg);font-weight:800;border-top:2px solid var(--border)}
+
+  /* cheques summary */
+  .sums{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;padding:12px}
+  .sum{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--gray-bg)}
+  .sum .lbl{font-size:12px;color:var(--muted)} .sum .val{font-size:17px;font-weight:800;margin-top:3px}
+  .sum.warn{background:var(--red-bg);border-color:var(--red-bd)} .sum.warn .val{color:var(--red)}
+
+  .chart{display:inline-flex;gap:3px;align-items:flex-end;height:56px}
+  .chart i{width:14px;background:var(--amber);border-radius:3px 3px 0 0;opacity:.85;display:inline-block}
+
+  .foot{margin-top:14px;color:var(--muted);font-size:12.5px;text-align:center}
+  .foot kbd{background:#fff;border:1px solid var(--border);border-radius:4px;padding:1px 6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="banner">
+    <span class="tag">پیش‌نمایش</span>
+    <span>این فقط <b>ماکِت ظاهری</b> است — هیچ تغییری در برنامه اعمال نشده. هدف: تأیید شکل «پروفایل مشتری واحد» (فاز ۳) — همان قاعدهٔ پارسیان: کلیک روی مشتری از هرجا، همین صفحه باز می‌شود.</span>
+  </div>
+
+  <!-- ================= identity ================= -->
+  <div class="head">
+    <div class="idcard">
+      <h1>علی رضایی
+        <span class="badge b-blue">عمده‌فروش</span>
+        <span class="badge b-gray">سقف اعتبار: ۲۰٬۰۰۰٬۰۰۰</span>
+      </h1>
+      <div class="sub">۰۹۱۲۳۴۵۶۷۸۹ · ویرایش مشتری · آخرین خرید: ۱۴۰۵/۰۶/۰۸</div>
+      <div class="sub muted" style="font-size:12px">اصفهان، خیابان سجاد، پلاک ۱۲ · کد ملی ۰۰۴۵۵۸۷۶۲۱ · کد اقتصادی ۴۱۱۳۲۲۶۵۴ · کد پستی ۸۱۶۳۴ · معرف: ویزیتور محمدی</div>
+      <div class="chips">
+        <span class="chip">۱۴ فاکتور امسال</span>
+        <span class="chip">میانگین خرید ماهانه: ۸٬۲۰۰٬۰۰۰</span>
+        <span class="chip">۱ چک سررسید نزدیک</span>
+        <span class="chip" style="background:var(--amber-bg);border-color:var(--amber-bd);color:var(--amber)">۱ فاکتور معوق</span>
+        <span class="chip blue">قیمت پیش‌فرض: قیمت ۲ (عمده)</span>
+        <span class="chip">معاف از مالیات</span>
+      </div>
+      <div class="chips" style="margin-top:6px">
+        <span class="chip" style="border-style:dashed">⚙ سقف اعتبار: ۲۰م</span>
+        <span class="chip" style="border-style:dashed">⚙ سقف چک نزد ما: ۳۰م</span>
+        <span class="chip" style="border-style:dashed">⚙ پورسانت پیش‌فرض: ۲٪</span>
+        <span class="chip" style="border-style:dashed;border-color:#bfdbfe;color:#1d4ed8">ویرایش تنظیمات مشتری (Ctrl+C)</span>
+      </div>
+    </div>
+    <div class="bal deb">
+      <span class="lbl">ماندهٔ حساب (بدهکار)</span>
+      <span class="val">۱۲٬۴۵۰٬۰۰۰</span>
+      <span class="lbl">از سقف اعتبار: ۶۲٪</span>
+    </div>
+    <div class="actions">
+      <button class="btn primary">فاکتور جدید <kbd>F2</kbd></button>
+      <button class="btn">دریافت <kbd>F6</kbd></button>
+      <button class="btn">پرداخت <kbd>F7</kbd></button>
+      <button class="btn">پیامک مانده</button>
+    </div>
+  </div>
+
+  <!-- ================= tabs ================= -->
+  <div class="tabs">
+    <div class="tab active">فاکتورها <span class="n">۲۳</span></div>
+    <div class="tab">دفتر (کارت حساب)</div>
+    <div class="tab">چک‌ها <span class="n">۴</span></div>
+  </div>
+
+  <!-- ================= TAB 1: invoices ================= -->
+  <div class="panel">
+    <div class="toolbar">
+      <div class="search">🔍 جستجو در فاکتورها… (شماره، کالا، مبلغ)</div>
+      <span class="hint"><kbd>Enter</kbd> نمایش فاکتور · <kbd>Ctrl+Enter</kbd> ویرایش · <kbd>Del</kbd> برگشت پرداخت</span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>شماره</th><th>تاریخ</th><th>اقلام</th><th>مبلغ کل</th><th>پرداخت‌شده</th><th>مانده</th><th>وضعیت</th><th></th>
+      </tr></thead>
+      <tbody>
+        <tr>
+          <td><a class="rowlink">#۱۰۳۲</a></td><td>۱۴۰۵/۰۶/۰۸</td><td>۵ قلم</td>
+          <td class="num">۴٬۸۵۰٬۰۰۰</td><td class="num">۴٬۸۵۰٬۰۰۰</td><td class="num">۰</td>
+          <td><span class="badge b-ok">پرداخت کامل</span></td>
+          <td><button class="icon-btn">چاپ</button></td>
+        </tr>
+        <tr>
+          <td><a class="rowlink">#۱۰۲۹</a></td><td>۱۴۰۵/۰۶/۰۳</td><td>۳ قلم · <span class="muted">۱ برگشتی</span></td>
+          <td class="num">۲٬۱۰۰٬۰۰۰</td><td class="num">۱٬۱۰۰٬۰۰۰</td><td class="num" style="color:var(--amber);font-weight:700">۱٬۰۰۰٬۰۰۰</td>
+          <td><span class="badge b-debt">نسیه</span></td>
+          <td><button class="icon-btn">چاپ</button> <button class="icon-btn warn">برگشت پرداخت</button></td>
+        </tr>
+        <tr>
+          <td><a class="rowlink">#۱۰۱۷</a></td><td>۱۴۰۵/۰۵/۲۱</td><td>۷ قلم</td>
+          <td class="num">۹٬۳۰۰٬۰۰۰</td><td class="num">۰</td><td class="num" style="color:var(--red);font-weight:700">۹٬۳۰۰٬۰۰۰</td>
+          <td><span class="badge b-over">معوق · سررسید ۱۴۰۵/۰۶/۰۵</span></td>
+          <td><button class="icon-btn">چاپ</button> <button class="icon-btn warn">برگشت پرداخت</button></td>
+        </tr>
+        <tr class="faded">
+          <td><a class="rowlink">#۹۸۸</a></td><td>۱۴۰۵/۰۴/۱۹</td><td>۴ قلم · <span class="badge b-gray">اصلاح‌شده</span></td>
+          <td class="num">۱٬۷۵۰٬۰۰۰</td><td class="num">۱٬۷۵۰٬۰۰۰</td><td class="num">۰</td>
+          <td><span class="badge b-ok">پرداخت کامل</span></td>
+          <td><button class="icon-btn">چاپ</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ================= TAB 2: ledger ================= -->
+  <div class="panel" style="display:none">
+    <div class="toolbar">
+      <div class="search">🔍 جستجو در دفتر… (شرح، مبلغ، شماره سند)</div>
+      <span class="hint">حفاری پارسیانی: <kbd>Enter</kbd> روی هر ردیف ← خودِ سند/فاکتور</span>
+    </div>
+    <div class="ledger-note" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+      <span>ماندهٔ ماهانهٔ امسال (نمودار پارسیانی Ctrl+N):</span>
+      <span class="chart">
+        <i style="height:34px" title="فروردین: ۴م بدهکار"></i><i style="height:22px"></i><i style="height:41px;background:var(--ok)" title="اردیبهشت: بستانکار"></i><i style="height:28px"></i><i style="height:47px"></i><i style="height:36px"></i><i style="height:55px;background:var(--amber)" title="مرداد: اوج بدهی"></i><i style="height:44px"></i>
+      </span>
+      <span class="muted" style="font-size:12px">هر ستون = ماندهٔ پایان ماه — سبز بستانکار، کهربایی بدهکار</span>
+    </div>
+    <div class="ledger-note">دفتر واحد مشتری — رسید، فاکتور، برگشت پرداخت و پرداخت همگی این‌جا یک تاریخچهٔ واحد می‌سازند (نه چند گزارش جدا).</div>
+    <table>
+      <thead><tr><th>تاریخ</th><th>شرح</th><th>مرجع</th><th>بدهکار</th><th>بستانکار</th><th>مانده</th></tr></thead>
+      <tbody>
+        <tr><td>۱۴۰۵/۰۶/۰۸</td><td>فروش نقدی</td><td class="mono"><a class="rowlink">فاکتور #۱۰۳۲</a></td>
+            <td class="dr num">۴٬۸۵۰٬۰۰۰</td><td class="cr num">—</td><td class="num">۱۲٬۴۵۰٬۰۰۰</td></tr>
+        <tr><td>۱۴۰۵/۰۶/۰۷</td><td>دریافت چک ش ۴۵۲۱۱ (سررسید ۱۴۰۵/۰۶/۲۰)</td><td class="mono">رسید R-۲۳۱</td>
+            <td class="dr num">—</td><td class="cr num">۵٬۰۰۰٬۰۰۰</td><td class="num">۷٬۶۰۰٬۰۰۰</td></tr>
+        <tr><td>۱۴۰۵/۰۶/۰۳</td><td>فروش نسیه</td><td class="mono"><a class="rowlink">فاکتور #۱۰۲۹</a></td>
+            <td class="dr num">۲٬۱۰۰٬۰۰۰</td><td class="cr num">—</td><td class="num">۱۲٬۶۰۰٬۰۰۰</td></tr>
+        <tr><td>۱۴۰۵/۰۶/۰۳</td><td>برگشت پرداخت — کارت بانک رد کرد</td><td class="mono">سند PR-۱۹</td>
+            <td class="dr num">۷۵۰٬۰۰۰</td><td class="cr num">—</td><td class="num">۱۰٬۵۰۰٬۰۰۰</td></tr>
+        <tr><td>۱۴۰۵/۰۵/۲۸</td><td>دریافت نقدی</td><td class="mono">رسید R-۲۰۹</td>
+            <td class="dr num">—</td><td class="cr num">۳٬۰۰۰٬۰۰۰</td><td class="num">۹٬۷۵۰٬۰۰۰</td></tr>
+      </tbody>
+      <tfoot><tr class="tfoot"><td colspan="3">جمع گردش دوره</td>
+        <td class="dr num">۷٬۷۰۰٬۰۰۰</td><td class="cr num">۸٬۰۰۰٬۰۰۰</td><td class="num">۱۲٬۴۵۰٬۰۰۰ بدهکار</td></tr></tfoot>
+    </table>
+  </div>
+
+  <!-- ================= TAB 3: cheques ================= -->
+  <div class="panel" style="display:none">
+    <div class="sums">
+      <div class="sum"><div class="lbl">نزد ما</div><div class="val">۱ چک · ۵٬۰۰۰٬۰۰۰</div></div>
+      <div class="sum warn"><div class="lbl">برگشتی</div><div class="val">۱ چک · ۲٬۵۰۰٬۰۰۰</div></div>
+      <div class="sum"><div class="lbl">وصول‌شده (این ماه)</div><div class="val">۸٬۰۰۰٬۰۰۰</div></div>
+      <div class="sum"><div class="lbl">نزدیک‌ترین سررسید</div><div class="val" style="color:var(--amber)">۱۴۰۵/۰۶/۲۰</div></div>
+    </div>
+    <table>
+      <thead><tr><th>شماره چک</th><th>بانک</th><th>مبلغ</th><th>سررسید</th><th>وضعیت</th><th></th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="mono">۴۵۲۱۱</td><td>بانک ملت</td><td class="num">۵٬۰۰۰٬۰۰۰</td><td>۱۴۰۵/۰۶/۲۰</td>
+          <td><span class="badge b-gray">نزد ما</span></td>
+          <td><button class="icon-btn">سرحساب</button></td>
+        </tr>
+        <tr>
+          <td class="mono">۴۴۸۰۲</td><td>بانک صادرات</td><td class="num">۲٬۵۰۰٬۰۰۰</td><td>۱۴۰۵/۰۵/۳۰</td>
+          <td><span class="badge b-over">برگشتی</span></td>
+          <td><button class="icon-btn warn">دریافت نقدی برای تسویه</button></td>
+        </tr>
+        <tr class="muted">
+          <td class="mono">۴۴۱۰۷</td><td>بانک ملی</td><td class="num">۸٬۰۰۰٬۰۰۰</td><td>۱۴۰۵/۰۵/۱۵</td>
+          <td><span class="badge b-ok">وصول‌شده</span></td>
+          <td><button class="icon-btn">گردش چک</button></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="foot">
+    قاعدهٔ ناوبری: این صفحه از <kbd>POS</kbd>، <kbd>F3</kbd>، <kbd>سرچ</kbd> و <kbd>لیست مشتریان</kbd> همه‌جا با همین شکل باز می‌شود —
+    پنل «فاکتورهای مشتری» در POS هم فقط تب «فاکتورها»ی همین صفحه خواهد بود.
+  </div>
+</div>
+
+<script>
+  // فقط برای پیش‌نمایش — سوییچ تب‌ها
+  const tabs=[...document.querySelectorAll('.tab')];
+  const panels=[...document.querySelectorAll('.panel')];
+  tabs.forEach((t,i)=>t.onclick=()=>{tabs.forEach(x=>x.classList.remove('active'));t.classList.add('active');
+    panels.forEach((p,j)=>p.style.display=i===j?'':'none');});
+</script>
+</body>
+</html>

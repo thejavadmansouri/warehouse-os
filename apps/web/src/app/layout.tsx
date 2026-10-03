@@ -1,17 +1,35 @@
-import type { Metadata } from "next";
-import { Vazirmatn } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { TooltipProvider } from "@/components/ui/tooltip";
-
-const vazirmatn = Vazirmatn({
-  variable: "--font-vazirmatn",
-  subsets: ["arabic", "latin"],
-  display: "swap",
-});
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
+import { ThemeProvider } from "@/components/theme-provider";
+import { QueryProvider } from "@/components/query-provider";
+import { ServiceWorkerRegister } from "@/components/sw-register";
+import { UiScaleProvider, uiScaleBootScript } from "@/components/ui-scale-provider";
 
 export const metadata: Metadata = {
-  title: "سیستم انبارداری هوشمند",
-  description: "پنل مدیریت انبار لوازم یدکی خودرو",
+  title: "کاردو — پنل مدیریت فروشگاه",
+  description: "سامانه فروش، حساب مشتریان و انبارداری کاردو",
+  manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/logo.png" },
+      { url: "/icons/worker-icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: "/icons/worker-icon-192.png",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "کاردو",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f1729",
+  width: "device-width",
+  initialScale: 1,
+  // کاربر می‌تواند بزرگ‌نمایی کند (WCAG 1.4.4) — حذفِ maximumScale و userScalable
 };
 
 export default function RootLayout({
@@ -20,13 +38,30 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="fa"
-      dir="rtl"
-      className={`${vazirmatn.variable} h-full antialiased`}
-    >
-      <body className="min-h-full flex flex-col font-sans bg-background text-foreground">
-        <TooltipProvider>{children}</TooltipProvider>
+    <html lang="fa" dir="rtl" suppressHydrationWarning>
+      <head>
+        {/* پیش از رنگ‌آمیزی اجرا می‌شود — توضیحش کنار خودِ اسکریپت است. */}
+        <script dangerouslySetInnerHTML={{ __html: uiScaleBootScript }} />
+      </head>
+      <body
+        className="font-sans antialiased bg-background text-foreground"
+      >
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <QueryProvider>
+            {children}
+            <Toaster />
+            {/* toast های سونر (POS، فاکتورها، مشتری‌ها و…) — بدون mount شدنِ
+                این Toaster، همه‌ی پیام‌های موفقیت/خطای آن‌ها بی‌صدا ناپدید می‌شدند. */}
+            <SonnerToaster position="bottom-left" richColors closeButton />
+            <ServiceWorkerRegister />
+            <UiScaleProvider />
+          </QueryProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

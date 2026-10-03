@@ -1,0 +1,717 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Banknote, CreditCard, Check, Clock, UserRound } from "lucide-react";
+
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/money-input";
+import { toast } from "sonner";
+
+import { createCustomer, creditCheck, searchCustomers } from "@/lib/api";
+import { ApiException } from "@/lib/api-error-messages";
+import { amount, faToEn, money, toFa, rial } from "@/lib/format";
+import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
+
+import { unitLabel } from "@/lib/currency";
+/**
+ * تسویه‌ی کامل با کیبورد — «اسکن → اینتر → مشتری → کارت → ثبت».
+ *
+ * فروشنده پشت پیشخوان دستش روی کیبورد و اسکنر است، نه ماوس. برای همین کل این
+ * جریان با Enter جلو می‌رود و با Esc عقب. دو گام است، نه بیشتر:
+ *
+ *   ۱) مشتری  — نام، فامیل و شماره را پر کن؛ Enter یعنی «ادامه» (مشتریِ موجود
+ *               انتخاب می‌شود یا تازه ثبت می‌شود؛ همه خالی = نقدی گذری).
+ *   ۲) پرداخت — کلید ۱..۳ روش را عوض می‌کند، Enter فاکتور را ثبت می‌کند.
+ *
+ * پرداخت ترکیبی و چک عمداً اینجا نیست: آن حالت نادر است و فرم مفصل خودش را
+ * دارد (F7). این مسیر برای همان ۹۰٪ فروشی است که باید در چند ثانیه تمام شود.
+ */
+
+/**
+ * کارت اول است و پیش‌فرض — بیشتر فروش‌ها با کارت‌خوان تسویه می‌شود، و پیش‌فرضِ
+ * نقد یعنی فروشنده باید هر بار یک کلید اضافه بزند.
+ */
+const FAST_METHODS: { method: PaymentMethod; label: string; icon: typeof Banknote }[] = [
+  { method: "CARD", label: "کارت", icon: CreditCard },
+  { method: "CASH", label: "نقد", icon: Banknote },
+  { method: "CREDIT", label: "حساب‌باز", icon: Clock },
+];
+
+/**
+ * مهلت‌های پرداخت.
+ *
+ * فروشنده عدد تایپ نمی‌کند، از بین چند گزینه‌ی رایج یکی را برمی‌دارد — و در
+ * حالت عادی حتی همین را هم نمی‌کند، چون پیش‌فرض از خودِ مشتری می‌آید.
+ * export است تا فرم پرداخت کامل (F7) هم همین گزینه‌ها را داشته باشد و دو مسیر
+ * از هم جدا نیفتند.
+ */
+export const CREDIT_TERMS = [0, 7, 15, 30, 45, 60, 90];
+
+type Step = "customer" | "payment";
+
+/*
+ * روشِ پیش‌فرضِ گام پرداخت — روشی که آخرین فروش با آن تمام شد.
+ *
+ * پیش‌فرضِ ثابتِ «کارت» یعنی فروشنده‌ای که بیشترش را نقد می‌فروشد هر بار یک
+ * کلید اضافه بزند، و برعکس. روشی که یک فروش را بست، دفعه‌ی بعد پیش‌فرض می‌شود —
+ * پس هر دو فروشنده به‌خودی‌خود به حالتِ یک‌کلیدی می‌رسند: Enter با همان روشِ
+ * پرتکرارِ خودش فاکتور را کامل می‌بندد.
+ */
+const FAST_METHOD_KEY = "warehouse-os.pos-fast-method";
+const FAST_METHODS_SET = new Set<PaymentMethod>(["CARD", "CASH", "CREDIT"]);
+
+function readFastMethod(): PaymentMethod {
+  try {
+    const raw =
+      typeof window !== "undefined" ? window.localStorage.getItem(FAST_METHOD_KEY) : null;
+    return raw && FAST_METHODS_SET.has(raw as PaymentMethod)
+      ? (raw as PaymentMethod)
+      : "CARD";
+  } catch {
+    return "CARD";
+  }
+}
+
+function writeFastMethod(m: PaymentMethod): void {
+  try {
+    if (typeof window !== "undefined") window.localStorage.setItem(FAST_METHOD_KEY, m);
+  } catch {
+    // حالت خصوصی مرورگر — پیش‌فرضِ ثابت می‌ماند؛ هیچ چیز نمی‌شکند.
+  }
+}
+
+export function CheckoutFlow({
+  open,
+  total,
+  lineCount,
+  customer,
+  pending,
+  onCustomerChange,
+  onSubmit,
+  onOpenFullPayment,
+  onClose,
+  requireCustomer = false,
+}: {
+  open: boolean;
+  total: number;
+  lineCount: number;
+  customer: Customer | null;
+  pending: boolean;
+  onCustomerChange: (c: Customer | null) => void;
+  /*
+   * فقط سطرهای پرداخت. سررسید از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ
+   * مشتری می‌نشیند و سررسیدش در تسویه ساخته می‌شود. سررسیدِ دستی جای خودش را
+   * دارد — فرمِ پرداختِ ترکیبی (F7)، آنجا که بخشی از پول واقعاً گرفته می‌شود.
+   */
+  onSubmit: (payments: PaymentInput[]) => void;
+  /** فرار به فرم پرداخت کامل (ترکیبی/چک). */
+  onOpenFullPayment: () => void;
+  onClose: () => void;
+  /** بعض مسیرها مثل تبدیل برگه‌ی سفید، مشتری را اجباری می‌کنند. */
+  requireCustomer?: boolean;
+}) {
+  const [step, setStep] = useState<Step>("customer");
+  /* سه فیلدِ مشتری — همان شکلِ فرمِ «مشتری جدید» در صفحه‌ی مشتریان. */
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [method, setMethod] = useState<PaymentMethod>("CARD");
+  const [received, setReceived] = useState(0);
+
+  const searchRef = useRef<HTMLInputElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
+  /**
+   * فوکوسِ پشتیبان.
+   *
+   * وقتی روش پرداخت «کارت» یا «نسیه» است خانه‌ی مبلغ اصلاً رندر نمی‌شود. اگر
+   * فوکوس روی body بیفتد، رویداد کیبورد به onKeyDownِ این دیالوگ نمی‌رسد و
+   * Enter کار نمی‌کند. پس خودِ محتوا فوکوس‌پذیر است و پناهگاه فوکوس می‌شود.
+   */
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * هر بار که باز می‌شود از گام اول و با حالت پیش‌فرضِ رایج شروع کن — تطبیقِ
+   * state در رندر (به ازایِ open/total) به‌جای effect. عمداً به `customer`
+   * وابسته نیست: اگر بود، انتخاب مشتری در گام اول بلافاصله دوباره رندر را
+   * می‌ریخت و فرم را از نو شروع می‌کرد.
+   *
+   * مشتری از قبل روی فاکتور انتخاب شده ⇒ گام مشتری اصلاً نشان داده نمی‌شود؛
+   * پرسیدن دوباره‌ی چیزی که کاربر همین الان جواب داده، یک Enter اضافه است.
+   */
+  const [prevOpen, setPrevOpen] = useState(open);
+  const [prevTotal, setPrevTotal] = useState(total);
+  if (open !== prevOpen || total !== prevTotal) {
+    setPrevOpen(open);
+    setPrevTotal(total);
+    if (open) {
+      setStep(customer ? "payment" : "customer");
+      setFirstName("");
+      setLastName("");
+      setPhone("");
+      setDebounced("");
+      setHighlight(0);
+      setMethod(readFastMethod());
+      setReceived(total);
+    }
+  }
+
+  /**
+   * کوئریِ جست‌وجو از هر سه فیلد ساخته می‌شود — جست‌وجوی سمت سرور روی نام،
+   * فامیل و شماره کار می‌کند، پس با هم فرستاده می‌شوند.
+   */
+  const query = useMemo(
+    () =>
+      [firstName, lastName, phone]
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .join(" "),
+    [firstName, lastName, phone]
+  );
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query), 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const results = useQuery({
+    queryKey: ["checkout-customers", debounced],
+    queryFn: () => searchCustomers(debounced),
+    enabled: open && step === "customer" && debounced.trim().length > 0,
+  });
+
+  const list = useMemo(() => results.data ?? [], [results.data]);
+
+  /* با عوض‌شدنِ عبارت، هایلایت به اول برمی‌گردد — تطبیقِ state در رندر. */
+  const [prevDebounced, setPrevDebounced] = useState(debounced);
+  if (debounced !== prevDebounced) {
+    setPrevDebounced(debounced);
+    setHighlight(0);
+  }
+
+  // فوکوس همیشه جایی باشد که تایپ بعدی باید برود.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => {
+      if (step === "customer") searchRef.current?.focus();
+      else (amountRef.current ?? contentRef.current)?.focus();
+    }, 30);
+    return () => clearTimeout(t);
+  }, [open, step, method]);
+
+  /** حساب‌باز بدون مشتری معنا ندارد — سرور هم ردش می‌کند. */
+  const creditNeedsCustomer = method === "CREDIT" && !customer;
+  const change = method === "CASH" ? Math.max(0, received - total) : 0;
+  const shortPaid = method !== "CREDIT" && received < total;
+  const canSubmit =
+    !pending &&
+    !creditNeedsCustomer &&
+    !shortPaid &&
+    lineCount > 0 &&
+    (!requireCustomer || !!customer);
+
+  /*
+   * هشدار اعتبار — فقط وقتی واقعاً حساب‌باز انتخاب شده.
+   *
+   * عمداً روی هر تغییرِ مبلغ صدا زده نمی‌شود: مبلغ در این گام ثابت است و
+   * فروشنده فقط روش پرداخت را عوض می‌کند.
+   */
+  const credit = useQuery({
+    queryKey: ["credit-check", customer?.id, total],
+    queryFn: () => creditCheck(customer!.id, total),
+    enabled: open && step === "payment" && method === "CREDIT" && !!customer?.id,
+  });
+
+  /** شماره‌ی تلفنِ نرمال‌شده (۰۹۱۲…). ارقام فارسی هم پذیرفته می‌شود. */
+  const normalizedPhone = useMemo(() => {
+    const digits = faToEn(phone)
+      .replace(/\D/g, "")
+      .replace(/^98/, "0")
+      .replace(/^9/, "09");
+    return digits;
+  }, [phone]);
+
+  /** نامِ تایپ‌شده برای پیش‌نمایشِ مشتریِ تازه. */
+  const typedName = [firstName, lastName]
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(" ");
+
+  /** چیزی تایپ شده که به هیچ مشتریِ موجودی نمی‌خورد — چه اسم، چه فامیل، چه شماره. */
+  const hasInput = debounced.trim().length > 0;
+  const isNewCustomer = hasInput && !results.isFetching && list.length === 0;
+
+  const quickCreate = useMutation({
+    mutationFn: () => {
+      const first = firstName.trim();
+      const last = lastName.trim();
+
+      // نام الزامی است (سمت سرور). اگر فقط فامیل یا فقط شماره تایپ شده، همان
+      // را به‌عنوان نام می‌بریم تا Enter هر لحظه کار کند — سیاستِ قبلی که
+      // «شماره‌ی تنها» هم مشتری می‌ساخت حفظ می‌شود.
+      const fallback =
+        first || last || (normalizedPhone ? toFa(normalizedPhone) : "");
+
+      return createCustomer({
+        firstName: fallback,
+        ...(first && last ? { lastName: last } : {}),
+        ...(normalizedPhone
+          ? { phones: [{ phone: normalizedPhone, isPrimary: true }] }
+          : {}),
+      });
+    },
+    onSuccess: (c) => {
+      onCustomerChange(c);
+      setStep("payment");
+    },
+    onError: (e: unknown) =>
+      toast.error(
+        e instanceof ApiException ? e.message : "ثبت مشتری ناموفق بود"
+      ),
+  });
+
+  const buildPayments = (): PaymentInput[] => {
+    if (method === "CREDIT") return [{ method: "CREDIT", amount: total }];
+    // نقدِ بیشتر از مبلغ = پول خرد؛ چیزی که ثبت می‌شود خودِ مبلغ فاکتور است.
+    return [{ method, amount: total }];
+  };
+
+  /*
+   * سررسید دیگر از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ مشتری می‌نشیند و
+   * سررسیدش در تسویه ساخته می‌شود.
+   */
+  const submit = () => {
+    // روشی که یک فروش واقعاً را بست، دفعه‌ی بعد پیش‌فرض می‌شود.
+    writeFastMethod(method);
+    onSubmit(buildPayments());
+  };
+
+  /**
+   * Space — ثبتِ فوریِ «نقدِ دقیقِ کل»، مستقل از روشِ انتخابی.
+   *
+   * فروشِ گذری تقریباً همیشه نقد است؛ حتی برای فروشنده‌ای که روزش کارتی است،
+   * یک کلید باید بتواند نقدِ دقیق را ببندد. مبلغِ ثبت‌شده خودِ مبلغِ فاکتور است
+   * (هرچه در خانه‌ی «دریافتی» باشد فقط برای حسابِ پولِ خرد است) — پس این کلید
+   * به عددِ دریافتی هم کاری ندارد.
+   */
+  const submitCashExact = () => {
+    writeFastMethod("CASH");
+    onSubmit([{ method: "CASH", amount: total }]);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    // Escape اینجا نیست: Radix آن را روی document می‌گیرد و preventDefaultِ
+    // رویدادِ ری‌اکت جلویش را نمی‌گیرد. مدیریتش در onEscapeKeyDown است.
+    if (step === "customer") {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setHighlight((h) => Math.min(h + 1, Math.max(0, list.length - 1)));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setHighlight((h) => Math.max(0, h - 1));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (quickCreate.isPending) return;
+
+        // نتیجه‌ای هست → همان را بردار.
+        if (list.length > 0 && debounced.trim()) {
+          onCustomerChange(list[highlight] ?? null);
+          setStep("payment");
+          return;
+        }
+
+        // چیزی تایپ شده و به کسی نخورد → همان را به‌عنوان مشتری تازه ثبت کن.
+        // خودِ mutation بعد از موفقیت گام را جلو می‌برد.
+        if (isNewCustomer) {
+          quickCreate.mutate();
+          return;
+        }
+
+        // فیلد خالی → واقعاً فروش گذری است.
+        setStep("payment");
+      }
+      return;
+    }
+
+    // گام پرداخت
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (canSubmit) submit();
+      return;
+    }
+
+    /*
+     * Space = نقدِ دقیق، همه‌جا جز وقتی که Space معنیِ دیگری دارد:
+     *   • داخلِ خانه‌ی مبلغ → کاراکتر است، دست نمی‌زنیم.
+     *   • روی خودِ دکمه‌ی ثبت → خودِ دکمه Space را فعال می‌کند؛ اگر ما هم
+     *     submit کنیم دو مسیر می‌شوند.
+     */
+    if (e.key === " " || e.code === "Space") {
+      const t = e.target as HTMLElement | null;
+      const typing = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA");
+      const onButton = t?.tagName === "BUTTON";
+      if (!typing && !onButton) {
+        e.preventDefault();
+        // نقدِ دقیق به «دریافتی» کاری ندارد — shortPaid اینجا معنا ندارد.
+        if (!pending && lineCount > 0) submitCashExact();
+        return;
+      }
+    }
+
+    // جهت‌دارها همیشه روش پرداخت را عوض می‌کنند — با تایپِ مبلغ تداخل ندارند.
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+      e.preventDefault();
+      const i = FAST_METHODS.findIndex((m) => m.method === method);
+      // چیدمان راست‌به‌چپ است: فلشِ چپ یعنی جلو.
+      const next = e.key === "ArrowLeft" ? i + 1 : i - 1;
+      const picked = FAST_METHODS[(next + FAST_METHODS.length) % FAST_METHODS.length];
+      if (picked) setMethod(picked.method);
+      return;
+    }
+
+    // ۱..۳ فقط وقتی فوکوس در خانه‌ی مبلغ نیست، وگرنه رقمِ مبلغ را می‌خورد.
+    if (e.key >= "1" && e.key <= "3" && document.activeElement !== amountRef.current) {
+      e.preventDefault();
+      const picked = FAST_METHODS[Number(e.key) - 1];
+      if (picked) setMethod(picked.method);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent
+        ref={contentRef}
+        tabIndex={-1}
+        className="max-w-2xl gap-0 p-0"
+        onKeyDown={onKeyDown}
+        /* Radix پیش‌فرض روی اولین عنصر فوکوس می‌گذارد؛ خودمان مدیریتش می‌کنیم. */
+        onOpenAutoFocus={(e) => e.preventDefault()}
+        /* Esc در گام پرداخت یعنی «یک گام عقب»، نه «بستن کل تسویه». */
+        onEscapeKeyDown={(e) => {
+          if (step === "payment") {
+            e.preventDefault();
+            setStep("customer");
+          }
+        }}
+      >
+        {/* سربرگ: مبلغ بزرگ‌ترین چیز روی صفحه است. */}
+        <div className="flex items-baseline justify-between border-b bg-muted/40 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <StepDot active={step === "customer"} done={step === "payment"} label="مشتری" n={1} />
+            <div className="h-px w-6 bg-border" />
+            <StepDot active={step === "payment"} done={false} label="پرداخت" n={2} />
+          </div>
+          <div className="text-end">
+            <div className="text-3xl font-bold tabular-nums">{money(total)}</div>
+            <div className="text-xs text-muted-foreground">
+              {unitLabel()} · {toFa(lineCount)} قلم
+            </div>
+          </div>
+        </div>
+
+        {step === "customer" ? (
+          <div className="flex flex-col gap-3 p-5">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <UserRound className="size-4" /> مشتری
+            </div>
+
+            {/* سه فیلدِ مشتری — همان چیدمانِ فرمِ «مشتری جدید» در صفحه‌ی مشتریان. */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="mb-1 block text-sm font-medium">نام</label>
+                <Input
+                  ref={searchRef}
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="الزامی"
+                  className="h-11 text-base"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">نام خانوادگی</label>
+                <Input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="h-11 text-base"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="mb-1 block text-sm font-medium">
+                شماره تماس <span className="text-muted-foreground">(اختیاری)</span>
+              </label>
+              <Input
+                dir="ltr"
+                className="h-11 text-right text-base"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="۰۹۱۲…"
+              />
+            </div>
+
+            <div className="min-h-32">
+              {/* ناشناس: Enter همان مشخصاتِ تایپ‌شده را ثبت می‌کند، نه گذری. */}
+              {isNewCustomer && (
+                <div className="rounded-lg border border-primary/40 bg-primary/10 p-3 text-center">
+                  <p className="text-sm font-semibold text-primary">
+                    مشتری تازه:{" "}
+                    {typedName || (normalizedPhone ? toFa(normalizedPhone) : "")}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {quickCreate.isPending
+                      ? "در حال ثبت…"
+                      : "Enter بزنید تا ثبت شود و فاکتور به نامش بخورد"}
+                  </p>
+                </div>
+              )}
+
+              {!hasInput && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  برای فروش نقدی، فقط Enter بزنید — یا مشخصات مشتری (نام، فامیل،
+                  شماره) را بنویسید
+                </p>
+              )}
+
+              <div className="flex flex-col gap-1">
+                {list.map((c, i) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => { onCustomerChange(c); setStep("payment"); }}
+                    onMouseEnter={() => setHighlight(i)}
+                    className={`flex items-center justify-between rounded-lg border p-2.5 text-right transition-colors ${
+                      i === highlight ? "border-primary bg-primary/5" : "border-transparent"
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">{c.fullName}</span>
+                      <span className="block text-xs text-muted-foreground" dir="ltr">
+                        {c.phones?.[0]?.phone ? toFa(c.phones[0].phone) : "بدون شماره"}
+                      </span>
+                    </span>
+                    {!!c.summary?.totalDue && (
+                      <span className="shrink-0 text-xs tabular-nums text-amber-600">
+                        بدهی {rial(c.summary.totalDue)}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <FooterHint
+              hints={[
+                [
+                  "Enter",
+                  hasInput
+                    ? list.length
+                      ? "انتخاب و ادامه"
+                      : "ثبت مشتری و ادامه"
+                    : "بدون مشتری، ادامه",
+                ],
+                ["↑↓", "جابه‌جایی در نتایج"],
+                ["Esc", "بازگشت به سبد"],
+              ]}
+            />
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 p-5">
+            {customer ? (
+              <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2 text-sm">
+                <span className="font-medium">{customer.fullName}</span>
+                {!!customer.summary?.totalDue && (
+                  <span className="text-xs tabular-nums text-amber-600">
+                    بدهی قبلی {rial(customer.summary.totalDue)}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                فروش نقدیِ گذری — بدون مشتری
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2">
+              {FAST_METHODS.map((m, i) => {
+                const Icon = m.icon;
+                const active = method === m.method;
+                return (
+                  <button
+                    key={m.method}
+                    type="button"
+                    onClick={() => setMethod(m.method)}
+                    className={`flex flex-col items-center gap-1 rounded-lg border p-3 transition-colors ${
+                      active
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hover:border-primary hover:bg-primary/5"
+                    }`}
+                  >
+                    <Icon className="size-5" />
+                    <span className="text-sm font-medium">{m.label}</span>
+                    <span
+                      className={`text-[11px] ${
+                        active ? "text-primary-foreground/70" : "text-muted-foreground"
+                      }`}
+                    >
+                      کلید {toFa(i + 1)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {method === "CASH" && (
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-muted-foreground">مبلغ دریافتی</span>
+                <div className="flex items-center gap-3">
+                  <MoneyInput
+                    ref={amountRef}
+                    className="h-11 w-40 text-right text-lg tabular-nums"
+                    value={received}
+                    onChange={setReceived}
+                  />
+                  <div className="w-32 text-end">
+                    <div className="text-xs text-muted-foreground">باقی‌مانده مشتری</div>
+                    <div className="text-lg font-bold tabular-nums">{money(change)}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/*
+              پنل حساب‌باز.
+
+              چیپ‌های «مهلت پرداخت» و سررسیدِ دستی برداشته شدند: این فروش روی تبِ
+              مشتری می‌نشیند و فاکتورش تا تسویه سررسید ندارد — سررسید در لحظه‌ی
+              تسویه از مهلتِ خودِ مشتری ساخته می‌شود. کنترلی که هیچ اثری ندارد،
+              بدتر از نبودنش است.
+
+              می‌ماند هشدار اعتبار، که تنها چیزی است که فروشنده باید همین‌جا بداند.
+            */}
+            {method === "CREDIT" && customer && (
+              <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+                <p className="text-sm">
+                  روی حساب بازِ{" "}
+                  <span className="font-semibold">{customer.fullName}</span> ثبت
+                  می‌شود — پول در تسویه گرفته می‌شود.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {customer.creditDays
+                    ? `مهلت این مشتری ${toFa(customer.creditDays)} روز است و سررسید هنگام تسویه حساب می‌شود.`
+                    : "سررسید هنگام تسویه، از مهلتِ خودِ مشتری حساب می‌شود."}
+                </p>
+
+                {credit.data?.exceeded && (
+                  <p className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
+                    ⚠️ این فروش {rial(credit.data.exceededBy)} از سقف اعتبار
+                    مشتری عبور می‌کند. ثبت می‌شود، ولی حواستان باشد.
+                  </p>
+                )}
+
+                {credit.data && !credit.data.exceeded && credit.data.available !== null && (
+                  <p className="text-xs text-muted-foreground">
+                    اعتبار باقی‌مانده پس از این فروش:{" "}
+                    <span className="tabular-nums">
+                      {rial(credit.data.available - total)}
+                    </span>
+                  </p>
+                )}
+              </div>
+            )}
+
+            {creditNeedsCustomer && (
+              <p className="text-sm text-destructive">
+                فروش حساب‌باز بدون مشتری ممکن نیست — با Esc برگردید و مشتری را انتخاب کنید.
+              </p>
+            )}
+            {shortPaid && !creditNeedsCustomer && (
+              <p className="text-sm text-destructive">
+                مبلغ دریافتی از مبلغ فاکتور کمتر است.
+              </p>
+            )}
+
+            <button
+              type="button"
+              disabled={!canSubmit}
+              onClick={submit}
+              className="flex h-14 items-center justify-center gap-2 rounded-lg bg-primary text-base
+                         font-semibold text-primary-foreground transition-opacity
+                         hover:opacity-90 disabled:opacity-40"
+            >
+              <Check className="size-5" />
+              {pending ? "در حال ثبت…" : `ثبت فاکتور — ${amount(total)}`}
+            </button>
+
+            <button
+              type="button"
+              onClick={onOpenFullPayment}
+              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+            >
+              پرداخت ترکیبی یا چک؟ فرم کامل را باز کنید
+            </button>
+
+            <FooterHint
+              hints={[
+                ["Enter", `ثبت با ${FAST_METHODS.find((m) => m.method === method)?.label ?? "—"}`],
+                ["Space", "نقدِ دقیق — ثبت فوری"],
+                ["→ ←", "روش پرداخت"],
+                ["Esc", "بازگشت به مشتری"],
+              ]}
+            />
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function StepDot({
+  n,
+  label,
+  active,
+  done,
+}: {
+  n: number;
+  label: string;
+  active: boolean;
+  done: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span
+        className={`flex size-6 items-center justify-center rounded-full text-xs font-bold ${
+          active
+            ? "bg-primary text-primary-foreground"
+            : done
+              ? "bg-primary/20 text-primary"
+              : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {done ? <Check className="size-3.5" /> : toFa(n)}
+      </span>
+      <span className={`text-sm ${active ? "font-semibold" : "text-muted-foreground"}`}>
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/** نوار راهنمای کلیدها — مثل صندوق‌های فروش واقعی، همیشه جلوی چشم. */
+function FooterHint({ hints }: { hints: [string, string | number][] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
+      {hints.map(([key, label]) => (
+        <span key={key} className="flex items-center gap-1.5">
+          <kbd className="rounded border bg-muted px-1.5 py-0.5 font-sans text-[11px]">
+            {key}
+          </kbd>
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}

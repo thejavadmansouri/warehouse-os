@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-approve-close"
+description = "Enables the approve_close command without any pre-configured scope."
+commands.allow = ["approve_close"]
+
+[[permission]]
+identifier = "deny-approve-close"
+description = "Denies the approve_close command without any pre-configured scope."
+commands.deny = ["approve_close"]

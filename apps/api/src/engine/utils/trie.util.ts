@@ -1,7 +1,10 @@
 export class TrieNode {
   children: Map<string, TrieNode> = new Map();
+
   isTerminal = false;
-  payload: any = null;
+
+  payloads: any[] = [];
+
   tokenLength = 0;
 }
 
@@ -9,11 +12,7 @@ export class TrieDictionary {
   private readonly root = new TrieNode();
 
   insert(phrase: string, payload: any): void {
-    const tokens = phrase
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
+    const tokens = phrase.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
     if (!tokens.length) return;
 
@@ -24,6 +23,7 @@ export class TrieDictionary {
 
       if (!child) {
         child = new TrieNode();
+
         node.children.set(token, child);
       }
 
@@ -31,16 +31,16 @@ export class TrieDictionary {
     }
 
     node.isTerminal = true;
-    node.payload = payload;
+
+    node.payloads.push(payload);
+
     node.tokenLength = tokens.length;
   }
 
-  findLongestMatch(
-    tokens: string[],
-    startIndex: number,
-  ): { payload: any; length: number } | null {
+  findLongestMatch(tokens: string[], startIndex: number) {
     let node = this.root;
-    let best: { payload: any; length: number } | null = null;
+
+    let best: any = null;
 
     for (let i = startIndex; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
@@ -53,7 +53,8 @@ export class TrieDictionary {
 
       if (node.isTerminal) {
         best = {
-          payload: node.payload,
+          payloads: node.payloads,
+
           length: node.tokenLength,
         };
       }
@@ -62,12 +63,8 @@ export class TrieDictionary {
     return best;
   }
 
-  has(phrase: string): boolean {
-    const tokens = phrase
-      .trim()
-      .toLowerCase()
-      .split(/\s+/)
-      .filter(Boolean);
+  has(phrase: string) {
+    const tokens = phrase.trim().toLowerCase().split(/\s+/).filter(Boolean);
 
     let node = this.root;
 
@@ -82,19 +79,17 @@ export class TrieDictionary {
     return node.isTerminal;
   }
 
-  clear(): void {
+  clear() {
     this.root.children.clear();
   }
 
-  size(): number {
+  size() {
     let count = 0;
 
     const walk = (node: TrieNode) => {
       if (node.isTerminal) count++;
 
-      for (const child of node.children.values()) {
-        walk(child);
-      }
+      for (const child of node.children.values()) walk(child);
     };
 
     walk(this.root);

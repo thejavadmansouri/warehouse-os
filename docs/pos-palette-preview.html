@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>پیشنهاد پالت رنگی POS — کاردو</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Vazirmatn", "Segoe UI", Tahoma, sans-serif;
+    background: #eef1f4;
+    color: #1e293b;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .intro { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(580px, 1fr));
+    gap: 20px;
+  }
+  .panel {
+    background: #fff;
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 1px 4px rgba(15,23,42,.08);
+  }
+  .panel h2 { font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .panel .tag {
+    font-size: 11px; font-weight: 400;
+    padding: 2px 8px; border-radius: 999px;
+    background: #eef2ff; color: #4338ca;
+  }
+  .panel .note { font-size: 12px; color: #475569; margin: 8px 0 12px; line-height: 1.7; }
+  .panel .note b { color: #1e293b; }
+
+  /* ---------- mock POS ---------- */
+  .pos {
+    border: 1px solid rgba(15,23,42,.12);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--bg);
+  }
+  .bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    padding: 10px; background: var(--card); border-bottom: 1px solid rgba(15,23,42,.08);
+  }
+  .scan {
+    flex: 1 1 200px; min-width: 180px; position: relative;
+    display: flex; align-items: center;
+    border: 1px solid var(--line); border-radius: 8px; background: #fff;
+    height: 38px; padding: 0 10px;
+  }
+  .scan .si { margin-left: 6px; font-size: 13px; opacity: .5; }
+  .scan .ph { color: #94a3b8; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chip {
+    flex: 0 1 auto; max-width: 256px; min-width: 0;
+    display: flex; align-items: center; gap: 6px;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 4px 10px; height: 46px; background: var(--card);
+  }
+  .chip .mid { min-width: 0; }
+  .chip .l1 { display: flex; align-items: center; gap: 4px; }
+  .chip .nm {
+    max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 12px; font-weight: 700;
+  }
+  .chip .bdg { font-size: 9px; background: var(--chip-bdg); color: #fff; border-radius: 999px; padding: 1px 6px; white-space: nowrap; }
+  .chip .l2 { display: flex; align-items: center; gap: 6px; font-size: 10px; color: #64748b; }
+  .chip .ph { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .due { font-weight: 700; color: var(--warn); white-space: nowrap; }
+  .chip .ic { font-size: 11px; opacity: .55; }
+  .wh {
+    height: 38px; border: 1px solid var(--line); border-radius: 8px;
+    background: #fff; padding: 0 8px; font-size: 12px; font-family: inherit;
+  }
+  .btn {
+    height: 38px; border: 1px solid var(--line); border-radius: 8px;
+    background: #fff; font-size: 12px; font-family: inherit;
+    padding: 0 10px; display: inline-flex; align-items: center; gap: 5px;
+    white-space: nowrap; color: #334155;
+  }
+  .btn.amber { border-color: #f59e0b66; color: var(--warn); background: #fff; }
+  .btn.green { background: var(--ok-solid); color: #fff; border-color: transparent; }
+  .btn .k { font-size: 10px; opacity: .7; }
+
+  .body { display: flex; gap: 10px; padding: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; background: var(--card); border-radius: 8px; }
+  th { text-align: right; font-weight: 600; color: #64748b; font-size: 11px; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 10px; border-bottom: 1px solid rgba(15,23,42,.05); }
+  tr:last-child td { border-bottom: none; }
+  .q { width: 60px; text-align: center; color: var(--pri); font-weight: 700; }
+  .pr { text-align: left; font-weight: 600; }
+  .side { width: 210px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+  .sbox { background: var(--card); border-radius: 8px; padding: 10px; font-size: 11px; color: #475569; border: 1px solid rgba(15,23,42,.06); }
+  .sbox .row { display: flex; justify-content: space-between; padding: 3px 0; }
+  .sbox .row b { color: #1e293b; }
+  .total { background: var(--pri); color: var(--pri-fg); border-radius: 8px; padding: 10px 12px; }
+  .total .l { font-size: 11px; opacity: .8; }
+  .total .v { font-size: 20px; font-weight: 800; }
+  .total .u { font-size: 10px; opacity: .7; text-align: left; }
+  .actions { display: flex; gap: 8px; padding: 0 10px 10px; }
+  .actions .btn { flex: 1; justify-content: center; height: 42px; }
+  .actions .solid { background: var(--pri); color: var(--pri-fg); border-color: transparent; font-weight: 700; }
+
+  /* dark mini-row */
+  .darkrow { margin-top: 10px; border-radius: 10px; padding: 10px; display: flex; align-items: center; gap: 8px; }
+  .darkrow .lab { font-size: 10px; color: var(--dark-fg-mut); margin-left: 6px; }
+  .darkrow .dbtn { height: 30px; border-radius: 6px; padding: 0 12px; font-size: 11px; display: flex; align-items: center; }
+  .darkrow .dchip { border-radius: 6px; border: 1px solid var(--dark-line); padding: 3px 8px; font-size: 10px; display: flex; gap: 6px; align-items: center; }
+
+  /* مقایسهٔ شدت گرمی */
+  .compare { background:#fff; border-radius:14px; padding:16px; box-shadow:0 1px 4px rgba(15,23,42,.08); margin-bottom:20px; }
+  .compare h2 { font-size:15px; margin-bottom:6px; }
+  .compare p { font-size:12px; color:#475569; margin-bottom:12px; line-height:1.7; }
+  .cgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; }
+  .citem { border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; }
+  .csw { padding:14px; min-height:120px; display:flex; flex-direction:column; gap:8px; justify-content:flex-end; }
+  .ccard { background:#fff; border:1px solid var(--c-bd); border-radius:8px; padding:8px; }
+  .ccard .cbar { height:26px; background:var(--c-mut); border-radius:5px; }
+  .ccard .cbtn { margin-top:6px; height:16px; width:60px; background:#2563eb; border-radius:4px; }
+  .clab { padding:8px 10px; font-size:11px; display:flex; justify-content:space-between; gap:6px; background:#fff; }
+  .clab b { font-weight:700; }
+  .clab .tag { font-size:10px; padding:1px 7px; border-radius:999px; background:#eef2ff; color:#4338ca; }
+  .clab .tag.live { background:#dcfce7; color:#166534; }
+  .clab .tag.cur { background:#fef3c7; color:#92400e; }
+</style>
+</head>
+<body>
+
+<h1>پیشنهاد پالت رنگی برای صفحهٔ POS</h1>
+<p class="intro">همان چیدمان فعلی، فقط با رنگ‌های متفاوت — هر پنل یک پیشنهاد کامل است (روشن + تیره). اسکرول کنید تا همه را ببینید.</p>
+
+<div class="compare">
+  <h2>شدتِ گرمی — مقایسهٔ سطوح chroma</h2>
+  <p>پس‌زمینهٔ روشن آن‌قدر روشن است که chroma از 0.004 تا 0.008 تقریباً نامرئی است (تفاوت فقط در رقم آخرِ هگز). گرمیِ واقعاً دیده‌شدنی از <b>0.012 به بالا</b> شروع می‌شود. هر ستون: پس‌زمینه + کارت سفید + نوار muted + یک دکمهٔ آبی.</p>
+  <div class="cgrid">
+    <div class="citem">
+      <div class="csw" style="background:#fbfaf7;--c-bd:#e8e7e4;--c-mut:#f6f5f2"><div class="ccard"><div class="cbar"></div><div class="cbtn"></div></div></div>
+      <div class="clab"><b>0.004</b><span class="tag">محوتر</span></div>
+      <div class="clab" style="border-top:1px solid #f1f5f9">#fbfaf7</div>
+    </div>
+    <div class="citem">
+      <div class="csw" style="background:#fcfaf6;--c-bd:#e9e7e3;--c-mut:#f7f5f1"><div class="ccard"><div class="cbar"></div><div class="cbtn"></div></div></div>
+      <div class="clab"><b>0.006</b></div>
+      <div class="clab" style="border-top:1px solid #f1f5f9">#fcfaf6</div>
+    </div>
+    <div class="citem">
+      <div class="csw" style="background:#fcfaf4;--c-bd:#e9e7e1;--c-mut:#f7f5ef"><div class="ccard"><div class="cbar"></div><div class="cbtn"></div></div></div>
+      <div class="clab"><b>0.008</b><span class="tag live">فعلی — روی سرور زنده</span></div>
+      <div class="clab" style="border-top:1px solid #f1f5f9">#fcfaf4</div>
+    </div>
+    <div class="citem">
+      <div class="csw" style="background:#fdfaf1;--c-bd:#eae7de;--c-mut:#f8f5ec"><div class="ccard"><div class="cbar"></div><div class="cbtn"></div></div></div>
+      <div class="clab"><b>0.012</b></div>
+      <div class="clab" style="border-top:1px solid #f1f5f9">#fdfaf1</div>
+    </div>
+    <div class="citem">
+      <div class="csw" style="background:#fefaef;--c-bd:#ebe7dc;--c-mut:#f9f5ea"><div class="ccard"><div class="cbar"></div><div class="cbtn"></div></div></div>
+      <div class="clab"><b>0.015</b><span class="tag">آشکارترین</span></div>
+      <div class="clab" style="border-top:1px solid #f1f5f9">#fefaef</div>
+    </div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ================= ۰) فعلی ================= -->
+  <section class="panel">
+    <h2>پایه — پالت فعلی <span class="tag">مرجع</span></h2>
+    <p class="note">آبی پیش‌فرض + سبزِ پول + کهربای بدهی. چیپِ مشتری با نامِ بلند را ببینید — این همان حالتی است که جستجو له می‌شد (الان در نسخهٔ واقعی رفع شده).</p>
+    <div class="pos" style="--bg:#f8fafc;--card:#fff;--line:#e2e8f0;--pri:#2563eb;--pri-fg:#fff;--ok-solid:#059669;--warn:#b45309;--chip-bdg:#0ea5e9">
+      <div class="bar">
+        <div class="scan"><span class="si">🔍</span><span class="ph">بارکد را اسکن کنید یا نام کالا را بنویسید…</span></div>
+        <div class="chip">
+          <span class="ic">👤</span>
+          <div class="mid">
+            <div class="l1"><span class="nm" title="نام کامل">مشتری با اسم خیلی خیلی طولانی برای آزمایش…</span><span class="bdg">عمده</span><span class="ic">🔒</span><span class="ic">🕘</span></div>
+            <div class="l2"><span class="ph">۰۹۱۲ ۳۴۵ ۶۷ ۸۹</span><span>امروز: ۳ فاکتور</span><span class="due">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <span class="ic">✕</span>
+        </div>
+        <select class="wh"><option>انبار مرکزی ▾</option></select>
+        <button class="btn amber">💳 حساب باز <span class="k">F3</span></button>
+        <button class="btn">📋 کارهای انبار</button>
+        <button class="btn green">🧾 فاکتورهای امروز <span class="k">F10</span></button>
+      </div>
+      <div class="body">
+        <table>
+          <tr><th>کالا</th><th style="width:60px">تعداد</th><th style="width:80px">قیمت</th></tr>
+          <tr><td>لنت ترمز پراید</td><td class="q">۲</td><td class="pr">۱٬۲۰۰٬۰۰۰</td></tr>
+          <tr><td>فیلتر روغن پژو ۲۰۶</td><td class="q">۱</td><td class="pr">۴۸۰٬۰۰۰</td></tr>
+          <tr><td>شمع ام وی ام</td><td class="q">۴</td><td class="pr">۹۶۰٬۰۰۰</td></tr>
+        </table>
+        <div class="side">
+          <div class="sbox">
+            <div class="row"><span>جمع اقلام</span><b>۲٬۶۴۰٬۰۰۰</b></div>
+            <div class="row"><span>تخفیف</span><span>۰</span></div>
+            <div class="row"><span>بدهی</span><span style="color:#b45309">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <div class="total"><div class="l">مبلغ نهایی</div><div class="v">۲٬۶۴۰٬۰۰۰</div><div class="u">ریال</div></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn">📤 ارسال به کارگر <span class="k">F9</span></button>
+        <button class="btn">⏱ پیش‌فاکتور <span class="k">F8</span></button>
+        <button class="btn">💳 پرداخت <span class="k">F7</span></button>
+        <button class="btn solid">تسویه و ثبت فاکتور <span class="k">F2</span></button>
+      </div>
+    </div>
+    <div class="darkrow" style="background:#181a2e;color:#e2e8f0;--dark-fg-mut:#94a3b8;--dark-line:#ffffff22">
+      <span class="lab">تیره:</span>
+      <span class="dbtn" style="background:#3b82f6;color:#fff">تسویه</span>
+      <span class="dchip"><span>👤</span><span>مشتری نمونه…</span></span>
+      <span class="dbtn" style="background:#10b981;color:#06281c">فاکتورهای امروز</span>
+    </div>
+  </section>
+
+  <!-- ================= ۱) فیروزه‌ای ================= -->
+  <section class="panel">
+    <h2>۱) فیروزه‌ای <span class="tag">توصیه‌شده</span></h2>
+    <p class="note">به‌جای آبی پیش‌فرض، <b>فیروزه‌ای/آبی-سبز</b> — هنوز «تکنیکی» است ولی گرم‌تر و متمایز. فاصلهٔ فیروزه با سبزِ پول و کهربای بدهی کامل است؛ هیچ معنایی قاطی نمی‌شود.</p>
+    <div class="pos" style="--bg:#f3fafc;--card:#fff;--line:#cfe8ee;--pri:#0e7490;--pri-fg:#fff;--ok-solid:#059669;--warn:#b45309;--chip-bdg:#0e7490">
+      <div class="bar">
+        <div class="scan"><span class="si">🔍</span><span class="ph">بارکد را اسکن کنید یا نام کالا را بنویسید…</span></div>
+        <div class="chip">
+          <span class="ic">👤</span>
+          <div class="mid">
+            <div class="l1"><span class="nm" title="نام کامل">مشتری با اسم خیلی خیلی طولانی برای آزمایش…</span><span class="bdg">عمده</span><span class="ic">🔒</span><span class="ic">🕘</span></div>
+            <div class="l2"><span class="ph">۰۹۱۲ ۳۴۵ ۶۷ ۸۹</span><span>امروز: ۳ فاکتور</span><span class="due">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <span class="ic">✕</span>
+        </div>
+        <select class="wh"><option>انبار مرکزی ▾</option></select>
+        <button class="btn amber">💳 حساب باز <span class="k">F3</span></button>
+        <button class="btn">📋 کارهای انبار</button>
+        <button class="btn green">🧾 فاکتورهای امروز <span class="k">F10</span></button>
+      </div>
+      <div class="body">
+        <table>
+          <tr><th>کالا</th><th style="width:60px">تعداد</th><th style="width:80px">قیمت</th></tr>
+          <tr><td>لنت ترمز پراید</td><td class="q">۲</td><td class="pr">۱٬۲۰۰٬۰۰۰</td></tr>
+          <tr><td>فیلتر روغن پژو ۲۰۶</td><td class="q">۱</td><td class="pr">۴۸۰٬۰۰۰</td></tr>
+          <tr><td>شمع ام وی ام</td><td class="q">۴</td><td class="pr">۹۶۰٬۰۰۰</td></tr>
+        </table>
+        <div class="side">
+          <div class="sbox">
+            <div class="row"><span>جمع اقلام</span><b>۲٬۶۴۰٬۰۰۰</b></div>
+            <div class="row"><span>تخفیف</span><span>۰</span></div>
+            <div class="row"><span>بدهی</span><span style="color:#b45309">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <div class="total"><div class="l">مبلغ نهایی</div><div class="v">۲٬۶۴۰٬۰۰۰</div><div class="u">ریال</div></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn">📤 ارسال به کارگر <span class="k">F9</span></button>
+        <button class="btn">⏱ پیش‌فاکتور <span class="k">F8</span></button>
+        <button class="btn">💳 پرداخت <span class="k">F7</span></button>
+        <button class="btn solid">تسویه و ثبت فاکتور <span class="k">F2</span></button>
+      </div>
+    </div>
+    <div class="darkrow" style="background:#0e1a21;color:#e0f2f7;--dark-fg-mut:#7fb6c6;--dark-line:#2dd4bf44">
+      <span class="lab">تیره:</span>
+      <span class="dbtn" style="background:#22d3ee;color:#083344">تسویه</span>
+      <span class="dchip"><span>👤</span><span>مشتری نمونه…</span></span>
+      <span class="dbtn" style="background:#34d399;color:#022c22">فاکتورهای امروز</span>
+    </div>
+  </section>
+
+  <!-- ================= ۲) سبز زمردی ================= -->
+  <section class="panel">
+    <h2>۲) سبز زمردی تیره</h2>
+    <p class="note">حس «انبار/طبیعی». <b>هشدار:</b> چون سبز الان معنای پول و «فاکتورهای امروز» است، در این پالت آن دکمه را به <b>فیروزه‌ای</b> منتقل کرده‌ایم تا معناها قاطی نشود.</p>
+    <div class="pos" style="--bg:#f3faf6;--card:#fff;--line:#d3e8dc;--pri:#047857;--pri-fg:#fff;--ok-solid:#0e7490;--warn:#b45309;--chip-bdg:#047857">
+      <div class="bar">
+        <div class="scan"><span class="si">🔍</span><span class="ph">بارکد را اسکن کنید یا نام کالا را بنویسید…</span></div>
+        <div class="chip">
+          <span class="ic">👤</span>
+          <div class="mid">
+            <div class="l1"><span class="nm" title="نام کامل">مشتری با اسم خیلی خیلی طولانی برای آزمایش…</span><span class="bdg">عمده</span><span class="ic">🔒</span><span class="ic">🕘</span></div>
+            <div class="l2"><span class="ph">۰۹۱۲ ۳۴۵ ۶۷ ۸۹</span><span>امروز: ۳ فاکتور</span><span class="due">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <span class="ic">✕</span>
+        </div>
+        <select class="wh"><option>انبار مرکزی ▾</option></select>
+        <button class="btn amber">💳 حساب باز <span class="k">F3</span></button>
+        <button class="btn">📋 کارهای انبار</button>
+        <button class="btn green">🧾 فاکتورهای امروز <span class="k">F10</span></button>
+      </div>
+      <div class="body">
+        <table>
+          <tr><th>کالا</th><th style="width:60px">تعداد</th><th style="width:80px">قیمت</th></tr>
+          <tr><td>لنت ترمز پراید</td><td class="q">۲</td><td class="pr">۱٬۲۰۰٬۰۰۰</td></tr>
+          <tr><td>فیلتر روغن پژو ۲۰۶</td><td class="q">۱</td><td class="pr">۴۸۰٬۰۰۰</td></tr>
+          <tr><td>شمع ام وی ام</td><td class="q">۴</td><td class="pr">۹۶۰٬۰۰۰</td></tr>
+        </table>
+        <div class="side">
+          <div class="sbox">
+            <div class="row"><span>جمع اقلام</span><b>۲٬۶۴۰٬۰۰۰</b></div>
+            <div class="row"><span>تخفیف</span><span>۰</span></div>
+            <div class="row"><span>بدهی</span><span style="color:#b45309">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <div class="total"><div class="l">مبلغ نهایی</div><div class="v">۲٬۶۴۰٬۰۰۰</div><div class="u">ریال</div></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn">📤 ارسال به کارگر <span class="k">F9</span></button>
+        <button class="btn">⏱ پیش‌فاکتور <span class="k">F8</span></button>
+        <button class="btn">💳 پرداخت <span class="k">F7</span></button>
+        <button class="btn solid">تسویه و ثبت فاکتور <span class="k">F2</span></button>
+      </div>
+    </div>
+    <div class="darkrow" style="background:#0d1f18;color:#d8f3e7;--dark-fg-mut:#7fbfa5;--dark-line:#34d39944">
+      <span class="lab">تیره:</span>
+      <span class="dbtn" style="background:#34d399;color:#022c22">تسویه</span>
+      <span class="dchip"><span>👤</span><span>مشتری نمونه…</span></span>
+      <span class="dbtn" style="background:#22d3ee;color:#083344">فاکتورهای امروز</span>
+    </div>
+  </section>
+
+  <!-- ================= ۳) نیلی ================= -->
+  <section class="panel">
+    <h2>۳) نیلی / بنفش-آبی</h2>
+    <p class="note">بهترین جداسازی معانی (نیلی از سبز، کهربا و قرمز هر سه دور است) ولی سردتر و «لوکستر». اگر برند جدی‌تر است، انتخاب خوبی است.</p>
+    <div class="pos" style="--bg:#f7f6fc;--card:#fff;--line:#e2dcf2;--pri:#6d28d9;--pri-fg:#fff;--ok-solid:#059669;--warn:#b45309;--chip-bdg:#6d28d9">
+      <div class="bar">
+        <div class="scan"><span class="si">🔍</span><span class="ph">بارکد را اسکن کنید یا نام کالا را بنویسید…</span></div>
+        <div class="chip">
+          <span class="ic">👤</span>
+          <div class="mid">
+            <div class="l1"><span class="nm" title="نام کامل">مشتری با اسم خیلی خیلی طولانی برای آزمایش…</span><span class="bdg">عمده</span><span class="ic">🔒</span><span class="ic">🕘</span></div>
+            <div class="l2"><span class="ph">۰۹۱۲ ۳۴۵ ۶۷ ۸۹</span><span>امروز: ۳ فاکتور</span><span class="due">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <span class="ic">✕</span>
+        </div>
+        <select class="wh"><option>انبار مرکزی ▾</option></select>
+        <button class="btn amber">💳 حساب باز <span class="k">F3</span></button>
+        <button class="btn">📋 کارهای انبار</button>
+        <button class="btn green">🧾 فاکتورهای امروز <span class="k">F10</span></button>
+      </div>
+      <div class="body">
+        <table>
+          <tr><th>کالا</th><th style="width:60px">تعداد</th><th style="width:80px">قیمت</th></tr>
+          <tr><td>لنت ترمز پراید</td><td class="q">۲</td><td class="pr">۱٬۲۰۰٬۰۰۰</td></tr>
+          <tr><td>فیلتر روغن پژو ۲۰۶</td><td class="q">۱</td><td class="pr">۴۸۰٬۰۰۰</td></tr>
+          <tr><td>شمع ام وی ام</td><td class="q">۴</td><td class="pr">۹۶۰٬۰۰۰</td></tr>
+        </table>
+        <div class="side">
+          <div class="sbox">
+            <div class="row"><span>جمع اقلام</span><b>۲٬۶۴۰٬۰۰۰</b></div>
+            <div class="row"><span>تخفیف</span><span>۰</span></div>
+            <div class="row"><span>بدهی</span><span style="color:#b45309">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <div class="total"><div class="l">مبلغ نهایی</div><div class="v">۲٬۶۴۰٬۰۰۰</div><div class="u">ریال</div></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn">📤 ارسال به کارگر <span class="k">F9</span></button>
+        <button class="btn">⏱ پیش‌فاکتور <span class="k">F8</span></button>
+        <button class="btn">💳 پرداخت <span class="k">F7</span></button>
+        <button class="btn solid">تسویه و ثبت فاکتور <span class="k">F2</span></button>
+      </div>
+    </div>
+    <div class="darkrow" style="background:#1b1730;color:#e8e2f7;--dark-fg-mut:#a99fe0;--dark-line:#a78bfa44">
+      <span class="lab">تیره:</span>
+      <span class="dbtn" style="background:#a78bfa;color:#2e1065">تسویه</span>
+      <span class="dchip"><span>👤</span><span>مشتری نمونه…</span></span>
+      <span class="dbtn" style="background:#34d399;color:#022c22">فاکتورهای امروز</span>
+    </div>
+  </section>
+
+  <!-- ================= ۴) گرمِ کمریسک ================= -->
+  <section class="panel">
+    <h2>۴) گرم‌کردن زمینه (تغییرِ ریز)</h2>
+    <p class="note">همان آبیِ فعلی، فقط پس‌زمینه از ته‌آبیِ سرد به <b>ته‌کرمِ گرم</b> — حس صفحه از «کلینیکی» به «فروشگاهی» می‌رود بدون شکستن چیزی.</p>
+    <div class="pos" style="--bg:#fbf7f0;--card:#fff;--line:#eae2d2;--pri:#2563eb;--pri-fg:#fff;--ok-solid:#059669;--warn:#b45309;--chip-bdg:#0ea5e9">
+      <div class="bar">
+        <div class="scan"><span class="si">🔍</span><span class="ph">بارکد را اسکن کنید یا نام کالا را بنویسید…</span></div>
+        <div class="chip">
+          <span class="ic">👤</span>
+          <div class="mid">
+            <div class="l1"><span class="nm" title="نام کامل">مشتری با اسم خیلی خیلی طولانی برای آزمایش…</span><span class="bdg">عمده</span><span class="ic">🔒</span><span class="ic">🕘</span></div>
+            <div class="l2"><span class="ph">۰۹۱۲ ۳۴۵ ۶۷ ۸۹</span><span>امروز: ۳ فاکتور</span><span class="due">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <span class="ic">✕</span>
+        </div>
+        <select class="wh"><option>انبار مرکزی ▾</option></select>
+        <button class="btn amber">💳 حساب باز <span class="k">F3</span></button>
+        <button class="btn">📋 کارهای انبار</button>
+        <button class="btn green">🧾 فاکتورهای امروز <span class="k">F10</span></button>
+      </div>
+      <div class="body">
+        <table>
+          <tr><th>کالا</th><th style="width:60px">تعداد</th><th style="width:80px">قیمت</th></tr>
+          <tr><td>لنت ترمز پراید</td><td class="q">۲</td><td class="pr">۱٬۲۰۰٬۰۰۰</td></tr>
+          <tr><td>فیلتر روغن پژو ۲۰۶</td><td class="q">۱</td><td class="pr">۴۸۰٬۰۰۰</td></tr>
+          <tr><td>شمع ام وی ام</td><td class="q">۴</td><td class="pr">۹۶۰٬۰۰۰</td></tr>
+        </table>
+        <div class="side">
+          <div class="sbox">
+            <div class="row"><span>جمع اقلام</span><b>۲٬۶۴۰٬۰۰۰</b></div>
+            <div class="row"><span>تخفیف</span><span>۰</span></div>
+            <div class="row"><span>بدهی</span><span style="color:#b45309">۱۲٬۴۵۰٬۰۰۰</span></div>
+          </div>
+          <div class="total"><div class="l">مبلغ نهایی</div><div class="v">۲٬۶۴۰٬۰۰۰</div><div class="u">ریال</div></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn">📤 ارسال به کارگر <span class="k">F9</span></button>
+        <button class="btn">⏱ پیش‌فاکتور <span class="k">F8</span></button>
+        <button class="btn">💳 پرداخت <span class="k">F7</span></button>
+        <button class="btn solid">تسویه و ثبت فاکتور <span class="k">F2</span></button>
+      </div>
+    </div>
+    <div class="darkrow" style="background:#211d18;color:#f0e9de;--dark-fg-mut:#b7ab97;--dark-line:#d6c9ae44">
+      <span class="lab">تیره:</span>
+      <span class="dbtn" style="background:#3b82f6;color:#fff">تسویه</span>
+      <span class="dchip"><span>👤</span><span>مشتری نمونه…</span></span>
+      <span class="dbtn" style="background:#10b981;color:#06281c">فاکتورهای امروز</span>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

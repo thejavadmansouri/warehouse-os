@@ -5,7 +5,6 @@ import { InventoryTransferService } from './inventory-transfer.service';
 
 @Controller('inventory-transfer')
 export class InventoryTransferController {
-
   constructor(private service: InventoryTransferService) {}
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)

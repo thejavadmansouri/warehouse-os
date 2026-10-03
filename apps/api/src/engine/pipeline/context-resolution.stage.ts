@@ -1,130 +1,111 @@
 import { ClassifiedResult } from './classification.stage';
 import { ConfidenceResult } from './confidence.stage';
 
-
 export interface ContextResult {
+  productId: string | null;
 
-  productName:string|null;
+  productName: string | null;
 
-  category:string|null;
+  category: string | null;
 
-  brand:string|null;
+  brand: string | null;
 
-  vehicleFamily:string|null;
+  vehicleFamily: string | null;
 
-  vehicleVariant:string|null;
+  vehicleModel: string | null;
 
-  engine:string|null;
+  vehicleVariant: string | null;
 
-  gearbox:string|null;
+  engine: string | null;
 
-  quantity:number|null;
+  gearbox: string | null;
 
-  goodQuantity:number;
+  quantity: number | null;
 
-  badQuantity:number;
+  goodQuantity: number;
 
-  confidence:number;
+  badQuantity: number;
 
+  confidence: number;
 }
 
-
-
 export class ContextResolutionStage {
-
-
-
   execute(
-    data:ClassifiedResult,
-    confidence:ConfidenceResult,
-    quantity:number|null
-  ):ContextResult {
-
-
-
+    data: ClassifiedResult,
+    confidence: ConfidenceResult,
+    quantity: number | null,
+  ): ContextResult {
     let goodQuantity = 0;
 
     let badQuantity = 0;
 
+    /**
+     * تعیین وضعیت موجودی
+     */
 
-
-    if(data.condition === 'سالم'){
-
+    if (data.condition === 'سالم') {
       goodQuantity = quantity ?? 0;
-
-    }
-
-
-
-    if(data.condition === 'خراب'){
-
+    } else if (data.condition === 'خراب') {
       badQuantity = quantity ?? 0;
-
     }
 
-
-
-    if(
-      goodQuantity === 0 &&
-      badQuantity === 0 &&
-      quantity
-    ){
-
+    /**
+     * اگر وضعیت مشخص نبود
+     * پیش فرض کالا سالم است
+     */
+    else if (quantity !== null) {
       goodQuantity = quantity;
-
     }
 
+    /**
+     * برند:
+     * اول از متن
+     * بعد از relation محصول
+     */
 
+    const resolvedBrand = data.brand ?? data.product?.brand?.name ?? null;
+
+    /**
+     * دسته بندی:
+     * اول category مستقیم
+     * بعد partCatalog
+     */
+
+    const resolvedCategory =
+      data.category ??
+      data.product?.category?.name ??
+      data.product?.partCatalog?.name ??
+      null;
 
     return {
+      productId: data.product?.id ?? null,
 
-      productName:
-        data.product?.name ?? null,
+      productName: data.product?.name ?? null,
 
+      category: resolvedCategory,
 
-      category:
-        data.product?.category ?? null,
-
-
-      brand:
-        data.brand ?? null,
-
+      brand: resolvedBrand,
 
       vehicleFamily:
-        data.vehicle?.family ?? null,
+        data.vehicleFamily ?? data.product?.vehicleModel?.name ?? null,
 
+      // فقط از متن صریح کارگر؛ از روی محصول حدس زده نمی‌شود
+      vehicleModel: data.vehicleModel ?? null,
 
       vehicleVariant:
-        data.vehicle?.variant ?? null,
+        data.vehicleVariant ?? data.product?.vehicleModel?.name ?? null,
 
+      engine: data.engine ?? data.product?.vehicleModel?.engine ?? null,
 
-      engine:
-        data.engine ??
-        data.vehicle?.engine ??
-        null,
-
-
-      gearbox:
-        data.gearbox ??
-        data.vehicle?.gearbox ??
-        null,
-
+      gearbox: data.gearbox ?? data.product?.vehicleModel?.gearbox ?? null,
 
       quantity,
 
-
       goodQuantity,
-
 
       badQuantity,
 
-
-      confidence:
-        confidence.score
-
+      confidence: confidence.score,
     };
-
-
   }
-
 }

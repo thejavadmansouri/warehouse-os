@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base theme used as the cold-start window background (acts as a lightweight
+         splash) before Compose takes over. Actual UI colors come from the Compose
+         theme in ui/theme/. Kept on a framework parent to avoid pulling in the
+         Material Components XML dependency. -->
+    <style name="Theme.WarehouseOperator" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="p">shortEdges</item>
+    </style>
+</resources>

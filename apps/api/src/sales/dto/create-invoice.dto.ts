@@ -1,0 +1,224 @@
+import {
+  IsString,
+  IsInt,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  ArrayMinSize,
+  ArrayMaxSize,
+  Max,
+  MaxLength,
+  Min,
+  IsEnum,
+  IsDateString,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  ChequeRateMode as ChequeRateModeEnum,
+  PaymentMethod,
+} from '@prisma/client';
+
+import type { ChequeRateMode } from '../../common/cheque-charge';
+import { INT4_MAX } from '../../common/money';
+
+/** یک ردیف فاکتور: کالا، مکانی که از آن کم می‌شود، تعداد و قیمت واحد. */
+export class InvoiceLineDto {
+  @IsString()
+  productId: string;
+
+  /**
+   * قفسه‌ای که کالا از آن کم می‌شود.
+   *
+   * اختیاری است چون در دوره‌ی راه‌اندازی، جنس در انبار هست ولی هنوز در نرم‌افزار
+   * ثبت نشده و فروشنده نمی‌داند کدام قفسه. نفرستادنش یعنی «نمی‌دانم کجاست» و
+   * سرور آن را روی مکانِ سیستمیِ «موجودی ثبت‌نشده» می‌برد.
+   */
+  @IsOptional()
+  @IsString()
+  locationId?: string;
+
+  @IsInt()
+  @Min(1)
+  quantity: number;
+
+  /**
+   * قیمت واحد فروش به ریال. صفر مجاز است (کالای هدیه)، منفی نه.
+   *
+   * سقف = INT4_MAX در money.ts (۱e12 ریال ≈ ۱۰۰ میلیارد تومان) — ستون‌ها
+   * float8 هستند و این سقفِ کد است تا جمع‌های داخلی در ناحیه‌ی دقیق بمانند.
+   */
+  @IsInt()
+  @Min(0)
+  @Max(INT4_MAX)
+  unitPrice: number;
+
+  /** توضیحِ همین قلم — روی برگه‌ی فاکتور زیرِ نامِ کالا چاپ می‌شود. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  lineNote?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(INT4_MAX)
+  discount?: number;
+}
+
+/** جزئیات چک — فقط وقتی method برابر CHEQUE است لازم می‌شود. */
+export class ChequeDto {
+  @IsString()
+  number: string;
+
+  @IsOptional()
+  @IsString()
+  bankName?: string;
+
+  @IsOptional()
+  @IsString()
+  branch?: string;
+
+  @IsOptional()
+  @IsString()
+  holderName?: string;
+
+  /** تاریخ سررسید (ISO). تبدیل شمسی/میلادی سمت کلاینت انجام می‌شود. */
+  @IsDateString()
+  dueDate: string;
+
+  /**
+   * نرخِ تفاوتِ فروشِ مدت‌دار، به پایه‌ی هزارم (bp). ۲۵۰ = ۲.۵٪
+   *
+   * نفرستادنش یعنی «بدونِ سود» — عمداً هیچ پیش‌فرضی از روی مشتری خوانده نمی‌شود.
+   * سودی که فروشنده صریحاً انتخاب نکرده نباید بی‌صدا روی فاکتور بنشیند.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(10_000)
+  rateBp?: number;
+
+  /** تعدادِ ماه. در حالتِ FLAT بی‌اثر است. */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  months?: number;
+
+  @IsOptional()
+  @IsEnum(ChequeRateModeEnum)
+  rateMode?: ChequeRateMode;
+
+  /**
+   * مبلغِ سود، اگر فروشنده دستی گردش کرده باشد («۶۰۰ هزار گرد کردم»).
+   * نیامدنش یعنی از نرخ و ماه حساب شود. سرور در هر حالت سقف را رعایت می‌کند.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  charge?: number;
+}
+
+/**
+ * یک سطر پرداخت. چند سطر یعنی تسویه‌ی ترکیبی (مثلاً نصف نقد، نصف چک).
+ * CREDIT یعنی نسیه: بدهی ثبت می‌شود بدون دریافت وجه، پس amount آن در
+ * paidAmount حساب نمی‌شود.
+ */
+export class PaymentDto {
+  @IsEnum(PaymentMethod)
+  method: PaymentMethod;
+
+  /** سقف = INT4_MAX در money.ts — مبلغِ بزرگ‌تر با پیامِ روشن رد شود، نه خطای خامِ Prisma. */
+  @IsInt()
+  @Min(0)
+  @Max(INT4_MAX)
+  amount: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ChequeDto)
+  cheque?: ChequeDto;
+}
+
+/**
+ * مشتری جدید که همراه فاکتور ساخته می‌شود (وقتی customerId نداریم).
+ * فقط نام الزامی است — باید بشود مشتری را بدون هیچ شماره‌ای ثبت کرد.
+ */
+export class InlineCustomerDto {
+  @IsString()
+  firstName: string;
+
+  @IsOptional()
+  @IsString()
+  lastName?: string;
+
+  @IsOptional()
+  @IsString()
+  phone?: string;
+}
+
+export class CreateInvoiceDto {
+  /**
+   * کلید یکتای کلاینت. ارسال دوباره‌ی همان کلید فاکتور تکراری نمی‌سازد و
+   * همان فاکتور قبلی برگردانده می‌شود. برای صف آفلاین و retry شبکه لازم است.
+   */
+  @IsString()
+  idempotencyKey: string;
+
+  @IsString()
+  warehouseId: string;
+
+  /** مشتری اختیاری است — فروش نقدیِ گذری نباید پشت نام گیر کند. */
+  @IsOptional()
+  @IsString()
+  customerId?: string;
+
+  /**
+   * حساب باز: وقتی فرستاده شود، فاکتور با وضعیت OPEN روی همین حساب ثبت می‌شود
+   * (فاکتور جاری — تا تسویه نهایی نمی‌شود). پرداخت در این مسیر پذیرفته نمی‌شود؛
+   * پول در تسویه می‌آید. مشتری باید همان مشتریِ حساب باشد.
+   */
+  @IsOptional()
+  @IsString()
+  accountId?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => InlineCustomerDto)
+  customer?: InlineCustomerDto;
+
+  /** تخفیف کل فاکتور به ریال (جدا از تخفیف ردیف‌ها). */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  discount?: number;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  /**
+   * سررسید بخش نسیه (ISO). نفرستادنش یعنی «مهلت همیشگیِ همین مشتری» —
+   * حالت عادی، تا فروشنده برای هر فروش یک فیلد اضافه پر نکند.
+   */
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(500)
+  @ValidateNested({ each: true })
+  @Type(() => InvoiceLineDto)
+  lines: InvoiceLineDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PaymentDto)
+  payments?: PaymentDto[];
+}

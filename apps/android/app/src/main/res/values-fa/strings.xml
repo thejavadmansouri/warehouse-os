@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  فارسی زبانِ اصلیِ برنامه است. values/ فقط نسخه‌ی پشتیبان است، ولی هر رشته‌ای
+  که آنجا هست باید اینجا هم باشد وگرنه lint (MissingTranslation) بیلد را
+  می‌شکند — و روی گوشیِ فارسی، رشته‌ی جامانده از فایلِ پیش‌فرض خوانده می‌شود.
+-->
+<resources>
+    <string name="app_name">کاردو</string>
+
+    <!-- نامِ کسب‌وکار برای نسخه‌ی سفارشیِ هر مشتری. در Kotlin هاردکد نشود. -->
+    <string name="customer_name">کاردو</string>
+
+    <string name="login_copyright">کاردو — تمامی حقوق محفوظ است</string>
+    <string name="login_author">طراحی و ساخته شده توسط MANS</string>
+</resources>
