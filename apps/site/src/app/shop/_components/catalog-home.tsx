@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/pagination";
 
 import { ProductCard } from "./product-card";
+import { VehicleStrip, CategoryTiles, BrandStrip } from "./home-sections";
 import { getShopBanners, getShopFacets, getShopProducts } from "@/lib/shop-api";
 import { assetUrl } from "@/lib/shop-api";
 import { toFa } from "@/lib/format";
@@ -43,6 +44,9 @@ export function CatalogHome() {
   const q = searchParams.get("q") ?? "";
   const categoryId = searchParams.get("category") ?? undefined;
   const brandId = searchParams.get("brand") ?? undefined;
+  // فیلتر خودرو (اتوموبی‌وار): تا امروز فقط در تایپِ API تعریف شده بود و هیچ
+  // رابطی آن را ست نمی‌کرد. نام پارام `vehicle` کوتاه است تا لینک تمیز بماند.
+  const vehicleId = searchParams.get("vehicle") ?? undefined;
   const sort = (searchParams.get("sort") ?? "newest") as
     | "newest"
     | "cheapest"
@@ -70,8 +74,8 @@ export function CatalogHome() {
   const bannerQuery = useQuery({ queryKey: ["shop", "banners"], queryFn: getShopBanners, staleTime: 60_000 });
 
   const productsQuery = useQuery({
-    queryKey: ["shop", "products", { q, categoryId, brandId, sort, page, inStock }],
-    queryFn: () => getShopProducts({ q: q || undefined, categoryId, brandId, sort, page, pageSize: 24, inStock }),
+    queryKey: ["shop", "products", { q, categoryId, brandId, vehicleId, sort, page, inStock }],
+    queryFn: () => getShopProducts({ q: q || undefined, categoryId, brandId, vehicleModelId: vehicleId, sort, page, pageSize: 24, inStock }),
     placeholderData: (prev) => prev,
   });
 
@@ -80,50 +84,11 @@ export function CatalogHome() {
   const facets = facetsQuery.data;
 
   const activeCategory = facets?.categories.find((c) => c.id === categoryId)?.name;
+  const activeVehicle = facets?.vehicles.find((v) => v.id === vehicleId)?.name;
+  const activeBrand = facets?.brands.find((b) => b.id === brandId)?.name;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
-      {/* نوار دسته‌ها: اسکرول افقیِ لمسی (الگوی دیجیکالا/ترب) — جایگزینِ سریعِ
-          دراپ‌داون برای پرکاربردترین مسیرِ ناوبری. */}
-      {facets && facets.categories.length > 1 && (
-        <nav
-          aria-label="دسته‌های کالا"
-          className="scroll-thin -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1"
-        >
-          <button
-            type="button"
-            onClick={() => setParams({ category: undefined, brand: undefined })}
-            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
-              !categoryId
-                ? "border-primary bg-primary font-bold text-primary-foreground"
-                : "bg-card hover:border-primary/50"
-            }`}
-          >
-            همه
-          </button>
-          {facets.categories.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() =>
-                setParams({
-                  category: c.id === categoryId ? undefined : c.id,
-                  brand: undefined,
-                })
-              }
-              aria-pressed={c.id === categoryId}
-              className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                c.id === categoryId
-                  ? "border-primary bg-primary font-bold text-primary-foreground"
-                  : "bg-card hover:border-primary/50"
-              }`}
-            >
-              {c.name} ({toFa(c.count)})
-            </button>
-          ))}
-        </nav>
-      )}
-
       {/* بنرها */}
       {bannerQuery.data && bannerQuery.data.length > 0 && page === 1 && !categoryId && !q && (
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -150,6 +115,22 @@ export function CatalogHome() {
         </div>
       )}
 
+      {/* سکشن‌های ناوبری به سبک فروشگاه‌های قطعه: خودرو، دسته، برند. */}
+      {!q && (
+        <>
+          <VehicleStrip
+            vehicles={facets?.vehicles ?? []}
+            activeId={vehicleId}
+            onSelect={(id) => setParams({ vehicle: id })}
+          />
+          <CategoryTiles
+            categories={facets?.categories ?? []}
+            activeId={categoryId}
+            onSelect={(id) => setParams({ category: id, brand: undefined })}
+          />
+        </>
+      )}
+
       {/* نوار فیلتر و مرتب */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground">
@@ -167,6 +148,22 @@ export function CatalogHome() {
           <Badge variant="secondary" className="gap-1">
             {activeCategory}
             <button type="button" onClick={() => setParams({ category: undefined, brand: undefined })} aria-label="حذف دسته">
+              ✕
+            </button>
+          </Badge>
+        )}
+        {activeVehicle && (
+          <Badge variant="secondary" className="gap-1">
+            خودرو: {activeVehicle}
+            <button type="button" onClick={() => setParams({ vehicle: undefined })} aria-label="حذف فیلتر خودرو">
+              ✕
+            </button>
+          </Badge>
+        )}
+        {activeBrand && (
+          <Badge variant="secondary" className="gap-1">
+            برند: {activeBrand}
+            <button type="button" onClick={() => setParams({ brand: undefined })} aria-label="حذف فیلتر برند">
               ✕
             </button>
           </Badge>
@@ -259,12 +256,19 @@ export function CatalogHome() {
               </PaginationItem>
             </PaginationContent>
           </Pagination>
+          {!q && (
+            <BrandStrip
+              brands={facets?.brands ?? []}
+              activeId={brandId}
+              onSelect={(id) => setParams({ brand: id })}
+            />
+          )}
         </>
       ) : (
         <EmptyState
           title="کالایی یافت نشد"
           text="فیلترها را عوض کنید یا عبارتِ دیگری جستجو کنید."
-          onReset={() => setParams({ q: undefined, category: undefined, brand: undefined, inStock: undefined })}
+          onReset={() => setParams({ q: undefined, category: undefined, brand: undefined, vehicle: undefined, inStock: undefined })}
         />
       )}
     </div>
