@@ -57,7 +57,11 @@ export function ProductView({ id, initial }: { id: string; initial: ShopProductD
   const p = detailQuery.data;
   const stock = p ? STOCK_LABELS[p.stock] ?? STOCK_LABELS.OUT : null;
   const images = p?.images ?? [];
+  // نوار بندانگشتی از نسخه‌ی ۳۰۰px (≈۶KB) بارگذاری می‌شود؛ تصویر اصلی
+  // فقط نسخه‌ی فعال دانلود می‌شود — پهنای باند موبایل برای هر کالا یک‌جا.
+  const thumbs = p?.thumbs?.length ? p.thumbs : images;
   const image = images[activeImg] ?? images[0] ?? null;
+  const buyable = !!p && p.price != null && p.stock !== "OUT";
 
   if (detailQuery.isLoading) return <DetailSkeleton />;
   if (detailQuery.isError || !p) {
@@ -77,7 +81,7 @@ export function ProductView({ id, initial }: { id: string; initial: ShopProductD
   };
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6">
+    <div className="mx-auto max-w-7xl px-4 pb-28 pt-6 lg:pb-6">
       <nav className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/shop" className="hover:text-foreground">فروشگاه</Link>
         {p.category && (
@@ -97,7 +101,7 @@ export function ProductView({ id, initial }: { id: string; initial: ShopProductD
         <div className="flex flex-col-reverse gap-3 sm:flex-row">
           {images.length > 1 && (
             <div className="flex gap-2 overflow-x-auto sm:max-h-[28rem] sm:w-[4.5rem] sm:flex-col sm:overflow-y-auto">
-              {images.map((im, i) => (
+              {thumbs.map((im, i) => (
                 <button
                   key={im}
                   type="button"
@@ -110,6 +114,9 @@ export function ProductView({ id, initial }: { id: string; initial: ShopProductD
                   <img
                     src={assetUrl(im)}
                     alt=""
+                    loading="lazy"
+                    width={64}
+                    height={64}
                     className="h-full w-full object-contain p-1"
                   />
                 </button>
@@ -227,6 +234,27 @@ export function ProductView({ id, initial }: { id: string; initial: ShopProductD
             ))}
           </div>
         </section>
+      )}
+
+      {/*
+        نوار چسبانِ پایین فقط برای موبایل: قیمت + خرید همیشه در دسترس، بدون
+        نیاز به اسکرول تا بالای صفحه. `env(safe-area-inset-bottom)` برای آیفون
+        با نوار خانه؛ `lg:hidden` چون دسکتاپ دکمه‌ی کنار قیمت را دارد.
+      */}
+      {buyable && (
+        <div
+          className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 px-4 py-3 shadow-lg backdrop-blur lg:hidden"
+          style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <div className="flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              <Price price={p.price} compareAt={p.compareAt} />
+            </div>
+            <Button size="lg" onClick={addToCart} className="shrink-0">
+              <ShoppingCart className="size-5" aria-hidden /> افزودن به سبد
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
