@@ -394,7 +394,8 @@ function ReviewList({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-bold">دیدگاه‌ها</h3>
+        {/* h2: بعد از h1 نام کالا می‌آید؛ h3 ترتیب عنوان‌ها را می‌شکست (Lighthouse). */}
+        <h2 className="text-lg font-bold">دیدگاه‌ها</h2>
         <Button variant="outline" size="sm" onClick={() => (token ? setOpenForm(true) : requestLogin())}>
           ثبت دیدگاه
         </Button>

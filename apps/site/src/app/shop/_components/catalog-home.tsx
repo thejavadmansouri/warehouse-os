@@ -136,7 +136,7 @@ export function CatalogHome() {
               value={categoryId ?? "__all__"}
               onValueChange={(v) => setParams({ category: v === "__all__" ? undefined : v })}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-40" aria-label="گروه کالا">
                 <SelectValue placeholder="گروه کالا" />
               </SelectTrigger>
               <SelectContent>
@@ -150,7 +150,7 @@ export function CatalogHome() {
             </Select>
           )}
           <Select value={sort} onValueChange={(v) => setParams({ sort: v })}>
-            <SelectTrigger className="w-32">
+            <SelectTrigger className="w-32" aria-label="مرتب‌سازی">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

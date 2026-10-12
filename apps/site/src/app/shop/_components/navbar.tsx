@@ -71,7 +71,7 @@ export function ShopNavbar() {
           </Link>
 
           <Link href="/shop/cart" aria-label="سبد خرید">
-            <Button variant="ghost" size="icon" className="relative">
+            <Button variant="ghost" size="icon" aria-label="سبد خرید" className="relative">
               <ShoppingBag className="size-5" aria-hidden />
               {count > 0 && (
                 <Badge className="absolute -left-1 -top-1 h-5 min-w-5 rounded-full px-1 text-[11px]">
