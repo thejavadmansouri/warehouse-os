@@ -479,6 +479,10 @@ export class StorefrontCatalogService {
       compareAt,
       stock: stockBand(stock),
       images: p.assets.map((a) => a.path),
+      // نمایشِ روزمره‌ی گالری از بندانگشتی (چند ده کیلوبایت)؛ `images` برای
+      // لینکِ «نمایش بزرگ» و JSON-LD می‌ماند. نبودِ این فیلد یعنی موبایل روی
+      // 4G برای هر کالا چند تصویر تمام‌سایز دانلود می‌کرد.
+      thumbs: p.assets.map((a) => a.thumbnailPath ?? a.path),
     };
   }
 

@@ -62,7 +62,10 @@ export interface ShopProductDetail extends ShopProduct {
   description: string | null;
   weight: number | null;
   vehicles: string[];
+  /** نمایشِ بزرگ (۸۰۰px) — برای لینک تصویر و JSON-LD. */
   images: string[];
+  /** بندانگشتی ۳۰۰px برای نوار گالری؛ نبودش یعنی همان images. */
+  thumbs: string[];
 }
 
 /** GET /shop/facets */
