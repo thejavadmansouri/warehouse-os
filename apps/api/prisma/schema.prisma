@@ -61,6 +61,7 @@ model User {
   shortagesResolved       ProductShortage[]        @relation("ShortageResolver")
   workTasksRequested      WorkTask[]               @relation("WorkTaskRequester")
   workTasksAssigned       WorkTask[]               @relation("WorkTaskAssignee")
+  workTaskAssigneeRows    WorkTaskAssignee[]
   workTaskItemsDone       WorkTaskItem[]           @relation("WorkTaskItemDoneBy")
   onlineOrdersDecided     OnlineOrder[]            @relation("OnlineOrderDecider")
   paymentReversals        PaymentReversal[]        @relation("ReversalActor")
@@ -163,8 +164,20 @@ model Brand {
 model Supplier {
   id        String            @id @default(uuid())
   name      String
+  /// نام مسئول خرید / رابط در شرکت تأمین‌کننده.
+  contactName String?
   phone     String?
   address   String?
+  note      String?
+  /// مهلت پرداخت پیش‌فرض ما به این تأمین‌کننده (روز). صفر = همان روز.
+  /// قرینه‌ی Customer.creditDays — آنجا مشتری به ما بدهکار است، اینجا ما به او.
+  creditDays Int              @default(0)
+  /// نحوهٔ تسویهٔ پیش‌فرض با این شرکت.
+  preferredPayMethod PaymentMethod?
+  bankName     String?
+  bankAccount  String?
+  /// شبا بدون IR — اختیاری برای کارت‌به‌کارت / حواله.
+  iban         String?
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
   products  Product[]
@@ -261,6 +274,7 @@ model Product {
   favorites           Favorite[]
   reviews             ProductReview[]
   stockNotifies       StockNotify[]
+  printJobItems       PrintJobItem[]
 
   @@index([searchTokens], type: Gin)
   @@index([labelPrintedAt])
@@ -314,8 +328,12 @@ model ProductPrice {
   /// می‌شود، پس هیچ‌وقت با قیمت ناهماهنگ نمی‌شود. اگر خالی باشد یا از
   /// `salePrice` بیشتر نباشد، سایت هیچ تخفیفی نشان نمی‌دهد.
   compareAtPrice Float?
-  createdAt      DateTime @default(now())
-  product        Product  @relation(fields: [productId], references: [id])
+  /// تاریخِ اثرِ قیمت خرید (تاریخ فاکتور خرید یا تاریخی که مدیر دستی زده).
+  /// با `createdAt` فرق دارد: ممکن است فاکتور دیروز امروز وارد شود.
+  /// برای ردیف‌های قدیمی null می‌ماند و UI به `createdAt` برمی‌گردد.
+  purchasePriceAt DateTime?
+  createdAt       DateTime @default(now())
+  product         Product  @relation(fields: [productId], references: [id])
 
   // «آخرین قیمتِ هر محصول» (`where productId, orderBy createdAt desc, take 1`) در
   // هر لیست/جستجو/جزئیاتِ محصول include می‌شود؛ بدون این ایندکس هر محصول یک اسکنِ
@@ -458,6 +476,10 @@ model PurchaseInvoice {
   supplierRef    String?
   /// تاریخِ روی برگه. با تاریخِ ثبت فرق دارد: فاکتور دیروز ممکن است امروز وارد شود.
   invoiceDate    DateTime?
+  /// سررسید پرداخت ما به تأمین‌کننده — قرینه‌ی dueDate فاکتور فروش.
+  dueDate        DateTime?
+  /// نحوهٔ تسویهٔ این فاکتور (نقد / کارت / چک / نسیه).
+  payMethod      PaymentMethod?
   subtotal       Float          @default(0)
   discount       Float          @default(0)
   total          Float          @default(0)
@@ -474,6 +496,8 @@ model PurchaseInvoice {
   user        User?          @relation("PurchaseRecorder", fields: [userId], references: [id])
   cancelledBy User?          @relation("PurchaseCanceller", fields: [cancelledById], references: [id])
   lines       InventoryLog[]
+  /// کارهای چیدنِ ساخته‌شده از این فاکتور (معمولاً یکی فعال).
+  workTasks   WorkTask[]
 
   @@index([warehouseId, createdAt])
   @@index([supplierId])
@@ -795,13 +819,22 @@ model ImportRow {
   job ImportJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 }
 
+/// صف چاپ — لیبل کالا یا قفسه.
+///
+/// برای لیبل کالا بعد از تأیید مدیر ساخته می‌شود (status=PENDING) و فقط وقتی
+/// مدیر روی PC «تأیید و چاپ» بزند واقعاً به پرینتر می‌رود.
 model PrintJob {
   id     String @id @default(uuid())
+  /// PRODUCT_LABEL | LOCATION
   type   String
+  /// PENDING | PROCESSING | COMPLETED | FAILED | CANCELLED
   status String @default("PENDING")
 
   totalItems   Int @default(0)
   printedItems Int @default(0)
+
+  /// مثلاً REVIEW_APPROVE | MANUAL — برای ردیابی منبع صف
+  source String?
 
   createdById String
   createdBy   User   @relation(fields: [createdById], references: [id])
@@ -810,20 +843,36 @@ model PrintJob {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status, type, createdAt])
 }
 
 model PrintJobItem {
   id String @id @default(uuid())
 
   jobId String
-  job   PrintJob @relation(fields: [jobId], references: [id])
+  job   PrintJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
   locationId String?
   location   Location? @relation(fields: [locationId], references: [id])
 
+  /// لیبل کالا — برای type=PRODUCT_LABEL
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id])
+
+  /// چند نسخه از همین لیبل (معمولاً = تعداد ورود)
+  copies Int @default(1)
+
+  /// عملیات تأییدشده‌ای که این آیتم را ساخت (اگر از review آمده باشد)
+  pendingOperationId String?
+  pendingOperation   PendingOperation? @relation(fields: [pendingOperationId], references: [id], onDelete: SetNull)
+
   status String @default("PENDING")
 
   createdAt DateTime @default(now())
+
+  @@index([productId])
+  @@index([pendingOperationId])
 }
 
 /// Worker-captured inventory operation awaiting manager approval.
@@ -857,6 +906,7 @@ model PendingOperation {
   worker     User?     @relation("PendingWorker", fields: [workerId], references: [id])
   reviewedBy User?     @relation("PendingReviewer", fields: [reviewedById], references: [id])
   assets     Asset[] // optional worker photos (0..n); v1 captures at most one
+  printJobItems PrintJobItem[]
 
   @@index([warehouseId, status])
   @@index([status])
@@ -1142,7 +1192,9 @@ model WorkTask {
   /// ارجاع اختیاری به سند — فقط برای نمایش («فاکتور ۱۲۳۴»)، هیچ تأثیری روی سند.
   invoiceId      String?
   quotationId    String?
-  /// null = «هر کارگری که آزاد است».
+  /// فاکتور خرید مبدأ کارِ چیدن — برای ارسالِ بعدی و جلوگیری از Task تکراری.
+  purchaseId     String?
+  /// null = «هر کارگری» یا چند نفر از جدول assignees؛ مقدار = یک کارگر مشخص (سازگاری قدیم).
   assignedToId   String?
   requestedById  String?
   note           String?
@@ -1153,20 +1205,37 @@ model WorkTask {
   createdAt      DateTime       @default(now())
   updatedAt      DateTime       @updatedAt
 
-  warehouse   Warehouse      @relation(fields: [warehouseId], references: [id])
-  invoice     SaleInvoice?   @relation(fields: [invoiceId], references: [id])
-  quotation   Quotation?     @relation(fields: [quotationId], references: [id])
-  requestedBy User?          @relation("WorkTaskRequester", fields: [requestedById], references: [id])
-  assignedTo  User?          @relation("WorkTaskAssignee", fields: [assignedToId], references: [id])
+  warehouse   Warehouse          @relation(fields: [warehouseId], references: [id])
+  invoice     SaleInvoice?       @relation(fields: [invoiceId], references: [id])
+  quotation   Quotation?         @relation(fields: [quotationId], references: [id])
+  purchase    PurchaseInvoice?   @relation(fields: [purchaseId], references: [id])
+  requestedBy User?              @relation("WorkTaskRequester", fields: [requestedById], references: [id])
+  assignedTo  User?              @relation("WorkTaskAssignee", fields: [assignedToId], references: [id])
+  /// گیرنده‌های چندنفره — اگر خالی باشد منطق assignedToId / «هر کارگری» برقرار است.
+  assignees   WorkTaskAssignee[]
   items       WorkTaskItem[]
 
   @@index([warehouseId, status, createdAt])
   @@index([assignedToId, status])
   @@index([invoiceId])
+  @@index([purchaseId])
   // صفِ کارگر و صفحه‌ی مدیر هر دو با نوع فیلتر می‌شوند.
   @@index([kind, status])
   // «فوری‌ها اول، بعد قدیمی‌ترها» — ترتیبِ صفِ کارگر.
   @@index([priority, createdAt])
+}
+
+/// تخصیص چند کارگر به یک Task — یک فاکتور خرید را چند نفر با هم می‌چینند
+/// و هر قلم را اولی که تیک زد برمی‌دارد (ادعای اتمیک روی WorkTaskItem).
+model WorkTaskAssignee {
+  taskId String
+  userId String
+
+  task WorkTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User     @relation(fields: [userId], references: [id])
+
+  @@id([taskId, userId])
+  @@index([userId])
 }
 
 /// یک قلمِ کارِ کارگر — کالا + قفسه + تعداد + وضعیت تیک.
@@ -1998,6 +2067,18 @@ model ShopSettings {
   /// نیست، ولی شماره‌ی تماس دیده می‌شود.
   showUnpriced  Boolean  @default(true)
 
+  /// ─── عکس سایت / واترمارک ───
+  /// روی عکس‌های محصول که برای سایت آماده می‌شوند زده می‌شود.
+  watermarkEnabled   Boolean @default(true)
+  /// متن واترمارک؛ خالی = نام مغازه.
+  watermarkText      String  @default("")
+  /// شفافیت ۰–۱۰۰ (۲۵ یعنی کم‌رنگ و خوانا).
+  watermarkOpacity   Int     @default(25)
+  /// bottom-right | bottom-left | center
+  watermarkPosition  String  @default("bottom-right")
+  /// وقتی کالا عکس سایت + لیبل چاپ‌شده + موجودی دارد، showOnline خودکار روشن شود؟
+  autoPublishOnline  Boolean @default(false)
+
   /// ─── واحد پول ───
   ///
   /// سه فیلد، ولی فقط دوتاشان «انتخاب»‌اند؛ اولی یک **واقعیت** است.
@@ -2118,10 +2199,13 @@ enum RestoreStatus {
 /// وقتی روزی چند بار چاپ می‌گیری، همین یک اصطکاک واقعی است.
 model LabelSettings {
   id              String  @id @default("singleton")
-  /// چند لیبل در هر ردیف روی کاغذ
+  /// چند لیبل در هر ردیف روی کاغذ A4 (برگه‌ای) — برای رول از mediaWidth/width حساب می‌شود
   columns         Int     @default(4)
-  widthMm         Int     @default(50)
-  heightMm        Int     @default(30)
+  /// عرض هر برچسب روی رول (میلی‌متر). رول ۱۰۰ ÷ این عدد = تعداد ستون
+  widthMm         Int     @default(33)
+  /// ارتفاع هر برچسب / تکه‌ی رول (میلی‌متر)
+  heightMm        Int     @default(25)
+  /// فاصله فیزیکی بین برچسب‌ها روی رول (GAP در TSPL)
   gapMm           Int     @default(2)
   /// نام کالا زیر بارکد چاپ شود
   showName        Boolean @default(true)
@@ -2133,9 +2217,9 @@ model LabelSettings {
   /// («کد ۱۲۳ — انبار مرکزی»، شماره ردیف قفسه، و…). خالی = بدون متن.
   footerText      String?
 
-  /// عرض فیزیکیِ رول (میلی‌متر). بزرگ‌تر از widthMm = چند لیبل کنار هم؛
-  /// مثلاً 100 با لیبل 50×30 یعنی دو برچسب کنار هم. خالی = همان widthMm.
-  mediaWidthMm Int?
+  /// عرض فیزیکی رول (میلی‌متر). مغازه همیشه ۱۰ سانتی = ۱۰۰.
+  /// بزرگ‌تر از widthMm = چند برچسب کنار هم (مثلاً ۱۰۰ با برچسب ۳۳ → سه تا).
+  mediaWidthMm Int? @default(100)
 
   /// --- پرینتر حرارتی لیبل (TSPL) ---
   /// نام پرینتر در ویندوز، وقتی با USB به همین سرور وصل است.
