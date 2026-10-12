@@ -20,8 +20,10 @@ const API_PUBLIC =
 /** نام فروشگاه از تنظیمات (تک‌منبع: همان که نوبار و فوتر نشان می‌دهند). */
 async function getShopName(): Promise<string> {
   try {
+    // revalidate کوتاه: تغییرِ نام توسط مدیر حداکثر چند دقیقه بعد در
+    // title همه‌ی صفحات می‌نشیند، نه یک ساعت.
     const res = await fetch(`${API_BASE}/shop/settings`, {
-      next: { revalidate: 3600 },
+      next: { revalidate: 600 },
     });
     if (!res.ok) return "شهر یدکی صادقی";
     const s = (await res.json()) as { name?: string };
