@@ -17,6 +17,16 @@ export interface ProcessedImageSet {
   thumbnail: ProcessedImage; // Max 300x300
 }
 
+export type WatermarkPosition = 'bottom-right' | 'bottom-left' | 'center';
+
+export interface WatermarkOptions {
+  enabled: boolean;
+  text: string;
+  /** 0–100 */
+  opacity: number;
+  position: WatermarkPosition;
+}
+
 /** Standard dimensions */
 const MASTER_MAX = 1200;
 const PRODUCT_MAX = 800;
@@ -37,10 +47,14 @@ export class ImageProcessService {
    * 3. Remove metadata (EXIF, GPS, etc.)
    * 4. Center product in frame with consistent padding
    * 5. Resize to target dimensions
-   * 6. Convert to WebP
-   * 7. Compress
+   * 6. Optional watermark (on master + product; not on tiny thumb)
+   * 7. Convert to WebP
+   * 8. Compress
    */
-  async processImage(inputBuffer: Buffer): Promise<ProcessedImageSet> {
+  async processImage(
+    inputBuffer: Buffer,
+    watermark?: WatermarkOptions | null,
+  ): Promise<ProcessedImageSet> {
     // Validate image is processable
     const metadata = await sharp(inputBuffer).metadata();
     if (!metadata.width || !metadata.height) {
@@ -48,13 +62,140 @@ export class ImageProcessService {
     }
 
     // Process all three sizes in parallel
-    const [master, product, thumbnail] = await Promise.all([
+    const [masterRaw, productRaw, thumbnail] = await Promise.all([
       this.resizeToSize(inputBuffer, MASTER_MAX),
       this.resizeToSize(inputBuffer, PRODUCT_MAX),
       this.resizeToSize(inputBuffer, THUMB_MAX),
     ]);
 
+    const master =
+      watermark?.enabled && watermark.text.trim()
+        ? await this.withWatermark(masterRaw, watermark)
+        : masterRaw;
+    const product =
+      watermark?.enabled && watermark.text.trim()
+        ? await this.withWatermark(productRaw, watermark)
+        : productRaw;
+
     return { master, product, thumbnail };
+  }
+
+  /**
+   * نام فایل SEO-friendly: sku + نام نرمال‌شده (لاتین/عدد/خط تیره).
+   * مثال: `100234-filter-roghan-peugeot-206.webp`
+   */
+  seoFileBase(sku: string, name: string): string {
+    const skuPart = (sku || 'item')
+      .toString()
+      .trim()
+      .replace(/[^\w.-]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 40) || 'item';
+
+    // تبدیل تقریبی حروف فارسی پرکاربرد به لاتین برای URL پایدار
+    const map: Record<string, string> = {
+      ا: 'a',
+      آ: 'a',
+      ب: 'b',
+      پ: 'p',
+      ت: 't',
+      ث: 's',
+      ج: 'j',
+      چ: 'ch',
+      ح: 'h',
+      خ: 'kh',
+      د: 'd',
+      ذ: 'z',
+      ر: 'r',
+      ز: 'z',
+      ژ: 'zh',
+      س: 's',
+      ش: 'sh',
+      ص: 's',
+      ض: 'z',
+      ط: 't',
+      ظ: 'z',
+      ع: 'a',
+      غ: 'gh',
+      ف: 'f',
+      ق: 'gh',
+      ک: 'k',
+      گ: 'g',
+      ل: 'l',
+      م: 'm',
+      ن: 'n',
+      و: 'v',
+      ه: 'h',
+      ی: 'y',
+      ئ: 'y',
+      ء: '',
+      '‌': '-',
+      ' ': '-',
+    };
+    let slug = '';
+    for (const ch of (name || '').trim().toLowerCase()) {
+      if (map[ch] !== undefined) slug += map[ch];
+      else if (/[a-z0-9]/.test(ch)) slug += ch;
+      else if (ch === '-' || ch === '_') slug += '-';
+    }
+    slug = slug.replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+    return slug ? `${skuPart}-${slug}` : skuPart;
+  }
+
+  private async withWatermark(
+    image: ProcessedImage,
+    opts: WatermarkOptions,
+  ): Promise<ProcessedImage> {
+    const text = opts.text.trim();
+    if (!text) return image;
+
+    const opacity = Math.min(100, Math.max(5, opts.opacity ?? 25)) / 100;
+    const fontSize = Math.max(18, Math.round(image.width * 0.045));
+    const padding = Math.round(fontSize * 0.6);
+    // SVG overlay — sharp composites it; text stays light for brand protection.
+    const escaped = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+    let x = padding;
+    let y = image.height - padding;
+    let anchor = 'start';
+    if (opts.position === 'bottom-right') {
+      x = image.width - padding;
+      anchor = 'end';
+    } else if (opts.position === 'center') {
+      x = Math.round(image.width / 2);
+      y = Math.round(image.height / 2);
+      anchor = 'middle';
+    }
+
+    const svg = Buffer.from(
+      `<svg width="${image.width}" height="${image.height}">
+        <text x="${x}" y="${y}" text-anchor="${anchor}"
+          font-family="Tahoma, Arial, sans-serif"
+          font-size="${fontSize}"
+          fill="rgba(255,255,255,${opacity})"
+          stroke="rgba(0,0,0,${Math.min(0.35, opacity)})"
+          stroke-width="0.8"
+          >${escaped}</text>
+      </svg>`,
+    );
+
+    const out = await sharp(image.buffer)
+      .composite([{ input: svg, top: 0, left: 0 }])
+      .webp({ quality: WEBP_QUALITY })
+      .toBuffer({ resolveWithObject: true });
+
+    return {
+      buffer: out.data,
+      width: out.info.width,
+      height: out.info.height,
+      size: out.data.length,
+      format: 'webp',
+    };
   }
 
   /**

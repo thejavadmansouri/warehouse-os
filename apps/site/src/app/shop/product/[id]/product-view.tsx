@@ -82,33 +82,55 @@ export function ProductView({ id }: { id: string }) {
         )}
       </nav>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* گالری */}
-        <div>
-          <div className="overflow-hidden rounded-xl border bg-white">
-            {image ? (
-              <img src={assetUrl(image)} alt={p.name} className="aspect-square w-full object-cover" />
-            ) : (
-              <div className="flex aspect-square items-center justify-center text-muted-foreground/30">
-                <ShoppingCart className="size-16" aria-hidden />
-              </div>
-            )}
-          </div>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        {/*
+          گالری به‌سبک دیجیکالا / فروشگاه‌های قطعه‌ی RTL:
+          تصویر اصلی با پس‌زمینه‌ی سفید + object-contain (قطعه‌ها بریده نشوند)،
+          بندانگشتی‌ها زیرش؛ روی دسکتاپ بندانگشتی عمودی کنار تصویر.
+        */}
+        <div className="flex flex-col-reverse gap-3 sm:flex-row">
           {images.length > 1 && (
-            <div className="mt-2 flex gap-2 overflow-x-auto">
+            <div className="flex gap-2 overflow-x-auto sm:max-h-[28rem] sm:w-[4.5rem] sm:flex-col sm:overflow-y-auto">
               {images.map((im, i) => (
                 <button
                   key={im}
                   type="button"
                   onClick={() => setActiveImg(i)}
                   aria-label={`تصویر ${toFa(i + 1)}`}
-                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 ${i === activeImg ? "border-primary" : "border-border"}`}
+                  className={`h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 bg-white ${
+                    i === activeImg ? "border-primary ring-1 ring-primary/30" : "border-border"
+                  }`}
                 >
-                    <img src={assetUrl(im)} alt="" className="h-full w-full object-cover" />
+                  <img
+                    src={assetUrl(im)}
+                    alt=""
+                    className="h-full w-full object-contain p-1"
+                  />
                 </button>
               ))}
             </div>
           )}
+          <div className="relative min-w-0 flex-1 overflow-hidden rounded-xl border bg-white">
+            {image ? (
+              <img
+                src={assetUrl(image)}
+                alt={p.name}
+                className="aspect-square w-full object-contain p-4"
+              />
+            ) : (
+              <div className="flex aspect-square items-center justify-center text-muted-foreground/30">
+                <ShoppingCart className="size-16" aria-hidden />
+              </div>
+            )}
+            {stock && (
+              <Badge
+                variant="secondary"
+                className={`absolute start-3 top-3 ${stock.cls}`}
+              >
+                {stock.label}
+              </Badge>
+            )}
+          </div>
         </div>
 
         {/* مشخصات و خرید */}

@@ -39,7 +39,7 @@ export function ProductCard({ product }: { product: ShopProduct }) {
             src={img}
             alt={product.name}
             loading="lazy"
-            className="h-full w-full object-cover transition-transform group-hover:scale-105"
+            className="h-full w-full bg-white object-contain p-2 transition-transform group-hover:scale-[1.03]"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground/40">

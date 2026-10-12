@@ -29,7 +29,18 @@ const EMPTY: ShopSettings = {
   storedUnit: "RIAL",
   panelUnit: "RIAL",
   siteUnit: "TOMAN",
+  watermarkEnabled: true,
+  watermarkText: "",
+  watermarkOpacity: 25,
+  watermarkPosition: "bottom-right",
+  autoPublishOnline: false,
 };
+
+const WATERMARK_POSITIONS = [
+  ["bottom-right", "پایین راست"],
+  ["bottom-left", "پایین چپ"],
+  ["center", "وسط"],
+] as const;
 
 const UNITS = [
   ["RIAL", "ریال"],
@@ -73,6 +84,11 @@ export function ShopSettingsPanel({ embedded }: { embedded?: boolean } = {}) {
         storedUnit: value.storedUnit,
         panelUnit: value.panelUnit,
         siteUnit: value.siteUnit,
+        watermarkEnabled: value.watermarkEnabled ?? true,
+        watermarkText: value.watermarkText ?? "",
+        watermarkOpacity: value.watermarkOpacity ?? 25,
+        watermarkPosition: value.watermarkPosition ?? "bottom-right",
+        autoPublishOnline: value.autoPublishOnline ?? false,
       }),
     onSuccess: () => {
       toast.success("مشخصات مغازه ذخیره شد");
@@ -246,6 +262,86 @@ export function ShopSettingsPanel({ embedded }: { embedded?: boolean } = {}) {
             placeholder="مثلاً: کالای فروخته‌شده تا ۷ روز با فاکتور پس گرفته می‌شود"
           />
         </Field>
+
+        <div className="rounded-lg border bg-muted/20 p-4">
+          <p className="mb-1 text-sm font-medium">عکس سایت و واترمارک</p>
+          <p className="mb-3 text-xs text-muted-foreground">
+            روی عکس‌هایی که از دوربین اپ برای سایت آماده می‌شوند زده می‌شود.
+            نام فایل برای SEO از SKU و نام کالا ساخته می‌شود.
+          </p>
+
+          <label className="mb-3 flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={value.watermarkEnabled ?? true}
+              onChange={(e) => set("watermarkEnabled", e.target.checked)}
+            />
+            واترمارک فعال باشد
+          </label>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="متن واترمارک">
+              <Input
+                value={value.watermarkText ?? ""}
+                onChange={(e) => set("watermarkText", e.target.value)}
+                placeholder="خالی = نام مغازه"
+                disabled={!(value.watermarkEnabled ?? true)}
+              />
+            </Field>
+            <Field label="شفافیت (۰–۱۰۰)">
+              <Input
+                dir="ltr"
+                className="text-right tabular-nums"
+                inputMode="numeric"
+                value={String(value.watermarkOpacity ?? 25)}
+                onChange={(e) => {
+                  const n = parseInt(faToEn(e.target.value), 10);
+                  set(
+                    "watermarkOpacity",
+                    Number.isFinite(n) ? Math.min(100, Math.max(0, n)) : 25,
+                  );
+                }}
+                disabled={!(value.watermarkEnabled ?? true)}
+              />
+            </Field>
+          </div>
+
+          <div className="mt-4">
+            <Field label="جای واترمارک">
+              <div className="flex gap-1">
+                {WATERMARK_POSITIONS.map(([pos, label]) => (
+                  <button
+                    key={pos}
+                    type="button"
+                    disabled={!(value.watermarkEnabled ?? true)}
+                    onClick={() => set("watermarkPosition", pos)}
+                    className={`h-9 flex-1 rounded-md border text-sm font-medium transition-colors ${
+                      (value.watermarkPosition ?? "bottom-right") === pos
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hover:border-primary hover:text-primary"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </div>
+
+          <label className="mt-4 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 accent-primary"
+              checked={value.autoPublishOnline ?? false}
+              onChange={(e) => set("autoPublishOnline", e.target.checked)}
+            />
+            <span>
+              انتشار خودکار صفحهٔ سایت وقتی کالا عکس سایت، لیبل چاپ‌شده و موجودی
+              دارد
+            </span>
+          </label>
+        </div>
 
         <Button
           className="h-11"

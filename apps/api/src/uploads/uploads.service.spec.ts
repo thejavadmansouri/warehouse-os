@@ -4,6 +4,7 @@ import type { Express } from 'express';
 import sharp from 'sharp';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImagePipeline } from '../common/image-pipeline';
+import { ProductImagesService } from '../product-images/product-images.service';
 import { UploadsService } from './uploads.service';
 
 /** Minimal valid JPEG header (FF D8 FF) padded to the 12-byte sniff minimum. */
@@ -40,6 +41,10 @@ describe('UploadsService', () => {
         UploadsService,
         ImagePipeline,
         { provide: PrismaService, useValue: prisma },
+        {
+          provide: ProductImagesService,
+          useValue: { promoteInventoryPhotos: jest.fn().mockResolvedValue({ promoted: 0, assetIds: [], published: false }) },
+        },
       ],
     }).compile();
     service = module.get<UploadsService>(UploadsService);

@@ -79,10 +79,27 @@ export class UploadsController {
   }
 
   /**
-   * Authenticated photo retrieval for Manager Review. Role-gated (unlike the
-   * public /storage static mount); pass ?variant=thumb for the list thumbnail.
+   * عکس هنگام چیدن — کارگر موقع گذاشتن جنس روی قفسه می‌گیرد.
+   * فشرده + واترمارک فروشگاه → PRODUCT_IMAGE برای سایت/ترب/دیجیکالا.
    */
-  @Roles(Role.MANAGER, Role.ADMIN)
+  @Roles(Role.STAFF, Role.MANAGER, Role.ADMIN)
+  @Post('work-task-item/:itemId/photo')
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }),
+  )
+  async uploadWorkTaskItemPhoto(
+    @Param('itemId', new ParseUUIDPipe()) itemId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    return this.uploadsService.uploadWorkTaskItemPhoto(itemId, file);
+  }
+
+  /**
+   * Authenticated photo retrieval (review + «کارهای من» روی اپ).
+   * Role-gated (unlike the public /storage static mount); pass ?variant=thumb
+   * for the list thumbnail. STAFF needs this to see photos they captured.
+   */
+  @Roles(Role.STAFF, Role.MANAGER, Role.ADMIN)
   @Get('photo/:assetId')
   async getPhoto(
     @Param('assetId', new ParseUUIDPipe()) assetId: string,

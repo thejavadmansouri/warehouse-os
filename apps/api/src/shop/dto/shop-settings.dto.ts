@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -80,4 +81,31 @@ export class ShopSettingsDto {
   @IsOptional()
   @IsBoolean()
   showUnpriced?: boolean;
+
+  /** واترمارک روی عکس‌های سایت */
+  @IsOptional()
+  @IsBoolean()
+  watermarkEnabled?: boolean;
+
+  /** متن واترمارک؛ خالی = نام مغازه */
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  watermarkText?: string;
+
+  /** شفافیت ۰–۱۰۰ */
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  watermarkOpacity?: number;
+
+  @IsOptional()
+  @IsIn(['bottom-right', 'bottom-left', 'center'])
+  watermarkPosition?: 'bottom-right' | 'bottom-left' | 'center';
+
+  /** وقتی عکس + لیبل + موجودی آماده شد، صفحهٔ سایت خودکار روشن شود؟ */
+  @IsOptional()
+  @IsBoolean()
+  autoPublishOnline?: boolean;
 }

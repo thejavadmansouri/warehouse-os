@@ -19,6 +19,11 @@ export interface ShopSettingsInput {
   panelUnit?: CurrencyUnit;
   siteUnit?: CurrencyUnit;
   showUnpriced?: boolean;
+  watermarkEnabled?: boolean;
+  watermarkText?: string;
+  watermarkOpacity?: number;
+  watermarkPosition?: 'bottom-right' | 'bottom-left' | 'center';
+  autoPublishOnline?: boolean;
 }
 
 @Injectable()
@@ -65,6 +70,21 @@ export class ShopService {
       ...(input.siteUnit !== undefined ? { siteUnit: input.siteUnit } : {}),
       ...(input.showUnpriced !== undefined
         ? { showUnpriced: input.showUnpriced }
+        : {}),
+      ...(input.watermarkEnabled !== undefined
+        ? { watermarkEnabled: input.watermarkEnabled }
+        : {}),
+      ...(input.watermarkText !== undefined
+        ? { watermarkText: input.watermarkText.trim() }
+        : {}),
+      ...(input.watermarkOpacity !== undefined
+        ? { watermarkOpacity: input.watermarkOpacity }
+        : {}),
+      ...(input.watermarkPosition !== undefined
+        ? { watermarkPosition: input.watermarkPosition }
+        : {}),
+      ...(input.autoPublishOnline !== undefined
+        ? { autoPublishOnline: input.autoPublishOnline }
         : {}),
     };
 

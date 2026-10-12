@@ -5,6 +5,7 @@ import { join } from 'path';
 import type { Express } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { ImagePipeline } from '../common/image-pipeline';
+import { ProductImagesService } from '../product-images/product-images.service';
 
 @Injectable()
 export class UploadsService {
@@ -19,6 +20,7 @@ export class UploadsService {
   constructor(
     private prisma: PrismaService,
     private images: ImagePipeline,
+    private productImages: ProductImagesService,
   ) {
     for (const p of [
       this.productPath,
@@ -132,6 +134,70 @@ export class UploadsService {
         inventoryLogId: logId,
       },
     });
+  }
+
+  /**
+   * عکس هنگام چیدن کالا (WorkTask PUTAWAY).
+   *
+   * فشرده‌سازی ImagePipeline → Asset(INVENTORY_IMAGE) روی productId →
+   * promote به PRODUCT_IMAGE با WebP + واترمارک تنظیمات فروشگاه.
+   */
+  async uploadWorkTaskItemPhoto(itemId: string, file: Express.Multer.File) {
+    const item = await this.prisma.workTaskItem.findUnique({
+      where: { id: itemId },
+      select: { id: true, productId: true },
+    });
+    if (!item) {
+      throw new NotFoundException({
+        error: 'WORK_TASK_ITEM_NOT_FOUND',
+        message: 'قلم کار پیدا نشد',
+      });
+    }
+
+    const p = await this.images.process(file);
+
+    const existing = await this.prisma.asset.findFirst({
+      where: {
+        productId: item.productId,
+        type: 'INVENTORY_IMAGE',
+        sha256: p.sha256,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      const promoted = await this.productImages.promoteInventoryPhotos(
+        item.productId,
+      );
+      return { id: existing.id, ...promoted };
+    }
+
+    const base = `putaway-${item.id}-${p.sha256.slice(0, 12)}`;
+    writeFileSync(join(this.inventoryPhotoPath, `${base}.jpg`), p.mainBuffer);
+    writeFileSync(
+      join(this.inventoryPhotoPath, `${base}.thumb.jpg`),
+      p.thumbBuffer,
+    );
+
+    const asset = await this.prisma.asset.create({
+      data: {
+        path: `/storage/inventory-photos/${base}.jpg`,
+        thumbnailPath: `/storage/inventory-photos/${base}.thumb.jpg`,
+        fileName: `${base}.jpg`,
+        type: 'INVENTORY_IMAGE',
+        mimeType: 'image/jpeg',
+        bytes: p.mainBuffer.length,
+        width: p.width,
+        height: p.height,
+        sha256: p.sha256,
+        productId: item.productId,
+      },
+      select: { id: true },
+    });
+
+    const promoted = await this.productImages.promoteInventoryPhotos(
+      item.productId,
+    );
+    return { id: asset.id, ...promoted };
   }
 
   /**

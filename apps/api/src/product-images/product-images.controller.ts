@@ -73,6 +73,107 @@ export class ProductImagesController {
     });
   }
 
+  /** کالاهای آماده‌ی صفحهٔ سایت (عکس / لیبل / موجودی). */
+  @Get('site-ready')
+  siteReady(@Query('limit') limit?: string) {
+    return this.service.listSiteReady(limit ? parseInt(limit, 10) : 100);
+  }
+
+  /**
+   * GET /admin/product-images/file/:path*
+   * Serve staging image files with auth protection.
+   * قبل از `:id` تا مسیر file بلعیده نشود.
+   */
+  @Get('file/*')
+  async serveFile(
+    @Res({ passthrough: true }) res: Response,
+    @Req() req: Request,
+  ) {
+    // Extract the path after /admin/product-images/file/
+    const fullPath = (req.params as any)[0] as string;
+    if (!fullPath) throw new NotFoundException('File not found');
+
+    // Security: prevent path traversal
+    const normalized = fullPath.replace(/\.\./g, '').replace(/^\/+/, '');
+    const absolute = join(process.cwd(), normalized);
+
+    // Only allow serving from storage/staging or storage/products
+    if (
+      !absolute.includes('storage/staging') &&
+      !absolute.includes('storage/products')
+    ) {
+      throw new NotFoundException('File not found');
+    }
+
+    if (!existsSync(absolute)) {
+      throw new NotFoundException('File not found');
+    }
+
+    // Determine MIME type from extension
+    const ext = absolute.split('.').pop()?.toLowerCase() ?? '';
+    const mimeMap: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      webp: 'image/webp',
+      gif: 'image/gif',
+    };
+    const mimeType = mimeMap[ext] ?? 'application/octet-stream';
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    return createReadStream(absolute);
+  }
+
+  /**
+   * POST /admin/product-images/search
+   * Queue an image search for products and return immediately. The background
+   * worker drains the queue; progress shows up in /stats.
+   */
+  @Post('search')
+  async startSearch(@Body() body: StartSearchDto) {
+    return this.service.enqueueSearch({
+      productIds: body.productIds,
+      limit: body.limit,
+      brandId: body.brandId,
+    });
+  }
+
+  /**
+   * POST /admin/product-images/bulk-approve
+   * Bulk approve HIGH confidence candidates only.
+   */
+  @Post('bulk-approve')
+  async bulkApprove(@Body() body: BulkActionDto, @Req() req: Request) {
+    const userId = (req as any).user?.id;
+    return this.service.bulkApprove(body.candidateIds, userId);
+  }
+
+  /**
+   * POST /admin/product-images/bulk-reject
+   * Bulk reject candidates.
+   */
+  @Post('bulk-reject')
+  async bulkReject(
+    @Body() body: BulkActionDto & { reason?: string },
+    @Req() req: Request,
+  ) {
+    const userId = (req as any).user?.id;
+    return this.service.bulkReject(body.candidateIds, userId, body.reason);
+  }
+
+  /** عکس‌های دوربین اپ → عکس سایت با واترمارک و نام SEO. */
+  @Post('promote/:productId')
+  promoteFromInventory(@Param('productId') productId: string) {
+    return this.service.promoteInventoryPhotos(productId);
+  }
+
+  /** روشن کردن showOnline وقتی عکس + لیبل + موجودی آماده است. */
+  @Post('publish/:productId')
+  publishPage(@Param('productId') productId: string) {
+    return this.service.publishProductPage(productId);
+  }
+
   /**
    * GET /admin/product-images/:id
    * Get single candidate with full details.
@@ -115,88 +216,5 @@ export class ProductImagesController {
   async searchAgain(@Param('id') id: string) {
     const candidate = await this.service.getCandidate(id);
     return this.service.enqueueSearch({ productIds: [candidate.productId] });
-  }
-
-  /**
-   * POST /admin/product-images/search
-   * Queue an image search for products and return immediately. The background
-   * worker drains the queue; progress shows up in /stats.
-   */
-  @Post('search')
-  async startSearch(@Body() body: StartSearchDto) {
-    return this.service.enqueueSearch({
-      productIds: body.productIds,
-      limit: body.limit,
-      brandId: body.brandId,
-    });
-  }
-
-  /**
-   * POST /admin/product-images/bulk-approve
-   * Bulk approve HIGH confidence candidates only.
-   */
-  @Post('bulk-approve')
-  async bulkApprove(@Body() body: BulkActionDto, @Req() req: Request) {
-    const userId = (req as any).user?.id;
-    return this.service.bulkApprove(body.candidateIds, userId);
-  }
-
-  /**
-   * POST /admin/product-images/bulk-reject
-   * Bulk reject candidates.
-   */
-  @Post('bulk-reject')
-  async bulkReject(
-    @Body() body: BulkActionDto & { reason?: string },
-    @Req() req: Request,
-  ) {
-    const userId = (req as any).user?.id;
-    return this.service.bulkReject(body.candidateIds, userId, body.reason);
-  }
-
-  /**
-   * GET /admin/product-images/file/:path*
-   * Serve staging image files with auth protection.
-   * The :path* param captures the relative path after "file/".
-   */
-  @Get('file/*')
-  async serveFile(
-    @Res({ passthrough: true }) res: Response,
-    @Req() req: Request,
-  ) {
-    // Extract the path after /admin/product-images/file/
-    const fullPath = (req.params as any)[0] as string;
-    if (!fullPath) throw new NotFoundException('File not found');
-
-    // Security: prevent path traversal
-    const normalized = fullPath.replace(/\.\./g, '').replace(/^\/+/, '');
-    const absolute = join(process.cwd(), normalized);
-
-    // Only allow serving from storage/staging or storage/products
-    if (
-      !absolute.includes('storage/staging') &&
-      !absolute.includes('storage/products')
-    ) {
-      throw new NotFoundException('File not found');
-    }
-
-    if (!existsSync(absolute)) {
-      throw new NotFoundException('File not found');
-    }
-
-    // Determine MIME type from extension
-    const ext = absolute.split('.').pop()?.toLowerCase() ?? '';
-    const mimeMap: Record<string, string> = {
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      webp: 'image/webp',
-      gif: 'image/gif',
-    };
-    const mimeType = mimeMap[ext] ?? 'application/octet-stream';
-
-    res.setHeader('Content-Type', mimeType);
-    res.setHeader('Cache-Control', 'private, max-age=3600');
-    return createReadStream(absolute);
   }
 }

@@ -1071,4 +1071,267 @@ export class ProductImagesService {
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // عکس دوربین اپ → عکس سایت (واترمارک + SEO) + انتشار صفحه
+  // ═══════════════════════════════════════════════════════════════════════
+
+  private async watermarkOptions(): Promise<{
+    enabled: boolean;
+    text: string;
+    opacity: number;
+    position: 'bottom-right' | 'bottom-left' | 'center';
+    autoPublishOnline: boolean;
+  }> {
+    const shop = await this.prisma.shopSettings.upsert({
+      where: { id: 'singleton' },
+      update: {},
+      create: { id: 'singleton' },
+    });
+    const text =
+      (shop.watermarkText || '').trim() || (shop.name || '').trim() || 'Warehouse OS';
+    const pos = shop.watermarkPosition;
+    const position =
+      pos === 'bottom-left' || pos === 'center' ? pos : 'bottom-right';
+    return {
+      enabled: shop.watermarkEnabled,
+      text,
+      opacity: shop.watermarkOpacity,
+      position,
+      autoPublishOnline: shop.autoPublishOnline,
+    };
+  }
+
+  /**
+   * عکس‌های انبار (دوربین اپ) را برای یک کالا به PRODUCT_IMAGE سایت تبدیل می‌کند:
+   * WebP چندسایزه، واترمارک تنظیمات، نام فایل SEO.
+   */
+  async promoteInventoryPhotos(productId: string): Promise<{
+    promoted: number;
+    assetIds: string[];
+    published: boolean;
+  }> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deletedAt: null },
+      select: { id: true, name: true, sku: true },
+    });
+    if (!product) throw new NotFoundException('کالا پیدا نشد');
+
+    // عکس‌های عملیات ورودی که به این کالا وصل شده‌اند
+    const assets = await this.prisma.asset.findMany({
+      where: {
+        type: 'INVENTORY_IMAGE',
+        OR: [
+          { productId },
+          {
+            pendingOperation: { productId, status: 'APPROVED' },
+          },
+          {
+            inventoryLog: { productId },
+          },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 8,
+    });
+
+    if (!assets.length) {
+      return { promoted: 0, assetIds: [], published: false };
+    }
+
+    const wm = await this.watermarkOptions();
+    const finalDir = join(process.cwd(), FINAL_BASE);
+    if (!existsSync(finalDir)) mkdirSync(finalDir, { recursive: true });
+
+    const seoBase = this.processService.seoFileBase(product.sku, product.name);
+    const createdIds: string[] = [];
+
+    for (let i = 0; i < assets.length; i++) {
+      const src = assets[i];
+      const abs = join(process.cwd(), src.path.replace(/^\//, ''));
+      if (!existsSync(abs)) continue;
+
+      // جلوگیری از دوباره‌کاری روی همان بایت‌ها
+      if (src.sha256) {
+        const already = await this.prisma.asset.findFirst({
+          where: {
+            productId,
+            type: 'PRODUCT_IMAGE',
+            sha256: src.sha256,
+          },
+          select: { id: true },
+        });
+        if (already) {
+          createdIds.push(already.id);
+          continue;
+        }
+      }
+
+      try {
+        const raw = readFileSync(abs);
+        const set = await this.processService.processImage(raw, {
+          enabled: wm.enabled,
+          text: wm.text,
+          opacity: wm.opacity,
+          position: wm.position,
+        });
+
+        const suffix = assets.length > 1 ? `-${i + 1}` : '';
+        const stamp = Date.now().toString(36);
+        const base = `${seoBase}${suffix}-${stamp}`;
+        const mainName = `${base}.webp`;
+        const thumbName = `${base}.thumb.webp`;
+
+        writeFileSync(join(finalDir, mainName), set.product.buffer);
+        writeFileSync(join(finalDir, thumbName), set.thumbnail.buffer);
+
+        const created = await this.prisma.asset.create({
+          data: {
+            path: `/storage/products/${mainName}`,
+            thumbnailPath: `/storage/products/${thumbName}`,
+            fileName: mainName,
+            type: 'PRODUCT_IMAGE',
+            productId,
+            mimeType: 'image/webp',
+            bytes: set.product.size,
+            width: set.product.width,
+            height: set.product.height,
+            sha256: src.sha256 ?? this.processService.computeSha256(raw),
+          },
+        });
+        createdIds.push(created.id);
+
+        // لینک عکس انبار به کالا تا بعداً پیدا شود
+        if (!src.productId) {
+          await this.prisma.asset.update({
+            where: { id: src.id },
+            data: { productId },
+          });
+        }
+      } catch (err) {
+        this.logger.warn(
+          `promoteInventoryPhotos ${productId} asset ${src.id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+    }
+
+    let published = false;
+    if (wm.autoPublishOnline && createdIds.length > 0) {
+      const res = await this.publishProductPage(productId);
+      published = res.published;
+    }
+
+    return {
+      promoted: createdIds.length,
+      assetIds: createdIds,
+      published,
+    };
+  }
+
+  /**
+   * صفحهٔ سایت برای کالا: showOnline=true وقتی عکس سایت + لیبل چاپ‌شده + موجودی دارد.
+   */
+  async publishProductPage(productId: string): Promise<{
+    published: boolean;
+    reason?: string;
+    productId: string;
+  }> {
+    const product = await this.prisma.product.findFirst({
+      where: { id: productId, deletedAt: null },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        showOnline: true,
+        labelPrintedAt: true,
+        isActive: true,
+        assets: {
+          where: { type: 'PRODUCT_IMAGE' },
+          select: { id: true },
+          take: 1,
+        },
+        inventories: { select: { quantity: true } },
+      },
+    });
+    if (!product) throw new NotFoundException('کالا پیدا نشد');
+    if (!product.isActive) {
+      return { published: false, reason: 'کالا غیرفعال است', productId };
+    }
+    if (!product.assets.length) {
+      return { published: false, reason: 'عکس سایت ندارد', productId };
+    }
+    if (!product.labelPrintedAt) {
+      return { published: false, reason: 'لیبل هنوز چاپ نشده', productId };
+    }
+    const stock = product.inventories.reduce((s, i) => s + i.quantity, 0);
+    if (stock <= 0) {
+      return { published: false, reason: 'موجودی صفر است', productId };
+    }
+
+    if (!product.showOnline) {
+      await this.prisma.product.update({
+        where: { id: productId },
+        data: { showOnline: true },
+      });
+    }
+    return { published: true, productId };
+  }
+
+  /** کالاهایی که آماده‌ی صفحهٔ سایت‌اند یا نزدیک آماده‌اند. */
+  async listSiteReady(limit = 100) {
+    const take = Math.min(200, Math.max(1, limit));
+    const products = await this.prisma.product.findMany({
+      where: {
+        deletedAt: null,
+        isActive: true,
+        OR: [
+          { showOnline: false },
+          {
+            assets: { some: { type: 'PRODUCT_IMAGE' } },
+          },
+        ],
+        inventories: { some: { quantity: { gt: 0 } } },
+      },
+      select: {
+        id: true,
+        name: true,
+        sku: true,
+        showOnline: true,
+        labelPrintedAt: true,
+        assets: {
+          where: { type: 'PRODUCT_IMAGE' },
+          select: { id: true, thumbnailPath: true, path: true },
+          take: 1,
+        },
+        inventories: { select: { quantity: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take,
+    });
+
+    return {
+      data: products
+        .map((p) => {
+          const stock = p.inventories.reduce((s, i) => s + i.quantity, 0);
+          const hasImage = p.assets.length > 0;
+          const hasLabel = !!p.labelPrintedAt;
+          const ready = hasImage && hasLabel && stock > 0;
+          return {
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            stock,
+            hasImage,
+            hasLabel,
+            showOnline: p.showOnline,
+            ready,
+            image: p.assets[0]?.thumbnailPath ?? p.assets[0]?.path ?? null,
+            sitePath: `/shop/product/${p.id}`,
+          };
+        })
+        .filter((p) => p.hasImage || p.ready || (!p.showOnline && p.stock > 0)),
+    };
+  }
 }
