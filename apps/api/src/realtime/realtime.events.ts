@@ -24,7 +24,15 @@ export type RealtimeEventType =
   | 'shortage.created'
   | 'shortage.updated'
   | 'online-order.created'
-  | 'online-order.decided';
+  | 'online-order.decided'
+  /** فاکتور خرید ثبت یا باطل شد — موجودی، بدهی تأمین‌کننده و قیمت خرید عوض شده. */
+  | 'purchase.changed'
+  /** مشخصات تأمین‌کننده ساخته/ویرایش شد. */
+  | 'supplier.changed'
+  /** مشخصات مشتری (نام، شماره، سقف اعتبار، دسته…) ساخته/ویرایش شد. */
+  | 'customer.changed'
+  /** کالا یا قیمتش ساخته/ویرایش/حذف شد. */
+  | 'product.changed';
 
 export interface RealtimeEvent {
   type: RealtimeEventType;
@@ -37,6 +45,8 @@ export interface RealtimeEvent {
   taskId?: string | null;
   /** سفارش سایت — فقط شناسه، خودِ سفارش از REST گرفته می‌شود. */
   orderId?: string | null;
+  purchaseId?: string | null;
+  supplierId?: string | null;
   /** زمان تولید رویداد (ISO) — سرور پر می‌کند اگر خالی باشد. */
   at?: string;
 }

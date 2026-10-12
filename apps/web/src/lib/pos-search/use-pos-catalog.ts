@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getPosCatalog } from "@/lib/api";
+import type { PosCatalogRow } from "@/lib/types";
+import { subscribeLiveEvent } from "@/lib/use-live-events";
 
 import {
   type CatalogState,
@@ -28,6 +30,10 @@ export interface PosCatalog {
     productId: string,
     patch: { salePrice?: number | null; managerPrice?: number | null },
   ) => void;
+  /** کالای تازه‌ساخته را همان لحظه در کش محلی بگذار — بدون رفرش صفحه. */
+  upsertLocal: (row: PosCatalogRow) => void;
+  /** کش را از سرور تازه کن (بعد از ساخت/ویرایش کالا). */
+  refreshNow: () => void;
 }
 
 /**
@@ -45,9 +51,12 @@ export function usePosCatalog(): PosCatalog {
 
   // The built index is derived from state; rebuilt only when state changes,
   // never per keystroke.
+  // فقط به byId وابسته — جلو رفتنِ cursor به‌تنهایی نباید ایندکسِ ۳۳ هزار
+  // ردیفی را از نو بسازد.
+  const byId = state.byId;
   const index = useMemo<CatalogIndex>(
-    () => indexCatalog(toCatalogItems(state)),
-    [state],
+    () => indexCatalog(toCatalogItems({ byId, cursor: null })),
+    [byId],
   );
 
   // Keep the latest cursor in a ref so the refresh timer reads it without being
@@ -69,16 +78,26 @@ export function usePosCatalog(): PosCatalog {
     try {
       let page = 1;
       let hasMore = true;
+      let serverTime: string | undefined;
       const batches: Awaited<ReturnType<typeof getPosCatalog>>["products"][] = [];
       while (hasMore && page <= MAX_PAGES) {
         const res = await getPosCatalog(page, PAGE_SIZE, since);
+        serverTime ??= res.serverTime;
         batches.push(res.products);
         hasMore = res.hasMore;
         page = res.page + 1;
       }
       const rows = batches.flat();
-      if (rows.length > 0) {
-        setState((prev) => mergeCatalog(prev, rows));
+      if (rows.length > 0 || serverTime) {
+        setState((prev) => {
+          const next = rows.length > 0 ? mergeCatalog(prev, rows) : prev;
+          // زمان سرور cursor است، نه updatedAtِ کالا — تا کالایی که فقط
+          // موجودی/قیمتش عوض شده هر بار دوباره نیاید.
+          if (serverTime && (!next.cursor || serverTime > next.cursor)) {
+            return { byId: next.byId, cursor: serverTime };
+          }
+          return next;
+        });
       }
     } finally {
       loadingRef.current = false;
@@ -134,9 +153,30 @@ export function usePosCatalog(): PosCatalog {
     const id = window.setInterval(tick, REFRESH_MS);
     const onFocus = () => tick();
     window.addEventListener("focus", onFocus);
+
+    /*
+     * کالا/قیمت یا فاکتور خرید جای دیگری عوض شد → sync افزایشی همان لحظه (فقط
+     * ردیف‌های تغییرکرده). stock.changed عمداً اینجا نیست: هر فروش یعنی ساختِ
+     * دوباره‌ی ایندکس کل کاتالوگ، و موجودی اینجا فقط برای ترتیبِ نتایج است —
+     * عددِ واقعی لحظه‌ی انتخاب تازه گرفته می‌شود؛ چرخه‌ی ۳ دقیقه‌ای کافی است.
+     */
+    let liveTimer: number | undefined;
+    const onLive = () => {
+      if (liveTimer) return;
+      liveTimer = window.setTimeout(() => {
+        liveTimer = undefined;
+        tick();
+      }, 1000);
+    };
+    const unsubs = ["product.changed", "purchase.changed"].map(
+      (t) => subscribeLiveEvent(t, onLive),
+    );
+
     return () => {
       window.clearInterval(id);
       window.removeEventListener("focus", onFocus);
+      if (liveTimer) window.clearTimeout(liveTimer);
+      unsubs.forEach((u) => u());
     };
   }, [pull]);
 
@@ -167,5 +207,20 @@ export function usePosCatalog(): PosCatalog {
     [],
   );
 
-  return { ready, count: state.byId.size, search, updateProductPrices };
+  const upsertLocal = useCallback((row: PosCatalogRow) => {
+    setState((prev) => mergeCatalog(prev, [row]));
+  }, []);
+
+  const refreshNow = useCallback(() => {
+    void pull(cursorRef.current ?? undefined).catch(() => {});
+  }, [pull]);
+
+  return {
+    ready,
+    count: state.byId.size,
+    search,
+    updateProductPrices,
+    upsertLocal,
+    refreshNow,
+  };
 }

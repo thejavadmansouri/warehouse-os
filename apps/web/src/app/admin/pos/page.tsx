@@ -575,8 +575,9 @@ export default function PosPage() {
    * هرگز «مرده» نباشد. بعد از آماده‌شدن، سرچ بدون هیچ رفت‌وبرگشتِ شبکه و
    * بدونِ مشکلِ کهنگیِ کش انجام می‌شود — دلیلِ اصلیِ کندیِ قبلی.
    *
-   * موجودی/قفسه عمداً در کاتالوگِ لوکال نیست: آن دو فقط لحظه‌ی انتخاب، تازه از
-   * سرور گرفته می‌شوند (`onPickRow`) تا فروش هرگز روی عددِ کهنه انجام نشود.
+   * قفسه در کاتالوگِ لوکال نیست و موجودی هم فقط برای رتبه‌بندی («موجودها
+   * اول») است: هر دو، لحظه‌ی انتخاب، تازه از سرور گرفته می‌شوند (`onPickRow`)
+   * تا فروش هرگز روی عددِ کهنه انجام نشود.
    */
   const posCatalog = usePosCatalog();
   const useLocalSearch = posCatalog.ready;
@@ -1187,7 +1188,7 @@ export default function PosPage() {
       getBlankQuotation(id)
         .then((q) => {
           if (q.unpricedCount > 0 || q.unlinkedCount > 0 || !q.lines.length) {
-            toast.error("این پیش‌فاکتور سفید هنوز کامل نیست");
+            toast.error("این فاکتور سفید هنوز کامل نیست");
             return;
           }
           const rows = q.lines.map((l) => ({
@@ -1220,11 +1221,11 @@ export default function PosPage() {
           setBlankQuotationId(q.id);
           invalidateIdem();
           toast.success(
-            `پیش‌فاکتور سفید ${toFa(q.number)} آماده‌ی انتخاب مشتری و پرداخت است`,
+            `فاکتور سفید ${toFa(q.number)} آماده‌ی انتخاب مشتری و پرداخت است`,
           );
           focusScan();
         })
-        .catch(() => toast.error("بارگذاری پیش‌فاکتور سفید ناموفق بود")),
+        .catch(() => toast.error("بارگذاری فاکتور سفید ناموفق بود")),
     [patchCart, invalidateIdem, focusScan],
   );
 
@@ -1865,8 +1866,9 @@ export default function PosPage() {
         customerId: customer?.id ?? null,
         discount: invoiceDiscount || undefined,
         note: note.trim() || undefined,
-        // روی حساب باز سررسید در تسویه ساخته می‌شود، نه حالا.
-        dueDate: accountId ? undefined : dueDate,
+        // سررسید حتی روی حساب باز همین‌جا می‌رود — API از لحظه‌ی بردن جنس
+        // معوق می‌سازد؛ قبلاً حذف می‌شد و F2/F7 برای مهلت ناهم‌رفتار بودند.
+        dueDate,
         lines: activeLines.map((l) => ({
           productId: l.productId,
           // قفسه‌ی خالی یعنی «کالا هنوز ثبت نشده» — سرور خودش مکان سیستمی را
@@ -2014,14 +2016,17 @@ export default function PosPage() {
    * می‌سازد؛ دوباره‌زدنِ همان دکمه (double-click/retry شبکه) تکراری نمی‌سازد.
    */
   const sendToWorker = useMutation({
-    mutationFn: (args: { assignedToId: string | null; note?: string }) => {
+    mutationFn: (args: { assignedToIds: string[]; note?: string }) => {
       // یادداشتِ کاربر + فهرستِ خودکارِ همه‌ی قفسه‌ها (اگر کالا چندمکانه بود).
       const noteParts = [args.note?.trim(), workerNoteRef.current].filter(
         (x): x is string => !!x,
       );
       return createWorkTask({
         warehouseId,
-        assignedToId: args.assignedToId,
+        assignedToIds: args.assignedToIds.length ? args.assignedToIds : undefined,
+        // سازگاری: یک نفر → ستون قدیم هم پر شود (سرور خودش resolve می‌کند).
+        assignedToId:
+          args.assignedToIds.length === 1 ? args.assignedToIds[0]! : null,
         note: noteParts.length ? noteParts.join("\n\n") : undefined,
         idempotencyKey: uuid(),
         lines: workerLinesRef.current,
@@ -2293,7 +2298,7 @@ export default function PosPage() {
       quotes: { run: () => setShowQuotes(true) },
       blankQuotes: {
         run: () => setShowBlankQuotes(true),
-        label: "پیش‌فاکتورهای سفید",
+        label: "فاکتورهای سفید",
       },
 
       // مرجوعی قفل به فاکتور است: نه قلمی اضافه می‌شود نه حذف. در ویرایشِ
@@ -2556,7 +2561,7 @@ export default function PosPage() {
           { keys: "Alt+Q", label: "پیش‌فاکتورهای باز — بارگذاری در سبد" },
           {
             keys: "Alt+B",
-            label: "پیش‌فاکتورهای سفید — قیمت‌گذاری و اتصال قلم‌ها",
+            label: "فاکتورهای سفید — قیمت‌گذاری و اتصال قلم‌ها",
             primary: true,
           },
           { keys: "F6", label: "تخفیف فاکتور" },
@@ -3649,7 +3654,7 @@ export default function PosPage() {
         open={showWorkerPicker}
         itemCount={workerItemCount}
         pending={sendToWorker.isPending}
-        onPick={(id, note) => sendToWorker.mutate({ assignedToId: id, note })}
+        onPick={(ids, note) => sendToWorker.mutate({ assignedToIds: ids, note })}
         onClose={() => {
           setShowWorkerPicker(false);
           focusScan();
@@ -3666,7 +3671,7 @@ export default function PosPage() {
           setCustomer(c);
           invalidateIdem();
         }}
-        onSubmit={(payments) => submit.mutate({ payments })}
+        onSubmit={(payments, dueDate) => submit.mutate({ payments, dueDate })}
         onOpenFullPayment={() => {
           if (blankQuotationId && !customer) {
             toast.info("اول مشتری را انتخاب کنید");
@@ -3762,6 +3767,36 @@ export default function PosPage() {
           if (!v) focusScan();
         }}
         mode="create"
+        onSuccess={(p) => {
+          // بدون رفرش صفحه در کش محلی دیده شود؛ refresh سرور توکن جست‌وجو را کامل می‌کند.
+          posCatalog.upsertLocal({
+            id: p.id,
+            name: p.name,
+            sku: p.sku ?? null,
+            partNumber: p.partNumber ?? null,
+            unit: p.unit ?? null,
+            isActive: p.isActive !== false,
+            searchTokens: p.name
+              ? p.name.split(/\s+/).filter(Boolean)
+              : [],
+            barcodes: [p.internalBarcode, p.factoryBarcode].filter(
+              (x): x is string => !!x,
+            ),
+            brand: p.brand?.name ?? null,
+            vehicleModel: p.vehicleModel?.name ?? null,
+            salePrice: p.salePrice ?? null,
+            purchasePrice: p.purchasePrice ?? null,
+            suggestedPrice: null,
+            managerPrice: p.managerPrice ?? null,
+            updatedAt: p.updatedAt ?? new Date().toISOString(),
+            deleted: false,
+          });
+          posCatalog.refreshNow();
+          void qc.invalidateQueries({ queryKey: ["pos-inline"] });
+          void qc.invalidateQueries({ queryKey: ["pos-locate"] });
+          void qc.invalidateQueries({ queryKey: ["products"] });
+          focusScan();
+        }}
       />
 
       <PaymentDialog

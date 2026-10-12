@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronDown } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/auth-store";
 import {
@@ -16,38 +16,73 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ROLE_LABELS } from "@/lib/format";
 
+/**
+ * راست‌چینِ واقعیِ منوی راست (استاندارد رایج پنل فارسی):
+ *
+ * ردیف با `dir=ltr` + `justify-end` تا ترتیب «لوگو/آیکن ← متن» حفظ شود
+ * و کل ردیف به لبه‌ی راست بچسبد — متن راست‌ترین عنصر است، لوگو دقیقاً قبلش.
+ * نه اینکه با `dir=rtl` متن برود سمت چپِ آیکن.
+ */
+
 function NavLink({
   item,
   collapsed,
   isActive,
+  nested,
 }: {
   item: NavItem;
   collapsed: boolean;
   isActive: boolean;
+  nested?: boolean;
 }) {
   const Icon = item.icon;
   return (
     <Link
       href={item.href ?? "#"}
       title={collapsed ? item.title : undefined}
+      dir="ltr"
       className={cn(
-        "group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-        collapsed && "justify-center px-2",
+        "relative flex w-full items-center justify-end gap-2.5 rounded-lg text-sm font-medium transition-colors",
+        collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2",
+        nested && !collapsed && "py-1.5 text-[13px]",
         isActive
-          ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
-          : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-sidebar-foreground/85 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
       )}
     >
-      <Icon className="h-5 w-5 shrink-0" />
-      {!collapsed ? <span className="truncate">{item.title}</span> : null}
+      {/* نوار فعال روی لبه‌ی راست فیزیکی منو */}
+      {isActive ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute inset-y-1.5 right-0 w-[3px] rounded-full bg-sidebar-primary",
+            collapsed && "inset-y-2",
+          )}
+        />
+      ) : null}
+
+      {/* dir=ltr + justify-end → [آیکن][متن] چسبیده به راست؛ متن راست‌ترین است */}
+      <Icon
+        className={cn(
+          "size-[1.125rem] shrink-0",
+          nested && "size-4 opacity-80",
+          isActive && "text-sidebar-primary",
+        )}
+      />
+      {!collapsed ? (
+        <span
+          className={cn(
+            "min-w-0 truncate text-right",
+            isActive && "font-semibold",
+          )}
+        >
+          {item.title}
+        </span>
+      ) : null}
     </Link>
   );
 }
 
-/**
- * هابِ جمع‌شونده (فقط در حالتِ بازِ سایدبار). اگر یکی از فرزندان فعال باشد،
- * خودش را باز نگه می‌دارد تا کاربر همیشه بداند کجاست.
- */
 function NavGroup({
   item,
   isActive,
@@ -62,32 +97,49 @@ function NavGroup({
   const anyActive = children.some((c) => c.href && isActive(c.href));
   const [open, setOpen] = React.useState(() => anyActive);
 
+  React.useEffect(() => {
+    if (anyActive) setOpen(true);
+  }, [anyActive]);
+
   return (
-    <div>
+    <div className="flex flex-col gap-0.5">
       <button
         type="button"
+        dir="ltr"
         onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
         className={cn(
-          "group flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+          "flex w-full items-center justify-end gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
           anyActive
-            ? "text-sidebar-foreground"
-            : "text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            ? "bg-sidebar-accent/70 text-sidebar-accent-foreground"
+            : "text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
         )}
       >
-        <Icon className="h-5 w-5 shrink-0" />
-        <span className="flex-1 truncate text-start">{item.title}</span>
-        {open ? (
-          <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
-        ) : (
-          <ChevronLeft className="h-4 w-4 shrink-0 opacity-60" />
-        )}
+        {/* فلش سمت چپ ردیف؛ آیکن + عنوان چسبیده به راست */}
+        <ChevronDown
+          className={cn(
+            "me-auto size-4 shrink-0 text-sidebar-foreground/45 transition-transform duration-200",
+            !open && "-rotate-90",
+          )}
+        />
+        <Icon className="size-[1.125rem] shrink-0" />
+        <span className="min-w-0 truncate text-right">{item.title}</span>
       </button>
 
       {open ? (
-        <div className="mt-1 flex flex-col gap-1 border-s-2 border-sidebar-border ms-4 ps-2">
+        <div
+          className="me-3 flex flex-col gap-0.5 border-r-2 border-sidebar-border pe-2"
+          role="group"
+          aria-label={item.title}
+        >
           {children.map((c) => (
             <div key={c.href ?? c.title} onClick={onNavigate}>
-              <NavLink item={c} collapsed={false} isActive={c.href ? isActive(c.href) : false} />
+              <NavLink
+                item={c}
+                collapsed={false}
+                nested
+                isActive={c.href ? isActive(c.href) : false}
+              />
             </div>
           ))}
         </div>
@@ -96,10 +148,6 @@ function NavGroup({
   );
 }
 
-/**
- * یک آیتمِ ناوبری — برگ یا هاب. در حالتِ جمع‌شده‌ی سایدبار، هاب‌ها صاف می‌شوند
- * (فرزندان به‌صورت آیکنِ تنها) تا هیچ صفحه‌ای پشتِ یک هابِ بازنشدنی گم نشود.
- */
 function NavTree({
   item,
   collapsed,
@@ -128,7 +176,11 @@ function NavTree({
       <>
         {item.children.map((c) => (
           <div key={c.href ?? c.title} onClick={onNavigate}>
-            <NavLink item={c} collapsed isActive={c.href ? isActive(c.href) : false} />
+            <NavLink
+              item={c}
+              collapsed
+              isActive={c.href ? isActive(c.href) : false}
+            />
           </div>
         ))}
       </>
@@ -138,11 +190,6 @@ function NavTree({
   return <NavGroup item={item} isActive={isActive} onNavigate={onNavigate} />;
 }
 
-/**
- * یک بخشِ سایدبار — سرتیترش جمع‌شونده است تا سایدبار به‌جای یک فهرستِ بلندِ
- * همیشه‌باز، چند سرتیترِ کوتاه باشد. پیش‌فرض فقط بخشی باز است که صفحه‌ی فعال
- * در آن است؛ رفتن به هر صفحه، بخشش را خودش باز می‌کند.
- */
 function SidebarSection({
   section,
   collapsed,
@@ -157,20 +204,17 @@ function SidebarSection({
   const containsActive = section.items.some(
     (it) =>
       (it.href ? isActive(it.href) : false) ||
-      (it.children?.some((c) => (c.href ? isActive(c.href) : false)) ?? false)
+      (it.children?.some((c) => (c.href ? isActive(c.href) : false)) ?? false),
   );
-  const [open, setOpen] = React.useState(() => containsActive);
+  const [open, setOpen] = React.useState(true);
 
-  /*
-   * بخشِ سنجاق‌شده سرتیتر ندارد و جمع نمی‌شود.
-   *
-   * کارهای هرروزه نباید پشتِ یک سرتیترِ دیگر باشند؛ سرتیتر برای چیزی است که
-   * ماهی یک بار باز می‌شود. ردیف‌هایش هم بدونِ تورفتگی می‌آیند تا واقعاً «بالای»
-   * منو دیده شوند، نه زیرمجموعه‌ی چیزی.
-   */
+  React.useEffect(() => {
+    if (containsActive) setOpen(true);
+  }, [containsActive]);
+
   if (section.pinned) {
     return (
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-0.5">
         {section.items.map((item) => (
           <NavTree
             key={item.href ?? item.title}
@@ -186,8 +230,8 @@ function SidebarSection({
 
   if (collapsed) {
     return (
-      <div className="flex flex-col gap-1">
-        <div className="mx-auto my-1 h-px w-6 bg-sidebar-border" />
+      <div className="flex flex-col gap-0.5">
+        <div className="mx-auto my-1.5 h-px w-8 bg-sidebar-border" />
         {section.items.map((item) => (
           <NavTree
             key={item.href ?? item.title}
@@ -201,26 +245,27 @@ function SidebarSection({
     );
   }
 
-  const SectionIcon = section.icon;
-
   return (
-    <div className="flex flex-col gap-1">
-      {/* سرتیترِ بخش هم‌زبانِ بقیه‌ی ردیف‌هاست: آیکن + متنِ ۱۴px + فلش — نه یک
-          برچسبِ ریزِ متفاوت. تنها فرقش رنگِ کم‌رنگ‌ترِ متن است تا «گروه» بودنش
-          خوانده شود. */}
+    <div className="flex flex-col gap-0.5">
       <button
         type="button"
+        dir="ltr"
         onClick={() => setOpen((o) => !o)}
-        className="group flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-sidebar-foreground/70 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        aria-expanded={open}
+        className="flex w-full items-center justify-end gap-2 px-3 pb-1 pt-2"
       >
-        <SectionIcon className="h-5 w-5 shrink-0" />
-        <span className="flex-1 truncate text-start">{section.title}</span>
         <ChevronDown
-          className={cn("h-4 w-4 shrink-0 opacity-60 transition-transform", !open && "-rotate-90")}
+          className={cn(
+            "size-3.5 shrink-0 text-sidebar-foreground/35 transition-transform duration-200 me-auto",
+            !open && "-rotate-90",
+          )}
         />
+        <span className="text-[11px] font-semibold tracking-wide text-sidebar-foreground/45">
+          {section.title}
+        </span>
       </button>
       {open ? (
-        <div className="flex flex-col gap-1 border-s-2 border-sidebar-border ms-4 ps-2">
+        <div className="flex flex-col gap-0.5">
           {section.items.map((item) => (
             <NavTree
               key={item.href ?? item.title}
@@ -254,33 +299,36 @@ export function AdminSidebar({
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      {/* لوگو / برند */}
+      {/*
+        برند: متن راست‌ترین، لوگو دقیقاً قبلش (چپِ متن).
+        dir=ltr + justify-end → [لوگو][کاردو] چسبیده به راست.
+      */}
       <div
+        dir="ltr"
         className={cn(
-          "flex h-16 items-center gap-3 border-b border-sidebar-border px-4",
-          collapsed && "justify-center px-2"
+          "flex h-14 shrink-0 items-center justify-end gap-3 border-b border-sidebar-border",
+          collapsed ? "justify-center px-2" : "px-4",
         )}
       >
         <img
           src="/logo.png"
           alt="کاردو"
-          className="h-10 w-10 shrink-0 rounded-xl shadow-sm"
+          className="size-9 shrink-0 rounded-lg shadow-sm"
         />
         {!collapsed ? (
-          <div className="min-w-0">
+          <div className="min-w-0 text-right">
             <p className="truncate text-sm font-bold leading-tight text-sidebar-foreground">
               کاردو
             </p>
-            <p className="truncate text-[11px] text-sidebar-foreground/60">
+            <p className="truncate text-[11px] text-sidebar-foreground/55">
               پنل مدیریت
             </p>
           </div>
         ) : null}
       </div>
 
-      {/* ناوبری */}
-      <ScrollArea className="flex-1 px-2 py-3">
-        <nav className="flex flex-col gap-3">
+      <ScrollArea className="min-h-0 flex-1">
+        <nav className="flex flex-col gap-3 px-2.5 py-3" aria-label="منوی اصلی">
           {sections.map((section, index) => (
             <SidebarSection
               key={`${section.title || "pinned"}-${index}`}
@@ -293,18 +341,20 @@ export function AdminSidebar({
         </nav>
       </ScrollArea>
 
-      {/* اطلاعات کاربر پایین */}
       {!collapsed && user ? (
-        <div className="border-t border-sidebar-border p-3">
-          <div className="flex items-center gap-3 rounded-md bg-sidebar-accent/50 p-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
-              {user.fullName?.charAt(0) ?? user.username.charAt(0)}
+        <div className="shrink-0 border-t border-sidebar-border p-2.5">
+          <div
+            dir="ltr"
+            className="flex items-center justify-end gap-2.5 rounded-lg bg-sidebar-accent/60 px-2.5 py-2"
+          >
+            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-sidebar-primary text-xs font-bold text-sidebar-primary-foreground">
+              {(user.fullName ?? user.username).charAt(0)}
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 text-right">
               <p className="truncate text-xs font-semibold text-sidebar-foreground">
                 {user.fullName}
               </p>
-              <p className="truncate text-[11px] text-sidebar-foreground/60">
+              <p className="truncate text-[11px] text-sidebar-foreground/55">
                 {ROLE_LABELS[user.role] ?? user.role}
               </p>
             </div>
@@ -327,15 +377,14 @@ export function SidebarCollapseToggle({
       variant="ghost"
       size="icon"
       onClick={onToggle}
-      className="h-8 w-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted"
+      className="size-8 shrink-0 rounded-md text-muted-foreground hover:bg-muted"
       title={collapsed ? "باز کردن منو" : "جمع کردن منو"}
     >
-      <ChevronLeft
-        className={cn(
-          "h-4 w-4 transition-transform",
-          collapsed && "rotate-180"
-        )}
-      />
+      {collapsed ? (
+        <ChevronLeft className="size-4" />
+      ) : (
+        <ChevronRight className="size-4" />
+      )}
     </Button>
   );
 }

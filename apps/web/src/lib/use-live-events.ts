@@ -17,16 +17,6 @@ function eventsSocketUrl(token: string): string {
   return `${proto}//${host}:${API_PORT}/events/ws?token=${encodeURIComponent(token)}`;
 }
 
-/**
- * نگاشتِ رویداد → پیشوندِ queryKeyهایی که باید تازه شوند.
- *
- * چرا هدفمند به‌جای invalidateِ همه: روی یک POS شلوغ، «همه» یعنی هر رویدادِ فروش،
- * هر کوئریِ فعالِ صفحه را refetch می‌کند (از جمله جستجوی زنده حین تایپ) — دقیقاً
- * همان کندی‌ای که نمی‌خواهیم. اینجا فقط کوئری‌های مرتبط را بی‌اعتبار می‌کنیم.
- *
- * React Query پیشوندی مطابقت می‌دهد: ["rep"] با ["rep","sales",...] هم می‌خورد.
- * رویدادِ ناشناس → fallbackِ امن: همه.
- */
 // ───────── تعاملِ جانبی با رویدادها (توست، زنگ، …) ─────────
 //
 // `useLiveEvents` خودش فقط invalidate می‌کند؛ هر کسی هم که می‌خواهد روی یک
@@ -61,182 +51,192 @@ function dispatchLiveEvent(type: string | undefined, payload: unknown) {
   }
 }
 
+/*
+ * ───────── گروه‌های دامنه ─────────
+ *
+ * هر صفحه‌ای که عددِ پولی (مانده، جمع فاکتور، رسید…) نشان می‌دهد کلیدش در
+ * MONEY است، و هر صفحه‌ای که موجودی/قفسه نشان می‌دهد در STOCK. رویدادها به
+ * گروه نگاشت می‌شوند نه به تک‌کلید — تا صفحه‌ی تازه فقط با افزودنِ کلیدش به
+ * یک گروه، در همه‌ی رویدادهای مربوط زنده شود.
+ *
+ * هزینه: invalidate فقط کوئری‌های «فعال» (روی صفحه) را refetch می‌کند؛ بقیه
+ * فقط stale علامت می‌خورند و تا باز نشوند هیچ درخواستی نمی‌زنند. پس گروهِ
+ * بزرگ = هزینه‌ی صفر برای صفحه‌های بسته.
+ *
+ * عمداً بیرون: کلیدهای جست‌وجوی زنده (pos-locate, pos-inline, *-search) — تا
+ * هر فروش وسطِ تایپ نتیجه‌ها را پرش ندهد.
+ */
+const k = (...roots: string[]): string[][] => roots.map((r) => [r]);
+
+export const MONEY_KEYS = k(
+  // فاکتورها
+  "invoice",
+  "invoices-list",
+  "invoice-story",
+  "invoice-settlement",
+  "pos-recent-invoices",
+  "pos-invoices-panel",
+  "pos-customer-invoices",
+  "net-swap-invoices",
+  "returnable",
+  "correctable",
+  "returns",
+  "corrections",
+  "correction",
+  // مشتری و مانده
+  "customer",
+  "customers",
+  "debtors",
+  "customer-purchases",
+  "customer-today-count",
+  "customer-today-invoices",
+  "pos-customer-balances",
+  "pos-customer-lookup",
+  "checkout-customers",
+  "credit-check",
+  // حساب‌ها و پرداخت‌ها
+  "open-accounts",
+  "open-accounts-pick",
+  "open-accounts-registry",
+  "open-account",
+  "open-plain-invoices",
+  "open-plain-customer",
+  "open-account-customer",
+  "receipts",
+  "payouts",
+  "cheques",
+  // گزارش و حسابداری
+  "rep",
+  "statement",
+  "vouchers",
+  "alerts",
+);
+
+export const STOCK_KEYS = k(
+  "products",
+  "product",
+  "pos-stock-batch",
+  "inventory",
+  "kardex",
+  "label-coverage",
+  "labels-at",
+  "subtree-stats",
+  "pricing-products",
+  "site-ready-products",
+);
+
+const CATALOG_KEYS = k(
+  "products",
+  "product",
+  "pos-stock-batch",
+  "pricing-products",
+  "site-ready-products",
+  "part-catalog",
+  "pending-labels",
+  "pending-labels-count",
+  "label-coverage",
+  "labels-at",
+);
+
+const PURCHASE_KEYS = k("purchases", "suppliers", "supplier");
+
+const QUOTATION_KEYS = k("pos-open-quotations", "quotations", "quotation");
+
+/** ادغامِ چند گروه بدون کلیدِ تکراری. */
+function merge(...groups: string[][][]): string[][] {
+  const seen = new Set<string>();
+  const out: string[][] = [];
+  for (const g of groups) {
+    for (const key of g) {
+      const id = JSON.stringify(key);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      out.push(key);
+    }
+  }
+  return out;
+}
+
 /**
- * اکسپورت برای تستِ «همه‌ی رویدادهای بک‌اند نگاشت‌شده‌اند» — افزودنِ نوعِ
- * جدید در بک‌اند باید یا اینجا ثبت شود یا آگاهانه به fallbackِ سنگین واگذار.
+ * نگاشتِ رویداد → پیشوندِ queryKeyهایی که باید تازه شوند.
+ *
+ * React Query پیشوندی مطابقت می‌دهد: ["rep"] با ["rep","sales",...] هم می‌خورد.
+ * رویدادِ ناشناس → fallbackِ امن: همه.
+ *
+ * اکسپورت برای تستِ «همه‌ی رویدادهای بک‌اند نگاشت‌شده‌اند».
  */
 export const KEYS_BY_EVENT: Record<string, string[][]> = {
-  "sale.created": [
-    ["pos-recent-invoices"],
-    ["invoice"],
-    ["rep"],
-    ["customer"],
-    ["customer-purchases"],
-    ["customer-today-count"],
-    ["customer-today-invoices"],
-    ["open-accounts"],
-    ["pos-customer-balances"],
-    ["products"],
-  ],
-  "sale.canceled": [
-    ["pos-recent-invoices"],
-    ["invoice"],
-    ["rep"],
-    ["customer"],
-    ["customer-purchases"],
-    ["open-accounts"],
-    ["pos-customer-balances"],
-    ["products"],
-  ],
-  "stock.changed": [["products"]],
+  "sale.created": merge(MONEY_KEYS, STOCK_KEYS, QUOTATION_KEYS),
+  "sale.canceled": merge(MONEY_KEYS, STOCK_KEYS),
+  "stock.changed": STOCK_KEYS,
   /*
-   * رسید ثبت شد → مانده‌ی فاکتورها و خلاصه‌ی مشتری عوض شد. جدول‌های ریزگردش
-   * (پنل مشتری F4 و پرونده‌ی دفتری F3) و چیپِ «مانده کل» همان لحظه تازه می‌شوند
-   * — پنل باز می‌ماند و اعداد عوض می‌شوند، بدون هیچ رفرشِ دستی.
+   * رسید / پرداخت / برگشت و اصلاحِ پرداخت / چک / تسویه — همه فقط پول را
+   * جابه‌جا می‌کنند: مانده‌ی مشتری، باقیِ فاکتورها، گزارش‌ها و اسناد. یک
+   * گروه، تا «دریافت از فلانی» در هر صفحه‌ای که باز است همان لحظه دیده شود.
    */
-  "receipt.created": [
-    ["receipts"],
-    ["customer"],
-    ["open-accounts"],
-    ["rep"],
-    ["pos-customer-invoices"],
-    ["pos-customer-balances"],
-    ["open-plain-invoices"],
-    ["open-plain-customer"],
-    ["open-account-customer"],
-  ],
-  /*
-   * پرداخت به مشتری بستانکار — مانده‌اش عوض شد؛ فهرستِ حساب‌بازها (F3) که
-   * طلبکارها را هم نشان می‌دهد همان لحظه تازه می‌شود، بدون بستن پنل.
-   */
-  /*
-   * برگشتِ پرداخت (کارتخوان برگشت زد / بانک رد کرد) — مانده‌ی فاکتور و دفترِ
-   * مشتری عوض شد؛ همان تازه‌سازی‌های رسید، چون اثرش روی همین‌هاست.
-   */
-  "payment.reversed": [
-    ["receipts"],
-    ["invoice"],
-    ["customer"],
-    ["open-accounts"],
-    ["rep"],
-    ["pos-customer-invoices"],
-    ["pos-customer-balances"],
-    ["open-plain-invoices"],
-    ["open-plain-customer"],
-    ["open-account-customer"],
-  ],
-  /*
-   * اصلاح نحوهٔ پرداخت — تقسیمِ پرداختِ فاکتور عوض شد، پس هم خودِ فاکتور و هم
-   * مانده‌ی مشتری و هم گزارش‌ها تازه می‌شوند؛ دقیقاً همان مجموعهٔ برگشتِ پرداخت.
-   */
-  "payment.recomposed": [
-    ["receipts"],
-    ["invoice"],
-    ["customer"],
-    ["open-accounts"],
-    ["rep"],
-    ["pos-customer-invoices"],
-    ["pos-customer-balances"],
-    ["open-plain-invoices"],
-    ["open-plain-customer"],
-    ["open-account-customer"],
-  ],
-  "payout.created": [
-    ["payouts"],
-    ["customer"],
-    ["open-accounts"],
-    ["rep"],
-    ["pos-customer-balances"],
-    ["open-plain-customer"],
-    ["open-account-customer"],
-  ],
-  "return.created": [
-    ["pos-recent-invoices"],
-    ["returns"],
-    ["invoice"],
-    ["returnable"],
-    ["customer"],
-    ["customer-purchases"],
-    ["open-accounts"],
-    ["rep"],
-    ["products"],
-    // مانده‌ی فاکتورها و اثر روی ردیف‌های حسابِ کلی هم عوض می‌شود.
-    ["pos-customer-invoices"],
-    ["pos-customer-balances"],
-    ["open-plain-invoices"],
-    ["open-account"],
-  ],
-  /*
-   * اصلاحیه — قراردادِ همان برگشت: جمع و مانده و ردیف‌های حسابِ کلی.
-   * قبلاً به fallbackِ «همه را تازه کن» می‌افتاد؛ حالا هدفمند است.
-   */
-  "correction.created": [
-    ["corrections"],
-    ["correction"],
-    ["invoice"],
-    ["customer"],
-    ["customer-purchases"],
-    ["open-accounts"],
-    ["rep"],
-    ["products"],
-    ["pos-customer-invoices"],
-    ["pos-customer-balances"],
-    ["open-plain-invoices"],
-    ["open-account"],
-  ],
-  // حسابِ کلی ساخته شد → فهرستِ حساب‌بازها و رجیستری تازه شوند.
-  "open-account.created": [["open-accounts"], ["open-accounts-registry"]],
-  /*
-   * تسویه — نوبت‌ها CONFIRMED می‌شوند و در ریزگردش‌ها (F4 و F3) ظاهر می‌شوند؛
-   * سطل‌های بدهیِ مشتری هم عوض می‌شود.
-   */
-  "open-account.settled": [
-    ["open-accounts"],
-    ["open-accounts-registry"],
-    ["customer"],
-    ["rep"],
-    ["invoice"],
-    ["pos-customer-invoices"],
-    ["pos-customer-balances"],
-    ["open-plain-invoices"],
-    ["open-plain-customer"],
-    ["open-account-customer"],
-  ],
-  /* وصول/برگشتِ چک — مانده‌ی مشتری و فهرستِ حساب‌بازها عوض می‌شود. */
-  "cheque.updated": [
-    ["cheques"],
-    ["customer"],
-    ["rep"],
-    ["open-accounts"],
-    ["pos-customer-balances"],
-    ["open-plain-customer"],
-    ["open-account-customer"],
-  ],
-  "shortage.created": [["shortages"]],
-  "shortage.updated": [["shortages"]],
-  // تیکِ کارگر → پنل «کارهای انبار» و چیپِ پیشرفت روی فاکتورها تازه شوند.
-  "work-task.progress": [["work-tasks"], ["pos-recent-invoices"]],
-  // سفارشِ جدیدِ سایت آمد، یا وضعیتش تغییر کرد → صفِ تحویل، جزئیات و شمارِ
-  // زنگوله (سفارش‌های منتظرِ برداشت) تازه شوند.
-  "online-order.created": [["online-orders"], ["online-order-pending"]],
-  "online-order.decided": [
-    ["online-orders"],
-    ["online-order"],
-    ["online-order-pending"],
-  ],
+  "receipt.created": MONEY_KEYS,
+  "payout.created": MONEY_KEYS,
+  "payment.reversed": MONEY_KEYS,
+  "payment.recomposed": MONEY_KEYS,
+  "cheque.updated": MONEY_KEYS,
+  "open-account.created": MONEY_KEYS,
+  "open-account.settled": MONEY_KEYS,
+  "return.created": merge(MONEY_KEYS, STOCK_KEYS),
+  "correction.created": merge(MONEY_KEYS, STOCK_KEYS),
+  "shortage.created": k("shortages"),
+  "shortage.updated": k("shortages"),
+  // تیکِ کارگر → پنل «کارهای انبار»، چیپِ پیشرفت روی فاکتورها و سند خرید.
+  "work-task.progress": k("work-tasks", "pos-recent-invoices", "purchases"),
+  "online-order.created": k("online-orders", "online-order-pending"),
+  "online-order.decided": merge(
+    k("online-orders", "online-order", "online-order-pending"),
+    STOCK_KEYS,
+  ),
+  // خرید: موجودی، بدهی تأمین‌کننده، قیمت خرید (حاشیه‌ی سود) و اسناد.
+  "purchase.changed": merge(
+    PURCHASE_KEYS,
+    STOCK_KEYS,
+    CATALOG_KEYS,
+    k("rep", "statement", "vouchers", "work-tasks"),
+  ),
+  "supplier.changed": PURCHASE_KEYS,
+  "customer.changed": k(
+    "customer",
+    "customers",
+    "debtors",
+    "checkout-customers",
+    "credit-check",
+    "pos-customer-lookup",
+    "pos-customer-balances",
+    "open-accounts",
+  ),
+  "product.changed": CATALOG_KEYS,
 };
+
+/**
+ * فاصله‌ی polling که فقط وقتی کانال زنده قطع است فعال می‌شود.
+ *
+ * وقتی سوکت وصل است رویدادها خودشان صفحه را تازه می‌کنند و polling فقط CPU و
+ * شبکه را می‌سوزاند؛ وقتی قطع است، همان polling تنها راهِ تازه‌ماندن است.
+ */
+export function useFallbackPoll(ms: number): number | false {
+  const status = useRealtimeStore((s) => s.status);
+  return status === "up" ? false : ms;
+}
 
 /**
  * پلِ realtime بین سرور و React Query.
  *
  * یک‌بار (در QueryProvider) mount می‌شود، به /events/ws وصل می‌شود و روی هر
- * رویداد، کوئری‌ها را invalidate می‌کند تا React Query داده‌ی تازه را از همان
- * endpointِ guard-شده دوباره بگیرد — بدون هیچ رفرشِ دستی.
+ * رویداد، کوئری‌های گروهِ مربوط را invalidate می‌کند تا React Query داده‌ی تازه
+ * را از همان endpointِ guard-شده دوباره بگیرد — بدون هیچ رفرشِ دستی.
  *
- * چرا invalidateAll: رویدادها سبک و انسان‌سرعت‌اند (چند ثانیه یک‌بار)، و تنها
- * کوئری‌های «فعال/روی صفحه» واقعاً refetch می‌شوند؛ پس نگاشتِ شکننده‌ی
- * event→queryKey لازم نیست و هیچ صفحه‌ای جا نمی‌ماند. یک coalesce کوتاه هم چند
- * رویدادِ پشت‌سرهم (مثلاً فروش = sale.created + stock.changed) را یکی می‌کند.
+ * سه چیز که مصرف را پایین نگه می‌دارد:
+ *  - coalesce ۱۵۰ms: چند رویدادِ پشت‌سرهم (فروش = sale.created + stock.changed)
+ *    یک دورِ refetch می‌شود.
+ *  - فقط کوئری‌های روی صفحه refetch می‌شوند (رفتارِ خودِ React Query).
+ *  - تبِ پنهان (پشتِ تب دیگر / مینیمایز) هیچ refetchی نمی‌زند؛ کلیدها جمع
+ *    می‌شوند و با برگشتن به تب یک‌جا تازه می‌شوند.
  */
 export function useLiveEvents(): void {
   const queryClient = useQueryClient();
@@ -251,24 +251,28 @@ export function useLiveEvents(): void {
     let coalesceTimer: ReturnType<typeof setTimeout> | undefined;
     let attempt = 0;
 
-    // کلیدهای منتظرِ invalidate تا لحظه‌ی flush جمع می‌شوند؛ چند رویدادِ پشت‌سرهم
-    // (مثلاً فروش = sale.created + stock.changed) به یک دورِ invalidate تبدیل می‌شود.
     let pendingKeys = new Set<string>();
     let invalidateAll = false;
 
     const flush = () => {
       coalesceTimer = undefined;
+      // تب پنهان: صبر تا برگشتن کاربر — همان لحظه یک‌جا تازه می‌شود.
+      if (document.hidden) return;
       if (invalidateAll) {
         invalidateAll = false;
         pendingKeys.clear();
         void queryClient.invalidateQueries();
         return;
       }
-      const keys = [...pendingKeys].map((k) => JSON.parse(k) as string[]);
+      const keys = [...pendingKeys].map((key) => JSON.parse(key) as string[]);
       pendingKeys = new Set<string>();
       for (const queryKey of keys) {
         void queryClient.invalidateQueries({ queryKey });
       }
+    };
+
+    const schedule = () => {
+      if (!coalesceTimer) coalesceTimer = setTimeout(flush, 150);
     };
 
     const enqueue = (type: string | undefined) => {
@@ -279,8 +283,13 @@ export function useLiveEvents(): void {
       } else {
         for (const key of mapped) pendingKeys.add(JSON.stringify(key));
       }
-      if (!coalesceTimer) coalesceTimer = setTimeout(flush, 150);
+      schedule();
     };
+
+    const onVisible = () => {
+      if (!document.hidden && (invalidateAll || pendingKeys.size > 0)) schedule();
+    };
+    document.addEventListener("visibilitychange", onVisible);
 
     const connect = () => {
       if (closedByUs) return;
@@ -293,7 +302,10 @@ export function useLiveEvents(): void {
          * فهرستِ حساب‌بازها و… ممکن است کهنه باشند. یک invalidateِ کامل همان
          * لحظه همه را از سرور تازه می‌کند؛ فقط روی reconnect، نه اولین اتصال.
          */
-        if (attempt > 0) void queryClient.invalidateQueries();
+        if (attempt > 0) {
+          invalidateAll = true;
+          schedule();
+        }
         attempt = 0;
         useRealtimeStore.getState().setStatus("up");
       };
@@ -332,6 +344,7 @@ export function useLiveEvents(): void {
 
     return () => {
       closedByUs = true;
+      document.removeEventListener("visibilitychange", onVisible);
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (coalesceTimer) clearTimeout(coalesceTimer);
       ws?.close();

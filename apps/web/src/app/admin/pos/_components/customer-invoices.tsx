@@ -521,6 +521,16 @@ export function CustomerInvoicesPanel({
 
 const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
 const TD = "px-2 py-1.5 whitespace-nowrap";
+/** تلفن زیر هدر RTL: LTR + text-end (نه text-start که عدد را چپ می‌برد). */
+const TD_PHONE = `${TD} text-end tabular-nums text-muted-foreground`;
+const TH_NUM = `${TH} text-end`;
+const TD_NUM = `${TD} text-end font-bold tabular-nums`;
+
+function phoneOf(c: Customer): string {
+  const phone =
+    c.phones?.find((p) => p.isPrimary)?.phone ?? c.phones?.[0]?.phone;
+  return phone ? toFa(phone) : "—";
+}
 
 function CustomerTable({
   rows,
@@ -568,8 +578,8 @@ function CustomerTable({
           >
             <td className={`${TD} tabular-nums text-muted-foreground`}>{toFa(i + 1)}</td>
             <td className={`${TD} font-semibold`}>{c.fullName}</td>
-            <td dir="ltr" className={`${TD} text-start text-muted-foreground`}>
-              {c.phones?.find((p) => p.isPrimary)?.phone ?? c.phones?.[0]?.phone ?? "—"}
+            <td dir="ltr" className={TD_PHONE}>
+              {phoneOf(c)}
             </td>
             <td className={TD}>
               <span
@@ -627,7 +637,7 @@ function BalanceTable({
           <th className={`${TH} w-40`}>شماره</th>
           <th className={`${TH} w-20`}>فاکتور</th>
           <th className={`${TH} w-24`}>وضعیت</th>
-          <th className={`${TH} w-40`}>مانده</th>
+          <th className={`${TH_NUM} w-40`}>مانده</th>
         </tr>
       </thead>
       <tbody>
@@ -641,8 +651,8 @@ function BalanceTable({
           >
             <td className={`${TD} tabular-nums text-muted-foreground`}>{toFa(i + 1)}</td>
             <td className={`${TD} font-semibold`}>{b.fullName}</td>
-            <td dir="ltr" className={`${TD} text-start text-muted-foreground`}>
-              {b.phone ?? "—"}
+            <td dir="ltr" className={TD_PHONE}>
+              {b.phone ? toFa(b.phone) : "—"}
             </td>
             <td className={`${TD} tabular-nums text-muted-foreground`}>
               {b.balance > 0 ? toFa(b.invoiceCount) : "—"}
@@ -650,7 +660,7 @@ function BalanceTable({
             <td className={TD}>
               <BalanceBadge amount={b.balance} overdue={b.overdue > 0} />
             </td>
-            <td className={`${TD} text-end font-bold tabular-nums ${balanceTextClass(b.balance)}`}>
+            <td className={`${TD_NUM} ${balanceTextClass(b.balance)}`}>
               {money(b.balance)}
             </td>
           </tr>

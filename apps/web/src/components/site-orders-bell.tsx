@@ -16,12 +16,15 @@ import { Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { listOnlineOrders } from "@/lib/api";
 import { toFa } from "@/lib/format";
+import { useFallbackPoll } from "@/lib/use-live-events";
 
 export function SiteOrdersBell() {
+  // online-order.* این کلید را زنده نگه می‌دارد؛ polling فقط برای وقتِ قطعی.
+  const fallbackPoll = useFallbackPoll(60_000);
   const pending = useQuery({
     queryKey: ["online-order-pending"],
     queryFn: () => listOnlineOrders("PLACED"),
-    refetchInterval: 60_000,
+    refetchInterval: fallbackPoll,
     retry: 1,
   });
 

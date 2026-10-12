@@ -16,11 +16,14 @@ export function normalizePersian(input?: string | null): string {
 
   let t = input.normalize('NFC');
 
-  // Arabic → Persian letters
+  // Arabic → Persian letters + alef variants (آ/أ/إ → ا) so speech/typo match.
   t = t
     .replace(/[يى]/g, 'ی') // ي ى → ی
     .replace(/ك/g, 'ک') // ك → ک
-    .replace(/ة/g, 'ه'); // ة → ه
+    .replace(/ة/g, 'ه') // ة → ه
+    .replace(/[آأإٱ]/g, 'ا') // آ أ إ ٱ → ا  (ارم ≈ آرم، اراد ≈ آراد)
+    .replace(/ؤ/g, 'و')
+    .replace(/ئ/g, 'ی');
 
   // Persian / Arabic-Indic digits → ASCII
   t = t

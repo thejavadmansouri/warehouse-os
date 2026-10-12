@@ -215,7 +215,10 @@ export function EditCustomerDialog({
                       className="flex items-center gap-2 rounded-md bg-muted/40 px-2.5 py-1.5 text-sm"
                     >
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium tabular-nums" dir="ltr">
+                        <span
+                          dir="ltr"
+                          className="block truncate text-right font-medium tabular-nums"
+                        >
                           {toFa(p.phone)}
                         </span>
                         <span className="text-[11px] text-muted-foreground">

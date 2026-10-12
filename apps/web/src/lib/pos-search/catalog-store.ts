@@ -60,6 +60,7 @@ export function toCatalogItems(state: CatalogState): CatalogItem[] {
       unit: r.unit,
       brandName: r.brand,
       vehicleModelName: r.vehicleModel,
+      totalStock: r.totalStock ?? null,
     });
   }
   return items;

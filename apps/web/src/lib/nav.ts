@@ -21,7 +21,11 @@ import {
   PackagePlus,
   PackageCheck,
   Image,
+  Globe,
   ScrollText,
+  Tags,
+  Building2,
+  Receipt,
 } from "lucide-react";
 
 export interface NavItem {
@@ -81,14 +85,33 @@ export const NAV_SECTIONS: NavSection[] = [
       },
       {
         /*
-         * چهار سندِ فروش یک صفحه شدند و نوعِ سند یک تب است، نه ردیفِ منو.
-         * قبلاً «فاکتورها» اینجا سنجاق بود و بقیه زیرِ «بیشتر» — یعنی برای
-         * دیدنِ مرجوعیِ همان مشتری باید جای دیگری می‌گشتی.
+         * اسناد — فروش (فاکتور/پیش‌فاکتور/…) و خرید از تأمین‌کننده.
+         * قبلاً فاکتور خرید زیرِ انبار بود؛ الان کنار بقیه‌ی اسناد می‌نشیند
+         * تا «طرف حساب → فاکتور → اقلام» یک مسیر باشد.
          */
         title: "اسناد",
-        href: "/admin/documents",
         icon: Files,
         roles: ["ADMIN", "MANAGER", "SALES"],
+        children: [
+          {
+            title: "فروش",
+            href: "/admin/documents",
+            icon: Receipt,
+            roles: ["ADMIN", "MANAGER", "SALES"],
+          },
+          {
+            title: "فاکتور خرید",
+            href: "/admin/purchases",
+            icon: PackagePlus,
+            roles: ["ADMIN", "MANAGER"],
+          },
+          {
+            title: "تأمین‌کنندگان",
+            href: "/admin/suppliers",
+            icon: Building2,
+            roles: ["ADMIN", "MANAGER"],
+          },
+        ],
       },
       {
         title: "گزارش‌ها",
@@ -150,6 +173,12 @@ export const NAV_SECTIONS: NavSection[] = [
         roles: ["ADMIN", "MANAGER"],
       },
       {
+        title: "صفحهٔ سایت کالاها",
+        href: "/admin/site-products",
+        icon: Globe,
+        roles: ["ADMIN", "MANAGER"],
+      },
+      {
         // چهار جدولِ مرجع که ماهی یک بار باز می‌شوند، یک ردیف بس است.
         title: "داده‌های پایه",
         href: "/admin/base-data",
@@ -165,12 +194,6 @@ export const NAV_SECTIONS: NavSection[] = [
             title: "موجودی",
             href: "/admin/inventory",
             icon: Boxes,
-            roles: ["ADMIN", "MANAGER"],
-          },
-          {
-            title: "فاکتور خرید",
-            href: "/admin/purchases",
-            icon: PackagePlus,
             roles: ["ADMIN", "MANAGER"],
           },
           {
@@ -207,6 +230,16 @@ export const NAV_SECTIONS: NavSection[] = [
         title: "کارتابل",
         href: "/admin/inbox",
         icon: ClipboardCheck,
+        roles: ["ADMIN", "MANAGER"],
+      },
+      {
+        /*
+         * لیبل‌ها / بارکدها — صف تأیید چاپ روی PC، کالاهای چاپ‌نشده،
+         * و پوشش لیبل به تفکیک انبار و قفسه.
+         */
+        title: "لیبل‌ها / بارکدها",
+        href: "/admin/labels",
+        icon: Tags,
         roles: ["ADMIN", "MANAGER"],
       },
       {

@@ -46,6 +46,11 @@ const PAGE_SIZE = 50;
 
 const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
 const TD = "px-2 py-1.5 whitespace-nowrap";
+/** تلفن: LTR برای ترتیب ارقام، text-end تا زیر هدرِ RTL بنشیند (نه چپِ ستون). */
+const TD_PHONE = `${TD} text-end tabular-nums text-muted-foreground`;
+/** مبلغ: هدر و سلول هر دو end — وگرنه «بدهی» راست است و عدد چپ. */
+const TH_NUM = `${TH} text-end`;
+const TD_NUM = `${TD} text-end font-bold tabular-nums`;
 
 export default function CustomersPage() {
   const router = useRouter();
@@ -248,11 +253,16 @@ export default function CustomersPage() {
                 <th className={TH}>نام</th>
                 <th className={`${TH} w-36`}>شماره</th>
                 <th className={`${TH} w-32`}>دسته</th>
-                <th className={`${TH} w-40`}>بدهی</th>
+                <th className={`${TH_NUM} w-40`}>بدهی</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((c, i) => (
+              {rows.map((c, i) => {
+                const phone =
+                  c.phones?.find((p) => p.isPrimary)?.phone ??
+                  c.phones?.[0]?.phone ??
+                  null;
+                return (
                 <tr
                   key={c.id}
                   data-active-row={i === row}
@@ -264,21 +274,21 @@ export default function CustomersPage() {
                     {toFa((page - 1) * PAGE_SIZE + i + 1)}
                   </td>
                   <td className={`${TD} font-semibold`}>{c.fullName}</td>
-                  <td dir="ltr" className={`${TD} text-start text-muted-foreground`}>
-                    {c.phones?.find((p) => p.isPrimary)?.phone ?? c.phones?.[0]?.phone ?? "—"}
+                  <td dir="ltr" className={TD_PHONE}>
+                    {phone ? toFa(phone) : "—"}
                   </td>
                   <td className={TD}>
                     {c.category ? <CustomerCategoryBadge category={c.category} /> : "—"}
                   </td>
                   <td
-                    className={`${TD} text-end font-bold tabular-nums ${
+                    className={`${TD_NUM} ${
                       c.summary?.totalDue
                         ? balanceTextClass(c.summary.totalDue)
                         : "text-muted-foreground"
                     }`}
                   >
                     {c.summary?.totalDue ? (
-                      <span className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center justify-end gap-1">
                         {/* منفی فقط عدد بود (علامتِ انگلیسی جلوی ارقام فارسی) — حالا
                             برچسبِ جهت دارد و عدد همیشه مثبت نمایش داده می‌شود. */}
                         {c.summary.totalDue < 0 && (
@@ -293,7 +303,8 @@ export default function CustomersPage() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -242,10 +242,11 @@ export function LineItems({
     // جدول افقی اسکرول شود.
     <div className="min-h-0 flex-1 overflow-auto">
       {/* pos-lines — لنگرِ CSSِ تراکم؛ تنظیمِ «ردیف‌های صندوق» در منوی خوانایی از همین می‌خواند. */}
-      <table className="pos-lines w-full min-w-[700px] table-fixed text-sm">
+      <table className="pos-lines w-full min-w-[740px] table-fixed text-sm">
         <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
           <tr className="text-muted-foreground">
             <th className="w-8 px-1.5 py-1" />
+            <th className="w-9 px-1 py-1 text-center text-xs font-medium">#</th>
             <th className="px-2 py-1 text-start text-xs font-medium">کالا</th>
             <th className="w-20 px-2 py-1 text-start text-xs font-medium">
               {isReturn ? "برگشتی" : plainView ? "تعداد" : isAdjust ? "مقدار" : "تعداد"}
@@ -321,6 +322,10 @@ export function LineItems({
                       aria-label={`${l.productName} در فاکتور`}
                     />
                   )}
+                </td>
+
+                <td className="px-1 py-0.5 text-center text-xs tabular-nums text-muted-foreground">
+                  {toFa(i + 1)}
                 </td>
 
                 {/*

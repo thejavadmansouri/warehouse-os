@@ -120,4 +120,24 @@ describe("searchCatalog", () => {
   it("returns [] when nothing matches", () => {
     expect(searchCatalog(idx, "شمع نگین موتور")).toHaveLength(0);
   });
+
+  it("ranks in-stock items above out-of-stock ones within the same stage", () => {
+    const stocky: CatalogItem[] = [
+      item({ id: "s1", name: "شمع موتور پراید", totalStock: 0 }),
+      item({ id: "s2", name: "شمع موتور تیبا", totalStock: 5 }),
+      item({ id: "s3", name: "شمع موتور دنا", totalStock: null }),
+      item({ id: "s4", name: "شمع موتور سمند", totalStock: 2 }),
+    ];
+    const hits = searchCatalog(indexCatalog(stocky), "شمع موتور").map(
+      (h) => h.id,
+    );
+    // موجودی‌دارها اول (ترتیب کاتالوگ داخلِ هر گروه حفظ می‌شود)…
+    expect(hits).toEqual(["s2", "s4", "s1", "s3"]);
+  });
+
+  it("keeps the original order when no item has stock data", () => {
+    // کاتالوگ بدون فیلد موجودی — رفتار قبلی دست‌نخورده.
+    const ids = searchCatalog(idx, "پراید").map((h) => h.id);
+    expect(ids.indexOf("a")).toBeLessThan(ids.indexOf("b"));
+  });
 });

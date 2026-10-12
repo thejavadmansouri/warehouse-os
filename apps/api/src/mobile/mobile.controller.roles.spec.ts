@@ -42,6 +42,14 @@ describe('blank quotation role guards', () => {
     ]);
   });
 
+  it('ساخت برگه از پنل برای مدیر و فروشنده باز است', () => {
+    expect(salesRolesOf('createBlankQuotation')).toEqual([
+      Role.ADMIN,
+      Role.MANAGER,
+      Role.SALES,
+    ]);
+  });
+
   it('قیمت‌گذاری، پیشنهاد کالا، تبدیل و لغو فقط ADMIN/MANAGER', () => {
     const managerOnly: Array<keyof SalesController> = [
       'listBlankQuotations',

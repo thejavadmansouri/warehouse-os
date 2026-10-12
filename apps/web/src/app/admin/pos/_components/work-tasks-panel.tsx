@@ -11,6 +11,7 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { cancelWorkTask, getWorkTasks } from "@/lib/api";
 import { toFa } from "@/lib/format";
 import type { WorkTask } from "@/lib/types";
+import { useFallbackPoll } from "@/lib/use-live-events";
 import { TaskProgressBar } from "./task-progress";
 
 const STATUS_LABELS: Record<WorkTask["status"], string> = {
@@ -45,13 +46,14 @@ export function WorkTasksPanel({
 }) {
   const qc = useQueryClient();
   const [cancelling, setCancelling] = useState<WorkTask | null>(null);
+  const fallbackPoll = useFallbackPoll(15_000);
 
   const tasks = useQuery({
     queryKey: ["work-tasks", warehouseId],
     queryFn: () => getWorkTasks({ warehouseId }),
     enabled: open && !!warehouseId,
-    // fallbackِ offline: اگر کانال زنده وصل نبود، پنل باز خودش تازه می‌شود.
-    refetchInterval: 15_000,
+    // fallbackِ offline: فقط وقتی کانال زنده وصل نیست، پنل باز خودش تازه می‌شود.
+    refetchInterval: fallbackPoll,
   });
 
   const doCancel = useMutation({

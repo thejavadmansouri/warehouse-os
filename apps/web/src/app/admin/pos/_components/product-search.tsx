@@ -207,7 +207,7 @@ function ResultRow({
                 <span className="min-w-0 flex-1 break-words text-emerald-700 dark:text-emerald-400">
                   {loc.path || loc.name}
                   {loc.stranded ? (
-                    <span className="mr-1.5 whitespace-nowrap rounded bg-amber-600/10 px-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    <span className="ms-1.5 whitespace-nowrap rounded bg-amber-600/10 px-1 text-[10px] text-amber-600 dark:text-amber-400">
                       قفسه حذف‌شده
                     </span>
                   ) : null}

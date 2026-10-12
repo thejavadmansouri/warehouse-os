@@ -42,6 +42,8 @@ export interface CatalogItem {
   unit?: string | null;
   brandName?: string | null;
   vehicleModelName?: string | null;
+  /** مجموع موجودیِ فعال — فقط برای رتبه‌بندیِ «موجودها اول» (عددِ فروش نه). */
+  totalStock?: number | null;
 }
 
 const MAX_RESULTS = 100;
@@ -128,8 +130,23 @@ export function searchCatalog(index: CatalogIndex, query: string): CatalogItem[]
   const out: CatalogItem[] = [];
   const seen = new Set<string>();
 
+  /**
+   * در هر مرحله، موجودی‌دارها جلوتر — با مرتب‌سازی پایدار، تا ترتیبِ کیفیتِ
+   * تطبیق داخلِ هر گروه (ترتیب کاتالوگ، تعداد توکن کمتر، نام کوتاه‌تر) دست
+   * نخورد. اگر همه ناموجود باشند یا کاتالوگ موجودی نداشته باشد، هیچ‌چیز عوض
+   * نمی‌شود (همه ۱ می‌گیرند و ترتیب همان قبلی می‌ماند).
+   */
+  const stockRank = (ix: IndexedItem): 0 | 1 =>
+    ix.item.totalStock != null && ix.item.totalStock > 0 ? 0 : 1;
+
   const push = (matches: IndexedItem[], limit: number) => {
-    for (const m of matches) {
+    const ranked =
+      matches.length > 1 &&
+      matches.some((m) => stockRank(m) === 0) &&
+      matches.some((m) => stockRank(m) === 1)
+        ? [...matches].sort((a, b) => stockRank(a) - stockRank(b))
+        : matches;
+    for (const m of ranked) {
       if (!seen.has(m.item.id)) {
         seen.add(m.item.id);
         out.push(m.item);

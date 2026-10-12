@@ -12,6 +12,9 @@ import type { CustomerChequeRow } from "@/lib/types";
 
 const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
 const TD = "px-2 py-1.5 whitespace-nowrap";
+const TH_NUM = `${TH} text-end`;
+const TD_NUM = `${TD} text-end font-semibold tabular-nums`;
+const TD_PHONE = `${TD} text-end tabular-nums`;
 
 /**
  * تبِ «چک‌ها» در پرونده‌ی مشتری — طرحِ تأییدشده.
@@ -96,7 +99,7 @@ export function CustomerChequesTab({ customerId }: { customerId: string }) {
                 <tr>
                   <th className={`${TH} w-24`}>شماره چک</th>
                   <th className={`${TH} w-32`}>بانک</th>
-                  <th className={`${TH} w-32`}>مبلغ</th>
+                  <th className={`${TH_NUM} w-32`}>مبلغ</th>
                   <th className={`${TH} w-28`}>سررسید</th>
                   <th className={`${TH} w-36`}>وضعیت</th>
                   <th className={TH}>سندِ مبدا</th>
@@ -105,9 +108,11 @@ export function CustomerChequesTab({ customerId }: { customerId: string }) {
               <tbody>
                 {rows.map((ch) => (
                   <tr key={ch.id} className="border-b odd:bg-muted/25">
-                    <td className={`${TD} font-bold tabular-nums`}>{toFa(ch.number)}</td>
+                    <td dir="ltr" className={`${TD_PHONE} font-bold`}>
+                      {toFa(ch.number)}
+                    </td>
                     <td className={`${TD} text-muted-foreground`}>{ch.bankName ?? "—"}</td>
-                    <td className={`${TD} font-semibold tabular-nums`}>{money(ch.amount)}</td>
+                    <td className={TD_NUM}>{money(ch.amount)}</td>
                     <td className={`${TD} tabular-nums text-muted-foreground`}>
                       {faDate(ch.dueDate)}
                     </td>

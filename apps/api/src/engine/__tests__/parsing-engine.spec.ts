@@ -62,6 +62,12 @@ describe('normalizePersian', () => {
     expect(normalizePersian('پژو ۲۰۶')).toBe(normalizePersian('پژو 206'));
   });
 
+  it('unifies alef madda with plain alef', () => {
+    expect(normalizePersian('آرم جلو پنجره آراد پارت')).toBe(
+      normalizePersian('ارم جلو پنجره اراد پارت'),
+    );
+  });
+
   it('is idempotent', () => {
     const x = 'لنت ﺟﻠﻮ ﻛﺴﺘﺎﺭ ۵ عدد';
     expect(normalizePersian(normalizePersian(x))).toBe(normalizePersian(x));

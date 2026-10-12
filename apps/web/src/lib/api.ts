@@ -736,6 +736,8 @@ export function setProductPrice(
     salePrice?: number;
     wholesalePrice?: number;
     managerPrice?: number;
+    /** تاریخ اثر قیمت خرید (ISO). */
+    purchasePriceAt?: string;
   },
 ): Promise<T.ProductPrice> {
   return apiFetch<T.ProductPrice>(
@@ -2087,7 +2089,9 @@ export function getWorkers(): Promise<T.Worker[]> {
 export function createWorkTask(body: {
   warehouseId: string;
   invoiceId?: string | null;
-  /** null یا نبود = «هر کارگری»؛ مقدار = آن کارگر مشخص. */
+  /** چند گیرنده؛ خالی/نبود = هر کارگری. */
+  assignedToIds?: string[];
+  /** سازگاری قدیم: یک نفر. */
   assignedToId?: string | null;
   note?: string;
   idempotencyKey: string;
@@ -2464,6 +2468,20 @@ export function createSupplier(
   return apiFetch<T.Supplier>("/suppliers", { method: "POST", body });
 }
 
+export function updateSupplier(
+  id: string,
+  body: T.UpdateSupplierInput,
+): Promise<T.Supplier> {
+  return apiFetch<T.Supplier>(`/suppliers/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body,
+  });
+}
+
+export function getSupplier(id: string): Promise<T.Supplier> {
+  return apiFetch<T.Supplier>(`/suppliers/${encodeURIComponent(id)}`);
+}
+
 export function createPurchase(
   body: T.CreatePurchaseInput,
 ): Promise<T.Purchase> {
@@ -2536,6 +2554,24 @@ export async function downloadPurchaseImportTemplate(): Promise<void> {
 
 export function getPurchase(id: string): Promise<T.Purchase> {
   return apiFetch<T.Purchase>(`/purchases/${encodeURIComponent(id)}`);
+}
+
+/**
+ * ارسال کارِ چیدن بعد از ثبت فاکتور — بار دیرتر رسیده.
+ * اقلامِ هنوز در انبار موقت به گوشی کارگر(ها) می‌رود.
+ */
+export function dispatchPurchasePutaway(
+  id: string,
+  body: {
+    idempotencyKey: string;
+    assignedToIds?: string[];
+    note?: string;
+  },
+): Promise<T.WorkTask> {
+  return apiFetch<T.WorkTask>(
+    `/purchases/${encodeURIComponent(id)}/putaway`,
+    { method: "POST", body },
+  );
 }
 
 export function cancelPurchase(
@@ -2779,9 +2815,22 @@ export function cancelQuotation(id: string): Promise<T.Quotation> {
 // پیش‌فاکتور سفید (برگه‌ی قیمت)
 //
 // سطلی جدا از پیش‌فاکتور عادی: اقلامش متنِ آزاد هستند و کالای واقعی ندارند تا
-// مدیر وصلشان کند. ساختش از گوشی انجام می‌شود (mobile/blank-quotations)؛ اینجا
-// فقط قیمت‌گذاری، پیشنهاد کالا و تبدیل است.
+// مدیر وصلشان کند. ساخت از گوشی (mobile) یا پنل (sales/blank-quotations).
 // =====================================================
+
+export function createBlankQuotation(body: {
+  clientRequestId: string;
+  customerName?: string;
+  customerId?: string;
+  note?: string;
+  validForMinutes?: number;
+  lines: { text: string; quantity: number; suggestedPrice?: number }[];
+}): Promise<T.BlankQuotation> {
+  return apiFetch<T.BlankQuotation>("/sales/blank-quotations", {
+    method: "POST",
+    body,
+  });
+}
 
 export function getBlankQuotations(
   p: { status?: string; page?: number; limit?: number } = {},
@@ -2819,6 +2868,8 @@ export function saveBlankPrices(
     /** اتصال نام به پرونده‌ی مشتری — null یعنی «وصل را بردار». */
     customerId?: string | null;
     note?: string;
+    addLines?: { text: string; quantity: number; suggestedPrice?: number }[];
+    removeLineIds?: string[];
     lines: {
       lineId: string;
       quantity?: number;
@@ -2870,6 +2921,145 @@ export function getPendingLabels(
   return apiFetch<{ data: T.PendingLabelProduct[]; meta: T.ReportMeta }>(
     `/products/labels/pending?${reportQs(p)}`,
   );
+}
+
+export type ProductLabelPrintJob = {
+  id: string;
+  type: string;
+  status: string;
+  source: string | null;
+  totalItems: number;
+  printedItems: number;
+  createdAt: string;
+  createdBy: { id: string; fullName: string | null; username: string } | null;
+  items: {
+    id: string;
+    copies: number;
+    status: string;
+    product: {
+      id: string;
+      name: string;
+      sku: string;
+      internalBarcode: string;
+      labelPrintedAt: string | null;
+    } | null;
+    location: {
+      id: string;
+      code: string;
+      name: string | null;
+      path: string | null;
+      warehouseId: string | null;
+    } | null;
+  }[];
+};
+
+export function getPrintJobs(p: { status?: string; type?: string } = {}) {
+  const qs = new URLSearchParams();
+  if (p.status) qs.set("status", p.status);
+  if (p.type) qs.set("type", p.type);
+  const q = qs.toString();
+  return apiFetch<ProductLabelPrintJob[]>(`/print-jobs${q ? `?${q}` : ""}`);
+}
+
+export function confirmPrintJob(id: string) {
+  return apiFetch<ProductLabelPrintJob>(`/print-jobs/${id}/confirm`, {
+    method: "POST",
+  });
+}
+
+export function cancelPrintJob(id: string) {
+  return apiFetch<ProductLabelPrintJob>(`/print-jobs/${id}/cancel`, {
+    method: "POST",
+  });
+}
+
+export type LabelCoverageRow = {
+  locationId: string;
+  code: string;
+  name: string | null;
+  path: string | null;
+  warehouseId: string | null;
+  warehouseName: string | null;
+  labeled: number;
+  unlabeled: number;
+  total: number;
+};
+
+export function getLabelCoverage(p: {
+  warehouseId?: string;
+  onlyWithStock?: boolean;
+} = {}) {
+  return apiFetch<{ data: LabelCoverageRow[] }>(
+    `/products/labels/coverage?${reportQs(p)}`,
+  );
+}
+
+export function getLabelsAtLocation(locationId: string) {
+  return apiFetch<{
+    location: {
+      id: string;
+      code: string;
+      name: string | null;
+      path: string | null;
+      warehouseId: string | null;
+      warehouse: { id: string; name: string } | null;
+    };
+    data: {
+      productId: string;
+      name: string;
+      sku: string;
+      brandName: string | null;
+      quantity: number;
+      labelPrintedAt: string | null;
+      labeled: boolean;
+    }[];
+  }>(`/products/labels/at/${locationId}`);
+}
+
+/** خود موقعیت + زیرمجموعه‌ها برای چاپ کامل / انتخابی لیبل قفسه. */
+export function getLocationLabelSubtree(locationId: string): Promise<
+  Array<{
+    id: string;
+    name: string;
+    code: string;
+    path: string | null;
+    typeName: string | null;
+    shortNum: string;
+    isRoot: boolean;
+  }>
+> {
+  return apiFetch(`/labels/location/${encodeURIComponent(locationId)}/subtree`);
+}
+
+export function listLabelPrinters(): Promise<
+  Array<{ name: string; isDefault: boolean }>
+> {
+  return apiFetch("/labels/printers");
+}
+
+export function printLocationLabelsDirect(body: {
+  ids: string[];
+  printerName?: string | null;
+  printerHost?: string | null;
+  printerPort?: number | null;
+}): Promise<{ printed: number; requested: number }> {
+  return apiFetch("/labels/location/print-direct", {
+    method: "POST",
+    body,
+  });
+}
+
+export function printProductLabelsDirectApi(body: {
+  productIds: string[];
+  copies?: number;
+  printerName?: string | null;
+  printerHost?: string | null;
+  printerPort?: number | null;
+}): Promise<{ printed: number; requested: number }> {
+  return apiFetch("/labels/product/print-direct", {
+    method: "POST",
+    body,
+  });
 }
 
 export function getLabelSettings(): Promise<T.LabelSettings> {
@@ -3037,6 +3227,50 @@ export function bulkRejectImages(
     method: "POST",
     body: { candidateIds, reason },
   });
+}
+
+export type SiteReadyProduct = {
+  id: string;
+  name: string;
+  sku: string;
+  stock: number;
+  hasImage: boolean;
+  hasLabel: boolean;
+  showOnline: boolean;
+  ready: boolean;
+  image: string | null;
+  sitePath: string;
+};
+
+/** کالاهای آماده‌ی صفحهٔ سایت (عکس / لیبل / موجودی). */
+export function listSiteReadyProducts(
+  limit = 100,
+): Promise<{ data: SiteReadyProduct[] }> {
+  return apiFetch(`/admin/product-images/site-ready?limit=${limit}`);
+}
+
+/** عکس‌های دوربین اپ → عکس سایت با واترمارک و نام SEO. */
+export function promoteInventoryPhotos(productId: string): Promise<{
+  promoted: number;
+  assetIds: string[];
+  published: boolean;
+}> {
+  return apiFetch(
+    `/admin/product-images/promote/${encodeURIComponent(productId)}`,
+    { method: "POST" },
+  );
+}
+
+/** روشن کردن showOnline وقتی عکس + لیبل + موجودی آماده است. */
+export function publishProductSitePage(productId: string): Promise<{
+  published: boolean;
+  reason?: string;
+  productId: string;
+}> {
+  return apiFetch(
+    `/admin/product-images/publish/${encodeURIComponent(productId)}`,
+    { method: "POST" },
+  );
 }
 
 // =====================================================

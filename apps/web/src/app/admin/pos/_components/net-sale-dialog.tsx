@@ -299,7 +299,7 @@ export function NetSwapDialog({
                       >
                         <span>
                           {p.name}
-                          <span className="mr-2 text-xs text-muted-foreground">{p.sku}</span>
+                          <span className="ms-2 text-xs text-muted-foreground">{p.sku}</span>
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {p.salePrice ? money(p.salePrice) : "بدون قیمت"}
@@ -354,7 +354,7 @@ export function NetSwapDialog({
                           }}
                         />
                       </td>
-                      <td className="py-1.5 pl-2 text-left tabular-nums">
+                      <td className="py-1.5 pe-2 text-end tabular-nums">
                         {money(row.qty * row.unitPrice)}
                       </td>
                       <td>
@@ -455,7 +455,7 @@ export function NetSwapDialog({
                             <tr key={l.saleLogId} className={q > 0 ? "bg-rose-600/5" : undefined}>
                               <td className="py-1.5">
                                 {l.product.name}
-                                <span className="mr-1 text-xs text-muted-foreground">
+                                <span className="ms-1 text-xs text-muted-foreground">
                                   (تا {toFa(l.returnable)} عدد)
                                 </span>
                               </td>
@@ -468,7 +468,7 @@ export function NetSwapDialog({
                                   onChange={(e) => setReturnQty(key, e.target.value, l.returnable)}
                                 />
                               </td>
-                              <td className="py-1.5 pl-2 text-left tabular-nums text-rose-700 dark:text-rose-400">
+                              <td className="py-1.5 pe-2 text-end tabular-nums text-rose-700 dark:text-rose-400">
                                 {q > 0 ? money(q * l.effectiveUnitPrice) : "—"}
                               </td>
                               <td>

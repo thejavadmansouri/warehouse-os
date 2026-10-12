@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { MessageSquareText, Users } from "lucide-react";
+import { Check, MessageSquareText, Users } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getWorkers } from "@/lib/api";
+import { toFa } from "@/lib/format";
 
 /**
- * انتخاب کارگرِ گیرنده‌ی «ارسال به کارگر» + پیام دلخواه.
+ * انتخاب گیرنده‌(های) «ارسال به کارگر» + پیام دلخواه.
  *
- * «هر کارگری» یعنی کار برای همه‌ی کارگرهای انبار دیده می‌شود و هر کدام آزاد
- * بود برمی‌دارد. انتخاب یک نفر خاص یعنی فقط او آن را می‌بیند. پیام اختیاری
- * روی گوشی کارگر همان‌جا در نوتیفیکیشن (و زیر هر قلم) نمایش داده می‌شود.
+ * کنار اسم هر کارگر تیک است — یک نفر یا چند نفر همزمان. همه روی **یک** Task
+ * کار می‌کنند و هر قلم را اولی که تیک زد برمی‌دارد. «هر کارگری» یعنی استخر
+ * عمومی بدون فیلتر گیرنده.
  */
 export function WorkerPicker({
   open,
@@ -22,34 +23,59 @@ export function WorkerPicker({
   pending,
   onPick,
   onClose,
+  title,
 }: {
   open: boolean;
   itemCount: number;
   pending: boolean;
-  onPick: (workerId: string | null, note: string) => void;
+  /** خالی = هر کارگری؛ یک یا چند id = فقط همان‌ها. */
+  onPick: (workerIds: string[], note: string) => void;
   onClose: () => void;
+  /** عنوان اختیاری — مثلاً «ارسال برای چیدن». */
+  title?: string;
 }) {
   const workers = useQuery({ queryKey: ["workers"], queryFn: getWorkers, enabled: open });
   const [note, setNote] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [anyone, setAnyone] = useState(false);
 
-  /* با بسته‌شدنِ پنل، یادداشت پاک می‌شود تا باز شدنِ بعدی از نو شروع کند —
-     تطبیقِ state در رندر (به‌جای effect). */
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
-    if (!open) setNote("");
+    if (!open) {
+      setNote("");
+      setSelected(new Set());
+      setAnyone(false);
+    }
   }
+
+  const toggle = (id: string) => {
+    setAnyone(false);
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const canConfirm = anyone || selected.size > 0;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base">
-            ارسال {itemCount} کالا به کارگر
+            {title ?? `ارسال ${toFa(itemCount)} کالا به کارگر`}
           </DialogTitle>
         </DialogHeader>
 
         <div className="flex flex-col gap-2">
+          <p className="text-xs text-muted-foreground">
+            یک یا چند کارگر را تیک بزنید تا با هم بچینند؛ هر قلم را هر کس گذاشت تیک
+            می‌زند.
+          </p>
+
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             <MessageSquareText className="size-4" />
             پیام برای کارگر (اختیاری)
@@ -61,19 +87,30 @@ export function WorkerPicker({
             placeholder="مثلاً: پشت پیشخوان بگذارید"
             className="h-10"
           />
-          <Button
-            variant="outline"
-            className="h-12 justify-start"
+
+          <button
+            type="button"
             disabled={pending}
-            onClick={() => onPick(null, note)}
+            onClick={() => {
+              setAnyone(true);
+              setSelected(new Set());
+            }}
+            className={`flex h-12 items-center justify-start gap-2 rounded-lg border px-3 text-sm
+              ${anyone ? "border-primary bg-primary/5 font-medium" : "hover:border-primary/60"}`}
           >
-            <Users className="ms-2 size-4" />
+            <span
+              className={`flex size-5 items-center justify-center rounded border
+                ${anyone ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}
+            >
+              {anyone ? <Check className="size-3.5" /> : null}
+            </span>
+            <Users className="size-4" />
             هر کارگری که آزاد است
-          </Button>
+          </button>
 
           <div className="my-1 flex items-center gap-2 text-xs text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
-            یا یک کارگر مشخص
+            یا انتخاب مشخص
             <span className="h-px flex-1 bg-border" />
           </div>
 
@@ -90,19 +127,46 @@ export function WorkerPicker({
               </p>
             )}
 
-            {workers.data?.map((w) => (
-              <button
-                key={w.id}
-                disabled={pending}
-                onClick={() => onPick(w.id, note)}
-                className="rounded-lg border p-3 text-right hover:border-primary
-                           hover:bg-primary/5 focus:outline-none focus:ring-2 focus:ring-primary"
-              >
-                <span className="block font-medium">{w.fullName}</span>
-                <span className="block text-xs text-muted-foreground">{w.username}</span>
-              </button>
-            ))}
+            {workers.data?.map((w) => {
+              const checked = selected.has(w.id);
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  disabled={pending}
+                  onClick={() => toggle(w.id)}
+                  className={`flex items-center gap-3 rounded-lg border p-3 text-right
+                    ${checked ? "border-primary bg-primary/5" : "hover:border-primary/60"}
+                    focus:outline-none focus:ring-2 focus:ring-primary`}
+                >
+                  <span
+                    className={`flex size-5 shrink-0 items-center justify-center rounded border
+                      ${checked ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/40"}`}
+                  >
+                    {checked ? <Check className="size-3.5" /> : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-medium">{w.fullName}</span>
+                    <span className="block text-xs text-muted-foreground">{w.username}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
+
+          <Button
+            className="mt-2 h-11"
+            disabled={pending || !canConfirm}
+            onClick={() => onPick(anyone ? [] : [...selected], note)}
+          >
+            {pending
+              ? "…"
+              : anyone
+                ? "ارسال برای هر کارگر آزاد"
+                : selected.size
+                  ? `ارسال برای ${toFa(selected.size)} کارگر`
+                  : "ارسال"}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

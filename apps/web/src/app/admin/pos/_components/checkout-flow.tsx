@@ -15,6 +15,10 @@ import { amount, faToEn, money, toFa, rial } from "@/lib/format";
 import type { Customer, PaymentInput, PaymentMethod } from "@/lib/types";
 
 import { unitLabel } from "@/lib/currency";
+import {
+  computeCreditDueDate,
+  CreditTermsPanel,
+} from "./credit-terms-panel";
 /**
  * تسویه‌ی کامل با کیبورد — «اسکن → اینتر → مشتری → کارت → ثبت».
  *
@@ -27,6 +31,7 @@ import { unitLabel } from "@/lib/currency";
  *
  * پرداخت ترکیبی و چک عمداً اینجا نیست: آن حالت نادر است و فرم مفصل خودش را
  * دارد (F7). این مسیر برای همان ۹۰٪ فروشی است که باید در چند ثانیه تمام شود.
+ * حساب‌باز همان چیپ‌های مهلت F7 را دارد تا دو مسیر از هم جدا نیفتند.
  */
 
 /**
@@ -39,15 +44,8 @@ const FAST_METHODS: { method: PaymentMethod; label: string; icon: typeof Banknot
   { method: "CREDIT", label: "حساب‌باز", icon: Clock },
 ];
 
-/**
- * مهلت‌های پرداخت.
- *
- * فروشنده عدد تایپ نمی‌کند، از بین چند گزینه‌ی رایج یکی را برمی‌دارد — و در
- * حالت عادی حتی همین را هم نمی‌کند، چون پیش‌فرض از خودِ مشتری می‌آید.
- * export است تا فرم پرداخت کامل (F7) هم همین گزینه‌ها را داشته باشد و دو مسیر
- * از هم جدا نیفتند.
- */
-export const CREDIT_TERMS = [0, 7, 15, 30, 45, 60, 90];
+/** @deprecated از `credit-terms-panel` وارد کنید — برای سازگاری با importهای قدیمی. */
+export { CREDIT_TERMS } from "./credit-terms-panel";
 
 type Step = "customer" | "payment";
 
@@ -100,12 +98,8 @@ export function CheckoutFlow({
   customer: Customer | null;
   pending: boolean;
   onCustomerChange: (c: Customer | null) => void;
-  /*
-   * فقط سطرهای پرداخت. سررسید از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ
-   * مشتری می‌نشیند و سررسیدش در تسویه ساخته می‌شود. سررسیدِ دستی جای خودش را
-   * دارد — فرمِ پرداختِ ترکیبی (F7)، آنجا که بخشی از پول واقعاً گرفته می‌شود.
-   */
-  onSubmit: (payments: PaymentInput[]) => void;
+  /** سطرهای پرداخت + سررسید وقتی حساب‌باز/نسیه انتخاب شده باشد. */
+  onSubmit: (payments: PaymentInput[], dueDate?: string) => void;
   /** فرار به فرم پرداخت کامل (ترکیبی/چک). */
   onOpenFullPayment: () => void;
   onClose: () => void;
@@ -121,6 +115,9 @@ export function CheckoutFlow({
   const [highlight, setHighlight] = useState(0);
   const [method, setMethod] = useState<PaymentMethod>("CARD");
   const [received, setReceived] = useState(0);
+  /** مهلت حساب‌باز — مثل F7؛ با انتخاب CREDIT از مهلت مشتری پر می‌شود. */
+  const [creditDays, setCreditDays] = useState<number | null>(null);
+  const [customDue, setCustomDue] = useState("");
 
   const searchRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
@@ -154,10 +151,21 @@ export function CheckoutFlow({
       setPhone("");
       setDebounced("");
       setHighlight(0);
-      setMethod(readFastMethod());
+      const next = readFastMethod();
+      setMethod(next);
       setReceived(total);
+      setCustomDue("");
+      setCreditDays(next === "CREDIT" ? (customer?.creditDays ?? 0) : null);
     }
   }
+
+  const pickMethod = (m: PaymentMethod) => {
+    setMethod(m);
+    if (m === "CREDIT") {
+      setCustomDue("");
+      setCreditDays(customer?.creditDays ?? 0);
+    }
+  };
 
   /**
    * کوئریِ جست‌وجو از هر سه فیلد ساخته می‌شود — جست‌وجوی سمت سرور روی نام،
@@ -279,13 +287,17 @@ export function CheckoutFlow({
     return [{ method, amount: total }];
   };
 
-  /*
-   * سررسید دیگر از اینجا نمی‌رود: فروشِ بدونِ پرداخت روی تبِ مشتری می‌نشیند و
-   * سررسیدش در تسویه ساخته می‌شود.
-   */
   const submit = () => {
-    // روشی که یک فروش واقعاً را بست، دفعه‌ی بعد پیش‌فرض می‌شود.
     writeFastMethod(method);
+    if (method === "CREDIT") {
+      const due = computeCreditDueDate(
+        creditDays,
+        customDue,
+        customer?.creditDays,
+      );
+      onSubmit(buildPayments(), due.toISOString());
+      return;
+    }
     onSubmit(buildPayments());
   };
 
@@ -368,7 +380,7 @@ export function CheckoutFlow({
       // چیدمان راست‌به‌چپ است: فلشِ چپ یعنی جلو.
       const next = e.key === "ArrowLeft" ? i + 1 : i - 1;
       const picked = FAST_METHODS[(next + FAST_METHODS.length) % FAST_METHODS.length];
-      if (picked) setMethod(picked.method);
+      if (picked) pickMethod(picked.method);
       return;
     }
 
@@ -376,7 +388,7 @@ export function CheckoutFlow({
     if (e.key >= "1" && e.key <= "3" && document.activeElement !== amountRef.current) {
       e.preventDefault();
       const picked = FAST_METHODS[Number(e.key) - 1];
-      if (picked) setMethod(picked.method);
+      if (picked) pickMethod(picked.method);
     }
   };
 
@@ -386,6 +398,7 @@ export function CheckoutFlow({
         ref={contentRef}
         tabIndex={-1}
         className="max-w-2xl gap-0 p-0"
+        dir="rtl"
         onKeyDown={onKeyDown}
         /* Radix پیش‌فرض روی اولین عنصر فوکوس می‌گذارد؛ خودمان مدیریتش می‌کنیم. */
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -446,7 +459,7 @@ export function CheckoutFlow({
               </label>
               <Input
                 dir="ltr"
-                className="h-11 text-right text-base"
+                className="h-11 text-end text-base"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
                 placeholder="۰۹۱۲…"
@@ -483,7 +496,7 @@ export function CheckoutFlow({
                     type="button"
                     onClick={() => { onCustomerChange(c); setStep("payment"); }}
                     onMouseEnter={() => setHighlight(i)}
-                    className={`flex items-center justify-between rounded-lg border p-2.5 text-right transition-colors ${
+                    className={`flex items-center justify-between rounded-lg border p-2.5 text-start transition-colors ${
                       i === highlight ? "border-primary bg-primary/5" : "border-transparent"
                     }`}
                   >
@@ -543,7 +556,7 @@ export function CheckoutFlow({
                   <button
                     key={m.method}
                     type="button"
-                    onClick={() => setMethod(m.method)}
+                    onClick={() => pickMethod(m.method)}
                     className={`flex flex-col items-center gap-1 rounded-lg border p-3 transition-colors ${
                       active
                         ? "border-primary bg-primary text-primary-foreground"
@@ -570,7 +583,7 @@ export function CheckoutFlow({
                 <div className="flex items-center gap-3">
                   <MoneyInput
                     ref={amountRef}
-                    className="h-11 w-40 text-right text-lg tabular-nums"
+                    className="h-11 w-40 text-end text-lg tabular-nums"
                     value={received}
                     onChange={setReceived}
                   />
@@ -582,33 +595,30 @@ export function CheckoutFlow({
               </div>
             )}
 
-            {/*
-              پنل حساب‌باز.
-
-              چیپ‌های «مهلت پرداخت» و سررسیدِ دستی برداشته شدند: این فروش روی تبِ
-              مشتری می‌نشیند و فاکتورش تا تسویه سررسید ندارد — سررسید در لحظه‌ی
-              تسویه از مهلتِ خودِ مشتری ساخته می‌شود. کنترلی که هیچ اثری ندارد،
-              بدتر از نبودنش است.
-
-              می‌ماند هشدار اعتبار، که تنها چیزی است که فروشنده باید همین‌جا بداند.
-            */}
             {method === "CREDIT" && customer && (
-              <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
-                <p className="text-sm">
+              <div className="flex flex-col gap-2">
+                <p className="rounded-lg border bg-muted/20 px-3 py-2 text-sm">
                   روی حساب بازِ{" "}
                   <span className="font-semibold">{customer.fullName}</span> ثبت
                   می‌شود — پول در تسویه گرفته می‌شود.
                 </p>
-                <p className="text-xs text-muted-foreground">
-                  {customer.creditDays
-                    ? `مهلت این مشتری ${toFa(customer.creditDays)} روز است و سررسید هنگام تسویه حساب می‌شود.`
-                    : "سررسید هنگام تسویه، از مهلتِ خودِ مشتری حساب می‌شود."}
-                </p>
+
+                <CreditTermsPanel
+                  customerCreditDays={customer.creditDays}
+                  creditDays={creditDays}
+                  customDue={customDue}
+                  onCreditDays={(d) => {
+                    setCustomDue("");
+                    setCreditDays(d);
+                  }}
+                  onCustomDue={setCustomDue}
+                  hint="سررسید از همین انتخاب روی فاکتور نوشته می‌شود (معوقات از لحظه‌ی بردن جنس)."
+                />
 
                 {credit.data?.exceeded && (
                   <p className="rounded-md bg-amber-600/10 px-3 py-2 text-sm text-amber-600 dark:bg-amber-600/10 dark:text-amber-400">
-                    ⚠️ این فروش {rial(credit.data.exceededBy)} از سقف اعتبار
-                    مشتری عبور می‌کند. ثبت می‌شود، ولی حواستان باشد.
+                    این فروش {rial(credit.data.exceededBy)} از سقف اعتبار مشتری
+                    عبور می‌کند. ثبت می‌شود، ولی حواستان باشد.
                   </p>
                 )}
 

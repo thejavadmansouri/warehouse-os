@@ -425,7 +425,7 @@ export default function CustomerPage() {
       */}
       <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b px-3 py-1.5">
         <h1 className="text-base font-bold">{c.fullName}</h1>
-        <span dir="ltr" className="text-sm text-muted-foreground">
+        <span dir="ltr" className="text-sm tabular-nums text-muted-foreground">
           {c.phones?.[0]?.phone ? toFa(c.phones[0].phone) : "بدون شماره"}
         </span>
         {c.category && <CustomerCategoryBadge category={c.category} />}
@@ -1506,7 +1506,7 @@ function CustomerPurchaseRows({
                     cancelled ? "opacity-60" : ""
                   } ${isOpen ? "bg-muted/40" : "hover:bg-muted/30"}`}
                 >
-                  <td className="p-2 font-medium tabular-nums">
+                  <td className="p-2 text-start font-medium tabular-nums">
                     <span className="inline-flex items-center gap-2">
                       <button
                         type="button"

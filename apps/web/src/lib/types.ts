@@ -104,6 +104,8 @@ export interface CreateProductDto {
   vehicleModelId?: string;
   supplierId?: string;
   purchasePrice?: number;
+  /** تاریخ اثر قیمت خرید (ISO). */
+  purchasePriceAt?: string;
   salePrice?: number;
   wholesalePrice?: number;
   /** قیمتِ چهارم — عددِ آزادِ مدیر. */
@@ -584,19 +586,46 @@ export interface Category {
   createdAt?: string;
 }
 
+/** نحوهٔ تسویه با تأمین‌کننده — همان enum پرداخت فروش. */
+export type SupplierPayMethod = "CASH" | "CARD" | "CHEQUE" | "CREDIT";
+
 export interface Supplier {
   id: string;
   name: string;
+  contactName?: string | null;
   phone?: string | null;
   address?: string | null;
+  note?: string | null;
+  /** مهلت پرداخت ما به این شرکت (روز). */
+  creditDays?: number;
+  preferredPayMethod?: SupplierPayMethod | null;
+  bankName?: string | null;
+  bankAccount?: string | null;
+  iban?: string | null;
   createdAt?: string;
 }
 
 export interface CreateSupplierInput {
   name: string;
+  contactName?: string;
   phone?: string;
   address?: string;
+  note?: string;
+  creditDays?: number;
+  preferredPayMethod?: SupplierPayMethod | null;
+  bankName?: string;
+  bankAccount?: string;
+  iban?: string;
 }
+
+export type UpdateSupplierInput = Partial<CreateSupplierInput>;
+
+export const SUPPLIER_PAY_METHOD_LABELS: Record<SupplierPayMethod, string> = {
+  CASH: "نقد",
+  CARD: "کارت / کارت‌به‌کارت",
+  CHEQUE: "چک",
+  CREDIT: "نسیه (حساب‌باز)",
+};
 
 // =====================================================
 // افزونه: چاپ لیبل (طبق بخش الف سند افزونه)
@@ -611,6 +640,8 @@ export interface LocationLabel {
   warehouseName: string | null;
   pathText: string;
   qrCode: string; // data:image/png;base64,...
+  /** عدد درشت کنار QR روی رول قفسه */
+  shortNum: string;
 }
 
 // GET /labels/product/:id و POST /labels/product/bulk
@@ -785,6 +816,8 @@ export interface PosCatalogRow {
   purchasePrice?: number | null;
   suggestedPrice?: number | null;
   managerPrice?: number | null;
+  /** فقط مسیر POS — مجموع موجودیِ فعال، برای رتبه‌بندیِ «موجودها اول» در سرچ. */
+  totalStock?: number | null;
   updatedAt: string;
   deleted: boolean;
 }
@@ -796,6 +829,8 @@ export interface PosCatalogPage {
   total: number;
   totalPages: number;
   hasMore: boolean;
+  /** cursorِ sync بعدی (زمان سرور) — نسخه‌های قدیمی API ندارندش. */
+  serverTime?: string;
 }
 
 export interface LocateResult {
@@ -1071,6 +1106,15 @@ export interface ShopSettings {
   panelUnit: CurrencyUnit;
   /** واحدِ نمایش در سایت عمومی. */
   siteUnit: CurrencyUnit;
+  /** واترمارک روی عکس‌های سایت */
+  watermarkEnabled?: boolean;
+  /** متن واترمارک؛ خالی = نام مغازه */
+  watermarkText?: string;
+  /** شفافیت ۰–۱۰۰ */
+  watermarkOpacity?: number;
+  watermarkPosition?: "bottom-right" | "bottom-left" | "center";
+  /** وقتی عکس + لیبل + موجودی آماده شد، صفحهٔ سایت خودکار روشن شود؟ */
+  autoPublishOnline?: boolean;
 }
 
 /** واحد پول. رابطه ثابت است: ۱ تومان = ۱۰ ریال. */
@@ -1665,6 +1709,7 @@ export interface WorkTask {
   warehouseId: string;
   invoiceId?: string | null;
   quotationId?: string | null;
+  purchaseId?: string | null;
   assignedToId?: string | null;
   note?: string | null;
   cancelReason?: string | null;
@@ -1674,8 +1719,11 @@ export interface WorkTask {
   totalItems: number;
   invoice?: { number: number } | null;
   quotation?: { number: number } | null;
+  purchase?: { number: number } | null;
   requestedBy?: { id: string; fullName: string } | null;
   assignedTo?: { id: string; fullName: string } | null;
+  /** گیرنده‌های چندنفره — خالی = استخر عمومی یا تک‌نفرهٔ قدیم. */
+  assignees?: { id: string; fullName: string }[];
   /** فقط در جزئیات (GET /work-tasks/:id) می‌آید. */
   items?: WorkTaskItem[];
 }
@@ -2665,6 +2713,11 @@ export interface LabelSettings {
   footerText: string | null;
   /** عرض فیزیکی رول؛ بزرگ‌تر از widthMm = چند لیبل کنار هم (رول دوستونه). */
   mediaWidthMm: number | null;
+  /** نام پرینتر ویندوز روی سرور (USB) — برای چاپ مستقیم از مرورگر. */
+  printerName?: string | null;
+  /** IP/هاست پرینتر شبکه؛ اگر پر باشد بر printerName اولویت دارد. */
+  printerHost?: string | null;
+  printerPort?: number | null;
 }
 
 export interface Worker {
@@ -2686,6 +2739,11 @@ export interface ProductPrice {
   wholesalePrice: number | null;
   /** قیمتِ چهارم — عددِ آزادِ مدیر (چانه‌زنی/مشتری خاص). */
   managerPrice?: number | null;
+  /**
+   * تاریخ اثر قیمت خرید (فاکتور خرید یا انتخاب دستی).
+   * اگر خالی باشد UI به `createdAt` برمی‌گردد.
+   */
+  purchasePriceAt?: string | null;
   createdAt: string;
 }
 
@@ -2746,15 +2804,27 @@ export interface PurchaseLineInput {
 export interface CreatePurchaseInput {
   idempotencyKey: string;
   warehouseId: string;
-  supplierId?: string | null;
+  /** تأمین‌کننده اجباری. */
+  supplierId: string;
   /** شماره‌ی فاکتور روی برگه‌ی فروشنده. */
   supplierRef?: string;
   /** تاریخ روی برگه (ISO) — تبدیل شمسی سمت کلاینت. */
   invoiceDate?: string;
+  /** سررسید پرداخت به تأمین‌کننده. */
+  dueDate?: string;
+  /** نحوهٔ تسویهٔ این فاکتور. */
+  payMethod?: SupplierPayMethod;
   discount?: number;
   note?: string;
   /** «هشدارهای قیمت را دیدم» — سند فقط با این پرچم پس از هشدار ثبت می‌شود. */
   confirmPriceWarnings?: boolean;
+  /**
+   * ارسال کارِ چیدن به کارگر برای اقلام بدون قفسه.
+   * خاموش = فقط ورود موجودی؛ روشن = Task چیدمان روی گوشی کارگر.
+   */
+  sendPutaway?: boolean;
+  /** گیرنده‌ها وقتی sendPutaway روشن است؛ خالی = هر کارگری. */
+  assignedToIds?: string[];
   lines: PurchaseLineInput[];
 }
 
@@ -2800,6 +2870,8 @@ export interface Purchase {
   warehouseId: string;
   supplierRef: string | null;
   invoiceDate: string | null;
+  dueDate?: string | null;
+  payMethod?: SupplierPayMethod | null;
   subtotal: number;
   discount: number;
   total: number;
@@ -2812,6 +2884,16 @@ export interface Purchase {
   user?: { id: string; fullName: string | null } | null;
   lines?: PurchaseLine[];
   _count?: { lines: number };
+  /** کارهای چیدنِ این فاکتور — برای ارسال بعدی و نمایش پیشرفت. */
+  putawayTasks?: Array<{
+    id: string;
+    status: WorkTaskStatus;
+    createdAt: string;
+    totalItems: number;
+    doneItems: number;
+    assignedTo?: { id: string; fullName: string } | null;
+    assignees?: { id: string; fullName: string }[];
+  }>;
 }
 
 export const PURCHASE_STATUS_LABELS: Record<string, string> = {

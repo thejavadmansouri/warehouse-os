@@ -21,6 +21,8 @@ const BACKEND_EVENT_TYPES = [
   "stock.changed",
   "receipt.created",
   "payout.created",
+  "payment.reversed",
+  "payment.recomposed",
   "return.created",
   "correction.created",
   "work-task.progress",
@@ -31,6 +33,10 @@ const BACKEND_EVENT_TYPES = [
   "shortage.updated",
   "online-order.created",
   "online-order.decided",
+  "purchase.changed",
+  "supplier.changed",
+  "customer.changed",
+  "product.changed",
 ] as const;
 
 describe("KEYS_BY_EVENT — پل realtime", () => {
@@ -79,6 +85,40 @@ describe("KEYS_BY_EVENT — پل realtime", () => {
         keys.some((k) => k[0] === prefix),
         `payout.created باید ${prefix} را تازه کند`,
       ).toBe(true);
+    }
+  });
+
+  it("هر رویدادِ پولی → فهرست فاکتورها، مشتری‌ها، بدهکاران و صورت‌حساب همه‌جا تازه می‌شوند", () => {
+    for (const type of [
+      "receipt.created",
+      "payout.created",
+      "payment.reversed",
+      "payment.recomposed",
+      "cheque.updated",
+      "open-account.settled",
+    ] as const) {
+      const keys = KEYS_BY_EVENT[type];
+      for (const prefix of [
+        "invoice",
+        "invoices-list",
+        "customer",
+        "customers",
+        "debtors",
+        "statement",
+        "credit-check",
+      ]) {
+        expect(
+          keys.some((k) => k[0] === prefix),
+          `${type} باید ${prefix} را تازه کند`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("فاکتور خرید → خریدها، تأمین‌کننده و موجودی تازه می‌شوند", () => {
+    const keys = KEYS_BY_EVENT["purchase.changed"];
+    for (const prefix of ["purchases", "suppliers", "supplier", "inventory", "products"]) {
+      expect(keys.some((k) => k[0] === prefix)).toBe(true);
     }
   });
 

@@ -82,9 +82,11 @@ export default function AdminLayout({
       */}
       {!isPos && (
         <aside
+          dir="rtl"
           className={cn(
-            "sticky top-0 hidden h-screen shrink-0 border-l bg-sidebar transition-[width] duration-200 lg:block",
-            collapsed ? "w-[72px]" : "w-64"
+            /* border-e = لبه‌ی رو به محتوا (چپِ فیزیکی وقتی منو راست است) */
+            "sticky top-0 hidden h-screen shrink-0 border-e border-sidebar-border bg-sidebar transition-[width] duration-200 lg:block",
+            collapsed ? "w-[4.5rem]" : "w-64"
           )}
         >
           <AdminSidebar collapsed={collapsed} />
