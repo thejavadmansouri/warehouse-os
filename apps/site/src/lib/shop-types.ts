@@ -46,6 +46,8 @@ export interface ShopProduct {
   compareAt: number | null;
   stock: ShopStockBand;
   image: string | null;
+  /** میانگین ستاره و تعداد نظرهای تأییدشده (برای کارت؛ count=0 یعنی بدون نمایش). */
+  rating: { average: number; count: number };
 }
 
 /** GET /shop/products */

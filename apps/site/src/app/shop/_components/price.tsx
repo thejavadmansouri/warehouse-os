@@ -28,7 +28,7 @@ export function Price({
         : "text-base font-bold text-foreground";
 
   return (
-    <span className="inline-flex flex-wrap items-baseline gap-x-2">
+    <span className="inline-flex flex-wrap items-baseline gap-x-2 whitespace-nowrap tabular-nums">
       <span className={priceCls}>
         {shopMoney(price, unit)}
       </span>
