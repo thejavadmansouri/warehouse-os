@@ -1,0 +1,30 @@
+---
+description: Reuse existing local caches, SDKs, and installs — never re-download casually
+alwaysApply: true
+---
+
+# Reuse local tooling (do not re-download)
+
+Before downloading, installing, or re-fetching any toolchain or dependency distribution:
+
+1. Check whether it already exists on this machine and use it.
+2. Prefer the real user caches over Cursor sandbox cache paths.
+3. Do not wipe caches, reinstall JDKs/SDKs, or re-download Gradle/npm packages “to be safe.”
+
+## Known local installs (this machine)
+
+- Gradle user home: `C:\Users\K\.gradle` (distribution `gradle-8.11.1` already cached)
+- Android build toolchain: `%LOCALAPPDATA%\AndroidBuild` (JDK 17 + Android SDK) via `deploy\android\build-android.ps1`
+- Android APK script: `deploy\android\build-android.ps1` (sets `JAVA_HOME` / `ANDROID_HOME`)
+
+## Android Gradle builds
+
+When running Gradle from the agent, **force**:
+
+```powershell
+$env:GRADLE_USER_HOME = "C:\Users\K\.gradle"
+```
+
+Cursor may set `GRADLE_USER_HOME` to a sandbox cache under `%TEMP%\cursor-sandbox-cache\...`; that causes a useless re-download of Gradle. Override it before `gradlew` / `build-android.ps1`.
+
+If a download appears stuck, inspect locks under `.gradle\wrapper\dists` and the effective `GRADLE_USER_HOME` first — do not start a fresh install.

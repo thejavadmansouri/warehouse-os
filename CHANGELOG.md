@@ -27,6 +27,129 @@
 
 ## Unreleased
 
+### Shelf roll labels: real PDF like 100200_big (2026-10-10)
+
+- تحقیق TSPL/TTP-244 + هندسهٔ `100200_big` در `docs/label-printing.md`.
+- رول قفسه دیگر HTML-با-پسوند-pdf نیست: PDF واقعی با MediaBox ۱۰۴×ارتفاع.
+- عرض تکهٔ رول ۱۰۴mm (نه ۱۰۰)؛ سلول‌ها مساوی تقسیم می‌شوند؛ کاربر فقط
+  اندازهٔ برچسب را از preset انتخاب می‌کند.
+- چاپ لیبل قفسه: کامل یا انتخابی (`GET /labels/location/:id/subtree` + picker
+  در موقعیت‌ها و تب انبار/قفسه). چاپ لیبل کالای یک قفسه هم همه/انتخابی.
+- چاپ مستقیم حرارتی از مرورگر و اپ ویندوزی: `GET /labels/printers`،
+  `POST /labels/location/print-direct`، winspool RAW روی سرور؛ دیالوگ چاپ
+  پرینتر را نشان می‌دهد و دکمهٔ اصلی «چاپ مستقیم روی پرینتر» است.
+
+### Putaway photo → shop (watermark pipeline) (2026-10-04)
+
+- کارگر هنگام چیدن (بعد از اسکن قفسه) می‌تواند عکس بگیرد؛
+  `POST /uploads/work-task-item/:id/photo` → فشرده + promote WebP با واترمارک
+  فروشگاه → `PRODUCT_IMAGE` برای سایت / ترب / دیجیکالا.
+- گالری فروشگاه: تصویر اصلی `object-contain` روی سفید + بندانگشتی کنار/زیر
+  (الگوی رایج دیجیکالا و فروشگاه‌های RTL قطعه‌ای).
+
+### Admin sidebar RTL rewrite (2026-10-04)
+
+- منوی راست بر اساس الگوی رایج پنل‌های فارسی بازنویسی شد: `dir=rtl` صریح،
+  آیکن/متن راست‌چین، نوار فعال روی لبه‌ی شروع، سرتیتر بخش به‌صورت برچسب کوچک،
+  تورفتگی زیرمنو از راست، فلش جمع/باز متناسب با منوی راست.
+
+### Customers / RTL table alignment (2026-10-04)
+
+- ستون «شماره» و مبلغ‌ها در فهرست مشتری، انتخابگر مشتری POS، چک‌ها و
+  تأمین‌کنندگان: تلفن با `dir=ltr` دیگر چپِ ستون نمی‌نشیند (`text-end`) و زیر
+  هدر RTL قرار می‌گیرد؛ ارقام فارسی (`toFa`)؛ هدر/سلول مبلغ هم‌تراز `text-end`.
+
+### Documents hub: purchases + suppliers + keyboard entry (2026-10-04)
+
+- منوی «اسناد» زیرمنو شد: فروش، فاکتور خرید، تأمین‌کنندگان (فاکتور خرید از
+  انبار برداشته شد).
+- صفحهٔ تأمین‌کنندگان: فهرست شرکت‌ها، فاکتورهای هر کدام، کلیک → اقلام سند.
+- فاکتور خرید مثل POS: `DocumentShell`، نوار اسکن، پیشنهاد زنده، جدول
+  `pos-lines`؛ کالای نبوده با Enter همان لحظه ساخته و به فاکتور اضافه می‌شود؛
+  Enter خالی = ثبت (F2).
+- بدون رفرش: بعد از ثبت خرید و ساخت کالا در POS، کش/`invalidate` همان لحظه
+  تازه می‌شود؛ کالای جدید وارد کاتالوگ محلی صندوق می‌شود.
+- تأمین‌کننده در فاکتور خرید اجباری است؛ پروندهٔ تأمین‌کننده آدرس، رابط، بانک،
+  مهلت پرداخت و نحوهٔ تسویه دارد؛ روی فاکتور هم `payMethod` و `dueDate` ثبت
+  می‌شود (قرینهٔ فروش به مشتری).
+- ارسال کارِ چیدن به کارگر دیگر خودکار نیست: از فاکتور خرید / Excel یا بعداً
+  از جزئیات سند (`POST /purchases/:id/putaway`).
+- انتخاب چند کارگر با تیک کنار اسم — یک Task مشترک؛ هر قلم را اولی که چید
+  تیک می‌زند (`WorkTaskAssignee` + ادعای اتمیک قلم).
+
+### Blank invoice (فاکتور سفید) desk create + solid UI (2026-10-04)
+
+- ساخت فاکتور سفید از پنل (`POST /sales/blank-quotations`) علاوه بر گوشی.
+- ویرایش کامل برگه‌های گوشی/سیستم: قیمت، تعداد، وصل کالا، افزودن/حذف قلم.
+- ظاهر فهرست و جزئیات solid‌تر (نوار تب، جدول `pos-lines`، نوار ذخیره/تبدیل).
+- برچسب UI گوشی: «فاکتور سفید».
+
+### Purchase price date on ProductPrice (2026-10-04)
+
+- `ProductPrice.purchasePriceAt`: تاریخ اثر قیمت خرید (تاریخ فاکتور خرید یا
+  انتخاب دستی). روی ایجاد کالا، ثبت قیمت، و تأیید فاکتور خرید پر می‌شود؛
+  تاریخچه و نوار قیمت و زمینهٔ ردیف خرید آن را نشان می‌دهند.
+
+### Persian alef unify + faster phone search + Apple-like UI (2026-10-04)
+
+- Normalize `آ/أ/إ` → `ا` (and related) on phone + API so «ارم…اراد» matches
+  «آرم…آراد» without re-download; index re-normalizes stored tokens.
+- Offline catalog: light pre-normalized index + longest-token filter (heavy
+  inverted postings removed — OOM crash on A12-class phones).
+- Search no longer loads all ~33k rows into RAM: SQLite candidates by longest
+  token, then rank; Locate uses the same local search and fills stock via
+  `stock-batch` (empty results on A12 were OOM/online-only, not missing data).
+- Operator UI: iOS HIG–inspired colors (system blue, grouped gray), capsule
+  buttons, flatter cards.
+
+### Locate by label scan + home polish (2026-10-04)
+
+- **یافتن کالا:** primary path is CameraX label/barcode scan (SKU/barcode →
+  shelf locations); typing remains secondary. Result cards show stock chips and
+  clearer shelf rows.
+- Shift home title shows Warehouse OS; locate tile subtitle mentions scan.
+
+### Faster Android voice + multi-photo capture (2026-10-04)
+
+- In-app CameraX still capture (no system camera hop); up to 4 photos per
+  stock-in; compress at shutter; confirm enqueues stock immediately and queues
+  photos in the background.
+- Voice loop: skip catalog-loading beat; primary action is «ثبت N تا»; mic
+  auto-restarts after save; photos optional / addable later from the shelf list
+  or saved notice. Photo Wi-Fi uploads run with concurrency 3.
+- Offline STT (Vosk) deferred — keeps APK size down.
+
+### Site product pages from worker photos (2026-10-04)
+
+- Shop settings: configurable image watermark (`watermarkEnabled` / text /
+  opacity / position) and `autoPublishOnline`.
+- Worker inventory photos can be promoted to SEO WebP site images
+  (`POST /admin/product-images/promote/:productId`); after approve, promote
+  runs automatically. Publishing sets `showOnline` when photo + printed label
+  + stock are ready (`POST .../publish/:productId`).
+- Admin page **صفحهٔ سایت کالاها** (`/admin/site-products`): list readiness,
+  prepare photos, publish. Public URL remains `/shop/product/:id`.
+
+### Product label print queue with PC confirm (2026-10-04)
+
+- After manager approves a worker stock-in (`/admin/review`), a `PRODUCT_LABEL`
+  print job is enqueued with `copies = quantity` — nothing prints yet.
+- New PC confirm flow: `GET /print-jobs?type=PRODUCT_LABEL&status=PENDING` and
+  `POST /print-jobs/:id/confirm` send TSPL to the configured network/Windows
+  label printer; cancel is also available.
+- Admin page **لیبل‌ها / بارکدها** (`/admin/labels`, also in sidebar): confirm
+  queue, unprinted products, and per-shelf labeled/unlabeled coverage
+  (`GET /products/labels/coverage`, `GET /products/labels/at/:locationId`).
+- **MANAGER/ADMIN on the Android app:** `POST /sync/operations` auto-approves
+  stock-in (and COUNT status) when product+location are known — no web review
+  queue; label jobs still wait for PC confirm. New-product requests from those
+  roles auto-approve with unique `sku`/`internalBarcode` via `nextSku`, apply
+  stock, and enqueue labels. STAFF path unchanged (pending review).
+- **My Work enriched:** `GET /mobile/my-work` returns location, SKU, photo count,
+  and label print status (`QUEUED`/`PRINTED`/…); managers also see ops they
+  reviewed today. Android «کارهای من» shows the fuller timeline. Staff can
+  fetch their own operation photos via `GET /uploads/photo/:id`.
+
 ### SaleInvoice.total is now net of credit returns (2026-09-20)
 
 - Bug: a credit return decremented `SaleInvoice.dueAmount` but never `total`,
