@@ -39,13 +39,17 @@ describe("ساختار منو", () => {
   });
 
   it("کارهای هرروزه‌ی فروش بالا سنجاق‌اند", () => {
-    const pinned = pinnedOf(filterNavByRole(NAV_SECTIONS, "SALES")).map((i) => i.href);
-    expect(pinned).toContain("/admin/pos");
-    expect(pinned).toContain("/admin/customers");
+    // «اسناد» حالا یک هابِ بدون href است؛ مقصدها برگ‌های داخلش‌اند، پس
+    // برگ‌های بخشِ سنجاق‌شده را چک می‌کنیم نه ردیف‌های سطحِ اول را.
+    const pinnedLeaves = leaves(
+      filterNavByRole(NAV_SECTIONS, "SALES").filter((s) => s.pinned)
+    ).map((i) => i.href);
+    expect(pinnedLeaves).toContain("/admin/pos");
+    expect(pinnedLeaves).toContain("/admin/customers");
     // فاکتور حالا یک تب داخلِ «اسناد» است، نه یک مقصدِ جدا.
-    expect(pinned).toContain("/admin/documents");
+    expect(pinnedLeaves).toContain("/admin/documents");
     // گزارش برای فروشنده نیست.
-    expect(pinned).not.toContain("/admin/reports");
+    expect(pinnedLeaves).not.toContain("/admin/reports");
   });
 
   it("انباردار میان‌برهای خودش را می‌بیند، نه صندوق را", () => {
