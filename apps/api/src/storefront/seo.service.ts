@@ -47,7 +47,15 @@ export class SeoService {
     const rows = shop?.onlineEnabled
       ? await this.prisma.product.findMany({
           where: { showOnline: true, isActive: true, deletedAt: null },
-          select: { id: true, updatedAt: true },
+          select: {
+            id: true,
+            updatedAt: true,
+            assets: {
+              where: { type: 'PRODUCT_IMAGE' },
+              select: { path: true },
+              take: 1,
+            },
+          },
           orderBy: { updatedAt: 'desc' },
           take: MAX_URLS,
         })
@@ -60,16 +68,37 @@ export class SeoService {
         : '') +
       `    <priority>${priority}</priority>\n  </url>`;
 
+    // Image extension so product photos enter Google Images. Paths stored
+    // are root-relative (/storage/...) — absolutise against the same origin.
+    const urlWithImage = (p: {
+      id: string;
+      updatedAt: Date;
+      assets: { path: string }[];
+    }) => {
+      const loc = `${origin}/shop/product/${p.id}`;
+      const img = p.assets[0]?.path
+        ? `\n    <image:image>\n      <image:loc>${this.esc(
+            origin + p.assets[0].path,
+          )}</image:loc>\n    </image:image>`
+        : '';
+      return (
+        `  <url>\n    <loc>${this.esc(loc)}</loc>\n` +
+        `    <lastmod>${p.updatedAt.toISOString().slice(0, 10)}</lastmod>\n` +
+        img +
+        `\n    <priority>0.6</priority>\n  </url>`
+      );
+    };
+
     const entries = [
       url(`${origin}/`, undefined, '1.0'),
-      ...rows.map((p: { id: string; updatedAt: Date }) =>
-        url(`${origin}/?product=${p.id}`, p.updatedAt),
-      ),
+      ...rows.map((p) => urlWithImage(p)),
     ];
 
+    const imageNs =
+      ' xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"';
     return (
       '<?xml version="1.0" encoding="UTF-8"?>\n' +
-      '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+      `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"${rows.length ? imageNs : ''}>\n` +
       entries.join('\n') +
       '\n</urlset>\n'
     );
