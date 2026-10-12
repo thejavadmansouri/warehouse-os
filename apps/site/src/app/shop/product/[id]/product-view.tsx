@@ -32,16 +32,22 @@ import { useShopAuth } from "@/lib/shop-auth";
 import { useShopCart } from "@/lib/shop-cart";
 import { faDateTime, faToEn, toFa } from "@/lib/format";
 import { STOCK_LABELS } from "@/lib/shop-format";
-import type { ShopReviews } from "@/lib/shop-types";
+import type { ShopProductDetail, ShopReviews } from "@/lib/shop-types";
 
-export function ProductView({ id }: { id: string }) {
+export function ProductView({ id, initial }: { id: string; initial: ShopProductDetail }) {
   const add = useShopCart((s) => s.add);
   const token = useShopAuth((s) => s.token);
 
   const [qty, setQty] = React.useState(1);
   const [activeImg, setActiveImg] = React.useState(0);
 
-  const detailQuery = useQuery({ queryKey: ["shop", "product", id], queryFn: () => getShopProduct(id) });
+  const detailQuery = useQuery({
+    queryKey: ["shop", "product", id],
+    queryFn: () => getShopProduct(id),
+    // Server-rendered HTML already carries the product: no loading flash,
+    // and the data is revalidated in the background (price/stock stay fresh).
+    initialData: initial,
+  });
   const reviewsQuery = useQuery<ShopReviews>({
     queryKey: ["shop", "product", id, "reviews"],
     queryFn: () => getShopReviews(id),
