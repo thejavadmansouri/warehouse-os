@@ -17,6 +17,20 @@ const API_PUBLIC =
   process.env.SITE_API_PUBLIC_URL ??
   (process.env.SITE_URL ?? `http://127.0.0.1:${API_PORT}`);
 
+/** نام فروشگاه از تنظیمات (تک‌منبع: همان که نوبار و فوتر نشان می‌دهند). */
+async function getShopName(): Promise<string> {
+  try {
+    const res = await fetch(`${API_BASE}/shop/settings`, {
+      next: { revalidate: 3600 },
+    });
+    if (!res.ok) return "شهر یدکی صادقی";
+    const s = (await res.json()) as { name?: string };
+    return s.name?.trim() || "شهر یدکی صادقی";
+  } catch {
+    return "شهر یدکی صادقی";
+  }
+}
+
 async function getDetail(id: string): Promise<ShopProductDetail | null> {
   // قیمت و موجودی نباید کشِ کهنه بماند؛ صفحه در هر درخواستِ رندر تازه می‌خواند.
   const res = await fetch(
@@ -58,7 +72,7 @@ export async function generateMetadata({
   const { id } = await params;
   const p = await getDetail(id);
   if (!p) return { title: "کالا یافت نشد" };
-  const shopName = "شهر یدکی صادقی";
+  const shopName = await getShopName();
   const title = `${p.name} | ${shopName}`;
   const priceBit =
     p.price != null

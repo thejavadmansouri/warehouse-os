@@ -83,6 +83,47 @@ export function CatalogHome() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
+      {/* نوار دسته‌ها: اسکرول افقیِ لمسی (الگوی دیجیکالا/ترب) — جایگزینِ سریعِ
+          دراپ‌داون برای پرکاربردترین مسیرِ ناوبری. */}
+      {facets && facets.categories.length > 1 && (
+        <nav
+          aria-label="دسته‌های کالا"
+          className="scroll-thin -mx-4 mb-4 flex gap-2 overflow-x-auto px-4 pb-1"
+        >
+          <button
+            type="button"
+            onClick={() => setParams({ category: undefined, brand: undefined })}
+            className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
+              !categoryId
+                ? "border-primary bg-primary font-bold text-primary-foreground"
+                : "bg-card hover:border-primary/50"
+            }`}
+          >
+            همه
+          </button>
+          {facets.categories.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() =>
+                setParams({
+                  category: c.id === categoryId ? undefined : c.id,
+                  brand: undefined,
+                })
+              }
+              aria-pressed={c.id === categoryId}
+              className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                c.id === categoryId
+                  ? "border-primary bg-primary font-bold text-primary-foreground"
+                  : "bg-card hover:border-primary/50"
+              }`}
+            >
+              {c.name} ({toFa(c.count)})
+            </button>
+          ))}
+        </nav>
+      )}
+
       {/* بنرها */}
       {bannerQuery.data && bannerQuery.data.length > 0 && page === 1 && !categoryId && !q && (
         <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
