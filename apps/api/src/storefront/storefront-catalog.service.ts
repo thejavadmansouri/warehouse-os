@@ -376,6 +376,23 @@ export class StorefrontCatalogService {
 
     const byId = new Map(rows.map((r) => [r.id, r]));
 
+    // میانگین ستاره‌ها برای کارت‌ها — یک کوئری برای کل صفحه، نه N+1.
+    const ratings = await this.prisma.productReview.groupBy({
+      by: ['productId'],
+      where: { productId: { in: slice.map((s) => s.id) }, status: 'APPROVED' },
+      _avg: { rating: true },
+      _count: { _all: true },
+    });
+    const ratingById = new Map(
+      ratings.map((r) => [
+        r.productId,
+        {
+          average: r._avg.rating ? Math.round(r._avg.rating * 10) / 10 : 0,
+          count: r._count._all,
+        },
+      ]),
+    );
+
     return slice
       .map((s) => {
         const p = byId.get(s.id);
@@ -395,6 +412,8 @@ export class StorefrontCatalogService {
           compareAt: s.compareAt ?? null,
           stock: stockBand(s.stock),
           image: p.assets[0]?.thumbnailPath ?? p.assets[0]?.path ?? null,
+          /** برای ستاره‌ی کارت؛ count=0 یعنی «بدون نظر» و ستاره نمایش داده نمی‌شود. */
+          rating: ratingById.get(s.id) ?? { average: 0, count: 0 },
         };
       })
       .filter(Boolean);
