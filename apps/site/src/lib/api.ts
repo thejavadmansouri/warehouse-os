@@ -30,12 +30,19 @@ export function apiUrl(): string {
   return resolveSiteApiUrl();
 }
 
-/** آدرسِ کاملِ فایل (بنر، …) — برای داده‌هایی که خودِ سایت آپلود کرده. */
+/**
+ * آدرسِ فایل (بنر، عکس کالا، …).
+ *
+ * مسیرهای ریشه‌ای همان‌طور که هستند برمی‌گردند: سایت آن‌ها را با rewrite در
+ * `next.config.ts` از خودش سرو می‌کند. اگر اینجا مبدأِ API را می‌چسباندیم،
+ * HTMLِ سرور (`127.0.0.1`) با رندر کلاینت (`localhost`) نمی‌خواند و React
+ * hydration error می‌داد — و تصویر بین‌مبدأیی که CORPِ API مسدود می‌کرد.
+ */
 export function assetUrl(path?: string | null): string {
   if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path;
-  if (path.startsWith("/")) return `${apiUrl()}${path}`;
-  return `${apiUrl()}/${path}`;
+  if (path.startsWith("/")) return path;
+  return `/${path}`;
 }
 
 export type ApiRequestInit = Omit<RequestInit, "body"> & { body?: unknown };

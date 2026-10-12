@@ -26,7 +26,11 @@ async function bootstrap() {
 
   // هدرهای امنیتی: CSP، X-Frame-Options، nosniff، HSTS، حذف X-Powered-By و…
   // (پیش‌فرض helmet برای API کافی است — این سرور HTML به مرورگر نمی‌دهد.)
-  app.use(helmet());
+  //
+  // استثنا: `crossOriginResourcePolicy: cross-origin` برای عکس‌های /storage.
+  // پیش‌فرض helmet یعنی `same-origin` و مرورگر تصویرِ سایت را — با وجود پاسخ
+  // ۲۰۰ — با `ERR_BLOCKED_BY_RESPONSE.NotSameOrigin` رد می‌کند.
+  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 
   app.useGlobalFilters(new AppExceptionFilter());
 
