@@ -50,6 +50,7 @@ function dto(over: Partial<CreatePurchaseDto> = {}): CreatePurchaseDto {
   return {
     idempotencyKey: 'k1',
     warehouseId: 'w1',
+    supplierId: 's1',
     lines: [{ productId: 'p1', quantity: 2, unitPrice: 1000 }],
     ...over,
   };
@@ -174,7 +175,7 @@ describe('PurchasesService', () => {
       prisma.purchaseInvoice.findUnique = jest
         .fn()
         .mockResolvedValueOnce(null)
-        .mockResolvedValue({ id: 'purchase-1' });
+        .mockResolvedValue({ id: 'purchase-1', workTasks: [] });
 
       await service.create(
         dto({
@@ -192,7 +193,7 @@ describe('PurchasesService', () => {
       prisma.purchaseInvoice.findUnique = jest
         .fn()
         .mockResolvedValueOnce(null)
-        .mockResolvedValue({ id: 'purchase-1' });
+        .mockResolvedValue({ id: 'purchase-1', workTasks: [] });
 
       await service.create(
         dto({

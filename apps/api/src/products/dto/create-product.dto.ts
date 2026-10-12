@@ -57,6 +57,11 @@ export class CreateProductDto {
   @IsNumber()
   purchasePrice?: number;
 
+  /** تاریخ اثر قیمت خرید (ISO). بدون آن، زمان ثبت استفاده می‌شود. */
+  @IsOptional()
+  @IsString()
+  purchasePriceAt?: string;
+
   @IsOptional()
   @IsNumber()
   salePrice?: number;

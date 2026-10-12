@@ -1,10 +1,12 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { PrintJobsService } from '../print-jobs/print-jobs.service';
 import { buildSearchTokens } from '../products/search-tokens';
 import { nextSku } from '../products/sku.util';
 import {
@@ -15,9 +17,12 @@ import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ProductRequestsService {
+  private readonly logger = new Logger(ProductRequestsService.name);
+
   constructor(
     private prisma: PrismaService,
     private inventoryOperation: InventoryOperationService,
+    private printJobs: PrintJobsService,
   ) {}
 
   private readonly reviewInclude = {
@@ -28,8 +33,15 @@ export class ProductRequestsService {
     createdProduct: { select: { id: true, name: true, sku: true } },
   };
 
-  /** Worker submits a new-product request; it lands PENDING for manager review. */
-  async create(dto: CreateProductRequestDto, workerId?: string) {
+  /**
+   * Worker submits a new-product request; STAFF lands PENDING for review.
+   * MANAGER/ADMIN: auto-approve → SKU یکتا + موجودی + صف چاپ لیبل.
+   */
+  async create(
+    dto: CreateProductRequestDto,
+    workerId?: string,
+    workerRole?: string,
+  ) {
     const location = dto.locationBarcode
       ? await this.prisma.location.findUnique({
           where: { barcode: dto.locationBarcode },
@@ -37,7 +49,7 @@ export class ProductRequestsService {
         })
       : null;
 
-    return this.prisma.productCreationRequest.create({
+    const created = await this.prisma.productCreationRequest.create({
       data: {
         name: dto.name.trim(),
         brandName: dto.brandName?.trim() || null,
@@ -56,6 +68,26 @@ export class ProductRequestsService {
       },
       include: this.reviewInclude,
     });
+
+    const direct =
+      (workerRole === 'ADMIN' || workerRole === 'MANAGER') && !!workerId;
+    if (!direct) return created;
+
+    try {
+      return await this.approve(created.id, workerId, undefined, {
+        printSource: 'APP_DIRECT',
+      });
+    } catch (err) {
+      this.logger.warn(
+        `product-request direct-approve failed for ${created.id}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+      return this.prisma.productCreationRequest.findUnique({
+        where: { id: created.id },
+        include: this.reviewInclude,
+      });
+    }
   }
 
   /** Manager review list, optionally filtered by status and warehouse. */
@@ -90,6 +122,7 @@ export class ProductRequestsService {
     id: string,
     reviewerId?: string,
     edits?: ApproveProductRequestDto,
+    options?: { printSource?: string },
   ) {
     const req = await this.prisma.productCreationRequest.findUnique({
       where: { id },
@@ -222,6 +255,25 @@ export class ProductRequestsService {
           userId: reviewerId,
           note: `ایجاد کالا از درخواست کارگر: ${name}`,
         });
+      }
+
+      // صف چاپ لیبل — تأیید روی PC؛ تعداد = quantity ورود.
+      if (reviewerId && quantity > 0) {
+        try {
+          await this.printJobs.enqueueProductLabel({
+            productId: product.id,
+            copies: quantity,
+            createdById: reviewerId,
+            locationId: req.locationId,
+            source: options?.printSource ?? 'PRODUCT_REQUEST_APPROVE',
+          });
+        } catch (err) {
+          this.logger.warn(
+            `enqueue label print failed for product-request ${id}: ${
+              err instanceof Error ? err.message : err
+            }`,
+          );
+        }
       }
 
       return this.prisma.productCreationRequest.update({

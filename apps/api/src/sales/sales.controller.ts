@@ -51,6 +51,7 @@ import {
 } from './dto/quotation.dto';
 import {
   ConvertBlankQuotationDto,
+  CreateBlankQuotationDto,
   SaveBlankPricesDto,
 } from './dto/blank-quotation.dto';
 import {
@@ -281,11 +282,19 @@ export class SalesController {
     return this.quotations.cancel(id);
   }
 
-  // ---------- پیش‌فاکتور سفید ----------
+  // ---------- پیش‌فاکتور سفید / فاکتور سفید ----------
   //
-  // برگهٔ قیمتِ متنی که از گوشی می‌آید (کارگر یا فروشنده). قیمت نهایی و وصل
-  // کردن به کالای واقعی کار مدیر است، پس همه‌ی روت‌های زیر فقط ADMIN/MANAGER
-  // هستند — ساختش از سطح موبایل انجام می‌شود (mobile/blank-quotations).
+  // برگهٔ قیمتِ متنی — از گوشی (mobile) یا از پنل. قیمت نهایی و وصل به کالای
+  // واقعی کار مدیر است؛ ساخت از پنل برای ADMIN/MANAGER/SALES باز است.
+
+  @Roles(Role.ADMIN, Role.MANAGER, Role.SALES)
+  @Post('blank-quotations')
+  createBlankQuotation(
+    @Body() dto: CreateBlankQuotationDto,
+    @Req() req: any,
+  ) {
+    return this.blankQuotations.create(dto, req.user?.userId, 'desk');
+  }
 
   @Roles(Role.ADMIN, Role.MANAGER)
   @Get('blank-quotations')

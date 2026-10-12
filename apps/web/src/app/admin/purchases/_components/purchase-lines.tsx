@@ -1,44 +1,19 @@
 "use client";
 
 /**
- * جدول اقلام فاکتور خرید — سبک POS.
+ * جدول اقلام فاکتور خرید — همان چیدمان و حرکتِ کیبوردِ صندوق فروش.
  *
- * سه چیز که این جدول را از یک فرم معمولی جدا می‌کند:
- *
- * ۱. **ردیف فعال.** آخرین ردیفِ در حال کار با ته‌رنگ مشخص دیده می‌شود؛
- *    حسابدار همیشه می‌داند Enter بعدی کجا می‌نشیند.
- *
- * ۲. **افزودن سریع کالای جدید.** اگر کالا در کاتالوگ نبود، همان‌جا دیالوگ
- *    سریع باز می‌شود؛ محصول تازه بلافاصله به همان ردیف بسته می‌شود و قیمتِ
- *    خریدی که کاربر داخل دیالوگ زده روی همان ردیف می‌نشیند.
- *
- * ۳. **زمینه‌ی هر کالا.** قیمت خرید قبلی، قیمت فروش و موجودی زیر کالای
- *    انتخاب‌شده می‌آید تا عددِ روی برگه با حافظه‌ی سیستم مقایسه شود.
+ * کالا از نوار اسکن بالا اضافه می‌شود؛ اینجا فقط تعداد و قیمت واحد ویرایش
+ * می‌شود (Tab بین خانه‌ها، Enter برگشت به نوار اسکن).
  */
 
-import * as React from "react";
-import { useQuery } from "@tanstack/react-query";
-import { PackagePlus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 
-import type { Product } from "@/lib/types";
-import { money, qty as faQty, toFa } from "@/lib/format";
-import { getProductByBarcode, getProductPrices, getProductStock } from "@/lib/api";
-import { MoneyInput } from "@/components/money-input";
-import { ProductPicker } from "@/components/product-picker";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MoneyInput } from "@/components/money-input";
+import { money, toFa } from "@/lib/format";
 import { unitLabel } from "@/lib/currency";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { QuickAddProductDialog } from "./quick-add-product-dialog";
 
-/** یک ردیفِ در حال ویرایش روی فرم. */
 export interface PurchaseRow {
   key: string;
   productId: string | null;
@@ -61,275 +36,175 @@ export function emptyRow(): PurchaseRow {
   };
 }
 
-/**
- * جمعِ خالصِ یک ردیف.
- *
- * ⚠️ همان ترتیبی که سرور دارد (`purchases.service.ts`):
- *   جمع ردیف = تعداد × قیمت واحد − تخفیف ردیف
- * اگر این دو از هم جدا بیفتند، عددی که حسابدار روی صفحه می‌بیند با عددی که ثبت
- * می‌شود فرق می‌کند — و او به کدام اعتماد کند؟
- */
 export const rowNet = (r: PurchaseRow) =>
   Math.max(0, r.quantity * r.unitPrice - r.discount);
 
-/** قیمت خرید قبلی + قیمت فروش + موجودی — زیر کالای انتخاب‌شده. */
-function ProductContext({ productId }: { productId: string }) {
-  const pricesQ = useQuery({
-    queryKey: ["purchase-product", productId, "prices"],
-    queryFn: () => getProductPrices(productId),
-    staleTime: 30_000,
-  });
-  const stockQ = useQuery({
-    queryKey: ["purchase-product", productId, "stock"],
-    queryFn: () => getProductStock(productId),
-    staleTime: 30_000,
-  });
-  const latest = pricesQ.data?.[0];
-  const stock = stockQ.data?.reduce((sum, item) => sum + item.quantity, 0) ?? null;
-  if (!latest && stock === null) return null;
-  return (
-    <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-      <span>خرید قبلی: {latest?.purchasePrice != null ? money(latest.purchasePrice) : "—"}</span>
-      <span>فروش: {latest?.salePrice != null ? money(latest.salePrice) : "—"}</span>
-      <span>موجودی: {stock === null ? "…" : faQty(stock)}</span>
-    </div>
+function parseFaInt(raw: string): number {
+  const n = Number(
+    raw
+      .replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
+      .replace(/\D/g, ""),
   );
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** حرکت بین خانه‌ها — کپیِ منطقِ POS. */
+function moveCell(e: React.KeyboardEvent<HTMLInputElement>) {
+  const from = e.currentTarget.dataset.cell;
+  if (!from) return;
+  const [row, col] = from.split(":").map(Number);
+  const toScan = () => document.getElementById("purchase-scan")?.focus();
+  const toCell = (r: number, c: number) => {
+    const el = document.querySelector<HTMLInputElement>(`[data-cell="${r}:${c}"]`);
+    el?.focus();
+    el?.select();
+  };
+
+  if (e.key === "Enter") {
+    e.preventDefault();
+    e.stopPropagation();
+    toScan();
+    return;
+  }
+  if (e.key === "Tab") {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.shiftKey) {
+      if (col === 0) toCell(row, 1);
+      else toScan();
+    } else {
+      if (col === 1) toCell(row, 0);
+      else toScan();
+    }
+    return;
+  }
+
+  const keys = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"];
+  if (!keys.includes(e.key)) return;
+  const el = e.currentTarget;
+  const atStart = el.selectionStart === 0 && el.selectionEnd === 0;
+  const atEnd =
+    el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+  let target: string | null = null;
+  if (e.key === "ArrowLeft" && atEnd) target = `${row}:${col + 1}`;
+  else if (e.key === "ArrowRight" && atStart) target = `${row}:${col - 1}`;
+  else if (e.key === "ArrowDown") target = `${row + 1}:${col}`;
+  else if (e.key === "ArrowUp") target = `${row - 1}:${col}`;
+  if (!target) return;
+  const [, tc] = target.split(":").map(Number);
+  if (tc < 0 || tc >= 2) return;
+  const next = document.querySelector<HTMLInputElement>(`[data-cell="${target}"]`);
+  if (!next) return;
+  e.preventDefault();
+  e.stopPropagation();
+  next.focus();
+  next.select();
 }
 
 export function PurchaseLines({
   rows,
-  onChange,
+  activeRow,
+  onActivate,
+  onPatch,
+  onRemove,
 }: {
   rows: PurchaseRow[];
-  onChange: (rows: PurchaseRow[]) => void;
+  activeRow: number;
+  onActivate: (i: number) => void;
+  onPatch: (i: number, patch: Partial<PurchaseRow>) => void;
+  onRemove: (i: number) => void;
 }) {
-  // ردیفی که کاربر همین حالا رویش کار می‌کند — برای نوار POS و مقصدِ «افزودن سریع».
-  const [activeKey, setActiveKey] = React.useState<string | null>(rows[0]?.key ?? null);
-  // دیالوگ افزودن سریع: null یعنی بسته.
-  const [quickAdd, setQuickAdd] = React.useState<{ rowKey: string; barcode?: string; suggestedName?: string } | null>(null);
-  // ورودی بارکدخوان — اسکن یا تایپ بارکد.
-  const [scan, setScan] = React.useState("");
-  const [scanning, setScanning] = React.useState(false);
-
-  const patch = (key: string, p: Partial<PurchaseRow>) =>
-    onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
-
-  const remove = (key: string) =>
-    onChange(rows.length === 1 ? [emptyRow()] : rows.filter((r) => r.key !== key));
-
-  const addRow = () => {
-    const row = emptyRow();
-    onChange([...rows, row]);
-    setActiveKey(row.key);
-  };
-
-  /** محصول تازه از دیالوگ سریع → بستن به ردیف + قیمت خریدش. */
-  const handleQuickCreated = (p: Product, rowKey: string) => {
-    patch(rowKey, {
-      productId: p.id,
-      productName: p.name,
-      unit: p.unit ?? null,
-      ...(p.purchasePrice != null && p.purchasePrice > 0 ? { unitPrice: p.purchasePrice } : {}),
-    });
-    setActiveKey(rowKey);
-  };
-
-  /**
-   * اسکن/تایپ بارکد.
-   *
-   * کالا پیدا شد → به اولین ردیفِ خالی می‌نشیند (یا ردیف تازه می‌سازد) و
-   * تعدادش یکی زیاد می‌شود — همان رفتار صندوق فروش.
-   * پیدا نشد → دیالوگ افزودن سریع با همین بارکد باز می‌شود تا کالا همان‌جا
-   * ساخته شود و بعد به ردیف بندد.
-   */
-  const handleScan = async () => {
-    const code = scan.trim();
-    if (!code || scanning) return;
-    setScanning(true);
-    try {
-      const p = await getProductByBarcode(code);
-      const emptyIndex = rows.findIndex((r) => !r.productId);
-      const target = emptyIndex >= 0 ? rows[emptyIndex] : null;
-      if (target) {
-        patch(target.key, {
-          productId: p.id,
-          productName: p.name,
-          unit: p.unit ?? null,
-          quantity: target.quantity + 1,
-        });
-        setActiveKey(target.key);
-      } else {
-        const row = emptyRow();
-        onChange([...rows, { ...row, productId: p.id, productName: p.name, unit: p.unit ?? null, quantity: 1 }]);
-        setActiveKey(row.key);
-      }
-      setScan("");
-    } catch {
-      // کالا نیست — افزودن سریع با همین بارکد.
-      const target = rows.find((r) => !r.productId) ?? rows[rows.length - 1];
-      setQuickAdd({ rowKey: target.key, barcode: code });
-      setScan("");
-    } finally {
-      setScanning(false);
-    }
-  };
-
-  // آخرین ردیف خالی را فعال نشان بده تا Enter/Tab طبیعی پیش برود.
-  const activeIndex = rows.findIndex((r) => r.key === activeKey);
+  if (rows.length === 0) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-lg font-medium">فاکتور خرید جدید</p>
+        <p className="text-sm text-muted-foreground">
+          نام کالا را در نوار بالا بنویس — اگر نبود همان لحظه ساخته می‌شود
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="overflow-x-auto">
-      <form className="mb-3 flex gap-2" onSubmit={(e) => { e.preventDefault(); handleScan(); }}>
-        <Input
-          value={scan}
-          onChange={(e) => setScan(e.target.value)}
-          placeholder="اسکن یا تایپ بارکد و Enter…"
-          aria-label="اسکن یا تایپ بارکد"
-        />
-        <Button type="submit" variant="outline" className="h-9" disabled={!scan.trim() || scanning}>
-          {scanning ? "…" : "افزودن"}
-        </Button>
-      </form>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead className="w-8 bg-muted/40 text-center">#</TableHead>
-            <TableHead className="w-[36%] bg-muted/40">کالا / شرح</TableHead>
-            <TableHead className="w-[11%] bg-muted/40 text-center">تعداد</TableHead>
-            <TableHead className="w-[18%] bg-muted/40">قیمت واحد ({unitLabel()})</TableHead>
-            <TableHead className="w-[13%] bg-muted/40">تخفیف</TableHead>
-            <TableHead className="w-[14%] bg-muted/40">مبلغ ردیف</TableHead>
-            <TableHead className="w-8" />
-          </TableRow>
-        </TableHeader>
-
-        <TableBody>
-          {rows.map((r, index) => {
-            const isActive = r.key === activeKey;
-            return (
-              <TableRow
-                key={r.key}
-                onFocus={() => setActiveKey(r.key)}
-                data-active={isActive ? "true" : undefined}
-                className={isActive ? "bg-primary/[0.04]" : undefined}
-              >
-                <TableCell className="text-center text-xs text-muted-foreground">
-                  {toFa(index + 1)}
-                </TableCell>
-
-                <TableCell>
-                  <ProductPicker
-                    value={r.productId}
-                    placeholder="جست‌وجوی کالا…"
-                    onChange={(id, p: Product | null) => {
-                      patch(r.key, {
-                        productId: id,
-                        productName: p?.name ?? "",
-                        unit: p?.unit ?? null,
-                      });
-                      // کالای جدید پیدا شد؛ ردیف بعدی آماده‌ی ورود باشد.
-                      if (id && index === rows.length - 1) {
-                        const next = emptyRow();
-                        onChange([...rows.map((x) => (x.key === r.key ? { ...x, productId: id, productName: p?.name ?? "", unit: p?.unit ?? null } : x)), next]);
-                        setActiveKey(next.key);
-                      }
-                    }}
-                  />
-                  {r.productId ? <ProductContext productId={r.productId} /> : null}
-                </TableCell>
-
-                <TableCell>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    dir="ltr"
-                    className="text-center"
-                    value={toFa(r.quantity)}
-                    onFocus={() => setActiveKey(r.key)}
-                    onChange={(e) => {
-                      const n = Number(
-                        e.target.value.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)))
-                          .replace(/\D/g, ""),
-                      );
-                      patch(r.key, { quantity: Number.isFinite(n) ? n : 0 });
-                    }}
-                  />
-                  {r.unit ? (
-                    <span className="mt-1 block text-center text-xs text-muted-foreground">
-                      {r.unit}
-                    </span>
-                  ) : null}
-                </TableCell>
-
-                <TableCell>
-                  <MoneyInput
-                    value={r.unitPrice}
-                    onChange={(n) => patch(r.key, { unitPrice: n })}
-                    selectOnFocus
-                    placeholder="۰"
-                  />
-                </TableCell>
-
-                <TableCell>
-                  <MoneyInput
-                    value={r.discount}
-                    onChange={(n) => patch(r.key, { discount: n })}
-                    placeholder="۰"
-                  />
-                </TableCell>
-
-                <TableCell className="whitespace-nowrap bg-muted/20 font-medium">
-                  {money(rowNet(r))}
-                </TableCell>
-
-                <TableCell>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="حذف ردیف"
-                    onClick={() => remove(r.key)}
-                  >
-                    <Trash2 className="h-4 w-4 text-destructive" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-2">
-          <Button type="button" variant="outline" className="h-9" onClick={addRow}>
-            افزودن ردیف
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 gap-1.5"
-            onClick={() => {
-              const target = (activeIndex >= 0 ? rows[activeIndex] : rows[rows.length - 1]) ?? emptyRow();
-              setQuickAdd({ rowKey: target.key });
-            }}
-          >
-            <PackagePlus className="size-4 text-primary" />
-            کالای جدید نیست؟
-          </Button>
-        </div>
-        <span className="text-sm text-muted-foreground">
-          {faQty(rows.filter((r) => r.productId).length)} قلم
-        </span>
-      </div>
-
-      <QuickAddProductDialog
-        open={!!quickAdd}
-        onOpenChange={(v) => { if (!v) setQuickAdd(null); }}
-        barcode={quickAdd?.barcode}
-        suggestedName={quickAdd?.suggestedName}
-        defaultPurchasePrice={quickAdd ? rows.find((r) => r.key === quickAdd.rowKey)?.unitPrice : undefined}
-        onCreated={(p) => quickAdd && handleQuickCreated(p, quickAdd.rowKey)}
-      />
+    <div className="min-h-0 flex-1 overflow-auto">
+      <table className="pos-lines w-full min-w-[740px] table-fixed text-sm">
+        <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
+          <tr className="text-muted-foreground">
+            <th className="w-9 px-1 py-1 text-center text-xs font-medium">#</th>
+            <th className="px-2 py-1 text-start text-xs font-medium">کالا</th>
+            <th className="w-20 px-2 py-1 text-start text-xs font-medium">تعداد</th>
+            <th className="w-36 px-2 py-1 text-start text-xs font-medium whitespace-nowrap">
+              قیمت واحد <span className="font-normal opacity-70">({unitLabel()})</span>
+            </th>
+            <th className="w-32 px-2 py-1 text-end text-xs font-medium">جمع</th>
+            <th className="w-8 px-1.5 py-1" />
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr
+              key={r.key}
+              onClick={() => onActivate(i)}
+              data-row-active={activeRow === i}
+              className={`border-t border-e-2 align-middle transition-colors ${
+                activeRow === i ? "border-e-primary bg-primary/[0.03]" : "border-e-transparent"
+              }`}
+            >
+              <td className="px-1 py-0.5 text-center text-xs tabular-nums text-muted-foreground">
+                {toFa(i + 1)}
+              </td>
+              <td className="col-mint px-2 py-0.5">
+                <span className="block truncate text-base font-bold leading-snug">
+                  {r.productName}
+                </span>
+                {r.unit ? (
+                  <span className="text-xs text-muted-foreground">{r.unit}</span>
+                ) : null}
+              </td>
+              <td className="px-2 py-0.5">
+                <Input
+                  data-cell={`${i}:0`}
+                  type="text"
+                  inputMode="numeric"
+                  dir="ltr"
+                  className="h-8 text-center"
+                  value={toFa(r.quantity)}
+                  onFocus={() => onActivate(i)}
+                  onChange={(e) => onPatch(i, { quantity: parseFaInt(e.target.value) })}
+                  onKeyDown={moveCell}
+                />
+              </td>
+              <td className="px-2 py-0.5">
+                <MoneyInput
+                  data-cell={`${i}:1`}
+                  value={r.unitPrice}
+                  selectOnFocus
+                  className="h-8"
+                  onFocus={() => onActivate(i)}
+                  onChange={(n) => onPatch(i, { unitPrice: n })}
+                  onKeyDown={moveCell}
+                />
+              </td>
+              <td className="px-2 py-0.5 text-end font-medium tabular-nums">
+                {money(rowNet(r))}
+              </td>
+              <td className="px-1.5 py-0.5">
+                <button
+                  type="button"
+                  className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  aria-label="حذف ردیف"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRemove(i);
+                  }}
+                >
+                  <Trash2 className="size-3.5" />
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

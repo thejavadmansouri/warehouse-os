@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Banknote } from "lucide-react";
 
 import { getProduct, setProductPrice } from "@/lib/api";
-import { rial } from "@/lib/format";
+import { faDate, rial } from "@/lib/format";
 import { useAuthStore } from "@/lib/auth-store";
 import { toast } from "sonner";
 import { EditablePrice } from "@/app/admin/pos/_components/inline-results";
@@ -50,6 +50,9 @@ export function ProductPriceStrip({ productId }: { productId: string }) {
 
   const latest = q.data?.prices?.[0];
   const purchasePrice = latest?.purchasePrice ?? null;
+  const purchasePriceAt =
+    latest?.purchasePriceAt ??
+    (purchasePrice != null ? latest?.createdAt : null);
   const suggestedPrice =
     purchasePrice != null ? Math.round(purchasePrice * 1.15) : null;
 
@@ -68,9 +71,19 @@ export function ProductPriceStrip({ productId }: { productId: string }) {
       </p>
       <div className="flex flex-wrap items-center gap-2">
         {purchasePrice != null && (
-          <span className="inline-flex items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-xs tabular-nums text-sky-700 dark:text-sky-300" title="بهای خرید">
+          <span
+            className="inline-flex items-center gap-1 rounded-md border border-sky-500/30 bg-sky-500/10 px-2 py-1 text-xs tabular-nums text-sky-700 dark:text-sky-300"
+            title={
+              purchasePriceAt
+                ? `بهای خرید — تاریخ قیمت: ${faDate(purchasePriceAt)}`
+                : "بهای خرید"
+            }
+          >
             <span className="opacity-70">خرید</span>
             {rial(purchasePrice)}
+            {purchasePriceAt ? (
+              <span className="opacity-70">· {faDate(purchasePriceAt)}</span>
+            ) : null}
           </span>
         )}
         <EditablePrice

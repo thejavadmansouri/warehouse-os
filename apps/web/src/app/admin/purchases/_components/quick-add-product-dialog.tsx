@@ -33,7 +33,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MoneyInput } from "@/components/money-input";
+import { JalaliDateInput } from "@/components/jalali-date-input";
 import { unitLabel } from "@/lib/currency";
+
+function todayIsoDate(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 export function QuickAddProductDialog({
   open,
@@ -59,6 +65,7 @@ export function QuickAddProductDialog({
   const [barcodeValue, setBarcodeValue] = React.useState("");
   const [purchasePrice, setPurchasePrice] = React.useState(0);
   const [salePrice, setSalePrice] = React.useState(0);
+  const [purchasePriceAt, setPurchasePriceAt] = React.useState(todayIsoDate);
 
   // هر بار باز شدن، فیلدها از زمینه‌ی فرم خرید پر می‌شوند — نه از رندر قبلی.
   React.useEffect(() => {
@@ -68,6 +75,7 @@ export function QuickAddProductDialog({
     setBarcodeValue(barcode ?? "");
     setPurchasePrice(defaultPurchasePrice ?? 0);
     setSalePrice(0);
+    setPurchasePriceAt(todayIsoDate());
   }, [open, suggestedName, barcode, defaultPurchasePrice]);
 
   const createM = useMutation({
@@ -78,7 +86,10 @@ export function QuickAddProductDialog({
         isActive: true,
       };
       if (barcodeValue.trim()) dto.internalBarcode = barcodeValue.trim();
-      if (purchasePrice > 0) dto.purchasePrice = purchasePrice;
+      if (purchasePrice > 0) {
+        dto.purchasePrice = purchasePrice;
+        dto.purchasePriceAt = purchasePriceAt || todayIsoDate();
+      }
       if (salePrice > 0) dto.salePrice = salePrice;
       return createProduct(dto as never);
     },
@@ -147,6 +158,13 @@ export function QuickAddProductDialog({
               <MoneyInput id="qa-sale" value={salePrice} onChange={setSalePrice} placeholder="۰" />
             </div>
           </div>
+
+          {purchasePrice > 0 && (
+            <div className="grid gap-1.5">
+              <Label>تاریخ قیمت خرید</Label>
+              <JalaliDateInput value={purchasePriceAt} onChange={setPurchasePriceAt} />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

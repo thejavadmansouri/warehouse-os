@@ -2,10 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma, PhoneKind } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsGateway } from '../realtime/events.gateway';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { normalizePhone, phoneKind } from '../common/phone.util';
 import { LedgerService } from './ledger.service';
@@ -35,7 +37,13 @@ export class CustomersService {
     private prisma: PrismaService,
     private ledger: LedgerService,
     private categories: CustomerCategoriesService,
+    @Optional() private realtime?: EventsGateway,
   ) {}
+
+  private announce<T>(customerId: string, result: T): T {
+    this.realtime?.broadcast({ type: 'customer.changed', customerId });
+    return result;
+  }
 
   /** نام کاملِ نرمال‌شده برای جست‌وجو — «محمّد رضایی» و «محمد رضائی» یکی شوند. */
   private buildSearchName(firstName: string, lastName?: string | null): string {
@@ -301,7 +309,7 @@ export class CustomersService {
       include: { phones: true },
     });
 
-    return this.withFullName(customer);
+    return this.announce(customer.id, this.withFullName(customer));
   }
 
   async update(id: string, input: Partial<CustomerInput>) {
@@ -361,7 +369,7 @@ export class CustomersService {
       include: { phones: true },
     });
 
-    return this.withFullName(updated);
+    return this.announce(id, this.withFullName(updated));
   }
 
   /** افزودن شماره به بانک شماره‌ی یک مشتری. */
@@ -375,14 +383,14 @@ export class CustomersService {
       data: { ...normalized, customerId },
     });
 
-    return this.findOne(customerId);
+    return this.announce(customerId, await this.findOne(customerId));
   }
 
   async removePhone(customerId: string, phoneId: string) {
     await this.prisma.customerPhone.deleteMany({
       where: { id: phoneId, customerId },
     });
-    return this.findOne(customerId);
+    return this.announce(customerId, await this.findOne(customerId));
   }
 
   /**
@@ -415,7 +423,7 @@ export class CustomersService {
       }),
     ]);
 
-    return this.findOne(customerId);
+    return this.announce(customerId, await this.findOne(customerId));
   }
 
   /**
@@ -442,10 +450,13 @@ export class CustomersService {
       });
     }
 
-    return this.prisma.customer.update({
-      where: { id },
-      data: { isActive: false },
-    });
+    return this.announce(
+      id,
+      await this.prisma.customer.update({
+        where: { id },
+        data: { isActive: false },
+      }),
+    );
   }
 
   // ---------- کمکی‌ها ----------

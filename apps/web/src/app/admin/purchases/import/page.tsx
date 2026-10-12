@@ -2,13 +2,15 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
   CheckCircle2,
   Download,
   FileSpreadsheet,
+  Send,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -19,6 +21,7 @@ import {
   getWarehouses,
   previewPurchaseImport,
 } from "@/lib/api";
+import { WorkerPicker } from "@/app/admin/pos/_components/worker-picker";
 import { ApiException } from "@/lib/api-error-messages";
 import { useAuthStore } from "@/lib/auth-store";
 import { uuid } from "@/lib/uuid";
@@ -50,13 +53,18 @@ const ALLOWED = ["ADMIN", "MANAGER"] as const;
 
 export default function PurchaseImportPage() {
   const router = useRouter();
+  const qc = useQueryClient();
   const canUse = useAuthStore((s) => s.hasRole)(...ALLOWED);
   const [file, setFile] = React.useState<File | null>(null);
   const [rows, setRows] = React.useState<PurchaseImportRow[]>([]);
   const [warehouseId, setWarehouseId] = React.useState("");
-  const [supplierId, setSupplierId] = React.useState("NONE");
+  const [supplierId, setSupplierId] = React.useState("");
   const [supplierRef, setSupplierRef] = React.useState("");
   const [invoiceDate, setInvoiceDate] = React.useState("");
+  const [putaway, setPutaway] = React.useState<
+    null | { mode: "anyone" } | { mode: "workers"; ids: string[] }
+  >(null);
+  const [putawayPickerOpen, setPutawayPickerOpen] = React.useState(false);
   const [creatingRow, setCreatingRow] =
     React.useState<PurchaseImportRow | null>(null);
   const [activeRow, setActiveRow] = React.useState<number | null>(null);
@@ -91,9 +99,12 @@ export default function PurchaseImportPage() {
       confirmPurchaseImport({
         idempotencyKey: uuid(),
         warehouseId: warehouseId || warehousesQ.data?.[0]?.id || "",
-        supplierId: supplierId === "NONE" ? null : supplierId,
+        supplierId,
         supplierRef: supplierRef.trim() || undefined,
         invoiceDate: invoiceDate || undefined,
+        sendPutaway: putaway ? true : undefined,
+        assignedToIds:
+          putaway?.mode === "workers" ? putaway.ids : undefined,
         lines: rows
           .filter((r) => r.status === "READY" && r.product)
           .map((r) => ({
@@ -102,8 +113,14 @@ export default function PurchaseImportPage() {
             unitPrice: r.unitPrice,
           })),
       }),
-    onSuccess: (purchase) => {
-      toast.success(`فاکتور خرید ${toFa(purchase.number)} ثبت شد`);
+    onSuccess: async (purchase) => {
+      await qc.invalidateQueries({ queryKey: ["purchases"] });
+      if (putaway) void qc.invalidateQueries({ queryKey: ["work-tasks"] });
+      toast.success(
+        putaway
+          ? `فاکتور خرید ${toFa(purchase.number)} ثبت شد و برای چیدن به کارگر ارسال شد`
+          : `فاکتور خرید ${toFa(purchase.number)} ثبت شد`,
+      );
       router.push(`/admin/purchases/${purchase.id}`);
     },
     onError: (error) =>
@@ -111,6 +128,18 @@ export default function PurchaseImportPage() {
         error instanceof ApiException ? error.message : "ثبت فاکتور ناموفق بود",
       ),
   });
+
+  const tryConfirm = () => {
+    if (!supplierId) {
+      toast.error("تأمین‌کننده الزامی است");
+      return;
+    }
+    if (ready.length === 0) {
+      toast.error("هیچ ردیف آماده‌ای برای ثبت نیست");
+      return;
+    }
+    confirm.mutate();
+  };
 
   const ready = rows.filter(
     (r) =>
@@ -141,7 +170,7 @@ export default function PurchaseImportPage() {
         review === 0
       ) {
         event.preventDefault();
-        if (!confirm.isPending) confirm.mutate();
+        if (!confirm.isPending) tryConfirm();
       }
       if (event.key === "Escape" && !typing && !creatingRow) {
         event.preventDefault();
@@ -150,7 +179,9 @@ export default function PurchaseImportPage() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activeRow, confirm, creatingRow, review, rows.length, router]);
+    // tryConfirm از supplierId/ready می‌خواند — عمداً در deps نیست تا شنونده هر تایپ عوض نشود
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRow, confirm.isPending, creatingRow, review, rows.length, router, supplierId]);
 
   if (!canUse)
     return (
@@ -238,13 +269,12 @@ export default function PurchaseImportPage() {
             </SelectContent>
           </Select>
         </Field>
-        <Field label="تأمین‌کننده">
-          <Select value={supplierId} onValueChange={setSupplierId}>
+        <Field label="تأمین‌کننده *">
+          <Select value={supplierId || undefined} onValueChange={setSupplierId}>
             <SelectTrigger>
-              <SelectValue placeholder="انتخاب تأمین‌کننده" />
+              <SelectValue placeholder="انتخاب تأمین‌کننده (الزامی)" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="NONE">بدون تأمین‌کننده</SelectItem>
               {(suppliersQ.data ?? []).map((s) => (
                 <SelectItem key={s.id} value={s.id}>
                   {s.name}
@@ -266,6 +296,33 @@ export default function PurchaseImportPage() {
             onChange={(e) => setInvoiceDate(e.target.value)}
           />
         </Field>
+        <div className="flex items-end pb-1">
+          {putaway ? (
+            <span className="flex h-9 items-center gap-1 rounded-md border border-primary/40 bg-primary/5 px-2 text-sm font-medium">
+              <Send className="size-3.5" />
+              {putaway.mode === "anyone"
+                ? "چیدن: هر کارگر آزاد"
+                : `چیدن: ${toFa(putaway.ids.length)} کارگر`}
+              <button
+                type="button"
+                className="ms-1 rounded p-0.5 hover:bg-muted"
+                onClick={() => setPutaway(null)}
+              >
+                <X className="size-3.5" />
+              </button>
+            </span>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9"
+              onClick={() => setPutawayPickerOpen(true)}
+            >
+              <Send className="me-2 size-3.5" />
+              ارسال به کارگر برای چیدن
+            </Button>
+          )}
+        </div>
         <div className="flex items-end">
           <Button
             className="w-full"
@@ -382,11 +439,12 @@ export default function PurchaseImportPage() {
             <Button
               disabled={
                 confirm.isPending ||
+                !supplierId ||
                 !(warehouseId || warehousesQ.data?.[0]?.id) ||
                 ready.length === 0 ||
                 review > 0
               }
-              onClick={() => confirm.mutate()}
+              onClick={tryConfirm}
             >
               <CheckCircle2 className="me-2 size-4" />
               ثبت فاکتور واردشده
@@ -404,6 +462,17 @@ export default function PurchaseImportPage() {
           if (creatingRow) setProduct(creatingRow.row, product);
           setCreatingRow(null);
         }}
+      />
+      <WorkerPicker
+        open={putawayPickerOpen}
+        itemCount={ready.length}
+        pending={false}
+        title="انتخاب کارگر برای چیدن"
+        onPick={(ids) => {
+          setPutaway(ids.length ? { mode: "workers", ids } : { mode: "anyone" });
+          setPutawayPickerOpen(false);
+        }}
+        onClose={() => setPutawayPickerOpen(false)}
       />
     </div>
   );

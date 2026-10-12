@@ -3,11 +3,14 @@ import {
   BadRequestException,
   NotFoundException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import {
   Prisma,
   PurchaseStatus,
   WorkTaskKind,
+  WorkTaskStatus,
+  WorkTaskItemStatus,
   FixedAccount,
   VoucherSourceType,
 } from '@prisma/client';
@@ -17,6 +20,7 @@ import { InventoryOperationService } from '../inventory-operation/inventory-oper
 import { SystemLocationsService } from '../inventory/system-locations.service';
 import { PostingService } from '../vouchers/posting.service';
 import { WorkTasksService } from '../work-tasks/work-tasks.service';
+import { EventsGateway } from '../realtime/events.gateway';
 import { INT4_MAX } from '../common/money';
 import { inLockOrder } from '../common/lock-order';
 import { checkPurchasePrice, type PriceWarning } from '../common/price-guard';
@@ -24,6 +28,7 @@ import * as XLSX from 'xlsx';
 
 import {
   CreatePurchaseDto,
+  DispatchPutawayDto,
   QueryPurchasesDto,
 } from './dto/create-purchase.dto';
 
@@ -50,7 +55,14 @@ export class PurchasesService {
     private systemLocations: SystemLocationsService,
     private workTasks: WorkTasksService,
     private posting: PostingService,
+    @Optional() private realtime?: EventsGateway,
   ) {}
+
+  /** بعد از commit — موجودی، بدهی تأمین‌کننده و قیمت خرید همه‌جا تازه شوند. */
+  private announce(purchaseId: string) {
+    this.realtime?.broadcast({ type: 'purchase.changed', purchaseId });
+    this.realtime?.broadcast({ type: 'stock.changed' });
+  }
 
   async create(dto: CreatePurchaseDto, userId?: string) {
     // ---- بررسی‌های ارزان، پیش از باز کردن تراکنش ----
@@ -99,18 +111,31 @@ export class PurchasesService {
       }
     }
 
-    if (dto.supplierId) {
-      const supplier = await this.prisma.supplier.findUnique({
-        where: { id: dto.supplierId },
-        select: { id: true },
+    if (!dto.supplierId?.trim()) {
+      throw new BadRequestException({
+        error: 'SUPPLIER_REQUIRED',
+        message: 'تأمین‌کننده الزامی است',
       });
-      if (!supplier) {
-        throw new NotFoundException({
-          error: 'SUPPLIER_NOT_FOUND',
-          message: 'تأمین‌کننده پیدا نشد',
-        });
-      }
     }
+    const supplier = await this.prisma.supplier.findUnique({
+      where: { id: dto.supplierId },
+      select: { id: true, creditDays: true, preferredPayMethod: true },
+    });
+    if (!supplier) {
+      throw new NotFoundException({
+        error: 'SUPPLIER_NOT_FOUND',
+        message: 'تأمین‌کننده پیدا نشد',
+      });
+    }
+
+    // سررسید پیش‌فرض از مهلت تأمین‌کننده — مثل customer.creditDays در فروش.
+    let dueDate: Date | null = dto.dueDate ? new Date(dto.dueDate) : null;
+    if (!dueDate && supplier.creditDays > 0) {
+      dueDate = new Date();
+      dueDate.setHours(0, 0, 0, 0);
+      dueDate.setDate(dueDate.getDate() + supplier.creditDays);
+    }
+    const payMethod = dto.payMethod ?? supplier.preferredPayMethod ?? null;
 
     // یک کالا از یک مکان نباید دو ردیف جدا داشته باشد؛ وگرنه سقفِ ابطال و
     // شمارشِ ردیف‌ها گمراه‌کننده می‌شود. کلاینت باید ادغام کند.
@@ -179,10 +204,12 @@ export class PurchasesService {
           data: {
             idempotencyKey: dto.idempotencyKey,
             warehouseId: dto.warehouseId,
-            supplierId: dto.supplierId ?? null,
+            supplierId: dto.supplierId,
             userId: userId ?? null,
             supplierRef: dto.supplierRef?.trim() || null,
             invoiceDate: dto.invoiceDate ? new Date(dto.invoiceDate) : null,
+            dueDate,
+            payMethod,
             subtotal,
             discount,
             total,
@@ -275,8 +302,12 @@ export class PurchasesService {
 
         return purchase.id;
       });
+      this.announce(purchaseId);
 
-      await this.queuePutaway(purchaseId, dto, userId);
+      // فقط وقتی مدیر صریحاً خواسته — نه خودکار روی هر فاکتور.
+      if (dto.sendPutaway) {
+        await this.queuePutaway(purchaseId, dto, userId);
+      }
 
       return this.findOne(purchaseId);
     } catch (err: any) {
@@ -413,6 +444,7 @@ export class PurchasesService {
         reversesVoucherId: original?.id ?? null,
       });
     });
+    this.announce(id);
 
     return this.findOne(id);
   }
@@ -536,6 +568,25 @@ export class PurchasesService {
           },
           orderBy: { createdAt: 'asc' },
         },
+        // کارهای چیدن فعال/تمام‌شده — برای دکمهٔ «ارسال بعدی» و نمایش پیشرفت.
+        workTasks: {
+          where: { kind: WorkTaskKind.PUTAWAY },
+          select: {
+            id: true,
+            status: true,
+            createdAt: true,
+            assignedTo: { select: { id: true, fullName: true } },
+            assignees: {
+              include: { user: { select: { id: true, fullName: true } } },
+            },
+            _count: { select: { items: true } },
+            items: {
+              where: { status: WorkTaskItemStatus.DONE },
+              select: { id: true },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -546,7 +597,105 @@ export class PurchasesService {
       });
     }
 
-    return purchase;
+    const { workTasks, ...rest } = purchase;
+    return {
+      ...rest,
+      putawayTasks: workTasks.map((t) => ({
+        id: t.id,
+        status: t.status,
+        createdAt: t.createdAt,
+        totalItems: t._count.items,
+        doneItems: t.items.length,
+        assignedTo: t.assignedTo,
+        assignees: t.assignees.map((a) => ({
+          id: a.user.id,
+          fullName: a.user.fullName,
+        })),
+      })),
+    };
+  }
+
+  /**
+   * ارسال کارِ چیدن بعد از ثبت فاکتور.
+   *
+   * فاکتور زده شده، بار بعداً رسیده — مدیر از جزئیات سند کارگر(ها) را انتخاب
+   * می‌کند. فقط اقلامی که هنوز روی «انبار موقت»اند می‌روند؛ اگر قبلاً Task
+   * فعال ساخته شده باشد همان برمی‌گردد.
+   */
+  async dispatchPutaway(
+    purchaseId: string,
+    dto: DispatchPutawayDto,
+    userId?: string,
+  ) {
+    const purchase = await this.prisma.purchaseInvoice.findUnique({
+      where: { id: purchaseId },
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        warehouseId: true,
+        lines: {
+          where: { action: 'IN' },
+          select: {
+            productId: true,
+            locationId: true,
+            quantity: true,
+          },
+        },
+      },
+    });
+
+    if (!purchase) {
+      throw new NotFoundException({
+        error: 'PURCHASE_NOT_FOUND',
+        message: 'فاکتور خرید پیدا نشد',
+      });
+    }
+    if (purchase.status === PurchaseStatus.CANCELLED) {
+      throw new ConflictException({
+        error: 'PURCHASE_CANCELLED',
+        message: 'فاکتور ابطال‌شده قابل ارسال برای چیدن نیست',
+      });
+    }
+
+    const active = await this.prisma.workTask.findFirst({
+      where: {
+        purchaseId,
+        kind: WorkTaskKind.PUTAWAY,
+        status: { not: WorkTaskStatus.CANCELLED },
+      },
+      select: { id: true },
+    });
+    if (active) return this.workTasks.findOne(active.id);
+
+    const stagingId = await this.systemLocations.staging(
+      this.prisma,
+      purchase.warehouseId,
+    );
+    const unplaced = purchase.lines.filter((l) => l.locationId === stagingId);
+    if (!unplaced.length) {
+      throw new BadRequestException({
+        error: 'NOTHING_TO_PUTAWAY',
+        message: 'قلمِ روی انبار موقت نمانده — یا همه چیده شده‌اند یا با قفسه ثبت شده‌اند',
+      });
+    }
+
+    return this.workTasks.create(
+      {
+        warehouseId: purchase.warehouseId,
+        kind: WorkTaskKind.PUTAWAY,
+        purchaseId,
+        assignedToIds: dto.assignedToIds,
+        note: dto.note?.trim() || `چیدن اقلام فاکتور خرید ${purchase.number}`,
+        idempotencyKey: dto.idempotencyKey,
+        lines: unplaced.map((l) => ({
+          productId: l.productId,
+          locationId: stagingId,
+          quantity: l.quantity,
+        })),
+      },
+      userId,
+    );
   }
 
   async findAll(q: QueryPurchasesDto) {
@@ -621,7 +770,7 @@ export class PurchasesService {
    * جنس روی «انبار موقت» می‌نشست — یک مکانِ سیستمی که روی هیچ قفسه‌ای نیست — و
    * **هیچ صفحه‌ای نمی‌گفت چیزی منتظر چیدن است**. صفی که کسی نمی‌دیدش.
    *
-   * حالا همان لحظه یک Task برای کارگر می‌رود و روی گوشی‌اش push می‌شود.
+   * فقط وقتی `sendPutaway` روی DTO روشن باشد صدا زده می‌شود.
    *
    * فقط ردیف‌های بی‌مکان: اگر حسابدار قفسه را می‌دانسته و زده، جنس سرِ جایش
    * است و کاری نمانده.
@@ -648,6 +797,8 @@ export class PurchasesService {
         {
           warehouseId: dto.warehouseId,
           kind: WorkTaskKind.PUTAWAY,
+          purchaseId,
+          assignedToIds: dto.assignedToIds,
           // مکانِ هر قلم «کجاست»، نه «کجا برود» — کارگر مقصد را خودش اسکن می‌کند.
           lines: unplaced.map((l) => ({
             productId: l.productId,
@@ -777,6 +928,11 @@ export class PurchasesService {
       }
     }
 
+    // تاریخ روی برگه؛ اگر خالی باشد لحظه‌ی ثبت.
+    const purchasePriceAt = dto.invoiceDate
+      ? new Date(dto.invoiceDate)
+      : new Date();
+
     const rows = [...wanted.entries()]
       // قیمتی که عوض نشده ردیف تازه نمی‌سازد، وگرنه تاریخچه با هر خرید شلوغ می‌شود.
       .filter(
@@ -788,6 +944,7 @@ export class PurchasesService {
         purchasePrice,
         salePrice: latest.get(productId)?.salePrice ?? null,
         wholesalePrice: latest.get(productId)?.wholesalePrice ?? null,
+        purchasePriceAt,
       }));
 
     if (rows.length) await tx.productPrice.createMany({ data: rows });

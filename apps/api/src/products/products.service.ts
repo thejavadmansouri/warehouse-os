@@ -2,10 +2,12 @@ import {
   BadRequestException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsGateway } from '../realtime/events.gateway';
 import { normalizePersian } from '../engine/utils/persian-normalize';
 import { buildSearchTokens, tokenizeQuery } from './search-tokens';
 import { nextSku } from './sku.util';
@@ -35,7 +37,16 @@ function escapeLike(s: string): string {
 
 @Injectable()
 export class ProductsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private realtime?: EventsGateway,
+  ) {}
+
+  /** productId خالی یعنی تغییر گروهی (قیمت/سایتِ دسته‌ای). */
+  private announce<T>(productId: string | null, result: T): T {
+    this.realtime?.broadcast({ type: 'product.changed', productId });
+    return result;
+  }
 
   async findAll(
     page: number = 1,
@@ -254,7 +265,7 @@ export class ProductsService {
       });
     }
 
-    return this.prisma.product.create({
+    const created = await this.prisma.product.create({
       data: {
         internalBarcode: internalBarcode,
 
@@ -301,6 +312,12 @@ export class ProductsService {
                   wholesalePrice: dto.wholesalePrice ?? null,
                   managerPrice: dto.managerPrice ?? null,
                   compareAtPrice: dto.compareAtPrice ?? null,
+                  purchasePriceAt:
+                    dto.purchasePrice != null
+                      ? dto.purchasePriceAt
+                        ? new Date(dto.purchasePriceAt)
+                        : new Date()
+                      : null,
                 },
               },
             }
@@ -328,6 +345,7 @@ export class ProductsService {
         vehicleModel: true,
       },
     });
+    return this.announce(created.id, created);
   }
 
   async update(id: string, dto: any) {
@@ -340,7 +358,8 @@ export class ProductsService {
       dto.salePrice != null ||
       dto.wholesalePrice != null ||
       dto.managerPrice != null ||
-      dto.compareAtPrice != null
+      dto.compareAtPrice != null ||
+      dto.purchasePriceAt != null
     ) {
       await this.setPrice(id, dto);
     }
@@ -392,7 +411,7 @@ export class ProductsService {
           })
         )?.name;
 
-    return this.prisma.product.update({
+    const updated = await this.prisma.product.update({
       where: {
         id,
       },
@@ -414,6 +433,7 @@ export class ProductsService {
         ...(nameChanged ? { labelPrintedAt: null } : {}),
       },
     });
+    return this.announce(id, updated);
   }
 
   /**
@@ -508,6 +528,113 @@ export class ProductsService {
   }
 
   /**
+   * پوشش لیبل به تفکیک قفسه: در هر موقعیت چند کالای دارای موجودی لیبل دارند
+   * و چندتا ندارند.
+   */
+  async labelCoverageByLocation(q: {
+    warehouseId?: string;
+    onlyWithStock?: boolean;
+  }) {
+    const onlyWithStock = q.onlyWithStock !== false;
+    const rows = await this.prisma.$queryRaw<
+      {
+        locationId: string;
+        code: string;
+        name: string | null;
+        path: string | null;
+        warehouseId: string | null;
+        warehouseName: string | null;
+        labeled: bigint;
+        unlabeled: bigint;
+        total: bigint;
+      }[]
+    >`
+      SELECT
+        l.id AS "locationId",
+        l.code,
+        l.name,
+        l.path,
+        l."warehouseId",
+        w.name AS "warehouseName",
+        COUNT(*) FILTER (WHERE p."labelPrintedAt" IS NOT NULL)::bigint AS labeled,
+        COUNT(*) FILTER (WHERE p."labelPrintedAt" IS NULL)::bigint AS unlabeled,
+        COUNT(*)::bigint AS total
+      FROM "Inventory" i
+      JOIN "Product" p ON p.id = i."productId" AND p."deletedAt" IS NULL AND p."isActive" = true
+      JOIN "Location" l ON l.id = i."locationId"
+      LEFT JOIN "Warehouse" w ON w.id = l."warehouseId"
+      WHERE (${q.warehouseId ?? null}::text IS NULL OR l."warehouseId" = ${q.warehouseId ?? null})
+        AND (${onlyWithStock} = false OR i.quantity > 0)
+      GROUP BY l.id, l.code, l.name, l.path, l."warehouseId", w.name
+      ORDER BY w.name NULLS LAST, l.path NULLS LAST, l.code
+    `;
+
+    return {
+      data: rows.map((r) => ({
+        locationId: r.locationId,
+        code: r.code,
+        name: r.name,
+        path: r.path,
+        warehouseId: r.warehouseId,
+        warehouseName: r.warehouseName,
+        labeled: Number(r.labeled),
+        unlabeled: Number(r.unlabeled),
+        total: Number(r.total),
+      })),
+    };
+  }
+
+  /** کالاهای یک قفسه با وضعیت چاپ لیبل. */
+  async labelsAtLocation(locationId: string) {
+    const location = await this.prisma.location.findUnique({
+      where: { id: locationId },
+      select: {
+        id: true,
+        code: true,
+        name: true,
+        path: true,
+        warehouseId: true,
+        warehouse: { select: { id: true, name: true } },
+      },
+    });
+    if (!location) {
+      throw new NotFoundException({
+        error: 'LOCATION_NOT_FOUND',
+        message: 'قفسه پیدا نشد',
+      });
+    }
+
+    const inventories = await this.prisma.inventory.findMany({
+      where: { locationId, quantity: { gt: 0 } },
+      include: {
+        product: {
+          select: {
+            id: true,
+            name: true,
+            sku: true,
+            labelPrintedAt: true,
+            brand: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { product: { name: 'asc' } },
+    });
+
+    return {
+      location,
+      data: inventories.map((i) => ({
+        productId: i.product.id,
+        name: i.product.name,
+        sku: i.product.sku,
+        brandName: i.product.brand?.name ?? null,
+        quantity: i.quantity,
+        labelPrintedAt: i.product.labelPrintedAt,
+        labeled: i.product.labelPrintedAt != null,
+      })),
+    };
+  }
+
+  /**
    * ثبت قیمت جدید برای یک کالا.
    *
    * ProductPrice جدول تاریخچه است: قیمت قبلی به‌روزرسانی نمی‌شود، ردیف تازه
@@ -526,6 +653,8 @@ export class ProductsService {
       wholesalePrice?: number | null;
       managerPrice?: number | null;
       compareAtPrice?: number | null;
+      /** تاریخ اثر قیمت خرید؛ فقط وقتی قیمت خرید عوض شود معنا دارد. */
+      purchasePriceAt?: string | null;
     },
   ) {
     const product = await this.prisma.product.findUnique({
@@ -549,6 +678,22 @@ export class ProductsService {
       compareAtPrice: dto.compareAtPrice ?? latest?.compareAtPrice ?? null,
     };
 
+    const purchaseChanged =
+      (dto.purchasePrice !== undefined &&
+        dto.purchasePrice !== (latest?.purchasePrice ?? null)) ||
+      (dto.purchasePriceAt != null &&
+        next.purchasePrice != null &&
+        (!latest?.purchasePriceAt ||
+          new Date(dto.purchasePriceAt).getTime() !==
+            new Date(latest.purchasePriceAt).getTime()));
+
+    const purchasePriceAt = (() => {
+      if (next.purchasePrice == null) return latest?.purchasePriceAt ?? null;
+      if (dto.purchasePriceAt) return new Date(dto.purchasePriceAt);
+      if (purchaseChanged || !latest?.purchasePriceAt) return new Date();
+      return latest.purchasePriceAt;
+    })();
+
     const unchanged =
       latest &&
       latest.purchasePrice === next.purchasePrice &&
@@ -556,13 +701,18 @@ export class ProductsService {
       latest.wholesalePrice === next.wholesalePrice &&
       latest.managerPrice === next.managerPrice &&
       // بدون این، عوض‌کردنِ تنهای «قیمت پیش از تخفیف» ذخیره نمی‌شد.
-      latest.compareAtPrice === next.compareAtPrice;
+      latest.compareAtPrice === next.compareAtPrice &&
+      (latest.purchasePriceAt?.getTime() ?? null) ===
+        (purchasePriceAt?.getTime() ?? null);
 
     if (unchanged) return latest;
 
-    return this.prisma.productPrice.create({
-      data: { productId, ...next },
-    });
+    return this.announce(
+      productId,
+      await this.prisma.productPrice.create({
+        data: { productId, ...next, purchasePriceAt },
+      }),
+    );
   }
 
   /** تاریخچه‌ی قیمت یک کالا، جدیدترین اول. */
@@ -640,8 +790,10 @@ export class ProductsService {
       purchasePrice: number | null;
       salePrice: number | null;
       wholesalePrice: number | null;
+      purchasePriceAt: Date | null;
     }[] = [];
     let skipped = 0;
+    const now = new Date();
 
     for (const p of products) {
       const cur = p.prices[0];
@@ -690,7 +842,14 @@ export class ProductsService {
         continue;
       }
 
-      rows.push({ productId: p.id, ...next });
+      const purchaseChanged = next.purchasePrice !== base.purchasePrice;
+      rows.push({
+        productId: p.id,
+        ...next,
+        purchasePriceAt: purchaseChanged
+          ? now
+          : (cur?.purchasePriceAt ?? null),
+      });
     }
 
     // تکه‌تکه، تا نه تراکنش طولانی شود نه حافظه.
@@ -701,6 +860,7 @@ export class ProductsService {
       });
     }
 
+    if (rows.length) this.announce(null, null);
     return { matched, updated: rows.length, skipped, dryRun: false };
   }
 
@@ -745,6 +905,7 @@ export class ProductsService {
       data: { showOnline: dto.showOnline },
     });
 
+    if (affected) this.announce(null, null);
     return { affected, applied: true };
   }
 
@@ -785,17 +946,20 @@ export class ProductsService {
   }
 
   async remove(id: string) {
-    return this.prisma.product.update({
-      where: {
-        id,
-      },
+    return this.announce(
+      id,
+      await this.prisma.product.update({
+        where: {
+          id,
+        },
 
-      data: {
-        isActive: false,
+        data: {
+          isActive: false,
 
-        deletedAt: new Date(),
-      },
-    });
+          deletedAt: new Date(),
+        },
+      }),
+    );
   }
 
   // نرمال‌سازی کوئری هم‌راستا با نرمال‌سازی نام‌ها هنگام import:
@@ -1474,14 +1638,33 @@ export class ProductsService {
     updatedSince?: string,
     includePrice = false,
     includePurchase = false,
+    includeStock = false,
   ) {
     const since = updatedSince ? new Date(updatedSince) : undefined;
     if (since && Number.isNaN(since.getTime())) {
       throw new BadRequestException('updatedSince معتبر نیست');
     }
+    /*
+     * cursorِ بعدی برای کلاینت: زمانِ سرور پیش از کوئری، با ۵ ثانیه حاشیه برای
+     * تراکنش‌هایی که همین لحظه commit می‌شوند. updatedAtِ خودِ کالا کافی نیست —
+     * کالایی که فقط موجودی/قیمتش عوض شده updatedAtش جلو نمی‌رود و بی‌این، در
+     * هر sync دوباره می‌آمد. هم‌پوشانی بی‌خطر است (upsert).
+     */
+    const serverTime = new Date(Date.now() - 5000).toISOString();
 
     const where: Prisma.ProductWhereInput = since
-      ? { OR: [{ updatedAt: { gt: since } }, { deletedAt: { gt: since } }] }
+      ? {
+          OR: [
+            { updatedAt: { gt: since } },
+            { deletedAt: { gt: since } },
+            // کالاهایی که فقط موجودی‌شان عوض شده — تا رتبه‌بندیِ «موجودها اول»
+            // در سرچ POS کهنه نماند. cursor سمت کلاینت به updatedAt خودِ محصول
+            // است، پس این ردیف‌ها کم‌تعدادند (فقط تغییرهای همین چرخه).
+            { inventories: { some: { updatedAt: { gt: since } } } },
+            // قیمت جدول تاریخچه است و updatedAt کالا را جلو نمی‌برد.
+            { prices: { some: { createdAt: { gt: since } } } },
+          ],
+        }
       : {};
 
     const [total, rows] = await Promise.all([
@@ -1525,6 +1708,22 @@ export class ProductsService {
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
+
+    // مجموعِ موجودیِ هر کالای همین صفحه با یک کوئریِ گروهی — فقط وقتی مسیر POS
+    // خواسته باشد (اپ کارگر این فیلد را نمی‌گیرد). این عدد فقط برایِ رتبه‌بندی
+    // «موجودها اول» است؛ چاپ فروش همچنان موجودی را لحظه‌ی pick تازه می‌گیرد.
+    let stockMap: Map<string, number> | null = null;
+    if (includeStock && rows.length) {
+      const inv = await this.prisma.inventory.groupBy({
+        by: ['productId'],
+        where: { productId: { in: rows.map((r) => r.id) }, quantity: { gt: 0 } },
+        _sum: { quantity: true },
+      });
+      stockMap = new Map(
+        inv.map((r) => [r.productId, r._sum.quantity ?? 0]),
+      );
+    }
+
     return {
       products: rows.map((p) => {
         const priced = p as typeof p & {
@@ -1563,6 +1762,9 @@ export class ProductsService {
                 managerPrice: priced.prices?.[0]?.managerPrice ?? null,
               }
             : {}),
+          ...(includeStock
+            ? { totalStock: stockMap?.get(p.id) ?? 0 }
+            : {}),
         };
       }),
       page,
@@ -1570,6 +1772,7 @@ export class ProductsService {
       total,
       totalPages,
       hasMore: page < totalPages,
+      serverTime,
     };
   }
 }

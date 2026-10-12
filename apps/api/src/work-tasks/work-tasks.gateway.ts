@@ -79,20 +79,24 @@ export class WorkTasksGateway
 
   /**
    * Task تازه ساخت → همان لحظه push کن.
-   * forUserId = null یعنی «هر کارگری» → برای همه‌ی اتصال‌های زنده.
+   * forUserIds خالی/undefined یعنی «هر کارگری» → برای همه‌ی اتصال‌های زنده.
+   * چند id یعنی فقط همان گیرنده‌ها (فاکتور خرید با چند کارگر).
    */
-  emitCreated(taskIds: string[], forUserId?: string | null) {
-    this.push({ type: 'work-task-created', taskIds }, forUserId);
+  emitCreated(taskIds: string[], forUserIds?: string[] | null) {
+    this.push({ type: 'work-task-created', taskIds }, forUserIds);
   }
 
-  emitCancelled(taskIds: string[], forUserId?: string | null) {
-    this.push({ type: 'work-task-cancelled', taskIds }, forUserId);
+  emitCancelled(taskIds: string[], forUserIds?: string[] | null) {
+    this.push({ type: 'work-task-cancelled', taskIds }, forUserIds);
   }
 
-  private push(payload: WorkTaskPushPayload, forUserId?: string | null) {
+  private push(payload: WorkTaskPushPayload, forUserIds?: string[] | null) {
     const message = JSON.stringify(payload);
-    if (forUserId) {
-      this.byUser.get(forUserId)?.forEach((ws) => this.send(ws, message));
+    const targets = forUserIds?.filter(Boolean) ?? [];
+    if (targets.length) {
+      for (const userId of targets) {
+        this.byUser.get(userId)?.forEach((ws) => this.send(ws, message));
+      }
     } else {
       for (const sockets of this.byUser.values()) {
         sockets.forEach((ws) => this.send(ws, message));

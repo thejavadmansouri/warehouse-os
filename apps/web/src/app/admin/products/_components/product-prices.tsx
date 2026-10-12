@@ -20,7 +20,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Banknote } from "lucide-react";
 
 import { getProductPrices } from "@/lib/api";
-import { formatPrice, formatDateTime } from "@/lib/format";
+import { formatPrice, formatDateTime, faDate } from "@/lib/format";
 import { LoadingState, ErrorState, EmptyState } from "@/components/states";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -69,7 +69,8 @@ export function ProductPrices({ productId }: { productId: string }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>تاریخ</TableHead>
+                  <TableHead>ثبت</TableHead>
+                  <TableHead>تاریخ قیمت خرید</TableHead>
                   <TableHead className="text-center">خرید</TableHead>
                   <TableHead className="text-center">فروش</TableHead>
                   <TableHead className="text-center">عمده</TableHead>
@@ -83,17 +84,20 @@ export function ProductPrices({ productId }: { productId: string }) {
                     r.salePrice != null &&
                     r.salePrice > 0 &&
                     r.purchasePrice > r.salePrice;
+                  const purchaseAt = r.purchasePriceAt ?? (r.purchasePrice != null ? r.createdAt : null);
 
                   return (
                     <TableRow key={r.id}>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {formatDateTime(r.createdAt)}
-                        {/* تازه‌ترین ردیف همان قیمتِ فعلیِ کالاست. */}
                         {i === 0 && (
-                          <Badge variant="secondary" className="mr-2 text-[10px]">
+                          <Badge variant="secondary" className="ms-2 text-[10px]">
                             فعلی
                           </Badge>
                         )}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-xs tabular-nums">
+                        {purchaseAt ? faDate(purchaseAt) : "—"}
                       </TableCell>
                       <TableCell
                         className={`text-center tabular-nums ${

@@ -38,6 +38,12 @@ export interface SyncMutation {
   toLocationBarcode?: string;
 }
 
+const ASSIGNEE_INCLUDE = {
+  assignees: {
+    include: { user: { select: { id: true, fullName: true } } },
+  },
+} satisfies Prisma.WorkTaskInclude;
+
 const SUMMARY_INCLUDE = {
   _count: { select: { items: true } },
   // فقط برای شمارشِ done — ردیف کامل لازم نیست، ولی `status` حتماً باید بیاید:
@@ -48,8 +54,10 @@ const SUMMARY_INCLUDE = {
   },
   invoice: { select: { number: true } },
   quotation: { select: { number: true } },
+  purchase: { select: { number: true } },
   requestedBy: { select: { id: true, fullName: true } },
   assignedTo: { select: { id: true, fullName: true } },
+  ...ASSIGNEE_INCLUDE,
 } satisfies Prisma.WorkTaskInclude;
 
 const DETAIL_INCLUDE = {
@@ -72,8 +80,10 @@ const DETAIL_INCLUDE = {
   },
   invoice: { select: { number: true } },
   quotation: { select: { number: true } },
+  purchase: { select: { number: true } },
   requestedBy: { select: { id: true, fullName: true } },
   assignedTo: { select: { id: true, fullName: true } },
+  ...ASSIGNEE_INCLUDE,
 } satisfies Prisma.WorkTaskInclude;
 
 /**
@@ -113,6 +123,12 @@ export class WorkTasksService {
       lines: CreateWorkTaskLine[];
       invoiceId?: string;
       quotationId?: string;
+      purchaseId?: string;
+      /**
+       * چند گیرنده — خالی = «هر کارگری».
+       * اگر فقط `assignedToId` آمده باشد (صندوق قدیم)، همان یک نفر است.
+       */
+      assignedToIds?: string[];
       assignedToId?: string | null;
       note?: string;
       idempotencyKey?: string;
@@ -148,6 +164,11 @@ export class WorkTasksService {
       if (existing) return this.findOne(existing.id);
     }
 
+    const assigneeIds = this.resolveAssigneeIds(input);
+    // یک نفر → ستون قدیم هم پر می‌شود؛ چند نفر → فقط جدول assignees.
+    const primaryAssignee =
+      assigneeIds.length === 1 ? assigneeIds[0]! : null;
+
     const task = await this.prisma.workTask.create({
       data: {
         warehouseId: input.warehouseId,
@@ -155,7 +176,8 @@ export class WorkTasksService {
         priority: input.priority ?? WorkTaskPriority.NORMAL,
         invoiceId: input.invoiceId ?? null,
         quotationId: input.quotationId ?? null,
-        assignedToId: input.assignedToId ?? null,
+        purchaseId: input.purchaseId ?? null,
+        assignedToId: primaryAssignee,
         requestedById: requestedById ?? null,
         note: input.note ?? null,
         idempotencyKey: input.idempotencyKey ?? null,
@@ -166,12 +188,22 @@ export class WorkTasksService {
             quantity: l.quantity,
           })),
         },
+        ...(assigneeIds.length
+          ? {
+              assignees: {
+                create: assigneeIds.map((userId) => ({ userId })),
+              },
+            }
+          : {}),
       },
     });
 
-    // همان لحظه به گوشی کارگر push — تخصیص‌داده‌شده فقط برای همان کارگر،
+    // همان لحظه به گوشی کارگر push — گیرنده‌های مشخص فقط آن‌ها؛
     // «هر کارگری» برای همه‌ی اتصال‌های زنده. اپ گوشی با این پیام فوراً تازه می‌شود.
-    this.gateway.emitCreated([task.id], input.assignedToId);
+    this.gateway.emitCreated(
+      [task.id],
+      assigneeIds.length ? assigneeIds : null,
+    );
     // POS هم لیستش را تازه کند (پیشرفت ۰٪ در ابتدا).
     this.events.broadcast({ type: 'work-task.progress', taskId: task.id });
 
@@ -184,7 +216,17 @@ export class WorkTasksService {
       where: {
         status: { not: WorkTaskStatus.CANCELLED },
         ...(warehouseId ? { warehouseId } : {}),
-        OR: [{ assignedToId: null }, { assignedToId: userId }],
+        OR: [
+          // چندنفره: فقط اگر در جدول assignees باشد
+          { assignees: { some: { userId } } },
+          // بدون ردیف assignee: منطق قدیم (هر کارگری / یک نفر)
+          {
+            AND: [
+              { assignees: { none: {} } },
+              { OR: [{ assignedToId: null }, { assignedToId: userId }] },
+            ],
+          },
+        ],
       },
       include: SUMMARY_INCLUDE,
       /*
@@ -232,10 +274,10 @@ export class WorkTasksService {
     }
     // کارگر نباید کارِ تخصیص‌یافته به دیگری یا کارِ لغوشده را ببیند.
     if (viewer?.role === Role.STAFF) {
-      const visible =
-        task.status !== WorkTaskStatus.CANCELLED &&
-        (task.assignedToId === null || task.assignedToId === viewer.userId);
-      if (!visible) {
+      if (
+        task.status === WorkTaskStatus.CANCELLED ||
+        !this.isVisibleToWorker(task, viewer.userId)
+      ) {
         throw new NotFoundException({
           error: 'WORK_TASK_NOT_FOUND',
           message: 'کار پیدا نشد',
@@ -281,7 +323,9 @@ export class WorkTasksService {
     for (const m of mutations) {
       const item = await this.prisma.workTaskItem.findUnique({
         where: { id: m.itemId },
-        include: { task: true },
+        include: {
+          task: { include: { assignees: { select: { userId: true } } } },
+        },
       });
 
       if (!item || item.taskId !== m.taskId) {
@@ -294,7 +338,7 @@ export class WorkTasksService {
         results.push({ ...m, status: 'TASK_CANCELLED' });
         continue;
       }
-      if (task.assignedToId !== null && task.assignedToId !== userId) {
+      if (!this.isVisibleToWorker(task, userId)) {
         results.push({ ...m, status: 'TASK_NOT_VISIBLE' });
         continue;
       }
@@ -450,7 +494,15 @@ export class WorkTasksService {
       });
     }
     const task = await this.findOne(id);
-    this.gateway.emitCancelled([id], task.assignedToId);
+    const fromAssignees = (task.assignees ?? [])
+      .map((a: { id: string }) => a.id)
+      .filter(Boolean);
+    const notifyIds = fromAssignees.length
+      ? fromAssignees
+      : task.assignedToId
+        ? [task.assignedToId]
+        : null;
+    this.gateway.emitCancelled([id], notifyIds);
     this.events.broadcast({ type: 'work-task.progress', taskId: id });
     return task;
   }
@@ -490,12 +542,49 @@ export class WorkTasksService {
     this.events.broadcast({ type: 'work-task.progress', taskId });
   }
 
+  /**
+   * گیرنده‌ها را از `assignedToIds` یا `assignedToId` قدیم یکدست می‌کند.
+   * خالی = استخر عمومی («هر کارگری»).
+   */
+  private resolveAssigneeIds(input: {
+    assignedToIds?: string[];
+    assignedToId?: string | null;
+  }): string[] {
+    const fromList = (input.assignedToIds ?? []).filter(Boolean);
+    if (fromList.length) return [...new Set(fromList)];
+    if (input.assignedToId) return [input.assignedToId];
+    return [];
+  }
+
+  /**
+   * آیا این کارگر این Task را می‌بیند؟
+   * - اگر ردیف assignees باشد → فقط همان‌ها
+   * - وگرنه منطق قدیم: assignedToId null = همه، وگرنه فقط همان نفر
+   */
+  private isVisibleToWorker(
+    task: {
+      assignedToId: string | null;
+      assignees?: Array<{ userId: string }>;
+    },
+    userId: string,
+  ): boolean {
+    const assignees = task.assignees ?? [];
+    if (assignees.length > 0) {
+      return assignees.some((a) => a.userId === userId);
+    }
+    return task.assignedToId === null || task.assignedToId === userId;
+  }
+
   private toTaskDto(task: any, opts: { withItems?: boolean } = {}) {
     const allItems = task.items ?? [];
     const doneItems = allItems.filter(
       (i: any) => i.status === WorkTaskItemStatus.DONE,
     ).length;
     const totalItems = task._count?.items ?? allItems.length;
+    const assignees = (task.assignees ?? []).map((a: any) => ({
+      id: a.user?.id ?? a.userId,
+      fullName: a.user?.fullName ?? '',
+    }));
 
     return {
       id: task.id,
@@ -511,6 +600,7 @@ export class WorkTasksService {
       warehouseId: task.warehouseId,
       invoiceId: task.invoiceId,
       quotationId: task.quotationId,
+      purchaseId: task.purchaseId ?? null,
       assignedToId: task.assignedToId,
       note: task.note,
       cancelReason: task.cancelReason,
@@ -520,8 +610,10 @@ export class WorkTasksService {
       totalItems,
       invoice: task.invoice ? { number: task.invoice.number } : null,
       quotation: task.quotation ? { number: task.quotation.number } : null,
+      purchase: task.purchase ? { number: task.purchase.number } : null,
       requestedBy: task.requestedBy ?? null,
       assignedTo: task.assignedTo ?? null,
+      assignees,
       items: opts.withItems ? allItems.map(this.toItemDto) : undefined,
     };
   }

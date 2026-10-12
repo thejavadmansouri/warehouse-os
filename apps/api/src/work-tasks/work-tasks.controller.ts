@@ -23,6 +23,9 @@ export class WorkTasksController {
       lines: CreateWorkTaskLine[];
       invoiceId?: string;
       quotationId?: string;
+      purchaseId?: string;
+      /** چند گیرنده؛ خالی/نبود = هر کارگری. سازگاری: assignedToId تک‌نفره. */
+      assignedToIds?: string[];
       assignedToId?: string | null;
       note?: string;
       idempotencyKey?: string;

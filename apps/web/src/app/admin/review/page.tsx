@@ -115,8 +115,13 @@ export function ReviewPanel({ embedded }: { embedded?: boolean } = {}) {
         vars.productId ? { productId: vars.productId } : {}
       ),
     onSuccess: () => {
-      toast({ title: "تأیید شد", description: "موجودی ثبت شد." });
+      toast({
+        title: "تأیید شد",
+        description: "موجودی ثبت شد و لیبل به صف چاپ PC رفت.",
+      });
       qc.invalidateQueries({ queryKey: ["pending-operations"] });
+      qc.invalidateQueries({ queryKey: ["print-jobs"] });
+      qc.invalidateQueries({ queryKey: ["pending-labels"] });
     },
     onError: (e: unknown) =>
       toast({
@@ -131,13 +136,15 @@ export function ReviewPanel({ embedded }: { embedded?: boolean } = {}) {
     mutationFn: (ids: string[]) => approvePendingOperationsMany(ids),
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: ["pending-operations"] });
+      qc.invalidateQueries({ queryKey: ["print-jobs"] });
+      qc.invalidateQueries({ queryKey: ["pending-labels"] });
       setShowBulkConfirm(false);
       toast({
         title: `${formatNumber(res.approved)} مورد تأیید و به موجودی اضافه شد`,
         description:
           res.failedCount > 0
             ? `${formatNumber(res.failedCount)} مورد آماده نبود و برای بررسی دستی ماند`
-            : undefined,
+            : "لیبل‌ها به صف چاپ PC رفتند — از «لیبل‌ها / بارکدها» تأیید چاپ کنید.",
       });
     },
     onError: (e: unknown) =>

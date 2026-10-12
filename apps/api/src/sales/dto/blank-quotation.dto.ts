@@ -123,11 +123,29 @@ export class SaveBlankPricesLineDto {
 }
 
 export class SaveBlankPricesDto {
+  /**
+   * ردیف‌های موجود برای به‌روزرسانی.
+   * می‌تواند خالی باشد اگر فقط `addLines` / `removeLineIds` آمده باشد.
+   */
   @IsArray()
-  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => SaveBlankPricesLineDto)
   lines: SaveBlankPricesLineDto[];
+
+  /** قلمِ متنی تازه از پنل دسکتاپ — به انتهای برگه اضافه می‌شود. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @ValidateNested({ each: true })
+  @Type(() => BlankQuotationLineDto)
+  addLines?: BlankQuotationLineDto[];
+
+  /** حذف قلم‌های موجود — فقط وقتی برگه هنوز تبدیل/لغو نشده. */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(100)
+  @IsString({ each: true })
+  removeLineIds?: string[];
 
   @IsOptional()
   @IsString()

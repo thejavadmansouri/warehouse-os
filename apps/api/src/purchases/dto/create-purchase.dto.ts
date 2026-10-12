@@ -4,15 +4,18 @@ import {
   IsArray,
   IsBoolean,
   IsDateString,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
+  IsUUID,
   Max,
   Min,
   MinLength,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { PaymentMethod } from '@prisma/client';
 
 import { INT4_MAX } from '../../common/money';
 
@@ -63,9 +66,10 @@ export class CreatePurchaseDto {
   @IsString()
   warehouseId: string;
 
-  @IsOptional()
+  /** تأمین‌کننده اجباری است — بدون طرف حساب، سابقهٔ خرید معنا ندارد. */
   @IsString()
-  supplierId?: string | null;
+  @MinLength(1)
+  supplierId: string;
 
   /** شماره‌ی فاکتور روی برگه‌ی فروشنده — برای تطبیق سند با کاغذ. */
   @IsOptional()
@@ -76,6 +80,16 @@ export class CreatePurchaseDto {
   @IsOptional()
   @IsDateString()
   invoiceDate?: string;
+
+  /** سررسید پرداخت به تأمین‌کننده (ISO). */
+  @IsOptional()
+  @IsDateString()
+  dueDate?: string;
+
+  /** نحوهٔ تسویهٔ این فاکتور. */
+  @IsOptional()
+  @IsEnum(PaymentMethod)
+  payMethod?: PaymentMethod;
 
   /** تخفیفِ کلِ فاکتور به ریال، جدا از تخفیف ردیف‌ها. */
   @IsOptional()
@@ -98,12 +112,50 @@ export class CreatePurchaseDto {
   @IsBoolean()
   confirmPriceWarnings?: boolean;
 
+  /**
+   * ارسال کارِ چیدن به کارگر (PUTAWAY) برای اقلامِ بدون قفسه.
+   *
+   * پیش‌فرض خاموش است — ثبت فاکتور فقط موجودی را وارد می‌کند؛ اگر مدیر بخواهد
+   * کارگر بچیند، این پرچم را می‌فرستد. قبلاً همیشه خودکار ساخته می‌شد.
+   */
+  @IsOptional()
+  @IsBoolean()
+  sendPutaway?: boolean;
+
+  /**
+   * گیرنده‌های کارِ چیدن وقتی `sendPutaway` روشن است.
+   * خالی/نبود = هر کارگری که آزاد است؛ یک یا چند id = فقط همان‌ها می‌بینند
+   * و با هم روی یک Task اقلام را تیک می‌زنند.
+   */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  assignedToIds?: string[];
+
   @IsArray()
   @ArrayMinSize(1)
   @ArrayMaxSize(500)
   @ValidateNested({ each: true })
   @Type(() => PurchaseLineDto)
   lines: PurchaseLineDto[];
+}
+
+/** ارسال کارِ چیدن بعد از ثبت فاکتور — وقتی بار دیرتر می‌رسد. */
+export class DispatchPutawayDto {
+  /** کلید یکتای کلاینت؛ دبل‌کلیک Task تکراری نمی‌سازد. */
+  @IsString()
+  @MinLength(8)
+  idempotencyKey: string;
+
+  /** خالی/نبود = هر کارگری؛ چند id = همان نفرها با هم می‌چینند. */
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  assignedToIds?: string[];
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 /** ابطال فاکتور خرید — دلیل اجباری است. */

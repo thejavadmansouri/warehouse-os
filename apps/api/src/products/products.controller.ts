@@ -75,6 +75,9 @@ export class ProductsController {
       true,
       // فقط مدیر: بهای خرید و قیمتِ پیشنهادی، همان قاعده‌ی attachStock.
       req.user?.role === Role.ADMIN || req.user?.role === Role.MANAGER,
+      // موجودی کل — برای رتبه‌بندیِ «موجودها اول» در سرچ POS (فقط رتبه است،
+      // فروش همچنان موجودی را لحظه‌ی انتخاب تازه می‌گیرد).
+      true,
     );
   }
 
@@ -202,6 +205,26 @@ export class ProductsController {
     });
   }
 
+  /** پوشش لیبل به تفکیک قفسه / انبار. */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('labels/coverage')
+  labelCoverage(
+    @Query('warehouseId') warehouseId?: string,
+    @Query('onlyWithStock') onlyWithStock?: string,
+  ) {
+    return this.productsService.labelCoverageByLocation({
+      warehouseId: warehouseId || undefined,
+      onlyWithStock: onlyWithStock !== 'false',
+    });
+  }
+
+  /** کالاهای یک قفسه با وضعیت چاپ‌شده / چاپ‌نشده. */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Get('labels/at/:locationId')
+  labelsAtLocation(@Param('locationId') locationId: string) {
+    return this.productsService.labelsAtLocation(locationId);
+  }
+
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('labels/mark-printed')
   markLabelsPrinted(@Body() body: { productIds: string[] }) {
@@ -219,6 +242,8 @@ export class ProductsController {
       salePrice?: number;
       wholesalePrice?: number;
       managerPrice?: number;
+      /** تاریخ اثر قیمت خرید (ISO) — وقتی قیمت خرید عوض می‌شود. */
+      purchasePriceAt?: string;
     },
   ) {
     return this.productsService.setPrice(id, dto);

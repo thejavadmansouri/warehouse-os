@@ -10,18 +10,19 @@ export class PendingOperationsController {
   constructor(private readonly service: PendingOperationsService) {}
 
   // Worker app uploads its offline queue when the LAN server is reachable.
+  // MANAGER/ADMIN: بعد از ثبت، همان‌جا موجودی + صف چاپ (بدون /admin/review).
   @Roles(Role.STAFF, Role.MANAGER, Role.ADMIN)
   @Post('sync/operations')
   sync(@Body() dto: SyncOperationsDto, @Req() req: any) {
-    return this.service.sync(dto.operations, req.user?.userId);
+    return this.service.sync(dto.operations, req.user?.userId, req.user?.role);
   }
 
-  // «کارهای من» — کارگر کارهای خودش و تصمیم مدیر (تأیید/رد + دلیل) را می‌بیند.
-  // بدون این، کارگر فقط یک عدد «N در انتظار» می‌بیند و نمی‌داند مدیر چه کرده.
+  // «کارهای من» — ثبت‌های خود کاربر + (برای مدیر) کارهایی که امروز بررسی کرده،
+  // همراه وضعیت چاپ لیبل و عکس.
   @Roles(Role.STAFF, Role.MANAGER, Role.ADMIN)
   @Get('mobile/my-work')
   myWork(@Query('since') since: string | undefined, @Req() req: any) {
-    return this.service.myWork(req.user?.userId, since);
+    return this.service.myWork(req.user?.userId, since, req.user?.role);
   }
 
   // Manager review queue (web admin).

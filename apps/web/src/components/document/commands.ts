@@ -95,7 +95,7 @@ export const COMMANDS: CommandSpec[] = [
 
   { id: "quotes", group: "سند", icon: FileSearch, label: "پیش‌فاکتورهای باز", keyLabel: "Alt+Q",
     match: (e) => e.altKey && !mod(e) && letter(e, "q") },
-  { id: "blankQuotes", group: "سند", icon: FileClock, label: "پیش‌فاکتورهای سفید", keyLabel: "Alt+B",
+  { id: "blankQuotes", group: "سند", icon: FileClock, label: "فاکتورهای سفید", keyLabel: "Alt+B",
     match: (e) => e.altKey && !mod(e) && letter(e, "b") },
 
   { id: "addRow",   group: "ردیف", icon: Plus, label: "افزودن ردیف", keyLabel: "Insert",

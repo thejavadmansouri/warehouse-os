@@ -8,6 +8,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ParsingEngineService } from '../engine/parsing-engine.service';
 import { ProductMatcherService } from '../inventory/product-matcher.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { PrintJobsService } from '../print-jobs/print-jobs.service';
+import { ProductImagesService } from '../product-images/product-images.service';
 import { SyncOperationItemDto } from './dto/sync-operations.dto';
 
 @Injectable()
@@ -19,16 +21,25 @@ export class PendingOperationsService {
     private parsingEngine: ParsingEngineService,
     private productMatcher: ProductMatcherService,
     private inventoryOperation: InventoryOperationService,
+    private printJobs: PrintJobsService,
+    private productImages: ProductImagesService,
   ) {}
 
   /**
    * Batch upload from the worker app. Each op is deduped by clientRequestId
    * (idempotent), the raw transcript is parsed + matched server-side, and it lands
-   * as PENDING — never touching stock. A manager approves later.
+   * as PENDING — never touching stock for STAFF. MANAGER/ADMIN commits immediately
+   * (approve → stock + label print queue) when product + location are known.
    */
-  async sync(operations: SyncOperationItemDto[], workerId?: string) {
+  async sync(
+    operations: SyncOperationItemDto[],
+    workerId?: string,
+    workerRole?: string,
+  ) {
     const results: { clientRequestId: string; id: string; status: string }[] =
       [];
+    const directCommit =
+      workerRole === 'ADMIN' || workerRole === 'MANAGER';
 
     for (const op of operations) {
       try {
@@ -110,10 +121,37 @@ export class PendingOperationsService {
           },
         });
 
+        let status = created.status;
+
+        // مدیر/مدیرکل با اپ: بدون صف وب، مستقیم موجودی + صف چاپ لیبل.
+        // COUNT فقط وضعیت را تأیید می‌کند (approve برای COUNT موجودی نمی‌زند).
+        // بدون productId برای IN نمی‌شود commit کرد — PENDING می‌ماند.
+        const canDirect =
+          directCommit &&
+          workerId &&
+          (created.type === 'COUNT' ||
+            (created.type === 'IN' &&
+              !!created.productId &&
+              !!created.locationId));
+        if (canDirect) {
+          try {
+            const approved = await this.approve(created.id, workerId, undefined, {
+              printSource: 'APP_DIRECT',
+            });
+            status = approved?.status ?? 'APPROVED';
+          } catch (err) {
+            this.logger.warn(
+              `sync direct-approve failed for ${created.id}: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
+          }
+        }
+
         results.push({
           clientRequestId: op.clientRequestId,
           id: created.id,
-          status: created.status,
+          status,
         });
       } catch (err) {
         /*
@@ -147,49 +185,119 @@ export class PendingOperationsService {
 
   /** Manager review queue for a warehouse (or all). */
   /**
-   * کارهای یک کارگر با تصمیم مدیر روی هرکدام.
+   * کارهای یک کاربر با روند کامل: وضعیت تأیید، قفسه، عکس، وضعیت چاپ لیبل.
    *
-   * کارگر باید ببیند چه ثبت کرده، چند تا تأیید شده، و کدام رد شده و چرا —
-   * وگرنه همان اشتباه را تکرار می‌کند. پیش‌فرض: از ابتدای امروز.
+   * کارگر و مدیر هر دو همین صفحه را می‌بینند تا بفهمند چه اسکن/ثبت شده و
+   * لیبل کجای صف چاپ است. پیش‌فرض: از ابتدای امروز.
    */
-  async myWork(userId: string, since?: string) {
+  async myWork(userId: string, since?: string, role?: string) {
     const from = since
       ? new Date(since)
       : new Date(new Date().setHours(0, 0, 0, 0));
+    const sinceOk = !isNaN(from.getTime());
+    const isManager = role === 'ADMIN' || role === 'MANAGER';
+
+    // کارگر: فقط ثبت‌های خودش.
+    // مدیر: ثبت‌های خودش روی اپ + کارهایی که امروز بررسی کرده.
+    const where = sinceOk
+      ? isManager
+        ? {
+            OR: [
+              { workerId: userId, createdAt: { gte: from } },
+              { reviewedById: userId, reviewedAt: { gte: from } },
+            ],
+          }
+        : { workerId: userId, createdAt: { gte: from } }
+      : isManager
+        ? {
+            OR: [{ workerId: userId }, { reviewedById: userId }],
+          }
+        : { workerId: userId };
 
     const ops = await this.prisma.pendingOperation.findMany({
-      where: {
-        workerId: userId,
-        createdAt: { gte: isNaN(from.getTime()) ? undefined : from },
-      },
+      where,
       include: {
         product: { select: { name: true, sku: true } },
+        location: {
+          select: { id: true, code: true, name: true, path: true },
+        },
+        worker: { select: { id: true, fullName: true, username: true } },
         reviewedBy: { select: { fullName: true } },
+        assets: { select: { id: true }, take: 5 },
+        printJobItems: {
+          select: {
+            copies: true,
+            status: true,
+            job: { select: { id: true, status: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
 
-    const counts = { pending: 0, approved: 0, rejected: 0 };
-    for (const o of ops) {
+    const counts = {
+      pending: 0,
+      approved: 0,
+      rejected: 0,
+      printQueued: 0,
+      printDone: 0,
+      withPhoto: 0,
+    };
+
+    const items = ops.map((o) => {
       if (o.status === 'APPROVED') counts.approved++;
       else if (o.status === 'REJECTED') counts.rejected++;
       else counts.pending++;
-    }
 
-    return {
-      summary: { total: ops.length, ...counts },
-      items: ops.map((o) => ({
+      const photoIds = o.assets.map((a) => a.id);
+      if (photoIds.length) counts.withPhoto++;
+
+      const printItem = o.printJobItems[0] ?? null;
+      const jobStatus = printItem?.job?.status ?? null;
+      let printStatus: 'NONE' | 'QUEUED' | 'PRINTING' | 'PRINTED' | 'FAILED' | 'CANCELLED' =
+        'NONE';
+      if (jobStatus === 'PENDING') printStatus = 'QUEUED';
+      else if (jobStatus === 'PROCESSING') printStatus = 'PRINTING';
+      else if (jobStatus === 'COMPLETED' || printItem?.status === 'PRINTED')
+        printStatus = 'PRINTED';
+      else if (jobStatus === 'FAILED' || printItem?.status === 'FAILED')
+        printStatus = 'FAILED';
+      else if (jobStatus === 'CANCELLED') printStatus = 'CANCELLED';
+
+      if (printStatus === 'QUEUED' || printStatus === 'PRINTING')
+        counts.printQueued++;
+      if (printStatus === 'PRINTED') counts.printDone++;
+
+      return {
         id: o.id,
+        type: o.type,
         status: o.status,
         productName: o.product?.name ?? null,
+        productSku: o.product?.sku ?? null,
         voiceText: o.voiceText,
         quantity: o.quantity,
+        unit: o.unit,
+        locationCode: o.location?.code ?? null,
+        locationPath: o.location?.path ?? o.location?.name ?? null,
+        workerName: o.worker?.fullName || o.worker?.username || null,
+        mine: o.workerId === userId,
         reviewNote: o.reviewNote,
         reviewedByName: o.reviewedBy?.fullName ?? null,
         createdAt: o.createdAt,
         reviewedAt: o.reviewedAt,
-      })),
+        photoCount: photoIds.length,
+        photoIds,
+        printStatus,
+        printCopies: printItem?.copies ?? null,
+      };
+    });
+
+    return {
+      summary: { total: ops.length, ...counts },
+      items,
     };
   }
 
@@ -223,6 +331,7 @@ export class PendingOperationsService {
     id: string,
     reviewerId?: string,
     override?: { productId?: string; quantity?: number },
+    options?: { printSource?: string },
   ) {
     const op = await this.prisma.pendingOperation.findUnique({ where: { id } });
     if (!op) throw new NotFoundException('عملیات پیدا نشد');
@@ -317,6 +426,38 @@ export class PendingOperationsService {
           data: { inventoryLogId: committedLogId },
         }),
       ]);
+    }
+
+    // صف چاپ لیبل کالا — هنوز چاپ نمی‌شود؛ مدیر روی PC تأیید می‌کند.
+    if (reviewerId) {
+      try {
+        await this.printJobs.enqueueProductLabel({
+          productId,
+          copies: quantity,
+          createdById: reviewerId,
+          locationId: op.locationId,
+          pendingOperationId: id,
+          source: options?.printSource ?? 'REVIEW_APPROVE',
+        });
+      } catch (err) {
+        // موجودی قبلاً ثبت شده؛ صف چاپ نباید تأیید را بشکند.
+        this.logger.warn(
+          `enqueue label print failed for pending ${id}: ${
+            err instanceof Error ? err.message : err
+          }`,
+        );
+      }
+    }
+
+    // عکس دوربین اپ → عکس سایت (واترمارک/SEO)؛ اگر autoPublish و لیبل آماده باشد صفحه روشن می‌شود.
+    try {
+      await this.productImages.promoteInventoryPhotos(productId);
+    } catch (err) {
+      this.logger.warn(
+        `promote site photos failed for pending ${id}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
     }
 
     return this.prisma.pendingOperation.findUnique({ where: { id } });

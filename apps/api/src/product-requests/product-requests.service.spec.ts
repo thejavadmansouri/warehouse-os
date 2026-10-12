@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../prisma/prisma.service';
 import { InventoryOperationService } from '../inventory-operation/inventory-operation.service';
+import { PrintJobsService } from '../print-jobs/print-jobs.service';
 import { ProductRequestsService } from './product-requests.service';
 
 /**
@@ -67,6 +68,10 @@ describe('ProductRequestsService — scanned barcode hand-off', () => {
         {
           provide: InventoryOperationService,
           useValue: { execute: jest.fn() },
+        },
+        {
+          provide: PrintJobsService,
+          useValue: { enqueueProductLabel: jest.fn() },
         },
       ],
     }).compile();

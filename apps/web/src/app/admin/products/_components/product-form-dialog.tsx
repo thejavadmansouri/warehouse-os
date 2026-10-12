@@ -53,6 +53,20 @@ import { useToast } from "@/hooks/use-toast";
 import type { Product, CreateProductDto, UpdateProductDto } from "@/lib/types";
 
 import { unitLabel } from "@/lib/currency";
+import { JalaliDateInput } from "@/components/jalali-date-input";
+
+function todayIsoDate(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function toIsoDateOnly(iso?: string | null): string | undefined {
+  if (!iso) return undefined;
+  return iso.slice(0, 10);
+}
 // عدد اختیاری — رشته خالی → undefined، در غیر این صورت عدد
 const optionalNumber = z.preprocess(
   (v) => {
@@ -78,6 +92,8 @@ const productSchema = z.object({
   categoryId: z.string().optional(),
   supplierId: z.string().optional(),
   purchasePrice: optionalNumber,
+  /** تاریخ اثر قیمت خرید — ISO YYYY-MM-DD */
+  purchasePriceAt: z.string().optional(),
   salePrice: optionalNumber,
   wholesalePrice: optionalNumber,
   managerPrice: optionalNumber,
@@ -153,6 +169,7 @@ export function ProductFormDialog({
       categoryId: "",
       supplierId: "",
       purchasePrice: undefined,
+      purchasePriceAt: todayIsoDate(),
       salePrice: undefined,
       wholesalePrice: undefined,
       managerPrice: undefined,
@@ -182,6 +199,10 @@ export function ProductFormDialog({
             categoryId: initial.categoryId ?? "",
             supplierId: initial.supplierId ?? "",
             purchasePrice: initial.purchasePrice ?? undefined,
+            purchasePriceAt:
+              toIsoDateOnly(initial.prices?.[0]?.purchasePriceAt) ??
+              toIsoDateOnly(initial.prices?.[0]?.createdAt) ??
+              todayIsoDate(),
             salePrice: initial.salePrice ?? undefined,
             wholesalePrice: initial.wholesalePrice ?? undefined,
             managerPrice: initial.managerPrice ?? undefined,
@@ -314,6 +335,10 @@ export function ProductFormDialog({
       categoryId: emptyToUndefined(values.categoryId),
       supplierId: emptyToUndefined(values.supplierId),
       purchasePrice: values.purchasePrice ?? undefined,
+      purchasePriceAt:
+        values.purchasePrice != null
+          ? values.purchasePriceAt || todayIsoDate()
+          : undefined,
       salePrice: values.salePrice ?? undefined,
       wholesalePrice: values.wholesalePrice ?? undefined,
       managerPrice: values.managerPrice ?? undefined,
@@ -657,7 +682,7 @@ export function ProductFormDialog({
                   )}
                 />
 
-                {/* قیمت خرید */}
+                {/* قیمت خرید + تاریخ اثر */}
                 <FormField
                   control={form.control}
                   name="purchasePrice"
@@ -669,6 +694,23 @@ export function ProductFormDialog({
                           placeholder="0"
                           min="0"
                           {...numberFieldProps(field)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="purchasePriceAt"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>تاریخ قیمت خرید</FormLabel>
+                      <FormControl>
+                        <JalaliDateInput
+                          value={field.value ?? ""}
+                          onChange={field.onChange}
                         />
                       </FormControl>
                       <FormMessage />

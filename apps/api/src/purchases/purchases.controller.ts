@@ -19,6 +19,7 @@ import { PurchasesService } from './purchases.service';
 import {
   CancelPurchaseDto,
   CreatePurchaseDto,
+  DispatchPutawayDto,
   QueryPurchasesDto,
 } from './dto/create-purchase.dto';
 
@@ -75,6 +76,20 @@ export class PurchasesController {
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.purchases.findOne(id);
+  }
+
+  /**
+   * ارسال کارِ چیدن بعد از ثبت — فاکتور زده شده، بار بعداً رسیده.
+   * اقلامِ هنوز در انبار موقت را به گوشی کارگر(ها) می‌فرستد.
+   */
+  @Roles(Role.ADMIN, Role.MANAGER)
+  @Post(':id/putaway')
+  dispatchPutaway(
+    @Param('id') id: string,
+    @Body() dto: DispatchPutawayDto,
+    @Req() req: any,
+  ) {
+    return this.purchases.dispatchPutaway(id, dto, req.user?.userId);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER)

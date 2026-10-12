@@ -150,10 +150,18 @@ export class BlankQuotationsService {
    * سطح دیتابیس تضمین می‌کند دوباره‌فرستادن برگه‌ی دوم نسازد و مدیر دو بار
    * برای یک برگه قیمت نگذارد.
    */
-  async create(input: CreateBlankQuotationDto, userId?: string) {
+  /**
+   * @param source `mobile` از گوشی، `desk` از پنل — پیشوند کلید یکتا را می‌سازد
+   * تا صف آفلاینِ گوشی با ثبت دستیِ دسکتاپ قاطی نشود.
+   */
+  async create(
+    input: CreateBlankQuotationDto,
+    userId?: string,
+    source: 'mobile' | 'desk' = 'mobile',
+  ) {
     this.assertLinesValid(input.lines);
 
-    const idempotencyKey = `mobile-${input.clientRequestId}`;
+    const idempotencyKey = `${source}-${input.clientRequestId}`;
 
     const existing = await this.prisma.blankQuotation.findUnique({
       where: { idempotencyKey },
@@ -335,8 +343,26 @@ export class BlankQuotationsService {
       });
     }
 
+    const removeIds = new Set(input.removeLineIds ?? []);
+    if (removeIds.size && removeIds.size >= q.lines.length && !(input.addLines?.length)) {
+      throw new BadRequestException({
+        error: 'EMPTY_LINES',
+        message: 'برگه نمی‌تواند بدون قلم بماند',
+      });
+    }
+    for (const rid of removeIds) {
+      if (!q.lines.some((l) => l.id === rid)) {
+        throw new BadRequestException({
+          error: 'LINE_NOT_FOUND',
+          message: 'قلمی برای حذف پیدا نشد',
+        });
+      }
+    }
+    if (input.addLines?.length) this.assertLinesValid(input.addLines);
+
     const byId = new Map(q.lines.map((l) => [l.id, l]));
     input.lines.forEach((row, lineIndex) => {
+      if (removeIds.has(row.lineId)) return;
       if (!byId.has(row.lineId)) {
         throw new BadRequestException({
           error: 'LINE_NOT_FOUND',
@@ -397,12 +423,20 @@ export class BlankQuotationsService {
     }
 
     // جمعِ قطعی فقط از قیمت نهایی؛ سقف مبلغ مثل فاکتور واقعی.
-    const total = q.lines.reduce((sum, line) => {
-      const row = input.lines.find((r) => r.lineId === line.id);
-      const finalPrice = row?.finalPrice !== undefined ? row.finalPrice : line.finalPrice;
-      const quantity = row?.quantity !== undefined ? row.quantity : line.quantity;
-      return sum + quantity * (finalPrice ?? 0);
-    }, 0);
+    const remaining = q.lines.filter((l) => !removeIds.has(l.id));
+    const total =
+      remaining.reduce((sum, line) => {
+        const row = input.lines.find((r) => r.lineId === line.id);
+        const finalPrice =
+          row?.finalPrice !== undefined ? row.finalPrice : line.finalPrice;
+        const quantity =
+          row?.quantity !== undefined ? row.quantity : line.quantity;
+        return sum + quantity * (finalPrice ?? 0);
+      }, 0) +
+      (input.addLines ?? []).reduce(
+        (sum, l) => sum + l.quantity * 0, // قلم تازه هنوز قیمت نهایی ندارد
+        0,
+      );
 
     if (total > INT4_MAX) {
       throw new BadRequestException({
@@ -412,7 +446,14 @@ export class BlankQuotationsService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      if (removeIds.size) {
+        await tx.blankQuotationLine.deleteMany({
+          where: { blankQuotationId: id, id: { in: [...removeIds] } },
+        });
+      }
+
       for (const row of input.lines) {
+        if (removeIds.has(row.lineId)) continue;
         await tx.blankQuotationLine.update({
           where: { id: row.lineId },
           data: {
@@ -423,8 +464,31 @@ export class BlankQuotationsService {
             ...(row.quantity !== undefined ? { quantity: row.quantity } : {}),
             // `null` یعنی «وصل را بردار»، `undefined` یعنی «دست نزن».
             ...(row.productId !== undefined ? { productId: row.productId } : {}),
-            ...(row.locationId !== undefined ? { locationId: row.locationId } : {}),
+            ...(row.locationId !== undefined
+              ? { locationId: row.locationId }
+              : {}),
           },
+        });
+      }
+
+      if (input.addLines?.length) {
+        const maxPos = await tx.blankQuotationLine.aggregate({
+          where: { blankQuotationId: id },
+          _max: { position: true },
+        });
+        let nextPos = (maxPos._max.position ?? -1) + 1;
+        await tx.blankQuotationLine.createMany({
+          data: input.addLines.map((l) => ({
+            blankQuotationId: id,
+            position: nextPos++,
+            text: l.text.trim(),
+            quantity: l.quantity,
+            suggestedPrice: l.suggestedPrice ?? null,
+            finalPrice: null,
+            pricedAt: null,
+            productId: null,
+            locationId: null,
+          })),
         });
       }
 
@@ -432,19 +496,25 @@ export class BlankQuotationsService {
         where: { blankQuotationId: id },
         select: { pricedAt: true },
       });
-      const allPriced = pricedRows.every((r) => r.pricedAt !== null);
+      const allPriced =
+        pricedRows.length > 0 && pricedRows.every((r) => r.pricedAt !== null);
 
       await tx.blankQuotation.update({
         where: { id },
         data: {
-          ...(allPriced ? { status: BlankQuotationStatus.PRICED } : {}),
+          // اگر قبلاً PRICED بود و حالا قلم بی‌قیمت اضافه شد، برگردد OPEN.
+          status: allPriced
+            ? BlankQuotationStatus.PRICED
+            : BlankQuotationStatus.OPEN,
           ...(input.customerName !== undefined
             ? { customerName: input.customerName.trim() || null }
             : {}),
           ...(input.customerId !== undefined
             ? { customerId: input.customerId?.trim() || null }
             : {}),
-          ...(input.note !== undefined ? { note: input.note.trim() || null } : {}),
+          ...(input.note !== undefined
+            ? { note: input.note.trim() || null }
+            : {}),
         },
       });
     });

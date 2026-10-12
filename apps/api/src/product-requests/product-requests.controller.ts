@@ -22,10 +22,11 @@ export class ProductRequestsController {
   constructor(private readonly service: ProductRequestsService) {}
 
   // Worker submits a new-product request.
+  // MANAGER/ADMIN: همان لحظه کالا با SKU یکتا ساخته می‌شود + موجودی + صف چاپ.
   @Roles(Role.STAFF, Role.MANAGER, Role.ADMIN)
   @Post()
   create(@Body() dto: CreateProductRequestDto, @Req() req: any) {
-    return this.service.create(dto, req.user?.userId);
+    return this.service.create(dto, req.user?.userId, req.user?.role);
   }
 
   // A worker sees their own requests (status / rejection reason).

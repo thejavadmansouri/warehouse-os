@@ -165,7 +165,7 @@ describe('WorkTasksService', () => {
           }),
         }),
       );
-      expect(gateway.emitCreated).toHaveBeenCalledWith(['t-new'], 'worker1');
+      expect(gateway.emitCreated).toHaveBeenCalledWith(['t-new'], ['worker1']);
       expect(events.broadcast).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'work-task.progress',
@@ -482,7 +482,7 @@ describe('WorkTasksService', () => {
         }),
       );
       expect(result.status).toBe('CANCELLED');
-      expect(gateway.emitCancelled).toHaveBeenCalledWith(['t1'], 'worker1');
+      expect(gateway.emitCancelled).toHaveBeenCalledWith(['t1'], ['worker1']);
     });
 
     it('rejects cancelling a completed task', async () => {
