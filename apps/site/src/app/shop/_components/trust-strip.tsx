@@ -14,7 +14,7 @@ const ITEMS = [
 
 export function TrustStrip() {
   return (
-    <section aria-label="چرا از ما بخرید" className="border-t bg-card">
+    <section aria-label="چرا از ما بخرید" className="border-y bg-muted/50">
       <div className="mx-auto grid max-w-7xl grid-cols-2 gap-4 px-4 py-6 lg:grid-cols-4">
         {ITEMS.map(({ icon: Icon, title, desc }) => (
           <div key={title} className="flex items-center gap-3">

@@ -20,7 +20,7 @@ export function ShopFooter() {
   const year = toFa(new Date().getFullYear());
 
   return (
-    <footer className="mt-12 border-t bg-muted/20">
+    <footer className="border-t bg-muted/60">
       <div className="mx-auto grid max-w-7xl gap-8 px-4 py-8 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <p className="flex items-center gap-2 font-bold text-primary">

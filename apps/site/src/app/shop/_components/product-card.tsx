@@ -39,7 +39,7 @@ export function ProductCard({ product }: { product: ShopProduct }) {
   };
 
   return (
-    <Card className="group flex h-full flex-col overflow-hidden transition-shadow hover:shadow-md">
+    <Card className="group flex h-full flex-col overflow-hidden transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg">
       <Link
         href={`/shop/product/${product.id}`}
         className="relative block aspect-square overflow-hidden bg-muted"

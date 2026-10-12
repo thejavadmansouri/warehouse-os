@@ -120,11 +120,13 @@
      نازک و کم‌جان دیده می‌شود؛ ۴۵۰ همان متن است با یک‌خط پررنگ‌تر. */
   --ui-weight: 450;
 
-  /* Light background — near-white, faint blue cast */
-  /* گرم‌کردن زمینه (پیشنهاد ۴): hue از ۲۵۰ (ته‌آبی) به ۸۸ (ته‌کرم).
-     کرومای 0.006 → 0.008 (نسخهٔ آشکارتر — مقایسه در docs/pos-palette-preview.html).
-     بازگشت به سرد: oklch(0.985 0.004 250) */
-  --background: oklch(0.985 0.008 88);
+  /* Light background — pure white.
+   *
+   * ویترینِ مشتری با پنلِ انبار فرق دارد: آنجا زیر نور مغازه زمینه‌ی گرم لازم
+   * بود، اینجا زمینه باید سفیدِ خنثی باشد (استاندارد ترب/دیجیکالا). کارت‌ها هم
+   * سفیدند و فقط با خطِ دورِ خنثی جدا می‌شوند — نه با ته‌مایه‌ی کرم.
+   * حالت تیره دست‌نخورده است. */
+  --background: oklch(1 0 0);
   --foreground: oklch(0.19 0.022 256);
 
   --card: oklch(1 0 0);
@@ -137,11 +139,11 @@
   --primary: oklch(0.55 0.19 254);
   --primary-foreground: oklch(0.99 0.005 250);
 
-  /* hue 88 — هم‌خانواده با پس‌زمینهٔ گرم (قبلی: 252) */
-  --secondary: oklch(0.968 0.008 88);
+  /* خنثی (قبلاً hue 88 کرم بود): ثانویه و خاکستریِ ملایم روی سفید. */
+  --secondary: oklch(0.965 0.003 250);
   --secondary-foreground: oklch(0.33 0.05 256);
 
-  --muted: oklch(0.97 0.008 88);
+  --muted: oklch(0.965 0.003 250);
   /* پررنگ‌تر از ۰٫۵۳: متنِ کم‌رنگ روی مانیتورِ پیشخوان محو می‌شد. */
   --muted-foreground: oklch(0.455 0.022 256);
 
@@ -164,10 +166,9 @@
   --info: oklch(0.6 0.13 235);
   --info-foreground: oklch(0.99 0 0);
 
-  /* hue 88 — گرم (قبلی: 252). روشنی از ۰٫۹۲۸ به ۰٫۸۸ آمد: خطوطِ جدول
-     زیر نورِ مغازه باید دیده شوند، وگرنه ردیف‌ها در هم می‌روند. */
-  --border: oklch(0.88 0.01 88);
-  --input: oklch(0.855 0.012 88);
+  /* خطِ دورِ خنثی — روی زمینه‌ی سفید باید دیده شود تا کارتِ سفید گم نشود. */
+  --border: oklch(0.9 0.005 250);
+  --input: oklch(0.88 0.005 250);
   /* Lighter/brighter than --primary and far from --destructive red */
   --ring: oklch(0.64 0.15 254);
 
@@ -304,11 +305,11 @@
     background: transparent;
   }
   .scroll-thin::-webkit-scrollbar-thumb {
-    background: oklch(0.86 0.008 88);
+    background: oklch(0.88 0.004 250);
     border-radius: 9999px;
   }
   .scroll-thin::-webkit-scrollbar-thumb:hover {
-    background: oklch(0.78 0.012 88);
+    background: oklch(0.8 0.005 250);
   }
   .dark .scroll-thin::-webkit-scrollbar-thumb {
     background: oklch(0.36 0.02 252);
