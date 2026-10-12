@@ -1,12 +1,14 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import * as QRCode from 'qrcode';
 import { PrismaService } from '../prisma/prisma.service';
 import { TsplService } from './tspl.service';
 import { PrinterTransportService } from './printer-transport.service';
+import { ProductImagesService } from '../product-images/product-images.service';
 import { isNumericSku } from '../products/sku.util';
 import {
   buildThermalLabelHtml,
@@ -23,13 +25,18 @@ import {
   buildRollLocationHtml,
   type HalfSheetLocationOptions,
 } from './label-template';
+import { buildRollLocationPdf } from './roll-location-pdf';
+import { shelfDisplayNumber } from './shelf-display-number';
 
 @Injectable()
 export class LabelsService {
+  private readonly logger = new Logger(LabelsService.name);
+
   constructor(
     private prisma: PrismaService,
     private tspl: TsplService,
     private transport: PrinterTransportService,
+    private productImages: ProductImagesService,
   ) {}
 
   private async qr(text: string): Promise<string> {
@@ -67,6 +74,68 @@ export class LabelsService {
     return path;
   }
 
+  /**
+   * فهرست موقعیت‌های قابل‌چاپ زیر یک ریشه (خود + همهٔ فرزندان فعال).
+   * برای UI «چاپ کامل / انتخابی» لیبل قفسه.
+   */
+  async listPrintableSubtree(rootId: string): Promise<
+    Array<{
+      id: string;
+      name: string;
+      code: string;
+      path: string | null;
+      typeName: string | null;
+      shortNum: string;
+      isRoot: boolean;
+    }>
+  > {
+    const root = await this.prisma.location.findUnique({
+      where: { id: rootId },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        path: true,
+        isActive: true,
+        type: { select: { name: true } },
+      },
+    });
+    if (!root || !root.isActive) {
+      throw new NotFoundException('موقعیت پیدا نشد');
+    }
+
+    const pathPrefix = root.path ? `${root.path} > ` : null;
+    const rows = await this.prisma.location.findMany({
+      where: {
+        isActive: true,
+        OR: [
+          { id: root.id },
+          ...(pathPrefix
+            ? [{ path: { startsWith: pathPrefix } }]
+            : [{ parentId: root.id }]),
+        ],
+      },
+      orderBy: [{ depth: 'asc' }, { sortOrder: 'asc' }, { code: 'asc' }],
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        path: true,
+        type: { select: { name: true } },
+      },
+    });
+
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      code: r.code,
+      path: r.path,
+      typeName: r.type?.name ?? null,
+      shortNum: shelfDisplayNumber(r.name, r.code),
+      isRoot: r.id === root.id,
+    }));
+  }
+
   async locationLabel(id: string): Promise<LabelData> {
     const location = await this.prisma.location.findUnique({
       where: { id },
@@ -89,6 +158,7 @@ export class LabelsService {
       pathText: path.map((p) => p.name).join(' › '),
       warehouseName: location.warehouse?.name ?? null,
       qrCode: await this.qr(location.barcode),
+      shortNum: shelfDisplayNumber(location.name, location.code),
     };
   }
 
@@ -100,7 +170,34 @@ export class LabelsService {
    * خام را به پرینتر می‌فرستد — چون پرینتر به همین سرور وصل است و مرورگر
    * نمی‌تواند بایت خام بفرستد.
    */
-  async printProductLabelsDirect(productIds: string[], copies = 1) {
+  private printerTarget(
+    settings: {
+      printerName: string | null;
+      printerHost: string | null;
+      printerPort: number | null;
+    },
+    override?: { printerName?: string | null; printerHost?: string | null; printerPort?: number | null },
+  ) {
+    return {
+      name: override?.printerName ?? settings.printerName,
+      host: override?.printerHost ?? settings.printerHost,
+      port: override?.printerPort ?? settings.printerPort ?? 9100,
+    };
+  }
+
+  async listPrinters() {
+    return this.transport.listSystemPrinters();
+  }
+
+  async printProductLabelsDirect(
+    productIds: string[],
+    copies = 1,
+    printerOverride?: {
+      printerName?: string | null;
+      printerHost?: string | null;
+      printerPort?: number | null;
+    },
+  ) {
     if (!productIds.length) {
       throw new BadRequestException({
         error: 'NO_PRODUCTS',
@@ -113,12 +210,16 @@ export class LabelsService {
       widthMm: settings.widthMm,
       heightMm: settings.heightMm,
       gapMm: settings.gapMm,
+      mediaWidthMm: settings.mediaWidthMm ?? 104,
     };
-    const target = {
-      name: settings.printerName,
-      host: settings.printerHost,
-      port: settings.printerPort,
-    };
+    const target = this.printerTarget(settings, printerOverride);
+    if (!target.name && !target.host) {
+      throw new BadRequestException({
+        error: 'PRINTER_NOT_CONFIGURED',
+        message:
+          'پرینتر لیبل تنظیم نشده — در تنظیمات چاپ نام پرینتر یا IP شبکه را بزن',
+      });
+    }
 
     const products = await this.prisma.product.findMany({
       where: { id: { in: productIds }, deletedAt: null },
@@ -126,15 +227,15 @@ export class LabelsService {
     });
 
     let printed = 0;
-    for (const p of products) {
-      const payload = await this.tspl.buildProductLabel(
-        { barcode: p.internalBarcode, name: p.name },
-        size,
-        copies,
-      );
-      await this.transport.send(payload, target);
-      printed++;
-    }
+    // همهٔ کالاها در «یک» payload — صف ستون‌بندی‌شده روی رول، مثل چیدمان قفسه.
+    // ارسال تک‌به‌تک یعنی هر کالا یک استیکر و بقیهٔ عرض رول هدر می‌رفت.
+    const items = products.map((p) => ({
+      item: { barcode: p.sku || p.internalBarcode || '', name: p.name },
+      copies,
+    }));
+    const payload = await this.tspl.buildProductRoll(items, size);
+    await this.transport.send(payload, target);
+    printed = products.length;
 
     // لیبل که چاپ شد، کالا از صف چاپ بیرون می‌رود.
     await this.prisma.product.updateMany({
@@ -142,15 +243,109 @@ export class LabelsService {
       data: { labelPrintedAt: new Date() },
     });
 
+    // اگر عکس سایت + موجودی هم آماده باشد و autoPublish روشن باشد، صفحهٔ سایت روشن می‌شود.
+    try {
+      const shop = await this.prisma.shopSettings.findUnique({
+        where: { id: 'singleton' },
+        select: { autoPublishOnline: true },
+      });
+      if (shop?.autoPublishOnline) {
+        for (const p of products) {
+          try {
+            await this.productImages.publishProductPage(p.id);
+          } catch (err) {
+            this.logger.warn(
+              `publish site page after label failed for ${p.id}: ${
+                err instanceof Error ? err.message : err
+              }`,
+            );
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.warn(
+        `autoPublish check after label failed: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
+
     return { printed, requested: productIds.length };
+  }
+
+  /** چاپ مستقیم لیبل قفسه (TSPL رول) روی پرینتر متصل به سرور / شبکه. */
+  async printLocationLabelsDirect(
+    ids: string[],
+    printerOverride?: {
+      printerName?: string | null;
+      printerHost?: string | null;
+      printerPort?: number | null;
+    },
+  ) {
+    if (!ids.length) {
+      throw new BadRequestException({
+        error: 'NO_LOCATIONS',
+        message: 'حداقل یک موقعیت باید انتخاب شود',
+      });
+    }
+    const settings = await this.getSettings();
+    const target = this.printerTarget(settings, printerOverride);
+    if (!target.name && !target.host) {
+      throw new BadRequestException({
+        error: 'PRINTER_NOT_CONFIGURED',
+        message:
+          'پرینتر لیبل تنظیم نشده — در تنظیمات چاپ نام پرینتر یا IP شبکه را بزن',
+      });
+    }
+
+    const labels = await this.bulkLocationLabels(ids);
+    if (!labels.length) {
+      throw new NotFoundException('موقعیتی برای چاپ پیدا نشد');
+    }
+
+    const payload = await this.tspl.buildLocationRoll(
+      labels.map((l) => ({
+        barcode: l.barcode,
+        shortNum: l.shortNum || l.code,
+      })),
+      {
+        widthMm: settings.widthMm,
+        heightMm: settings.heightMm,
+        gapMm: settings.gapMm,
+        mediaWidthMm: settings.mediaWidthMm ?? 104,
+      },
+    );
+    this.logger.log(
+      `print-location-direct: labels=${labels.length} sticker=${settings.widthMm}x${settings.heightMm} media=${settings.mediaWidthMm ?? 104} cols=${Math.max(1, Math.floor((settings.mediaWidthMm ?? 104) / settings.widthMm))} feeds=${Math.ceil(labels.length / Math.max(1, Math.floor((settings.mediaWidthMm ?? 104) / settings.widthMm)))} target=${target.name ?? target.host ?? '?'}`,
+    );
+    await this.transport.send(payload, target);
+    return { printed: labels.length, requested: ids.length };
   }
 
   async getSettings() {
     const existing = await this.prisma.labelSettings.findUnique({
       where: { id: 'singleton' },
     });
-    if (existing) return existing;
-    return this.prisma.labelSettings.create({ data: { id: 'singleton' } });
+    if (!existing) {
+      // رول مغازه همیشه ۱۰ سانتی است؛ برچسب پیش‌فرض ۳ تایی روی همان رول.
+      return this.prisma.labelSettings.create({
+        data: {
+          id: 'singleton',
+          mediaWidthMm: 104,
+          widthMm: 34,
+          heightMm: 25,
+          gapMm: 2,
+        },
+      });
+    }
+    // عرض تکهٔ رول همیشه ۱۰۴mm (مثل 100200_big) — مقادیر قدیمی ۱۰۰/۱۰۵ هم نرمال می‌شوند.
+    if (existing.mediaWidthMm == null || existing.mediaWidthMm !== 104) {
+      return this.prisma.labelSettings.update({
+        where: { id: 'singleton' },
+        data: { mediaWidthMm: 104 },
+      });
+    }
+    return existing;
   }
 
   async updateSettings(dto: {
@@ -162,14 +357,23 @@ export class LabelsService {
     showBarcodeText?: boolean;
     cropMarks?: boolean;
     footerText?: string;
-    /** عرض فیزیکی رول؛ بزرگ‌تر از widthMm = چند لیبل کنار هم. */
+    /** عرض فیزیکی رول — همیشه ۱۰۴mm (مثل 100200_big). */
     mediaWidthMm?: number | null;
+    printerName?: string | null;
+    printerHost?: string | null;
+    printerPort?: number | null;
   }) {
     await this.getSettings();
     // خالی‌کردنِ متن هم باید کار کند؛ null → پاک‌کردنِ مقدار قبلی.
-    const data: any = { ...dto };
+    const data: any = { ...dto, mediaWidthMm: 104 };
     if (data.footerText !== undefined) {
       data.footerText = data.footerText?.trim() ? data.footerText.trim() : null;
+    }
+    if (data.printerName !== undefined) {
+      data.printerName = data.printerName?.trim() ? data.printerName.trim() : null;
+    }
+    if (data.printerHost !== undefined) {
+      data.printerHost = data.printerHost?.trim() ? data.printerHost.trim() : null;
     }
     return this.prisma.labelSettings.update({
       where: { id: 'singleton' },
@@ -534,15 +738,33 @@ export class LabelsService {
   }
 
   /*
-   * PDF رول حرارتیِ لیبلِ **موقعیت** (قفسه/ردیف/طبقه): هر صفحه = یک تکه‌ی رول
-   * با چند لیبلِ کیوآر-محور کنار هم. هر لیبل: کیوآرِ بزرگ یک طرف (با موبایل
-   * اسکن می‌شود و مستقیم روی همان قفسه می‌رود)، کدِ درشت و آدرسِ کامل طرفِ دیگر.
+   * PDF واقعی رول قفسه (مثل 100200_big): MediaBox = عرض رول × ارتفاع برچسب،
+   * QR + عدد Helvetica-Bold. HTML فقط برای پیش‌نمایش داخلی نگه داشته شده.
    */
   async rollLocationLabelsPdf(
     ids: string[],
     opts: RollLocationOptions,
+  ): Promise<Buffer> {
+    const labels = await this.bulkLocationLabels(ids);
+    if (!labels.length) {
+      throw new NotFoundException('موقعیتی برای چاپ لیبل پیدا نشد');
+    }
+    return buildRollLocationPdf(labels, {
+      widthMm: opts.widthMm,
+      heightMm: opts.heightMm,
+      mediaWidthMm: opts.mediaWidthMm ?? 104,
+    });
+  }
+
+  /** پیش‌نمایش HTML رول قفسه (تب مرورگر) — چاپ نهایی از PDF واقعی است. */
+  async rollLocationLabelsHtmlPreview(
+    ids: string[],
+    opts: RollLocationOptions,
   ): Promise<string> {
     const labels = await this.bulkLocationLabels(ids);
-    return buildRollLocationHtml(labels, opts);
+    return buildRollLocationHtml(labels, {
+      ...opts,
+      mediaWidthMm: opts.mediaWidthMm ?? 104,
+    });
   }
 }

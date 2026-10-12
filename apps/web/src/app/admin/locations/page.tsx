@@ -57,6 +57,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LabelPrintDialog } from "@/components/labels/label-print-dialog";
+import { LocationPrintPicker } from "@/components/labels/location-print-picker";
 import { BulkGenerateDialog } from "./_components/bulk-generate-dialog";
 
 // ---------------------------------------------------------------------------
@@ -474,12 +475,14 @@ export default function LocationsPage() {
     });
   const clearSel = () => setSelected(new Set());
 
-  // چاپ لیبل
-  const [printIds, setPrintIds] = React.useState<string[]>([]);
-  const [printOpen, setPrintOpen] = React.useState(false);
+  // چاپ لیبل — تک‌گره: picker کامل/انتخابی؛ چندانتخاب: همان ids
+  const [printRootId, setPrintRootId] = React.useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [multiPrintIds, setMultiPrintIds] = React.useState<string[]>([]);
+  const [multiPrintOpen, setMultiPrintOpen] = React.useState(false);
   const requestPrint = (id: string) => {
-    setPrintIds([id]);
-    setPrintOpen(true);
+    setPrintRootId(id);
+    setPickerOpen(true);
   };
 
   // حذف تکی (با آمار زیردرخت)
@@ -739,7 +742,19 @@ export default function LocationsPage() {
               </Button>
             </div>
             <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => { setPrintIds([...selected]); setPrintOpen(true); }}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const ids = [...selected];
+                  if (ids.length === 1) {
+                    requestPrint(ids[0]!);
+                  } else {
+                    setMultiPrintIds(ids);
+                    setMultiPrintOpen(true);
+                  }
+                }}
+              >
                 <Printer className="size-4" /> چاپ لیبل‌ها
               </Button>
               <Button size="sm" variant="destructive" onClick={() => setBulkOpen(true)}>
@@ -817,8 +832,17 @@ export default function LocationsPage() {
         )}
       </div>
 
-      {/* چاپ لیبل */}
-      <LabelPrintDialog open={printOpen} onOpenChange={setPrintOpen} mode="location" ids={printIds} />
+      <LocationPrintPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        rootId={printRootId}
+      />
+      <LabelPrintDialog
+        open={multiPrintOpen}
+        onOpenChange={setMultiPrintOpen}
+        mode="location"
+        ids={multiPrintIds}
+      />
 
       {/* دیالوگ حذف تکی */}
       <Dialog open={!!delTarget} onOpenChange={(o) => !o && setDelTarget(null)}>

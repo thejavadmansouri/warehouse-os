@@ -39,6 +39,11 @@ export interface LabelData {
   warehouseName: string | null;
 
   qrCode: string;
+
+  /**
+   * عدد درشت کنار QR روی رول (مثل 100200_big) — از نام/کد موقعیت استخراج می‌شود.
+   */
+  shortNum: string;
 }
 
 export interface ProductLabelData {
@@ -884,59 +889,76 @@ ${cards}
  * قفسه می‌رود؛ با چشم هم کد درشت آدرس را لو می‌دهد.
  */
 export interface RollLocationOptions {
-  widthMm: number; // عرض هر لیبل (مثلاً ۵۱)
-  heightMm: number; // ارتفاع لیبل/تکه‌ی رول (مثلاً ۳۲)
-  mediaWidthMm?: number | null; // عرض کل رول (مثلاً ۱۰۵)
+  widthMm: number; // عرض هر برچسب روی رول (مثلاً ۳۳)
+  heightMm: number; // ارتفاع برچسب / تکه‌ی رول (مثلاً ۲۵)
+  mediaWidthMm?: number | null; // عرض فیزیکی رول — مغازه همیشه ۱۰۰mm
 }
 
+/**
+ * رول قفسه به سبک 100200_big: هر صفحه = عرض رول × ارتفاع لیبل،
+ * چند برچسب کنار هم؛ هر برچسب = QR چپ + عدد درشت راست.
+ * تعداد ستون = floor(عرض رول / عرض برچسب) تا با عوض‌کردن اندازهٔ برچسب
+ * روی همان رول ۱۰۰mm، چیدمان خودش درست شود.
+ */
 export function buildRollLocationHtml(
   labels: LabelData[],
   opts: RollLocationOptions,
 ): string {
-  const w = Math.max(20, Math.round(opts.widthMm));
+  const stickerW = Math.max(18, Math.round(opts.widthMm));
   const h = Math.max(15, Math.round(opts.heightMm));
   const mediaW = Math.max(
-    w,
-    Math.round(opts.mediaWidthMm && opts.mediaWidthMm >= w ? opts.mediaWidthMm : w),
+    stickerW,
+    Math.round(
+      opts.mediaWidthMm && opts.mediaWidthMm >= stickerW
+        ? opts.mediaWidthMm
+        : 104,
+    ),
   );
-  const cols = Math.max(1, Math.floor(mediaW / w));
+  const cols = Math.max(1, Math.floor(mediaW / stickerW));
+  // مثل 100200_big: تقسیم مساوی عرض رول بین ستون‌ها
+  const w = mediaW / cols;
 
-  // کیوآرِ مربع تا نزدیکِ کلِ ارتفاعِ لیبل بزرگ می‌شود؛ بقیه‌ی عرض برای متن.
-  const qrMm = Math.max(10, h - 4);
-  const codeSize = h <= 25 ? 10 : 12;
-  const pathSize = h <= 25 ? 6 : 7;
+  // حاشیه و فاصله مثل اسکریپت دسکتاپ 100200 (~2.2mm / ~2mm).
+  const padMm = 2.2;
+  const gapMm = 2;
+  const qrMm = Math.max(10, Math.min(h - padMm * 2, Math.min(19, w * 0.55)));
+  // عدد درشت: تقریباً مثل Helvetica-Bold در 100200_big.
+  const numPt = Math.max(14, Math.min(28, Math.round(h * 0.72)));
 
   const locationCard = (l: LabelData): string => `
 <div class="label">
   <div class="qr"><img src="${l.qrCode}" alt=""/></div>
-  <div class="info">
-    <div class="code">${escapeHtml(l.code)}</div>
-    ${l.pathText ? `<div class="path">${escapeHtml(l.pathText)}</div>` : ''}
-  </div>
+  <div class="num">${escapeHtml(l.shortNum || l.code)}</div>
 </div>`;
 
-  // صف را به سطرهای «cols تایی» می‌بُریم — هر سطر یک تکه‌ی رول؛
-  // اگر آخرین سطر ناقص بود، خانه‌های خالی سفید می‌مانند (لیبلِ خالی می‌سوزد).
   const rows: string[] = [];
   for (let i = 0; i < labels.length; i += cols) {
     const slice = labels.slice(i, i + cols);
     const cells = slice
       .map((l) => `<div class="cell">${locationCard(l)}</div>`)
       .join('\n');
-    rows.push(`<div class="row">${cells}</div>`);
+    // خانه‌های خالی تا عرض رول پر شود — لیبلِ سفید می‌سوزد، چیدمان به‌هم نمی‌ریزد.
+    const pad = cols - slice.length;
+    const fillers =
+      pad > 0
+        ? Array.from({ length: pad }, () => `<div class="cell empty"></div>`).join(
+            '\n',
+          )
+        : '';
+    rows.push(`<div class="row">${cells}${fillers}</div>`);
   }
 
   return `
 <!DOCTYPE html>
-<html dir="rtl" lang="fa">
+<html dir="ltr" lang="fa">
 <head>
 <meta charset="utf-8"/>
-<title>لیبل قفسه — رول حرارتی ${mediaW}×${h}mm</title>
+<title>لیبل قفسه — رول ${mediaW}×${h}mm</title>
 <style>
 @page { size: ${mediaW}mm ${h}mm; margin: 0; }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { width: ${mediaW}mm; }
-body { font-family: ${FONT_STACK}; background: white; }
+html, body { width: ${mediaW}mm; background: white; }
+body { font-family: Helvetica, Arial, ${FONT_STACK}; }
 .row {
   width: ${mediaW}mm;
   height: ${h}mm;
@@ -950,20 +972,18 @@ body { font-family: ${FONT_STACK}; background: white; }
 .cell {
   width: ${w}mm;
   height: ${h}mm;
-  border: 1px dashed #bbb;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex: 0 0 ${w}mm;
   overflow: hidden;
 }
+.cell.empty { background: white; }
 .label {
   width: ${w}mm;
   height: ${h}mm;
   display: flex;
   flex-direction: row;
   align-items: center;
-  padding: 1.5mm;
-  gap: 1.5mm;
+  padding: ${padMm}mm;
+  gap: ${gapMm}mm;
   overflow: hidden;
 }
 .qr {
@@ -974,32 +994,17 @@ body { font-family: ${FONT_STACK}; background: white; }
   align-items: center;
   justify-content: center;
 }
-.qr img { width: ${qrMm}mm; height: ${qrMm}mm; }
-.info {
+.qr img { width: ${qrMm}mm; height: ${qrMm}mm; display: block; }
+.num {
   flex: 1 1 auto;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  gap: 0.8mm;
-}
-.code {
-  font-size: ${codeSize}pt;
+  text-align: center;
+  font-size: ${numPt}pt;
   font-weight: 800;
+  line-height: 1;
   direction: ltr;
   letter-spacing: 0.5px;
-  max-width: 100%;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.path {
-  font-size: ${pathSize}pt;
-  color: #333;
-  line-height: 1.25;
-  max-width: 100%;
-  max-height: ${Math.round(h * 0.45)}mm;
   overflow: hidden;
 }
 @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }

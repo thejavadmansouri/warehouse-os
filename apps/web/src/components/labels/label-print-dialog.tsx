@@ -12,9 +12,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Printer, QrCode, Loader2, Package, MapPin, Download } from "lucide-react";
 import { toast } from "sonner";
 
-// پل چاپ مستقیم حرارتی — فقط داخل اپ فروشنده (Tauri) در دسترس است.
-import { isDesktop, printTspLabel } from "@/lib/desktop";
-import { buildProductTsplPayload, buildLocationTsplPayload } from "@/lib/tspl";
+import { isDesktop } from "@/lib/desktop";
+import {
+  ROLL_MEDIA_WIDTH_MM,
+  matchRollPreset,
+  rollColumns,
+} from "@/lib/label-roll-presets";
+import {
+  directPrintLocationLabels,
+  directPrintProductLabels,
+  resolveLabelPrinterList,
+  resolveSavedLabelPrinterName,
+} from "@/lib/label-direct-print";
 
 // طبق بخش الف سند افزونه — endpointهای لیبل
 import {
@@ -178,59 +187,42 @@ function LocationLabelCard({
     );
   }
 
-  const cardPx = preset.hMm * PRINT_PX_PER_MM;
-  const padPx = 8; // p-1 بالا/پایین + فاصله‌ی امن
-  const availPx = Math.max(0, cardPx - padPx);
-  const namePx = 13;
-  const pathPx = label.pathText && availPx > 70 ? 10 : 0;
-  const barPx = Math.min(34, Math.max(20, Math.round(availPx * 0.26)));
-  let qrPx = Math.round(availPx - namePx - pathPx - barPx);
-
-  // QR همیشه حداقل ~۷ میلی‌متر بماند تا دوربین گوشی بخواندش.
-  const minQrPx = Math.round(7 * PRINT_PX_PER_MM);
-  const maxQrPx = Math.round(parseFloat(preset.qr) * 10 * PRINT_PX_PER_MM);
-  qrPx = Math.max(minQrPx, Math.min(qrPx, maxQrPx));
-
-  // CODE128: هر نویسه ≈ ۱۱ ماژول + شروع/پایان/چک؛ میله‌ها را به‌قدری نازک
-  // می‌کنیم که کل بارکد در عرضِ کارت جا بگیرد (بارکدِ بلند = میلهٔ باریک‌تر،
-  // نه بیرون‌زدن از کارت).
-  const usableWidthPx = Math.max(1, preset.wMm * PRINT_PX_PER_MM - 14);
-  const estModules = 11 * label.barcode.length + 40;
-  const moduleWidth = Math.min(1.4, Math.max(0.6, usableWidthPx / estModules));
+  // رول قفسه (مثل 100200_big): QR چپ + عدد درشت راست — همان خروجی چاپ مستقیم/PDF.
+  const padPx = Math.round(2.2 * PRINT_PX_PER_MM);
+  const gapPx = Math.round(2 * PRINT_PX_PER_MM);
+  const cardH = preset.hMm * PRINT_PX_PER_MM;
+  const cardW = preset.wMm * PRINT_PX_PER_MM;
+  const qrPx = Math.max(
+    Math.round(7 * PRINT_PX_PER_MM),
+    Math.min(cardH - padPx * 2, Math.round(cardW * 0.55)),
+  );
+  const num = label.shortNum || label.code;
+  const numPx = Math.max(14, Math.min(28, Math.round(preset.hMm * 0.72)));
 
   return (
     <div
-      className="label-card flex flex-col items-center justify-between overflow-hidden rounded border border-black/25 bg-white p-1 text-center"
-      style={{ width: preset.w, height: preset.h }}
+      className="label-card flex flex-row items-center overflow-hidden rounded border border-black/25 bg-white"
+      style={{
+        width: preset.w,
+        height: preset.h,
+        padding: padPx,
+        gap: gapPx,
+        direction: "ltr",
+      }}
     >
-      <p
-        className="w-full truncate font-bold leading-tight text-black"
-        style={{ fontSize: namePx }}
-        dir="rtl"
-      >
-        {label.name}
-      </p>
-      {pathPx > 0 ? (
-        <p
-          className="w-full truncate leading-tight text-gray-600"
-          style={{ fontSize: pathPx }}
-          dir="rtl"
-        >
-          {label.pathText}
-        </p>
-      ) : null}
       <img
         src={label.qrCode}
         alt="QR قفسه"
-        style={{ width: qrPx, height: qrPx }}
+        style={{ width: qrPx, height: qrPx, flex: "0 0 auto" }}
         className="object-contain"
       />
-      <BarcodeSvg
-        value={label.barcode}
-        height={barPx}
-        moduleWidth={moduleWidth}
-        className="mx-auto block h-auto max-w-full object-contain"
-      />
+      <p
+        className="min-w-0 flex-1 truncate text-center font-extrabold leading-none text-black"
+        style={{ fontSize: numPx }}
+        dir="ltr"
+      >
+        {num}
+      </p>
     </div>
   );
 }
@@ -327,11 +319,9 @@ function ProductThermalPreview({
 }) {
   const wMm = settings?.widthMm ?? 50;
   const hMm = settings?.heightMm ?? 30;
-  const twoUp =
-    !!settings?.mediaWidthMm && settings.mediaWidthMm >= wMm * 2;
-  const cols = twoUp
-    ? Math.max(1, Math.floor(settings!.mediaWidthMm! / wMm))
-    : 1;
+  const mediaMm = settings?.mediaWidthMm ?? ROLL_MEDIA_WIDTH_MM;
+  const cols = rollColumns(wMm, mediaMm);
+  const twoUp = cols >= 2;
 
   // صفِ چاپ — دقیقاً همان منطق handleDirectPrint.
   const queue: ProductLabel[] = [];
@@ -372,7 +362,6 @@ function ProductThermalPreview({
   for (let i = 0; i < queue.length; i += cols) {
     pieces.push(queue.slice(i, i + cols));
   }
-  const mediaMm = settings!.mediaWidthMm!;
 
   return (
     <div className="space-y-3">
@@ -593,16 +582,12 @@ export function LabelPrintDialog({
   const settingsSize = React.useMemo(() => {
     const s = settingsQ.data;
     if (!s) return null;
-    const cols =
-      s.mediaWidthMm && s.mediaWidthMm >= s.widthMm * 2
-        ? Math.max(1, Math.floor(s.mediaWidthMm / s.widthMm))
-        : Math.max(1, s.columns);
     return {
       value: "settings" as const,
       label: `همان تنظیمات چاپ (${toFa(s.widthMm)} × ${toFa(s.heightMm)})`,
       w: s.widthMm,
       h: s.heightMm,
-      cols,
+      cols: rollColumns(s.widthMm, ROLL_MEDIA_WIDTH_MM),
     };
   }, [settingsQ.data]);
 
@@ -615,27 +600,59 @@ export function LabelPrintDialog({
     prodSizeKey === "settings" && settingsSize ? settingsSize : prodSize;
 
   /*
-   * حالت قفسه: اندازهٔ رول — پیش‌فرض «همان تنظیمات چاپ» و اگر کاربر سایزی
-   * انتخاب کند، از همان می‌آید (free-size). عرض رول همیشه از تنظیمات می‌آید
-   * تا تعداد ستون‌ها با کاغذِ واقعیِ داخل دستگاه یکی بماند.
+   * قفسه: اندازه فقط از «تنظیمات چاپ» می‌آید (رول همیشه ۱۰۰mm).
+   * کاربر سایز را آنجا انتخاب می‌کند، نه داخل دیالوگ چاپ.
    */
-  const [locSizeKey, setLocSizeKey] = React.useState<string>("settings");
-  const [locSizeTouched, setLocSizeTouched] = React.useState(false);
-  React.useEffect(() => {
-    if (settingsQ.data && !locSizeTouched) setLocSizeKey("settings");
-  }, [settingsQ.data, locSizeTouched]);
   const locSize = React.useMemo(() => {
     const s = settingsQ.data;
-    if (locSizeKey === "settings" || !s) {
-      return s
-        ? { w: s.widthMm, h: s.heightMm }
-        : { w: 50, h: 30 };
-    }
-    const found = PRODUCT_SIZES.find((x) => x.value === locSizeKey);
-    return found ? { w: found.w, h: found.h } : { w: 50, h: 30 };
-  }, [locSizeKey, settingsQ.data]);
+    return s
+      ? { w: s.widthMm, h: s.heightMm, gap: s.gapMm }
+      : { w: 30, h: 20, gap: 2 };
+  }, [settingsQ.data]);
+  const locMediaMm = ROLL_MEDIA_WIDTH_MM;
+  const locCols = rollColumns(locSize.w, locMediaMm);
+  const locPresetLabel =
+    matchRollPreset(locSize.w, locSize.h)?.label ??
+    `${toFa(locSize.w)}×${toFa(locSize.h)} میلی‌متر`;
+  const locPreviewPreset: SizePreset = {
+    value: "roll",
+    label: locPresetLabel,
+    w: `${locSize.w}mm`,
+    h: `${locSize.h}mm`,
+    qr: "0cm",
+    wMm: locSize.w,
+    hMm: locSize.h,
+  };
 
-  // چاپ مستقیمِ قفسه (TSPL) — مثل کالا فقط داخل اپ فروشنده.
+  // پرینتر — از اپ ویندوزی یا از فهرست سرور (مرورگر)
+  const [printerName, setPrinterName] = React.useState("");
+  const [printerHost, setPrinterHost] = React.useState("");
+  const printersQ = useQuery({
+    queryKey: ["label-printers", isDesktop() ? "desktop" : "server"],
+    queryFn: resolveLabelPrinterList,
+    enabled: open,
+    retry: false,
+  });
+  React.useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    (async () => {
+      const name = await resolveSavedLabelPrinterName(settingsQ.data);
+      if (!alive) return;
+      setPrinterName(name);
+      setPrinterHost(settingsQ.data?.printerHost ?? "");
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [open, settingsQ.data]);
+
+  const printerChoice = {
+    printerName: printerName || null,
+    printerHost: printerHost.trim() || null,
+    printerPort: settingsQ.data?.printerPort ?? 9100,
+  };
+
   const [locDirectPrinting, setLocDirectPrinting] = React.useState(false);
   const [locDirectErr, setLocDirectErr] = React.useState<string | null>(null);
   const handleLocationDirectPrint = async () => {
@@ -644,27 +661,22 @@ export function LabelPrintDialog({
     try {
       const s = settingsQ.data;
       if (!s) throw new Error("تنظیمات چاپ در دسترس نیست");
-      if (locationLabels.length === 0) {
-        throw new Error("داده‌ای برای چاپ لیبل وجود ندارد");
-      }
-      const payload = await buildLocationTsplPayload(
-        locationLabels.map((l) => ({
-          qrCode: l.qrCode,
-          code: l.code,
-          pathText: l.pathText,
-        })),
-        {
-          widthMm: locSize.w,
-          heightMm: locSize.h,
-          gapMm: s.gapMm,
-          mediaWidthMm: s.mediaWidthMm,
-        },
+      const res = await directPrintLocationLabels({
+        labels: locationLabels,
+        settings: s,
+        printer: printerChoice,
+      });
+      toast.success(
+        `${toFa(res.printed)} لیبل قفسه چاپ شد` +
+          (res.via === "server" ? " (از سرور)" : ""),
       );
-      await printTspLabel(payload);
-      toast.success(`${toFa(locationLabels.length)} لیبل قفسه چاپ شد`);
     } catch (e) {
       setLocDirectErr(
-        e instanceof Error ? e.message : "چاپ مستقیم ناموفق بود",
+        e instanceof ApiException
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "چاپ مستقیم ناموفق بود",
       );
     } finally {
       setLocDirectPrinting(false);
@@ -685,9 +697,9 @@ export function LabelPrintDialog({
           ids: stableIds,
           widthMm: locSize.w,
           heightMm: locSize.h,
-          mediaWidthMm: s.mediaWidthMm ?? null,
+          mediaWidthMm: locMediaMm,
         },
-        `kardo-roll-location-${locSize.w * 10}x${locSize.h * 10}-${s.mediaWidthMm ?? locSize.w}mm.pdf`,
+        `kardo-roll-location-${locSize.w}x${locSize.h}-on-${locMediaMm}mm.pdf`,
       );
     } catch (e) {
       setLocRollErr(
@@ -717,50 +729,36 @@ export function LabelPrintDialog({
     }
   };
 
-  /*
-   * چاپ مستقیم روی پرینتر حرارتی (TSPL) — فقط از داخل اپ فروشنده، چون پرینتر
-   * به همان سیستم وصل است. بایت‌ها سمت کلاینت ساخته می‌شوند (مثل نسخه‌ی سرور)
-   * و با پل دسکتاپ به‌صورت RAW فرستاده می‌شوند؛ API نقشی ندارد.
-   */
+  /** چاپ مستقیم کالا — اپ ویندوزی یا مرورگر (از طریق API سرور). */
   const handleDirectPrint = async () => {
     setDirectErr(null);
     setDirectPrinting(true);
     try {
       const settings = settingsQ.data;
-      if (!settings) {
-        throw new Error("تنظیمات چاپ در دسترس نیست");
+      if (!settings) throw new Error("تنظیمات چاپ در دسترس نیست");
+      if (isAllStock) {
+        throw new Error("برای کل موجودی از «دانلود PDF رول» استفاده کن");
       }
-      if (productLabels.length === 0) {
-        throw new Error("داده‌ای برای چاپ لیبل وجود ندارد");
-      }
-      const payload = buildProductTsplPayload(
-        productLabels.map((l) => {
-          const qty = perItem
-            ? (items!.find((i) => i.productId === l.id)?.quantity ?? 1)
-            : Math.max(1, Math.min(500, Math.floor(copies) || 1));
-          return {
-            label: {
-              barcode: l.barcode || l.sku,
-              // بالا: مدل خودرو (مثل «پژو ۴۰۵»)؛ اگر نبود نام کوتاه کالا.
-              name: l.vehicleModelName || l.name,
-            },
-            copies: qty,
-          };
-        }),
-        {
-          widthMm: settings.widthMm,
-          heightMm: settings.heightMm,
-          gapMm: settings.gapMm,
-          // رول دوستونه: مثلاً ۱۰۰ میلی‌متر → دو برچسب ۵۰×۳۰ کنار هم.
-          mediaWidthMm: settings.mediaWidthMm,
-        },
-      );
-      await printTspLabel(payload);
+      const res = await directPrintProductLabels({
+        labels: productLabels,
+        settings,
+        copies,
+        perItem,
+        items,
+        printer: printerChoice,
+      });
       toast.success(
-        `${toFa(productLabels.length)} لیبل روی پرینتر حرارتی چاپ شد`,
+        `${toFa(res.printed)} لیبل روی پرینتر حرارتی چاپ شد` +
+          (res.via === "server" ? " (از سرور)" : ""),
       );
     } catch (e) {
-      setDirectErr(e instanceof Error ? e.message : "چاپ مستقیم ناموفق بود");
+      setDirectErr(
+        e instanceof ApiException
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "چاپ مستقیم ناموفق بود",
+      );
     } finally {
       setDirectPrinting(false);
     }
@@ -817,8 +815,8 @@ export function LabelPrintDialog({
       if (!settings) throw new Error("تنظیمات چاپ در دسترس نیست");
       const w = settings.widthMm;
       const h = settings.heightMm;
-      const media = settings.mediaWidthMm ?? null;
-      const cols = Math.max(1, Math.floor((media ?? w) / w));
+      const media = ROLL_MEDIA_WIDTH_MM;
+      const cols = rollColumns(w, media);
       const opts = {
         widthMm: w,
         heightMm: h,
@@ -829,7 +827,7 @@ export function LabelPrintDialog({
       };
       if (isAllStock || perItem) {
         // کل موجودی یا تعدادِ هر ردیف — سرور خودش می‌شمارد
-        await downloadRollLabelsPdf(opts, `kardo-roll-${w * 10}x${h * 10}-${media ?? w}mm.pdf`);
+        await downloadRollLabelsPdf(opts, `kardo-roll-${w}x${h}-on-${media}mm.pdf`);
       } else {
         const printItems = stableIds.map((id) => ({
           productId: id,
@@ -837,11 +835,11 @@ export function LabelPrintDialog({
         }));
         await downloadRollLabelsPdf(
           { ...opts, items: printItems },
-          `kardo-roll-${w * 10}x${h * 10}-${media ?? w}mm.pdf`,
+          `kardo-roll-${w}x${h}-on-${media}mm.pdf`,
         );
       }
       toast.success(
-        `PDF رول ساخته شد — ${cols} لیبل در هر تکه‌ی ${toFa(media ?? w)} میلی‌متری. چاپ با Scale=100% و بدون هدر/فوتر.`,
+        `PDF رول ساخته شد — ${toFa(cols)} لیبل در هر تکهٔ ${toFa(media)} میلی‌متری. چاپ با Scale=۱۰۰٪ و بدون هدر/فوتر.`,
       );
     } catch (e) {
       setRollErr(e instanceof Error ? e.message : "ساخت PDF رول ناموفق بود");
@@ -927,91 +925,44 @@ export function LabelPrintDialog({
             {mode === "location" ? "چاپ لیبل موقعیت" : "چاپ لیبل محصول"}
           </DialogTitle>
           <DialogDescription>
-            پیش‌نمایش لیبل‌ها — برای چاپ از دکمه «چاپ» استفاده کنید.
-            {stableIds.length > 0 ? ` ${stableIds.length} شناسه دریافت شد.` : ""}
+            {mode === "location"
+              ? "پیش‌نمایش رول قفسه — PDF رول مثل فایل ۱۰۰۲۰۰؛ سایز از تنظیمات چاپ."
+              : "پیش‌نمایش لیبل‌ها — برای چاپ از دکمه‌های پایین استفاده کنید."}
+            {stableIds.length > 0
+              ? ` ${toFa(stableIds.length)} شناسه دریافت شد.`
+              : ""}
           </DialogDescription>
         </DialogHeader>
 
-        {/* کنترل‌ها */}
-        <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b pb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">سایز لیبل:</span>
-            <Select dir="rtl" value={sizeKey} onValueChange={setSizeKey}>
-              <SelectTrigger size="sm" className="w-[180px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SIZE_PRESETS.map((s) => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          {/*
-            کاغذ. برای لیبلِ موقعیت همان چیزی است که انباردار در دستگاه می‌گذارد
-            — A6 برای چند قفسه، A4 برای یک ردیفِ کامل.
-          */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">کاغذ:</span>
-            <div className="flex gap-1">
-              {PAPER_OPTIONS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPaper(p)}
-                  className={`h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
-                    paper === p
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "hover:border-primary hover:text-primary"
-                  }`}
-                >
-                  {p}
-                </button>
-              ))}
-            </div>
-            <span className="text-[11px] text-muted-foreground">
-              {toFa(printColumns)} ستون · {toFa(perSheet)} لیبل در هر برگه
-            </span>
-          </div>
-
-          {hasLabels ? (
-            <Badge variant="secondary" className="gap-1">
-              {mode === "location" ? (
-                <MapPin className="h-3 w-3" />
-              ) : (
-                <Package className="h-3 w-3" />
-              )}
-              {labels.length} لیبل
-            </Badge>
-          ) : null}
-        </div>
-
-        {/* تنظیمات رولِ قفسه — اندازهٔ آزاد + رول از تنظیمات */}
+        {/* کنترل‌ها — برای قفسه فقط خلاصهٔ تنظیمات؛ سایز را از صفحهٔ لیبل‌ها عوض کن */}
         {mode === "location" ? (
-          <div className="no-print flex flex-wrap items-center gap-3 rounded-lg border bg-muted/30 p-2 text-xs">
-            <span className="font-semibold text-foreground">رول حرارتی:</span>
+          <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b pb-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="font-semibold text-foreground">
+                رول {toFa(locMediaMm)}mm
+              </span>
+              <Badge variant="secondary">{locPresetLabel}</Badge>
+              <span className="text-muted-foreground">
+                {toFa(locCols)} برچسب در هر ردیف · QR + عدد درشت
+              </span>
+            </div>
+            {hasLabels ? (
+              <Badge variant="secondary" className="gap-1">
+                <MapPin className="h-3 w-3" />
+                {toFa(labels.length)} لیبل
+              </Badge>
+            ) : null}
+          </div>
+        ) : (
+          <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b pb-3">
             <div className="flex items-center gap-2">
-              <span className="text-muted-foreground">اندازهٔ لیبل:</span>
-              <Select
-                dir="rtl"
-                value={locSizeKey}
-                onValueChange={(v) => {
-                  setLocSizeTouched(true);
-                  setLocSizeKey(v);
-                }}
-              >
-                <SelectTrigger size="sm" className="w-[200px]">
+              <span className="text-xs text-muted-foreground">سایز لیبل:</span>
+              <Select dir="rtl" value={sizeKey} onValueChange={setSizeKey}>
+                <SelectTrigger size="sm" className="w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="settings">
-                    {settingsQ.data
-                      ? `همان تنظیمات چاپ (${toFa(settingsQ.data.widthMm)} × ${toFa(settingsQ.data.heightMm)})`
-                      : "همان تنظیمات چاپ"}
-                  </SelectItem>
-                  {PRODUCT_SIZES.map((s) => (
+                  {SIZE_PRESETS.map((s) => (
                     <SelectItem key={s.value} value={s.value}>
                       {s.label}
                     </SelectItem>
@@ -1019,22 +970,84 @@ export function LabelPrintDialog({
                 </SelectContent>
               </Select>
             </div>
-            {settingsQ.data ? (
-              <span className="text-muted-foreground">
-                رول {toFa(settingsQ.data.mediaWidthMm ?? settingsQ.data.widthMm)} میلی‌متر —{" "}
-                {toFa(Math.max(1, Math.floor((settingsQ.data.mediaWidthMm ?? locSize.w) / locSize.w)))} لیبل کنار هم
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">کاغذ:</span>
+              <div className="flex gap-1">
+                {PAPER_OPTIONS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setPaper(p)}
+                    className={`h-8 rounded-md border px-3 text-xs font-medium transition-colors ${
+                      paper === p
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "hover:border-primary hover:text-primary"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <span className="text-[11px] text-muted-foreground">
+                {toFa(printColumns)} ستون · {toFa(perSheet)} لیبل در هر برگه
               </span>
-            ) : null}
-            {locDirectErr || locRollErr ? (
-              <div className="w-full text-destructive">{locDirectErr ?? locRollErr}</div>
-            ) : null}
-            {!isDesktop() ? (
-              <span className="text-muted-foreground">
-                چاپ مستقیم فقط از داخل اپ فروشنده در دسترس است.
-              </span>
+            </div>
+            {hasLabels ? (
+              <Badge variant="secondary" className="gap-1">
+                <Package className="h-3 w-3" />
+                {labels.length} لیبل
+              </Badge>
             ) : null}
           </div>
-        ) : null}
+        )}
+
+        {/* پرینتر — مشترک موقعیت و کالا */}
+        <div className="no-print grid gap-2 rounded-lg border bg-muted/30 p-3 text-xs sm:grid-cols-2">
+          <div className="sm:col-span-2 text-muted-foreground">
+            {mode === "location"
+              ? "اندازه از تنظیمات چاپ است. چاپ مستقیم TSPL خام به پرینتر می‌فرستد — هم از مرورگر (پرینتر سرور/شبکه) هم از اپ ویندوزی."
+              : "چاپ مستقیم TSPL به پرینتر حرارتی — مرورگر از طریق سرور، اپ ویندوزی از روی همین PC."}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="w-20 shrink-0 text-muted-foreground">پرینتر</span>
+            <select
+              dir="rtl"
+              className="h-8 flex-1 rounded-md border bg-background px-2"
+              value={printerName}
+              onChange={(e) => setPrinterName(e.target.value)}
+            >
+              <option value="">
+                {isDesktop()
+                  ? "پیش‌فرض ویندوز / تنظیمات اپ"
+                  : "از تنظیمات چاپ سرور"}
+              </option>
+              {(printersQ.data ?? []).map((p) => (
+                <option key={p.name} value={p.name}>
+                  {p.name}
+                  {p.isDefault ? " (پیش‌فرض)" : ""}
+                  {p.source === "server" ? " · سرور" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          {!isDesktop() ? (
+            <div className="flex items-center gap-2">
+              <span className="w-20 shrink-0 text-muted-foreground">IP شبکه</span>
+              <Input
+                dir="ltr"
+                className="h-8"
+                placeholder="مثلاً 192.168.1.50"
+                value={printerHost}
+                onChange={(e) => setPrinterHost(e.target.value)}
+              />
+            </div>
+          ) : null}
+          {locDirectErr || locRollErr || directErr ? (
+            <p className="text-destructive sm:col-span-2">
+              {locDirectErr ?? locRollErr ?? directErr}
+            </p>
+          ) : null}
+        </div>
 
         {/* تنظیمات چاپِ محصول (PDF باکیفیت سمت سرور) */}
         {mode === "product" ? (
@@ -1127,21 +1140,6 @@ export function LabelPrintDialog({
             {printErr ? (
               <div className="text-xs text-destructive sm:col-span-2">{printErr}</div>
             ) : null}
-            {directErr ? (
-              <div className="text-xs text-destructive sm:col-span-2">{directErr}</div>
-            ) : null}
-            {!isDesktop() ? (
-              <div className="text-xs text-muted-foreground sm:col-span-2">
-                چاپ مستقیم روی پرینتر حرارتی فقط از داخل اپ فروشنده (برنامهٔ
-                ویندوز) در دسترس است.
-              </div>
-            ) : null}
-            <div className="rounded-md border border-dashed bg-background p-2 text-xs text-muted-foreground sm:col-span-2">
-              <span className="font-semibold text-foreground">رول حرارتی:</span>{" "}
-              «دانلود PDF رول» فایلی می‌دهد که هر صفحه‌اش دقیقاً یک تکه‌ی رول است
-              ({toFa(Math.floor(((settingsQ.data?.mediaWidthMm ?? settingsQ.data?.widthMm) ?? 50) / (settingsQ.data?.widthMm ?? 50)))} لیبل
-              کنار هم) — برای چاپ: Scale=100% و بدون هدر/فوتر.
-            </div>
           </div>
         ) : null}
 
@@ -1186,7 +1184,7 @@ export function LabelPrintDialog({
                 <LocationLabelCard
                   key={l.id}
                   label={l}
-                  preset={sizePreset}
+                  preset={locPreviewPreset}
                 />
               ))}
             </div>
@@ -1213,7 +1211,7 @@ export function LabelPrintDialog({
           </Button>
           {mode === "product" ? (
             <React.Fragment>
-              {isDesktop() && !isAllStock ? (
+              {!isAllStock ? (
                 <Button
                   onClick={handleDirectPrint}
                   disabled={directPrinting || !hasLabels}
@@ -1223,24 +1221,16 @@ export function LabelPrintDialog({
                   ) : (
                     <Printer className="h-4 w-4" />
                   )}
-                  چاپ مستقیم (حرارتی)
+                  چاپ مستقیم روی پرینتر
                 </Button>
               ) : null}
               <Button
-                onClick={handlePdfPrint}
-                disabled={printing || (!isAllStock && stableIds.length === 0)}
-              >
-                {printing ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Printer className="h-4 w-4" />
-                )}
-                چاپ PDF (کیفیت بالا)
-              </Button>
-              <Button
                 variant="outline"
                 onClick={handleRollDownload}
-                disabled={rollPrinting || (mode === "product" && !isAllStock && stableIds.length === 0)}
+                disabled={
+                  rollPrinting ||
+                  (!isAllStock && stableIds.length === 0)
+                }
               >
                 {rollPrinting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1249,22 +1239,32 @@ export function LabelPrintDialog({
                 )}
                 دانلود PDF رول
               </Button>
+              <Button
+                variant="ghost"
+                onClick={handlePdfPrint}
+                disabled={printing || (!isAllStock && stableIds.length === 0)}
+              >
+                {printing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                PDF برگه‌ای (A4)
+              </Button>
             </React.Fragment>
-          ) : isHalfSheet ? (
+          ) : (
             <React.Fragment>
-              {isDesktop() ? (
-                <Button
-                  onClick={handleLocationDirectPrint}
-                  disabled={locDirectPrinting || !hasLabels}
-                >
-                  {locDirectPrinting ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Printer className="h-4 w-4" />
-                  )}
-                  چاپ مستقیم (حرارتی)
-                </Button>
-              ) : null}
+              <Button
+                onClick={handleLocationDirectPrint}
+                disabled={locDirectPrinting || !hasLabels}
+              >
+                {locDirectPrinting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Printer className="h-4 w-4" />
+                )}
+                چاپ مستقیم روی پرینتر
+              </Button>
               <Button
                 variant="outline"
                 onClick={handleLocationRollDownload}
@@ -1278,29 +1278,20 @@ export function LabelPrintDialog({
                 دانلود PDF رول
               </Button>
               <Button
+                variant="ghost"
                 onClick={handleHalfSheetPrint}
-                disabled={halfSheetPrinting || isLoading || isError || !hasLabels}
+                disabled={
+                  halfSheetPrinting || isLoading || isError || !hasLabels
+                }
               >
                 {halfSheetPrinting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Printer className="h-4 w-4" />
                 )}
-                چاپ نیم‌برگ
+                نیم‌برگ A5
               </Button>
             </React.Fragment>
-          ) : (
-            <Button
-              onClick={handlePrint}
-              disabled={isLoading || isError || !hasLabels}
-            >
-              {isLoading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Printer className="h-4 w-4" />
-              )}
-              چاپ
-            </Button>
           )}
         </DialogFooter>
       </DialogContent>

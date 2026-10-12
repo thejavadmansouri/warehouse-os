@@ -52,6 +52,8 @@ export function buildProductTsplPayload(
       ? size.mediaWidthMm
       : size.widthMm;
   const cols = Math.max(1, Math.floor(mediaWidth / size.widthMm));
+  /** تقسیم مساوی مثل رول قفسه — سلول‌ها روی ستون‌های die-cut می‌نشینند. */
+  const cellDots = Math.floor((mediaWidth * DOTS_PER_MM) / cols);
 
   const nameTop = mm(1.5);
   const nameHeightDots = Math.round(7 * DOTS_PER_MM);
@@ -87,15 +89,16 @@ export function buildProductTsplPayload(
     const row = queue.slice(start, start + cols);
     parts.push("CLS\r\n");
     row.forEach((label, slot) => {
-      const xOffset = slot * wDots;
+      const xOffset = slot * cellDots;
       const name = renderNameBitmap(label.name, maxNameWidth, nameHeightDots);
       parts.push(bitmapCommand(xOffset + mm(2), nameTop, name));
       // 2 = متن زیر بارکد وسط‌چین — همان پارامترهای نسخه‌ی سرور.
+      // بدون پارامتر alignment؛ با آن بارکد وسطِ کل عرض رول می‌افتد.
       parts.push(
         `BARCODE ${xOffset + mm(2)},${barcodeTop},"128",${Math.max(
           barcodeHeightDots,
           40,
-        )},2,0,2,2,2,"${escapeTspl(label.barcode)}"\r\n`,
+        )},2,0,2,2,"${escapeTspl(label.barcode)}"\r\n`,
       );
     });
     parts.push("PRINT 1,1\r\n");
@@ -245,40 +248,40 @@ function escapeTspl(v: string): string {
 export interface TsplLocationLabel {
   /** کیوآرِ قفسه — data:image/png;base64 (همان که لیبلِ bulk می‌دهد). */
   qrCode: string;
-  /** کدِ موقعیت (لاتین، خودِ پرینتر می‌نویسد). */
+  /** کد موقعیت — پشتیبان اگر shortNum نبود. */
   code: string;
-  /** آدرسِ کامل (فارسی، بیت‌مپ می‌شود). */
-  pathText: string;
+  /** عدد درشت کنار QR (مثل 100200_big). */
+  shortNum?: string;
+  /** آدرس کامل — در چیدمان رول جدید استفاده نمی‌شود. */
+  pathText?: string;
 }
 
 /**
  * بایت‌های خام TSPL برای چاپ لیبلِ **قفسه** روی رول حرارتی.
  *
- * چیدمانِ هر لیبل «کیوآر-محور» است (همان زبانِ نسخهٔ PDF): کیوآرِ بزرگِ
- * قابلِ اسکن با موبایل یک طرف، کدِ درشتِ لاتین + آدرسِ بیت‌مپِ فارسی طرفِ
- * دیگر. رولِ دوستونه (مثلاً ۱۰۵ با لیبل ۵۱) مثل کالا دو لیبل کنار هم می‌چیند.
- *
- * کیوآر که از سرور به‌صورت data URL می‌رسد با canvas به بیت‌مپِ تک‌بیتیِ
- * سیاه/سفید تبدیل می‌شود — threshold روی کانال آلفا، چون PNG شفاف دارد.
+ * چیدمان مثل 100200_big / PDF رول: QR چپ + عدد درشت راست.
+ * عرض رول (معمولاً ۱۰۰mm) ÷ عرض برچسب = تعداد ستون؛ GAP فاصلهٔ فیزیکی برچسب‌هاست.
  */
 export async function buildLocationTsplPayload(
   labels: TsplLocationLabel[],
   size: TsplLabelSize,
 ): Promise<Uint8Array> {
-  const wDots = Math.round(size.widthMm * DOTS_PER_MM);
   const hDots = Math.round(size.heightMm * DOTS_PER_MM);
   const mediaWidth =
     size.mediaWidthMm && size.mediaWidthMm >= size.widthMm
       ? size.mediaWidthMm
-      : size.widthMm;
+      : 104;
   const cols = Math.max(1, Math.floor(mediaWidth / size.widthMm));
+  // تقسیم مساوی مثل 100200_big
+  const cellDots = Math.floor((mediaWidth * DOTS_PER_MM) / cols);
+  const wDots = cellDots;
 
-  const pad = mm(1.5);
-  const qrDots = Math.max(24, hDots - pad * 2);
-  // کدِ لاتین: فونت ۴ (تقریباً ۳۲ نقطه بلند) — بلندترین فونتِ داخلیِ TSC.
-  const codeFontH = 32;
-  const pathTop = pad + codeFontH + mm(0.8);
-  const pathH = Math.max(16, hDots - pathTop - pad);
+  const pad = mm(2.2);
+  const gap = mm(2);
+  const qrDots = Math.max(
+    24,
+    Math.min(hDots - pad * 2, Math.min(mm(19), Math.round(wDots * 0.55))),
+  );
 
   const parts: (string | Uint8Array)[] = [
     `SIZE ${mediaWidth} mm,${size.heightMm} mm\r\n`,
@@ -292,22 +295,19 @@ export async function buildLocationTsplPayload(
     parts.push("CLS\r\n");
     for (let slot = 0; slot < row.length; slot++) {
       const l = row[slot]!;
-      const xOffset = slot * wDots;
+      const xOffset = slot * cellDots;
       const qr = await renderQrBitmapAsync(l.qrCode, qrDots);
       if (qr) {
         parts.push(bitmapCommand(xOffset + pad, pad, qr));
       }
-      // متنِ آدرس بیت‌مپ می‌شود (فارسی است)؛ خودش پایینِ ستونِ متن می‌نشیند.
-      const textX = xOffset + pad + qrDots + mm(1.2);
-      const textW = Math.max(40, wDots - pad * 2 - qrDots - mm(1.2));
-      const path = renderPathBitmap(l.pathText, textW, pathH);
-      if (path) {
-        parts.push(bitmapCommand(textX, pathTop, path));
+      const num = (l.shortNum || l.code || "").trim() || "?";
+      const textX = xOffset + pad + qrDots + gap;
+      const textW = Math.max(32, wDots - pad * 2 - qrDots - gap);
+      const textH = Math.max(24, hDots - pad * 2);
+      const numBmp = renderBigNumberBitmap(num, textW, textH);
+      if (numBmp) {
+        parts.push(bitmapCommand(textX, pad, numBmp));
       }
-      // کدِ موقعیت با فونت داخلی پرینتر — همیشه تیز و خوانا.
-      parts.push(
-        `TEXT ${textX},${pad},"4",0,1,1,2,"${escapeTspl(l.code)}"\r\n`,
-      );
     }
     parts.push("PRINT 1,1\r\n");
   }
@@ -353,6 +353,46 @@ async function renderQrBitmapAsync(
   } catch {
     return null;
   }
+}
+
+/**
+ * عدد درشت لاتین کنار QR — بیت‌مپ، تا روی لیبل‌های کوچک هم خوانا بماند.
+ */
+function renderBigNumberBitmap(
+  text: string,
+  maxWidth: number,
+  maxHeight: number,
+): { widthBytes: number; height: number; data: Uint8Array } | null {
+  if (!text || !text.trim()) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, maxWidth);
+  canvas.height = Math.max(1, maxHeight);
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#000";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  let size = Math.floor(maxHeight * 0.92);
+  ctx.font = `800 ${size}px Arial, Helvetica, sans-serif`;
+  while (size > 10 && ctx.measureText(text).width > maxWidth * 0.95) {
+    size -= 1;
+    ctx.font = `800 ${size}px Arial, Helvetica, sans-serif`;
+  }
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2 + size * 0.04);
+  const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+  const widthBytes = Math.ceil(canvas.width / 8);
+  const out = new Uint8Array(widthBytes * canvas.height).fill(0xff);
+  for (let y = 0; y < canvas.height; y++) {
+    for (let x = 0; x < canvas.width; x++) {
+      const i = (y * canvas.width + x) * 4;
+      if (imgData[i]! < 128) {
+        const byteIndex = y * widthBytes + (x >> 3);
+        out[byteIndex]! &= ~(0x80 >> (x & 7));
+      }
+    }
+  }
+  return { widthBytes, height: canvas.height, data: out };
 }
 
 /**

@@ -26,6 +26,13 @@ export class LabelsController {
     private readonly products: ProductsService,
   ) {}
 
+  /** خود موقعیت + همهٔ زیرمجموعه‌های فعال — برای چاپ کامل / انتخابی. */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Get('location/:id/subtree')
+  printableSubtree(@Param('id') id: string) {
+    return this.service.listPrintableSubtree(id);
+  }
+
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Get('location/:id')
   locationLabel(@Param('id') id: string) {
@@ -73,10 +80,7 @@ export class LabelsController {
     const html = await this.service.rollLabelsPdf(dto.items ?? null, {
       widthMm: dto.widthMm ?? saved.widthMm,
       heightMm: dto.heightMm ?? saved.heightMm,
-      mediaWidthMm:
-        dto.mediaWidthMm ??
-        (saved as { mediaWidthMm?: number | null }).mediaWidthMm ??
-        null,
+      mediaWidthMm: 104,
       showName: dto.showName ?? saved.showName,
       showBarcodeText: dto.showBarcodeText ?? saved.showBarcodeText,
       footerText: dto.footerText ?? saved.footerText ?? undefined,
@@ -165,16 +169,18 @@ export class LabelsController {
     @Res() res: Response,
   ) {
     const saved = await this.service.getSettings();
-    const html = await this.service.rollLocationLabelsPdf(dto.ids ?? [], {
+    const pdf = await this.service.rollLocationLabelsPdf(dto.ids ?? [], {
       widthMm: dto.widthMm ?? saved.widthMm,
       heightMm: dto.heightMm ?? saved.heightMm,
-      mediaWidthMm:
-        dto.mediaWidthMm ??
-        (saved as { mediaWidthMm?: number | null }).mediaWidthMm ??
-        null,
+      // مثل 100200_big — عرض تکهٔ رول اثبات‌شده روی مغازه
+      mediaWidthMm: 104,
     });
-    res.set({ 'Content-Type': 'text/html; charset=utf-8' });
-    res.send(html);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="kardo-roll-locations.pdf"',
+      'Content-Length': String(pdf.length),
+    });
+    res.send(pdf);
   }
 
   @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
@@ -299,14 +305,54 @@ export class LabelsController {
     res.send(html);
   }
 
-  /** چاپ مستقیم لیبل کالا روی پرینتر حرارتیِ وصل به همین سرور. */
-  @Roles(Role.ADMIN, Role.MANAGER)
+  /** فهرست پرینترهای سیستمِ سرور (برای انتخاب در مرورگر). */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Get('printers')
+  listPrinters() {
+    return this.service.listPrinters();
+  }
+
+  /** چاپ مستقیم لیبل کالا روی پرینتر حرارتیِ وصل به سرور / شبکه. */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
   @Post('product/print-direct')
-  printProductDirect(@Body() dto: { productIds: string[]; copies?: number }) {
+  printProductDirect(
+    @Body()
+    dto: {
+      productIds: string[];
+      copies?: number;
+      printerName?: string | null;
+      printerHost?: string | null;
+      printerPort?: number | null;
+    },
+  ) {
     return this.service.printProductLabelsDirect(
       dto?.productIds ?? [],
       dto?.copies ?? 1,
+      {
+        printerName: dto?.printerName,
+        printerHost: dto?.printerHost,
+        printerPort: dto?.printerPort,
+      },
     );
+  }
+
+  /** چاپ مستقیم لیبل قفسه (TSPL رول) روی پرینتر سرور / شبکه. */
+  @Roles(Role.ADMIN, Role.MANAGER, Role.STAFF)
+  @Post('location/print-direct')
+  printLocationDirect(
+    @Body()
+    dto: {
+      ids: string[];
+      printerName?: string | null;
+      printerHost?: string | null;
+      printerPort?: number | null;
+    },
+  ) {
+    return this.service.printLocationLabelsDirect(dto?.ids ?? [], {
+      printerName: dto?.printerName,
+      printerHost: dto?.printerHost,
+      printerPort: dto?.printerPort,
+    });
   }
 
   // تنظیمات چاپ — فقط مدیر؛ نباید هر کاربرِ لاگین‌شده (حتی STAFF) عوضش کند.
@@ -329,8 +375,10 @@ export class LabelsController {
       showBarcodeText?: boolean;
       cropMarks?: boolean;
       footerText?: string;
-      /** عرض فیزیکی رول؛ بزرگ‌تر از widthMm = چند لیبل کنار هم. */
       mediaWidthMm?: number | null;
+      printerName?: string | null;
+      printerHost?: string | null;
+      printerPort?: number | null;
     },
   ) {
     return this.service.updateSettings(dto);
