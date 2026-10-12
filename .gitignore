@@ -92,3 +92,6 @@ options/
 
 # ── بستهٔ مستقل CLI پرایسما که کیت آپدیت حمل میکند (خروجی npm، tools/build-prisma-cli-kit.ps1 آن را میسازد) ──
 tools/prisma-cli-kit/node_modules/
+
+# ── لاگ ران‌تایم API (دامپ دیباگ چاپ لیبل) — خراش محلی ماشین، نه سورس ──
+apps/api/logs/
