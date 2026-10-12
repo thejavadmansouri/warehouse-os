@@ -33,8 +33,8 @@ describe('ImageProcessService (putaway photo pipeline)', () => {
 
   it('emits three WebP sizes on square white canvases', async () => {
     const set = await service.processImage(photo, null);
-    expect(set.master.format).toBe('webp');
-    expect([set.master.width, set.master.height]).toEqual([1200, 1200]);
+    expect(set.master!.format).toBe('webp');
+    expect([set.master!.width, set.master!.height]).toEqual([1200, 1200]);
     expect([set.product.width, set.product.height]).toEqual([800, 800]);
     expect([set.thumbnail.width, set.thumbnail.height]).toEqual([300, 300]);
     // White canvas corner, blue product centre — the pipeline signature.
@@ -62,9 +62,9 @@ describe('ImageProcessService (putaway photo pipeline)', () => {
     // Same source, same sizes — only the watermark differs.
     expect(marked.product.width).toBe(plain.product.width);
     expect(marked.product.buffer.equals(plain.product.buffer)).toBe(false);
-    expect(marked.master.buffer.equals(plain.master.buffer)).toBe(false);
+    expect(marked.master!.buffer.equals(plain.master!.buffer)).toBe(false);
     // parseable WebP either way
-    for (const img of [marked.master, marked.product, marked.thumbnail]) {
+    for (const img of [marked.master!, marked.product, marked.thumbnail]) {
       const meta = await sharp(img.buffer).metadata();
       expect(meta.format).toBe('webp');
     }
@@ -86,6 +86,15 @@ describe('ImageProcessService (putaway photo pipeline)', () => {
     });
     expect(b.product.buffer.equals(a.product.buffer)).toBe(true);
     expect(c.product.buffer.equals(a.product.buffer)).toBe(true);
+  });
+
+  it('skips the 1200px master on request (the promote path never stores it)', async () => {
+    const set = await service.processImage(photo, null, {
+      includeMaster: false,
+    });
+    expect(set.master).toBeUndefined();
+    expect([set.product.width, set.product.height]).toEqual([800, 800]);
+    expect([set.thumbnail.width, set.thumbnail.height]).toEqual([300, 300]);
   });
 
   it('builds a stable latin SEO slug from a Persian name', () => {

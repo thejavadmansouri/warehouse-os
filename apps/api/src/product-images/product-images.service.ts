@@ -256,6 +256,8 @@ export class ProductImagesService {
         try {
           const processed = await this.processService.processImage(
             downloaded.buffer,
+            null,
+            { includeMaster: false },
           );
           const processedFileName = `processed-${downloaded.sha256.slice(0, 12)}.webp`;
           const processedLocalPath = join(
@@ -1174,7 +1176,7 @@ export class ProductImagesService {
           text: wm.text,
           opacity: wm.opacity,
           position: wm.position,
-        });
+        }, { includeMaster: false });
 
         const suffix = assets.length > 1 ? `-${i + 1}` : '';
         const stamp = Date.now().toString(36);

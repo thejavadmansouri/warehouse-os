@@ -12,7 +12,8 @@ export interface ProcessedImage {
 }
 
 export interface ProcessedImageSet {
-  master: ProcessedImage; // Max 1200x1200
+  /** Max 1200x1200. Absent when processed with { includeMaster: false }. */
+  master?: ProcessedImage;
   product: ProcessedImage; // Max 800x800
   thumbnail: ProcessedImage; // Max 300x300
 }
@@ -54,6 +55,9 @@ export class ImageProcessService {
   async processImage(
     inputBuffer: Buffer,
     watermark?: WatermarkOptions | null,
+    /** { includeMaster: false } skips the 1200px render — both production
+     * callers store only product + thumbnail, so the master was pure CPU. */
+    opts?: { includeMaster?: boolean },
   ): Promise<ProcessedImageSet> {
     // Validate image is processable
     const metadata = await sharp(inputBuffer).metadata();
@@ -61,21 +65,23 @@ export class ImageProcessService {
       throw new Error('Could not read image dimensions');
     }
 
-    // Process all three sizes in parallel
+    const wantMaster = opts?.includeMaster !== false;
+    // Process the needed sizes in parallel
     const [masterRaw, productRaw, thumbnail] = await Promise.all([
-      this.resizeToSize(inputBuffer, MASTER_MAX),
+      wantMaster
+        ? this.resizeToSize(inputBuffer, MASTER_MAX)
+        : Promise.resolve(null),
       this.resizeToSize(inputBuffer, PRODUCT_MAX),
       this.resizeToSize(inputBuffer, THUMB_MAX),
     ]);
 
+    const applyMark = async (img: ProcessedImage) =>
+      watermark?.enabled && watermark.text.trim()
+        ? this.withWatermark(img, watermark)
+        : img;
     const master =
-      watermark?.enabled && watermark.text.trim()
-        ? await this.withWatermark(masterRaw, watermark)
-        : masterRaw;
-    const product =
-      watermark?.enabled && watermark.text.trim()
-        ? await this.withWatermark(productRaw, watermark)
-        : productRaw;
+      masterRaw != null ? await applyMark(masterRaw) : undefined;
+    const product = await applyMark(productRaw);
 
     return { master, product, thumbnail };
   }
