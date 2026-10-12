@@ -9,7 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { Throttle } from '@nestjs/throttler';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 import { Public } from '../auth/decorators/public.decorator';
 import { CurrentCustomer, CustomerAuthGuard } from './customer-token';
@@ -41,6 +41,10 @@ import { PreviewCouponDto } from './dto/preview-coupon.dto';
  */
 @Public()
 @Controller('shop')
+// `@Throttle` بدون این guard هیچ اثری ندارد (دقیقاً همان‌طور که روی
+// auth.controller ثبت شده). سقف پیش‌فرض ThrottlerModule: ۱۲۰ درخواست در دقیقه؛
+// مسیرهای OTP اینجا زیرشان `@Throttle` سخت‌گیرانه‌تر دارند.
+@UseGuards(ThrottlerGuard)
 export class StorefrontController {
   constructor(
     private readonly catalog: StorefrontCatalogService,
