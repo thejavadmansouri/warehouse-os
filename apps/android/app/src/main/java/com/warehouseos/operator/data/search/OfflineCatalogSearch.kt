@@ -3,21 +3,10 @@ package com.warehouseos.operator.data.search
 import com.warehouseos.operator.data.local.CatalogProductEntity
 
 /**
- * In-memory ranked search over the offline catalog — a faithful port of the
- * server's POS pipeline (`rankIds` → byTokens → bySubstring → one-less):
- *
- *  1. exact code (sku / partNumber / barcode)
- *  2. full token-set containment (every query token in searchTokens)
- *  3. substring match on the joined token text
- *  4. one-less: drop each token in turn and retry substring
- *
- * Result order and limits match the web POS (100 max, substring stage runs
- * while results < 20).
- *
- * Speed: the token/barcode strings are split ONCE per query into [Indexed]
- * (the split per comparison was the dominant cost — 33k rows × several stages
- * × per-token re-splitting). The comparisons themselves are unchanged, so the
- * ranking is byte-for-byte the same as before.
+ * In-memory ranked search — POS pipeline port, kept **light** for low-RAM phones
+ * (A12-class). No inverted postings map: that doubled heap and killed the process
+ * on first «بررسی و ادامه». Speed comes from pre-normalized [Indexed] + filtering
+ * substring stage by the longest query token.
  */
 object OfflineCatalogSearch {
 
@@ -25,12 +14,9 @@ object OfflineCatalogSearch {
     private const val SUBSTRING_THRESHOLD = 20
 
     /** Builds the reusable index. Do this once per catalog load, never per query. */
-    fun index(products: List<CatalogProductEntity>): List<Indexed> = products.map { Indexed(it) }
+    fun index(products: List<CatalogProductEntity>): List<Indexed> =
+        products.map { Indexed(it) }
 
-    /**
-     * Convenience for callers that hold raw rows (tests). Indexes on every call,
-     * so never use it on a hot path — [index] once and call [search] instead.
-     */
     fun search(products: List<CatalogProductEntity>, query: String): List<CatalogProductEntity> =
         search(index(products), query)
 
@@ -52,12 +38,10 @@ object OfflineCatalogSearch {
             }
         }
 
-        // 1) exact code — sku / partNumber / barcode
+        // 1) exact code
         push(
             indexed.filter { ix ->
-                ix.p.sku == q ||
-                    ix.p.partNumber == q ||
-                    ix.barcodes.contains(q)
+                ix.skuNorm == q || ix.partNorm == q || ix.barcodes.contains(q)
             },
             MAX_RESULTS,
         )
@@ -65,11 +49,10 @@ object OfflineCatalogSearch {
         // 2) full token-set containment
         push(byTokens(indexed, tokens), MAX_RESULTS)
 
-        // 3) substring — generous threshold like the server
+        // 3) substring — فقط ردیف‌هایی که توکنِ بلند کوئری را دارند
         if (out.size < SUBSTRING_THRESHOLD) {
             push(bySubstring(indexed, tokens), MAX_RESULTS)
 
-            // 4) one-less — an extra/wrong word must not zero the result
             if (out.size < SUBSTRING_THRESHOLD && tokens.size >= 2) {
                 for (skip in tokens.indices) {
                     if (out.size >= MAX_RESULTS) break
@@ -83,25 +66,27 @@ object OfflineCatalogSearch {
     }
 
     /**
-     * Pre-split token/barcode fields.
-     *
-     * Built once per catalog load and reused for every keystroke. Rebuilding it
-     * per query meant ~50k string splits + set/string allocations on every letter
-     * typed, which is the single most expensive thing the worker app did.
+     * Pre-split + normalized once per catalog load.
+     * آ→ا اینجا اعمال می‌شود تا کاتالوگ قدیمی بدون دانلود دوباره درست match شود.
      */
     class Indexed(val p: CatalogProductEntity) {
-        private val tokenList: List<String> = p.tokenList()
-        val tokens: Set<String> = tokenList.toSet()
+        private val tokenList: List<String> =
+            p.tokenList()
+                .map { PersianText.normalize(it) }
+                .filter { it.length > 1 }
+
+        val tokens: Set<String> = tokenList.toHashSet()
         val joined: String = tokenList.joinToString(" ")
-        val barcodes: Set<String> = p.barcodeList().toSet()
+        val barcodes: Set<String> =
+            p.barcodeList().mapNotNull {
+                PersianText.normalize(it).takeIf { n -> n.isNotEmpty() }
+            }.toHashSet()
+        val skuNorm: String = PersianText.normalize(p.sku)
+        val partNorm: String = PersianText.normalize(p.partNumber)
         val tokenCount: Int = tokenList.size
     }
 
-    /** Full containment: every query token must be among the product's tokens. */
-    private fun byTokens(
-        indexed: List<Indexed>,
-        tokens: List<String>,
-    ): List<Indexed> {
+    private fun byTokens(indexed: List<Indexed>, tokens: List<String>): List<Indexed> {
         val joined = tokens.joinToString(" ")
         return indexed
             .filter { ix -> tokens.all { ix.tokens.contains(it) } }
@@ -114,17 +99,15 @@ object OfflineCatalogSearch {
             )
     }
 
-    /** Every token must be a substring of the joined token text, ranked by score. */
-    private fun bySubstring(
-        indexed: List<Indexed>,
-        tokens: List<String>,
-    ): List<Indexed> {
-        return indexed
+    private fun bySubstring(indexed: List<Indexed>, tokens: List<String>): List<Indexed> {
+        val key = tokens.maxByOrNull { it.length } ?: return emptyList()
+        // فیلتر ارزان: فقط کسانی که توکنِ بلند را دارند اسکن کامل می‌شوند
+        val pool = indexed.asSequence().filter { it.joined.contains(key) }
+        return pool
             .mapNotNull { ix ->
                 val txt = ix.joined
                 if (!tokens.all { txt.contains(it) }) return@mapNotNull null
-                val score = score(txt, tokens)
-                ScoreRow(ix, score, txt)
+                ScoreRow(ix, score(txt, tokens))
             }
             .sortedWith(
                 compareByDescending<ScoreRow> { it.score }
@@ -132,31 +115,26 @@ object OfflineCatalogSearch {
                     .thenBy { it.ix.p.name.length },
             )
             .map { it.ix }
+            .toList()
     }
 
     private fun score(txt: String, tokens: List<String>): Int {
         var s = 0
         for (t in tokens) {
             s += when {
-                txt.startsWith(t) -> 3 // prefix of the whole joined text
-                txt.contains(" $t") -> 2 // whole-word match
+                txt.startsWith(t) -> 3
+                txt.contains(" $t") -> 2
                 else -> 1
             }
         }
-        // tokens must appear in order (meaningless for a single token)
         if (tokens.size >= 2) {
             val ordered = (0 until tokens.size - 1).all { i ->
                 txt.indexOf(tokens[i]) < txt.indexOf(tokens[i + 1])
             }
             if (ordered) s += 5
         }
-        // NB: server adds +2 for having stock — unknown offline, intentionally omitted.
         return s
     }
 
-    private data class ScoreRow(
-        val ix: Indexed,
-        val score: Int,
-        @Suppress("unused") val txt: String,
-    )
+    private data class ScoreRow(val ix: Indexed, val score: Int)
 }

@@ -109,6 +109,30 @@ class FakeCatalogDao : CatalogDao {
 
     override suspend fun getAll(): List<CatalogProductEntity> = rows.values.toList()
 
+    override suspend fun candidates(
+        token: String,
+        raw: String,
+        limit: Int,
+    ): List<CatalogProductEntity> =
+        rows.values
+            .filter { !it.deleted }
+            .filter {
+                it.searchTokens.contains(token) ||
+                    it.name.contains(token) ||
+                    it.sku == raw ||
+                    it.partNumber == raw ||
+                    it.barcodes.contains(token)
+            }
+            .take(limit)
+
+    override suspend fun byBarcode(code: String): List<CatalogProductEntity> =
+        rows.values
+            .filter { !it.deleted }
+            .filter { row ->
+                row.barcodeList().any { it == code }
+            }
+            .take(5)
+
     override suspend fun byId(id: String): CatalogProductEntity? = rows[id]
 
     override suspend fun bySku(sku: String): CatalogProductEntity? =

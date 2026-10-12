@@ -49,6 +49,22 @@ class OfflineCatalogSearchTest {
         assertEquals("123", PersianText.normalize("۱۲۳"))
         // ZWNJ → space
         assertEquals("میز کار", PersianText.normalize("میز\u200Cکار"))
+        // آ / أ / إ → ا  (ارم ≈ آرم، اراد ≈ آراد)
+        assertEquals("ارم جلو پنجره اراد پارت", PersianText.normalize("آرم جلو پنجره آراد پارت"))
+        assertEquals(PersianText.normalize("آرم"), PersianText.normalize("ارم"))
+    }
+
+    @Test
+    fun `alef madda does not block product match`() {
+        val withAlef = catalog + product(
+            "6",
+            "آرم جلو پنجره آراد پارت",
+            "SKU-600",
+            brand = "آراد",
+        )
+        val hits = OfflineCatalogSearch.search(withAlef, "ارم جلو پنجره اراد پارت")
+        assertTrue(hits.isNotEmpty())
+        assertEquals("6", hits.first().id)
     }
 
     @Test

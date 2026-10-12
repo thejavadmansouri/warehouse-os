@@ -76,7 +76,7 @@ fun BlankQuoteScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("پیش‌فاکتور سفید", fontWeight = FontWeight.Bold) },
+                title = { Text("فاکتور سفید", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "بازگشت")

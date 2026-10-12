@@ -79,7 +79,15 @@ fun NewProductRequestScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.done) "درخواست ثبت شد" else "افزودن کالای جدید") },
+                title = {
+                    Text(
+                        when {
+                            !state.done -> "افزودن کالای جدید"
+                            state.commitsDirectly -> "کالا ثبت شد"
+                            else -> "درخواست ثبت شد"
+                        },
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "بازگشت")
@@ -92,7 +100,14 @@ fun NewProductRequestScreen(
         },
     ) { padding ->
         if (state.done) {
-            SuccessContent(name = state.name, quantity = state.quantity, unit = state.unit, onNext = onDone, padding = padding)
+            SuccessContent(
+                name = state.name,
+                quantity = state.quantity,
+                unit = state.unit,
+                commitsDirectly = state.commitsDirectly,
+                onNext = onDone,
+                padding = padding,
+            )
             return@Scaffold
         }
 
@@ -299,6 +314,7 @@ private fun SuccessContent(
     name: String,
     quantity: Int,
     unit: String,
+    commitsDirectly: Boolean,
     onNext: () -> Unit,
     padding: androidx.compose.foundation.layout.PaddingValues,
 ) {
@@ -317,7 +333,7 @@ private fun SuccessContent(
             modifier = Modifier.size(80.dp),
         )
         Text(
-            text = "درخواست ثبت شد",
+            text = if (commitsDirectly) "کالا ثبت شد" else "درخواست ثبت شد",
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(top = Dimens.gap),
         )
@@ -328,7 +344,11 @@ private fun SuccessContent(
             modifier = Modifier.padding(top = Dimens.gapSmall),
         )
         Text(
-            text = "اطلاعات کالا برای بررسی مدیر ارسال شد. پس از تأیید، کالا در سیستم ثبت خواهد شد.",
+            text = if (commitsDirectly) {
+                "کد یکتا ساخته شد، موجودی ثبت شد و لیبل در صف چاپ PC است."
+            } else {
+                "اطلاعات کالا برای بررسی مدیر ارسال شد. پس از تأیید، کالا در سیستم ثبت خواهد شد."
+            },
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,

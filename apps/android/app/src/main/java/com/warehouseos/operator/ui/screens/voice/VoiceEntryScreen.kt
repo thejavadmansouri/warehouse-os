@@ -1,18 +1,17 @@
 package com.warehouseos.operator.ui.screens.voice
 
 import android.Manifest
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -23,7 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddAPhoto
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -50,15 +49,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.style.TextAlign
@@ -73,11 +70,12 @@ import com.warehouseos.operator.ui.components.Dimens
 import com.warehouseos.operator.ui.components.KeepScreenOn
 import com.warehouseos.operator.ui.components.PrimaryButton
 import com.warehouseos.operator.ui.components.SecondaryButton
-import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
 import com.warehouseos.operator.ui.components.StatusBanner
 import com.warehouseos.operator.ui.components.faNum
 import com.warehouseos.operator.ui.components.rememberOperatorTones
 import com.warehouseos.operator.ui.navigation.NewProductPrefill
+import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
+import kotlinx.coroutines.delay
 
 /**
  * Voice stock-in (propose → confirm), the screen a worker lives in all day.
@@ -105,15 +103,11 @@ fun VoiceEntryScreen(
     val haptic = LocalHapticFeedback.current
     val tones = rememberOperatorTones()
 
-    // The operator speaks with a box in their hands; the screen must not sleep.
     KeepScreenOn()
 
-    val takePhoto = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
-        viewModel.onPhotoCaptured(saved)
-    }
-    val launchCamera = {
+    fun openCamera(forEntryId: String? = null) {
         if (cameraPermission.status.isGranted) {
-            takePhoto.launch(viewModel.prepareCapture())
+            viewModel.openCamera(forEntryId)
         } else {
             cameraPermission.launchPermissionRequest()
         }
@@ -121,34 +115,51 @@ fun VoiceEntryScreen(
 
     fun prefill(nameOverride: String?) = NewProductPrefill(
         barcode = viewModel.barcode,
-        // Never fall back to the raw transcript here — it still has the quantity
-        // phrase in it (e.g. "۱۷۳ تا لنت پراید") and would duplicate the qty field
-        // below. The full transcript is preserved separately via `voice` for the
-        // manager to read, so leaving this blank when recognition fails is safe.
         name = nameOverride?.takeIf { it.isNotBlank() } ?: state.recognizedName,
         brand = state.recognizedBrand,
         vehicle = state.recognizedVehicle,
         qty = state.quantity,
         unit = state.unit ?: "عدد",
         voice = state.transcript,
-        // The box's own barcode, when it was scanned but matched nothing. Losing
-        // it here is what forced the same box to be identified again next time.
         productBarcode = state.unlinkedBarcode.orEmpty(),
     )
 
-    // Warm the speech engine as soon as the screen opens → the first mic tap is instant.
     LaunchedEffect(Unit) { viewModel.prewarmMic() }
 
     LaunchedEffect(state.lastSaved?.clientRequestId) {
         if (state.lastSaved != null) {
             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             tones.success()
+            // میکروفون فوری برای کالای بعدی — عکس اختیاری است و حلقه را قطع نمی‌کند.
+            if (micPermission.status.isGranted &&
+                state.phase == VoicePhase.INPUT &&
+                !state.capturingPhoto &&
+                !state.scanning
+            ) {
+                delay(250)
+                viewModel.startListening()
+            }
         }
     }
 
-    // Audible failure too: a silent error is the one the operator walks away from.
     LaunchedEffect(state.error) {
         if (state.error != null) tones.error()
+    }
+
+    if (state.capturingPhoto) {
+        val attachCount = state.attachingToEntryId?.let { id ->
+            state.shelfEntries.find { it.clientRequestId == id }?.photoCount
+                ?: state.lastSaved?.takeIf { it.clientRequestId == id }?.photoCount
+        }
+        StillCameraCapture(
+            photoCount = attachCount ?: state.photoPaths.size,
+            maxPhotos = VoiceEntryViewModel.MAX_PHOTOS,
+            onCaptured = viewModel::onCaptureFile,
+            onDone = viewModel::closeCamera,
+            createCaptureFile = viewModel::createCaptureFile,
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
     }
 
     Scaffold(
@@ -192,15 +203,12 @@ fun VoiceEntryScreen(
                     notice = saved,
                     onUndo = viewModel::undoLastSaved,
                     onDismiss = viewModel::dismissSavedNotice,
+                    onAddPhoto = { openCamera(saved.clientRequestId) },
                 )
             }
 
             when (state.phase) {
                 VoicePhase.INPUT -> if (state.scanning) {
-                    /*
-                     * سریع‌ترین راهِ ورود، وقتی جنس بارکد دارد: نه حرف‌زدن، نه
-                     * تایپ. بعد از بارکددارشدنِ انبار این مسیرِ اکثریت می‌شود.
-                     */
                     BarcodeStep(
                         cameraGranted = cameraPermission.status.isGranted,
                         onRequestCamera = { cameraPermission.launchPermissionRequest() },
@@ -225,8 +233,8 @@ fun VoiceEntryScreen(
                     state = state,
                     onInc = viewModel::incQuantity,
                     onDec = viewModel::decQuantity,
-                    onAddPhoto = launchCamera,
-                    onRemovePhoto = viewModel::removePhoto,
+                    onAddPhoto = { openCamera(null) },
+                    onRemovePhoto = viewModel::removePhotoAt,
                 )
 
                 VoicePhase.SELECT -> SelectStep(
@@ -251,28 +259,26 @@ fun VoiceEntryScreen(
             }
 
             state.error?.let { message ->
-                if (state.phase != VoicePhase.PREVIEWING) {
-                    StatusBanner(
-                        text = message,
-                        type = BannerType.Error,
-                        modifier = Modifier.padding(top = Dimens.gapLarge),
-                    )
-                }
+                StatusBanner(
+                    text = message,
+                    type = BannerType.Error,
+                    modifier = Modifier.padding(top = Dimens.gapLarge),
+                )
             }
 
-            ShelfEntryList(entries = state.shelfEntries)
+            ShelfEntryList(
+                entries = state.shelfEntries,
+                onAddPhoto = { id -> openCamera(id) },
+            )
         }
     }
 }
 
-/**
- * What this shelf visit has registered so far, newest first.
- *
- * Answers "did that one go through?" without leaving the screen — previously the
- * only way to check was to back out to another screen and lose the shelf context.
- */
 @Composable
-private fun ShelfEntryList(entries: List<SavedNotice>) {
+private fun ShelfEntryList(
+    entries: List<SavedNotice>,
+    onAddPhoto: (String) -> Unit,
+) {
     if (entries.isEmpty()) return
 
     val total = entries.sumOf { it.quantity }
@@ -301,15 +307,28 @@ private fun ShelfEntryList(entries: List<SavedNotice>) {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                if (entry.withPhoto) {
-                    Icon(
-                        imageVector = Icons.Filled.PhotoCamera,
-                        contentDescription = "با عکس",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .padding(end = Dimens.gapSmall)
-                            .size(16.dp),
-                    )
+                if (entry.photoCount > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.padding(end = Dimens.gapSmall),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.PhotoCamera,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = faNum(entry.photoCount),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 2.dp),
+                        )
+                    }
+                } else if (entry.undoResult == null) {
+                    TextButton(onClick = { onAddPhoto(entry.clientRequestId) }) {
+                        Text("عکس")
+                    }
                 }
                 Text(
                     text = faNum(entry.quantity),
@@ -321,7 +340,6 @@ private fun ShelfEntryList(entries: List<SavedNotice>) {
     }
 }
 
-/** Shelf identity stays visible at every step — the costliest mistake is the wrong shelf. */
 @Composable
 private fun ShelfTitle(barcode: String, pendingPhotos: Int) {
     Column {
@@ -331,7 +349,7 @@ private fun ShelfTitle(barcode: String, pendingPhotos: Int) {
         )
         if (pendingPhotos > 0) {
             Text(
-                text = "$pendingPhotos عکس در انتظار وای‌فای",
+                text = "${faNum(pendingPhotos)} عکس در انتظار وای‌فای",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -339,10 +357,6 @@ private fun ShelfTitle(barcode: String, pendingPhotos: Int) {
     }
 }
 
-/**
- * One action per step, pinned in thumb reach. NOT_FOUND has none on purpose —
- * its three options are the content, and a fourth button below would compete.
- */
 @Composable
 private fun BottomAction(
     state: VoiceUiState,
@@ -359,8 +373,14 @@ private fun BottomAction(
                     enabled = state.transcript.isNotBlank(),
                 )
 
+                VoicePhase.PREVIEWING -> PrimaryButton(
+                    text = "در حال جستجو…",
+                    onClick = {},
+                    loading = true,
+                )
+
                 VoicePhase.CONFIRM -> PrimaryButton(
-                    text = "تأیید و ثبت",
+                    text = "ثبت ${faNum(state.quantity)} تا",
                     onClick = onConfirm,
                     icon = Icons.Filled.CheckCircle,
                     height = Dimens.hugeActionHeight,
@@ -372,21 +392,18 @@ private fun BottomAction(
                     icon = Icons.Filled.Mic,
                 )
 
-                VoicePhase.PREVIEWING, VoicePhase.SUBMITTING, VoicePhase.NOT_FOUND -> Unit
+                VoicePhase.SUBMITTING, VoicePhase.NOT_FOUND -> Unit
             }
         }
     }
 }
 
-/**
- * The saved confirmation, with a short undo window. Undo is honest: once the row
- * has synced the notice says so instead of pretending it was reversed.
- */
 @Composable
 private fun SavedNoticeCard(
     notice: SavedNotice,
     onUndo: () -> Unit,
     onDismiss: () -> Unit,
+    onAddPhoto: () -> Unit,
 ) {
     Card(
         modifier = Modifier
@@ -415,19 +432,26 @@ private fun SavedNoticeCard(
             ) {
                 Text(
                     text = notice.undoResult
-                        ?: "${notice.productName} × ${notice.quantity} در صف ثبت شد",
+                        ?: if (notice.commitsDirectly) {
+                            "${notice.productName} × ${faNum(notice.quantity)} ثبت شد — لیبل در صف چاپ PC"
+                        } else {
+                            "${notice.productName} × ${faNum(notice.quantity)} در صف تأیید مدیر ثبت شد"
+                        },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onTertiaryContainer,
                 )
-                if (notice.withPhoto && notice.undoResult == null) {
+                if (notice.photoCount > 0 && notice.undoResult == null) {
                     Text(
-                        text = "عکس هم ضمیمه شد",
+                        text = "${faNum(notice.photoCount)} عکس ضمیمه شد",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                     )
                 }
             }
             if (notice.undoResult == null) {
+                if (notice.photoCount == 0) {
+                    TextButton(onClick = onAddPhoto) { Text("عکس") }
+                }
                 TextButton(onClick = onUndo) { Text("لغو") }
             } else {
                 TextButton(onClick = onDismiss) { Text("باشه") }
@@ -436,12 +460,6 @@ private fun SavedNoticeCard(
     }
 }
 
-/**
- * اسکنِ بارکدِ خودِ کالا، داخل همین صفحه.
- *
- * قفسه از قبل انتخاب شده و همان می‌ماند؛ این فقط می‌گوید «چه چیزی». بعد از
- * تشخیص، اگر بارکد شناخته شده باشد مستقیم می‌رود سرِ تعداد — نه حرفی، نه تایپی.
- */
 @Composable
 private fun BarcodeStep(
     cameraGranted: Boolean,
@@ -496,11 +514,6 @@ private fun InputStep(
     onTranscriptChange: (String) -> Unit,
     onScanBarcode: () -> Unit,
 ) {
-    /*
-     * سه راهِ ورود، و ترتیبشان عمدی است: بارکد بالا چون سریع‌ترین است، صدا در
-     * وسط چون همیشه کار می‌کند، و متن پایین به‌عنوان تکیه‌گاهِ آخر برای وقتی
-     * سوله پرسر‌وصدا است و بارکد هم خراب.
-     */
     SecondaryButton(
         text = "اسکن بارکد کالا",
         onClick = onScanBarcode,
@@ -574,7 +587,7 @@ private fun ConfirmStep(
     onInc: () -> Unit,
     onDec: () -> Unit,
     onAddPhoto: () -> Unit,
-    onRemovePhoto: () -> Unit,
+    onRemovePhoto: (Int) -> Unit,
 ) {
     RecognizedText(transcript = state.transcript)
 
@@ -597,8 +610,6 @@ private fun ConfirmStep(
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.gap))
 
-            // Correctable on the spot: "سه تا" is heard as "سی تا" often enough
-            // that forcing a re-record for one wrong digit is unacceptable.
             Text(
                 text = "تعداد" + (state.unit?.let { " ($it)" } ?: ""),
                 style = MaterialTheme.typography.labelMedium,
@@ -611,7 +622,7 @@ private fun ConfirmStep(
             ) {
                 StepperButton(label = "−", onClick = onDec)
                 Text(
-                    text = state.quantity.toString(),
+                    text = faNum(state.quantity),
                     style = MaterialTheme.typography.displaySmall,
                 )
                 StepperButton(label = "+", onClick = onInc)
@@ -619,46 +630,65 @@ private fun ConfirmStep(
         }
     }
 
-    // Optional, one tap, never in the way of the main loop.
-    val photoPath = state.photoPath
-    if (photoPath != null) {
-        // Show it back: a blurred or half-framed shot is worse than none, and the
-        // worker can only tell by looking before the photo is queued.
-        // Decoded once per path and subsampled: a 1600px JPEG would otherwise be
-        // decoded in full on the composition thread for a 180dp preview.
-        val preview = remember(photoPath) { decodePreview(photoPath) }
-        if (preview != null) {
-            Image(
-                bitmap = preview,
-                contentDescription = "عکس گرفته‌شده",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(180.dp)
-                    .padding(top = Dimens.gap)
-                    .clip(RoundedCornerShape(Dimens.cornerSmall)),
-            )
-        }
+    Text(
+        text = "عکس اختیاری است — می‌توانید بعداً هم اضافه کنید",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = Dimens.gap),
+        textAlign = TextAlign.Center,
+    )
+
+    if (state.photoPaths.isNotEmpty()) {
         Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(top = Dimens.gapSmall),
             horizontalArrangement = Arrangement.spacedBy(Dimens.gapSmall),
-            modifier = Modifier.padding(top = Dimens.gapSmall),
         ) {
-            SecondaryButton(
-                text = "حذف عکس",
-                onClick = onRemovePhoto,
-                icon = Icons.Filled.Delete,
-                modifier = Modifier.weight(1f),
-            )
-            SecondaryButton(
-                text = "عکس دوباره",
-                onClick = onAddPhoto,
-                icon = Icons.Filled.AddAPhoto,
-                modifier = Modifier.weight(1f),
-            )
+            state.photoPaths.forEachIndexed { index, path ->
+                val preview = remember(path) { decodePreview(path) }
+                Box {
+                    if (preview != null) {
+                        Image(
+                            bitmap = preview,
+                            contentDescription = "عکس ${faNum(index + 1)}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier
+                                .size(96.dp)
+                                .clip(RoundedCornerShape(Dimens.cornerSmall)),
+                        )
+                    }
+                    IconButton(
+                        onClick = { onRemovePhoto(index) },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(28.dp),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                        ),
+                    ) {
+                        Icon(
+                            Icons.Filled.Close,
+                            contentDescription = "حذف عکس",
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
         }
-    } else {
+    }
+
+    val canAddMore = state.photoPaths.size < VoiceEntryViewModel.MAX_PHOTOS
+    if (canAddMore) {
         SecondaryButton(
-            text = "افزودن عکس (اختیاری)",
+            text = if (state.photoPaths.isEmpty()) {
+                "افزودن عکس (اختیاری)"
+            } else {
+                "عکس بعدی (${faNum(state.photoPaths.size)} از ${faNum(VoiceEntryViewModel.MAX_PHOTOS)})"
+            },
             onClick = onAddPhoto,
             icon = Icons.Filled.AddAPhoto,
             modifier = Modifier.padding(top = Dimens.gap),
@@ -666,7 +696,6 @@ private fun ConfirmStep(
     }
 }
 
-/** Small, cheap decode of the queued photo — null when the file is unreadable. */
 private fun decodePreview(path: String): ImageBitmap? = runCatching {
     val options = BitmapFactory.Options().apply { inSampleSize = 4 }
     BitmapFactory.decodeFile(path, options)?.asImageBitmap()
@@ -693,7 +722,6 @@ private fun SelectStep(
     onPick: (ProductChoice) -> Unit,
     onAddNew: (String) -> Unit,
 ) {
-
     Text(
         text = state.selectionMessage ?: "محصول را انتخاب کنید",
         style = MaterialTheme.typography.bodyLarge,
@@ -703,20 +731,12 @@ private fun SelectStep(
             .padding(top = Dimens.gapLarge, bottom = Dimens.gap),
     )
 
-    // کارگر باید ببیند اپ دقیقاً چه شنیده — وقتی چند انتخاب است، تشخیص
-    // «درست شنیده شد یا نه» از همین متن ممکن است.
     RecognizedText(transcript = state.transcript)
 
     state.choices.forEach { choice -> ChoiceButton(choice, onPick) }
 
     HorizontalDivider(modifier = Modifier.padding(vertical = Dimens.gapLarge))
 
-    /*
-     * صدا کنارِ کادر جست‌وجو، نه به‌جای آن.
-     *
-     * این صفحه معمولاً بعد از اسکنِ یک بارکدِ ناشناس باز می‌شود: جعبه دستِ
-     * کارگر است و دستکش دارد. تایپ در آن لحظه گران‌ترین کارِ ممکن است.
-     */
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.fillMaxWidth(),

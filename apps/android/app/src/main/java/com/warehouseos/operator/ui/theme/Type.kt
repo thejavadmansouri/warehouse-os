@@ -46,15 +46,17 @@ val Typography = Typography(
     ),
     titleLarge = TextStyle(
         fontFamily = AppFontFamily,
-        fontWeight = FontWeight.Medium,
-        fontSize = 21.sp,
-        lineHeight = 30.sp,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
+        letterSpacing = (-0.2).sp,
     ),
     titleMedium = TextStyle(
         fontFamily = AppFontFamily,
-        fontWeight = FontWeight.Medium,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 17.sp,
-        lineHeight = 26.sp,
+        lineHeight = 22.sp,
+        letterSpacing = (-0.2).sp,
     ),
     titleSmall = TextStyle(
         fontFamily = AppFontFamily,

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.warehouseos.operator.data.remote.ApiResult
 import com.warehouseos.operator.data.remote.dto.CreateProductRequestBody
+import com.warehouseos.operator.data.repository.AuthRepository
 import com.warehouseos.operator.data.repository.ProductRequestRepository
 import com.warehouseos.operator.data.repository.SessionRepository
 import com.warehouseos.operator.data.speech.SpeechToTextProvider
@@ -30,6 +31,8 @@ data class NewProductUiState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val done: Boolean = false,
+    /** مدیر/مدیرکل: کالا همان لحظه ساخته می‌شود؛ کارگر منتظر تأیید می‌ماند. */
+    val commitsDirectly: Boolean = false,
     /** میکروفون روشن است و برای کدام فیلد. */
     val listeningField: DictationField? = null,
     val partialText: String = "",
@@ -59,6 +62,7 @@ enum class DictationField { NAME, BRAND, VEHICLE, NOTES }
 class NewProductRequestViewModel @Inject constructor(
     private val repository: ProductRequestRepository,
     private val sessionRepository: SessionRepository,
+    private val authRepository: AuthRepository,
     private val speech: SpeechToTextProvider,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
@@ -79,6 +83,7 @@ class NewProductRequestViewModel @Inject constructor(
             unit = savedStateHandle.get<String>(Routes.ARG_UNIT)?.takeIf { it.isNotBlank() } ?: "عدد",
             // یا از صفحه‌ی قبل آمده، یا کارگر همین‌جا اسکنش می‌کند.
             productBarcode = savedStateHandle.get<String>(Routes.ARG_PRODUCT_BARCODE).orEmpty(),
+            commitsDirectly = authRepository.cachedUser()?.commitsStockDirectly == true,
         ),
     )
     val uiState: StateFlow<NewProductUiState> = _uiState.asStateFlow()

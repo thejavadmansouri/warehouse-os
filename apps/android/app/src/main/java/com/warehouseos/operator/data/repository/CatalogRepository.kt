@@ -7,6 +7,7 @@ import com.warehouseos.operator.data.remote.ApiService
 import com.warehouseos.operator.data.remote.dto.CatalogProductDto
 import com.warehouseos.operator.data.remote.safeApiCall
 import com.warehouseos.operator.data.search.OfflineCatalogSearch
+import com.warehouseos.operator.data.search.PersianText
 import com.warehouseos.operator.data.settings.CatalogReadyFlag
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -37,6 +38,11 @@ sealed interface CatalogSyncResult {
  * GET /products/catalog when on the shop Wi-Fi (full on first run, incremental
  * by updatedAt afterwards), then serves POS-strength search from Room — no
  * internet needed while picking.
+ *
+ * جستجو عمداً **بدون** بارگذاریِ کلِ ۳۳k ردیف در heap است: اول SQLite با
+ * توکنِ بلند فیلتر می‌کند، بعد رتبه‌بندیِ سبک روی همان کاندیدها اجرا می‌شود.
+ * روی گوشی‌های کم‌رم (A12) ایندکسِ کامل قبلاً OOM می‌داد و کارگر «چیزی پیدا نشد»
+ * می‌دید.
  */
 @Singleton
 class CatalogRepository @Inject constructor(
@@ -55,17 +61,6 @@ class CatalogRepository @Inject constructor(
      */
     private val _ready = MutableStateFlow(settings.isCatalogReady())
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
-
-    /**
-     * موتور جستجو به‌صورت حافظه‌ای؛ کش بعد از هر sync باطل می‌شود.
-     *
-     * کش، فرمِ *ایندکس‌شده* را نگه می‌دارد نه ردیف خام: ساختِ ایندکس یک‌بار به‌ازای
-     * هر بارگذاری انجام می‌شود، نه به‌ازای هر حرفی که کارگر تایپ می‌کند.
-     */
-    @Volatile
-    private var cache: List<OfflineCatalogSearch.Indexed>? = null
-    @Volatile
-    private var cacheLoading = false
 
     /**
      * Downloads the catalog page by page (full on first run, incremental by
@@ -105,21 +100,17 @@ class CatalogRepository @Inject constructor(
                 // Whatever pages already landed stay (idempotent upserts); the next
                 // run resumes from max(updatedAt) with no loss.
                 is ApiResult.NetworkError -> {
-                    invalidate()
                     return CatalogSyncResult.NoNetwork
                 }
                 is ApiResult.Unauthorized -> {
-                    invalidate()
                     return CatalogSyncResult.ServerError("نشست شما منقضی شده. دوباره وارد شوید")
                 }
                 is ApiResult.ServerError -> {
-                    invalidate()
                     return CatalogSyncResult.ServerError(result.message)
                 }
             }
         }
 
-        invalidate()
         // فقط اینجا — یعنی همه‌ی صفحه‌ها تا آخر گرفته شدند. هر خروجِ زودهنگام بالا
         // فلگ را دست‌نخورده می‌گذارد تا کاتالوگِ نصفه «آماده» شمرده نشود.
         settings.setCatalogReady(true)
@@ -128,39 +119,58 @@ class CatalogRepository @Inject constructor(
     }
 
     /**
-     * سرچ محلی با همان رتبه‌بندی POS — روی کشِ درون‌حافظه.
-     *
-     * کلِ کار (خواندن کش + جستجو) روی [Dispatchers.Default] اجرا می‌شود نه ترد
-     * اصلی: هر تایپ چند پاس O(N) روی ~۳۳k ردیف می‌کشد و اگر روی Main اجرا شود
-     * همان لگِ قابل‌لمسِ تایپ است.
+     * سرچ محلی با همان رتبه‌بندی POS — روی کاندیدهای SQLite، نه کل کاتالوگ در RAM.
      */
-    suspend fun search(query: String): List<CatalogProductEntity> = withContext(Dispatchers.Default) {
+    suspend fun search(query: String): List<CatalogProductEntity> = withContext(Dispatchers.IO) {
         val q = query.trim()
         if (q.length < 2) return@withContext emptyList()
-        OfflineCatalogSearch.search(loadAll(), q)
+
+        val tokens = PersianText.tokenizeQuery(q)
+        if (tokens.isEmpty()) return@withContext emptyList()
+
+        // کد دقیق (SKU) — یک رفت‌وبرگشت ارزان قبل از LIKE.
+        val normalizedQ = PersianText.normalize(q)
+        dao.bySku(normalizedQ)?.let { exact ->
+            return@withContext listOf(exact)
+        }
+
+        val ordered = tokens.sortedByDescending { it.length }
+        var pool = emptyList<CatalogProductEntity>()
+        outer@ for (token in ordered) {
+            // کاتالوگ قدیمی ممکن است هنوز «آرم» داشته باشد در حالی که کوئری «ارم» است.
+            for (variant in alefVariants(token)) {
+                pool = dao.candidates(token = variant, raw = q, limit = CANDIDATE_LIMIT)
+                if (pool.isNotEmpty()) break@outer
+            }
+        }
+        if (pool.isEmpty()) return@withContext emptyList()
+
+        OfflineCatalogSearch.search(OfflineCatalogSearch.index(pool), q)
+    }
+
+    /** گونه‌های آ/ا برای LIKE روی ردیف‌هایی که هنوز normalize نشده‌اند. */
+    private fun alefVariants(token: String): List<String> {
+        if (token.none { it == 'ا' || it == 'آ' }) return listOf(token)
+        return listOf(token, token.replace('آ', 'ا'), token.replace('ا', 'آ')).distinct()
     }
 
     /**
      * کالایی که این بارکد به آن وصل است — از روی کاتالوگِ همین گوشی.
-     *
-     * آفلاین جواب می‌دهد، و همین نکته‌ی اصلی است: کارگر باید قبل از وصل‌کردن
-     * بداند این بارکد قبلاً گرفته شده یا نه، بی‌آنکه منتظر شبکه بماند.
      */
     suspend fun findByBarcode(barcode: String): CatalogProductEntity? =
         withContext(Dispatchers.Default) {
-            val code = barcode.trim()
+            val code = PersianText.normalize(barcode.trim())
             if (code.isEmpty()) return@withContext null
-            loadAll().map { it.p }.firstOrNull { code in it.barcodeList() }
+            dao.byBarcode(code).firstOrNull { entity ->
+                entity.barcodeList().any { PersianText.normalize(it) == code }
+            }
         }
+
+    /** قبلاً کشِ حافظه‌ای را باطل می‌کرد؛ سرچ دیگر کشِ کامل نگه نمی‌دارد. */
+    fun invalidate() = Unit
 
     /**
      * بارکدِ تازه را همان لحظه به کاتالوگِ روی گوشی هم اضافه می‌کند.
-     *
-     * بدون این، کارگری که بارکدی را وصل کرده و بلافاصله همان جعبه را برای ثبت
-     * ورود اسکن می‌کند، «کالا پیدا نشد» می‌گیرد — تا سینکِ بعدیِ کاتالوگ. و آن
-     * دقیقاً کاری است که بعد از وصل‌کردن انجام می‌شود.
-     *
-     * حقیقتِ نهایی همچنان سرور است؛ این فقط جلوی یک شکافِ چنددقیقه‌ای را می‌گیرد.
      */
     suspend fun addBarcodeLocally(productId: String, barcode: String) {
         val row = dao.byId(productId) ?: return
@@ -174,26 +184,6 @@ class CatalogRepository @Inject constructor(
                 ),
             ),
         )
-        // کشِ درون‌حافظه‌ی جستجو کهنه شد.
-        invalidate()
-    }
-
-    fun invalidate() {
-        cache = null
-    }
-
-    private suspend fun loadAll(): List<OfflineCatalogSearch.Indexed> {
-        cache?.let { return it }
-        if (cacheLoading) {
-            // خیلی بعید است؛ فقط منتظر نمان — مستقیم از DB.
-            return OfflineCatalogSearch.index(dao.getAll())
-        }
-        cacheLoading = true
-        return try {
-            OfflineCatalogSearch.index(dao.getAll()).also { cache = it }
-        } finally {
-            cacheLoading = false
-        }
     }
 
     private fun CatalogProductDto.toEntity() = CatalogProductEntity(
@@ -214,6 +204,7 @@ class CatalogRepository @Inject constructor(
     private companion object {
         const val PAGE_SIZE = 1000
         const val MAX_PAGES = 1000
+        const val CANDIDATE_LIMIT = 2500
         val syncMutex = Mutex()
     }
 }

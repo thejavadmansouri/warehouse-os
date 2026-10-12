@@ -25,9 +25,42 @@ interface CatalogDao {
     @Query("SELECT MAX(updatedAt) FROM catalog_product")
     suspend fun maxUpdatedAt(): Long?
 
-    /** بارگذاری کامل برای موتور جستجوی محلی (33k ردیف ≈ چند مگابایت، یک‌بار در حافظه). */
+    /** بارگذاری کامل — فقط برای تست/ابزار؛ جستجوی اپ از [candidates] استفاده می‌کند. */
     @Query("SELECT * FROM catalog_product")
     suspend fun getAll(): List<CatalogProductEntity>
+
+    /**
+     * کاندیدهای سبک برای سرچ آفلاین — فقط ردیف‌هایی که توکنِ بلند کوئری را دارند.
+     * روی A12 بارگذاریِ هم‌زمانِ ۳۳k ردیف در حافظه OOM می‌دهد و نتیجه‌ی خالی دیده می‌شود.
+     */
+    @Query(
+        """
+        SELECT * FROM catalog_product
+        WHERE deleted = 0 AND (
+          searchTokens LIKE '%' || :token || '%'
+          OR name LIKE '%' || :token || '%'
+          OR sku = :raw
+          OR partNumber = :raw
+          OR barcodes LIKE '%' || :token || '%'
+        )
+        LIMIT :limit
+        """,
+    )
+    suspend fun candidates(token: String, raw: String, limit: Int): List<CatalogProductEntity>
+
+    @Query(
+        """
+        SELECT * FROM catalog_product
+        WHERE deleted = 0 AND (
+          barcodes = :code
+          OR barcodes LIKE :code || char(1) || '%'
+          OR barcodes LIKE '%' || char(1) || :code
+          OR barcodes LIKE '%' || char(1) || :code || char(1) || '%'
+        )
+        LIMIT 5
+        """,
+    )
+    suspend fun byBarcode(code: String): List<CatalogProductEntity>
 
     @Query("SELECT * FROM catalog_product WHERE id = :id LIMIT 1")
     suspend fun byId(id: String): CatalogProductEntity?

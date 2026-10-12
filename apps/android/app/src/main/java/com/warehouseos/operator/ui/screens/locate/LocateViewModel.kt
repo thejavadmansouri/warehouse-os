@@ -17,8 +17,11 @@ data class LocateUiState(
     val query: String = "",
     val loading: Boolean = false,
     val searched: Boolean = false,
+    val scanning: Boolean = false,
     val results: List<LocateResultDto> = emptyList(),
     val error: String? = null,
+    /** آخرین بارکد اسکن‌شده — برای نمایش کوتاه بالای نتایج. */
+    val lastScanned: String? = null,
 )
 
 @HiltViewModel
@@ -29,12 +32,34 @@ class LocateViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(LocateUiState())
     val uiState: StateFlow<LocateUiState> = _uiState.asStateFlow()
 
-    fun onQueryChange(q: String) = _uiState.update { it.copy(query = q, error = null) }
+    fun onQueryChange(q: String) =
+        _uiState.update { it.copy(query = q, error = null, lastScanned = null) }
+
+    fun openScanner() = _uiState.update { it.copy(scanning = true, error = null) }
+
+    fun closeScanner() = _uiState.update { it.copy(scanning = false) }
+
+    /**
+     * لیبل/بارکد کالا اسکن شد — همان مسیر locate سرور (SKU / بارکد / نام).
+     */
+    fun onBarcodeScanned(raw: String) {
+        val code = raw.trim()
+        if (code.isEmpty()) return
+        _uiState.update {
+            it.copy(
+                scanning = false,
+                query = code,
+                lastScanned = code,
+                error = null,
+            )
+        }
+        search()
+    }
 
     fun search() {
         val q = _uiState.value.query.trim()
         if (q.isBlank()) return
-        _uiState.update { it.copy(loading = true, error = null) }
+        _uiState.update { it.copy(loading = true, error = null, scanning = false) }
         viewModelScope.launch {
             when (val r = repo.locate(q)) {
                 is ApiResult.Success ->
@@ -42,11 +67,17 @@ class LocateViewModel @Inject constructor(
                         it.copy(loading = false, searched = true, results = r.data)
                     }
                 is ApiResult.Unauthorized ->
-                    _uiState.update { it.copy(loading = false, error = "نشست منقضی شده — دوباره وارد شوید") }
+                    _uiState.update {
+                        it.copy(loading = false, error = "نشست منقضی شده — دوباره وارد شوید")
+                    }
                 is ApiResult.NetworkError ->
-                    _uiState.update { it.copy(loading = false, error = "اتصال به سرور برقرار نشد") }
+                    _uiState.update {
+                        it.copy(loading = false, error = "اتصال به سرور برقرار نشد")
+                    }
                 is ApiResult.ServerError ->
-                    _uiState.update { it.copy(loading = false, error = "خطای سرور (${r.code})") }
+                    _uiState.update {
+                        it.copy(loading = false, error = "خطای سرور (${r.code})")
+                    }
             }
         }
     }

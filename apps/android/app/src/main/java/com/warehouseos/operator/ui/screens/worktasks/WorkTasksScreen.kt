@@ -68,6 +68,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.warehouseos.operator.ui.screens.scan.BarcodeScanner
+import com.warehouseos.operator.ui.screens.voice.StillCameraCapture
+import com.warehouseos.operator.ui.screens.worktasks.WorkTasksViewModel.Companion.MAX_PUTAWAY_PHOTOS
 
 /**
  * «کارهای انبار» — کارهایی که فروشنده/مدیر از POS برای کارگر می‌فرستد.
@@ -95,6 +97,19 @@ fun WorkTasksScreen(
             snackbarHost.showSnackbar(it)
             viewModel.clearToast()
         }
+    }
+
+    /* دوربین عکسِ چیدن — تمام‌صفحه روی اسکفولد. */
+    if (state.capturingPhotos) {
+        StillCameraCapture(
+            photoCount = state.capturePhotoCount,
+            maxPhotos = MAX_PUTAWAY_PHOTOS,
+            onCaptured = viewModel::onPutawayCapture,
+            onDone = viewModel::finishPutawayPhotos,
+            createCaptureFile = viewModel::createCaptureFile,
+            modifier = Modifier.fillMaxSize(),
+        )
+        return
     }
 
     Scaffold(
@@ -291,7 +306,7 @@ private fun DestinationSheet(
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text = "بارکد قفسه‌ای که جنس را رویش می‌چینید اسکن کنید.",
+                    text = "بارکد قفسه را اسکن کنید؛ بعد می‌توانید عکس کالا را برای سایت بگیرید.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 4.dp, bottom = Dimens.gap),
@@ -391,7 +406,8 @@ private fun TaskDetail(
             quantity = pending.quantity,
             onDismiss = { destinationFor = null },
             onConfirm = { barcode ->
-                viewModel.tick(taskId, pending.id, barcode)
+                // اول عکس (اختیاری برای سایت)، بعد تیک چیدن.
+                viewModel.beginPutawayPhoto(taskId, pending.id, barcode)
                 destinationFor = null
             },
         )

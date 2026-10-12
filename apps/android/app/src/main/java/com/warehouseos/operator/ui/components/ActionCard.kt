@@ -77,10 +77,11 @@ fun ActionCard(
                 scaleY = scale
             },
         shape = RoundedCornerShape(Dimens.corner),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (highlighted) scheme.primaryContainer else scheme.surfaceContainer,
+            containerColor = if (highlighted) scheme.primaryContainer else scheme.surface,
             contentColor = scheme.onSurface,
-            disabledContainerColor = scheme.surfaceContainer.copy(alpha = 0.5f),
+            disabledContainerColor = scheme.surface.copy(alpha = 0.5f),
         ),
     ) {
         Row(

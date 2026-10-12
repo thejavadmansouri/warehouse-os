@@ -93,7 +93,16 @@ fun ShiftHomeScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("خانه اپراتور", fontWeight = FontWeight.Bold) },
+                title = {
+                    Column {
+                        Text("Warehouse OS", fontWeight = FontWeight.Bold)
+                        Text(
+                            "خانه اپراتور",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                },
                 actions = {
                     IconButton(onClick = onSettings) {
                         Icon(Icons.Filled.Settings, "تنظیمات", Modifier.size(Dimens.icon))
@@ -103,10 +112,11 @@ fun ShiftHomeScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
+                    containerColor = MaterialTheme.colorScheme.background,
                 ),
             )
         },
+        containerColor = MaterialTheme.colorScheme.background,
     ) { padding ->
         Column(
             modifier = Modifier
@@ -147,7 +157,7 @@ fun ShiftHomeScreen(
              */
             SectionLabel("برگه‌ی قیمت")
             ActionCard(
-                title = "پیش‌فاکتور سفید",
+                title = "فاکتور سفید",
                 subtitle = "نام و تعداد را بگو؛ قیمت با مدیر",
                 icon = Icons.AutoMirrored.Filled.ReceiptLong,
                 accent = AccentBlank,
@@ -266,14 +276,15 @@ private data class HomeAction(
     val accent: Color? = null,
 )
 
-private val AccentPick = Color(0xFF1D4ED8)
-private val AccentWork = Color(0xFF7C3AED)
-private val AccentCount = Color(0xFFB45309)
-private val AccentFind = Color(0xFF0F766E)
-private val AccentBarcode = Color(0xFF15803D)
-private val AccentMine = Color(0xFF475569)
-private val AccentTransfer = Color(0xFFBE185D)
-private val AccentBlank = Color(0xFF0891B2)
+/** iOS-like semantic accents — distinguishable at arm's length. */
+private val AccentPick = Color(0xFF007AFF)
+private val AccentWork = Color(0xFF5856D6)
+private val AccentCount = Color(0xFFFF9500)
+private val AccentFind = Color(0xFF30B0C7)
+private val AccentBarcode = Color(0xFF34C759)
+private val AccentMine = Color(0xFF8E8E93)
+private val AccentTransfer = Color(0xFFFF2D55)
+private val AccentBlank = Color(0xFF64D2FF)
 
 @Composable
 private fun SectionLabel(text: String) {
@@ -341,10 +352,10 @@ private fun ActiveSessionContent(
     ActionGrid(
         listOf(
             HomeAction("انبارگردانی", "شمارش موجودی", Icons.Filled.Checklist, onCount, accent = AccentCount),
-            HomeAction("یافتن کالا", "آدرس دقیق قفسه", Icons.Filled.Search, onLocate, accent = AccentFind),
+            HomeAction("یافتن کالا", "اسکن لیبل یا جستجو → قفسه", Icons.Filled.Search, onLocate, accent = AccentFind),
             HomeAction("اتصال بارکد", "اتصال بارکد جعبه به کالا", Icons.Filled.QrCodeScanner, onLinkBarcode, accent = AccentBarcode),
             HomeAction("انتقال بین قفسه", "جابه‌جایی موجودی", Icons.Filled.SwapHoriz, onTransfer, accent = AccentTransfer),
-            HomeAction("کارهای من", "ثبت‌ها و تأییدها", Icons.Filled.History, onMyWork, accent = AccentMine),
+            HomeAction("کارهای من", "ثبت، چاپ، عکس", Icons.Filled.History, onMyWork, accent = AccentMine),
         ),
         highlightBadged = false,
     )
@@ -406,7 +417,7 @@ private fun OutboxEntity.label(): String {
         OutboxType.IN -> "ثبت کالا$where"
         OutboxType.COUNT -> "انبارگردانی$where"
         OutboxType.WORK_TASK_TICK -> "تیک کار انبار"
-        OutboxType.BLANK_QUOTATION -> "پیش‌فاکتور سفید"
+        OutboxType.BLANK_QUOTATION -> "فاکتور سفید"
         else -> "عملیات$where"
     }
 }

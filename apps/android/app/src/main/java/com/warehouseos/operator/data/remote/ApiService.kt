@@ -97,6 +97,10 @@ interface ApiService {
     @GET("products/locate")
     suspend fun locateProducts(@Query("q") query: String): List<LocateResultDto>
 
+    /** موجودیِ زنده‌ی چند کالا — بعد از سرچِ لوکال برای تکمیل قفسه/تعداد. */
+    @GET("products/stock-batch")
+    suspend fun stockBatch(@Query("ids") ids: String): List<LocateResultDto>
+
     // ---- Shelf transfer (انتقال بین قفسه) ----
     // موجودیِ فعلیِ یک قفسه — بارکد را سرور resolve می‌کند؛ items فقط ردیف‌های
     // با موجودی مثبت است.
@@ -178,6 +182,17 @@ interface ApiService {
     @POST("uploads/pending-operation/{clientRequestId}/photo")
     suspend fun uploadOperationPhoto(
         @Path("clientRequestId") clientRequestId: String,
+        @Part file: MultipartBody.Part,
+    ): PhotoUploadResponse
+
+    /**
+     * عکس هنگام چیدن — سرور فشرده می‌کند، واترمارک می‌زند و به PRODUCT_IMAGE
+     * سایت promote می‌کند. کلید مسیر همان itemId قلم کار است.
+     */
+    @Multipart
+    @POST("uploads/work-task-item/{itemId}/photo")
+    suspend fun uploadWorkTaskItemPhoto(
+        @Path("itemId") itemId: String,
         @Part file: MultipartBody.Part,
     ): PhotoUploadResponse
 

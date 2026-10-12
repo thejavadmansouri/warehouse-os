@@ -12,11 +12,21 @@ object PersianText {
     private const val FA_DIGITS = "۰۱۲۳۴۵۶۷۸۹"
     private const val AR_DIGITS = "٠١٢٣٤٥٦٧٨٩"
 
+    /**
+     * حروفی که در گفتار/تایپ فارسی اغلب جابه‌جا می‌شوند و باید یکی شمرده شوند.
+     * مهم: آ (U+0622) → ا تا «ارم» و «آرم»، «اراد» و «آراد» یکی شوند.
+     */
     private val ARABIC_TO_PERSIAN = mapOf(
         'ي' to 'ی', // ي
         'ى' to 'ی', // ى
         'ك' to 'ک', // ك
         'ة' to 'ه', // ة
+        'آ' to 'ا', // آ
+        'أ' to 'ا', // أ
+        'إ' to 'ا', // إ
+        'ٱ' to 'ا', // ٱ
+        'ؤ' to 'و', // مؤ…
+        'ئ' to 'ی', // ئ
     )
 
     /** Tashkil (U+064B–U+0652) + tatweel (U+0640). */
@@ -27,6 +37,7 @@ object PersianText {
     private val ZERO_WIDTH_OR_BIDI = Regex("[\u200B\u200D\u200E\u200F\uFEFF]")
 
     private val WHITESPACE = Regex("\\s+")
+    private val TOKEN_SPLIT = Regex("[\\s/(),._\\-]+")
 
     /** Idempotent canonical normalizer — mirrors normalizePersian(). */
     fun normalize(input: String?): String {
@@ -34,12 +45,10 @@ object PersianText {
 
         var t = Normalizer.normalize(input, Normalizer.Form.NFC)
 
-        // Arabic → Persian letters
         val sb = StringBuilder(t.length)
         for (c in t) sb.append(ARABIC_TO_PERSIAN[c] ?: c)
         t = sb.toString()
 
-        // Persian / Arabic-Indic digits → ASCII
         val digits = StringBuilder(t.length)
         for (c in t) {
             when {
@@ -53,8 +62,6 @@ object PersianText {
         t = TASHKIL.replace(t, "")
         t = ZWNJ.replace(t, " ")
         t = ZERO_WIDTH_OR_BIDI.replace(t, "")
-
-        // Latin fragments arrive both ways (تکستار / Textar)
         t = t.lowercase()
 
         return WHITESPACE.replace(t, " ").trim()
@@ -69,7 +76,7 @@ object PersianText {
         if (normalized.isEmpty()) return emptyList()
 
         return normalized
-            .split(Regex("[\\s/(),._\\-]+"))
+            .split(TOKEN_SPLIT)
             .map { it.trim() }
             .filter { it.length > 1 }
     }

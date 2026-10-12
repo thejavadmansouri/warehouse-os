@@ -17,8 +17,16 @@ data class AuthUser(
     val canSell: Boolean
         get() = role in SALES_ROLES
 
+    /**
+     * مدیر / مدیرکل با اپ: ورود کالا بدون صف تأیید وب، مستقیم موجودی + صف چاپ.
+     * کارگر (STAFF) همچنان منتظر تأیید مدیر می‌ماند.
+     */
+    val commitsStockDirectly: Boolean
+        get() = role in DIRECT_COMMIT_ROLES
+
     companion object {
         val ALLOWED_ROLES = setOf("ADMIN", "MANAGER", "STAFF", "SALES")
         val SALES_ROLES = setOf("ADMIN", "MANAGER", "SALES")
+        val DIRECT_COMMIT_ROLES = setOf("ADMIN", "MANAGER")
     }
 }

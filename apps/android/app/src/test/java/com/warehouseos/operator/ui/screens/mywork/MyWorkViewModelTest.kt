@@ -119,6 +119,31 @@ class MyWorkViewModelTest {
     }
 
     @Test
+    fun `print and photo fields map onto the list`() {
+        server.enqueue(
+            MockResponse().setBody(
+                """
+                {"summary":{"total":1,"pending":0,"approved":1,"rejected":0,"printQueued":1,"printDone":0,"withPhoto":1},
+                 "items":[{
+                   "id":"i1","status":"APPROVED","productName":"فیلتر","quantity":3,
+                   "locationPath":"انبار۱>قفسه۲","photoCount":1,"photoIds":["a1"],
+                   "printStatus":"QUEUED","printCopies":3,"mine":true
+                 }]}
+                """.trimIndent(),
+            ),
+        )
+
+        val state = loaded()
+
+        assertEquals(1, state.summary.printQueued)
+        assertEquals(1, state.summary.withPhoto)
+        assertEquals("QUEUED", state.items[0].printStatus)
+        assertEquals(3, state.items[0].printCopies)
+        assertEquals("انبار۱>قفسه۲", state.items[0].locationPath)
+        assertEquals(1, state.items[0].photoCount)
+    }
+
+    @Test
     fun `an expired session tells the worker to sign in again`() {
         server.enqueue(MockResponse().setResponseCode(401))
 

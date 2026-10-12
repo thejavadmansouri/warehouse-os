@@ -10,7 +10,12 @@ import com.warehouseos.operator.data.remote.ApiService
 import com.warehouseos.operator.data.sync.PhotoUploadRequester
 import com.warehouseos.operator.data.remote.safeApiCall
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -67,30 +72,56 @@ class PhotoRepository @Inject constructor(
     suspend fun attach(clientRequestId: String, source: Uri): Boolean =
         withContext(Dispatchers.IO) {
             val compressed = store.compress(source) ?: return@withContext false
-            dao.insert(
-                PendingPhotoEntity(
-                    id = UUID.randomUUID().toString(),
-                    clientRequestId = clientRequestId,
-                    filePath = compressed.absolutePath,
-                    bytes = compressed.length(),
-                    status = PhotoStatus.PENDING,
-                ),
-            )
-
-            /*
-             * همین‌جا درخواستِ ارسال بده.
-             *
-             * تا امروز گرفتنِ عکس هیچ‌چیزی را زمان‌بندی نمی‌کرد: تنها محرک‌ها
-             * پایانِ موفقِ drainِ outbox بود و کارِ دوره‌ایِ ۳۰ دقیقه‌ای. پس عکسی
-             * که برای عملیاتی گرفته می‌شد که **از قبل** سینک شده بود، تا نیم
-             * ساعت در «انتظار» می‌ماند بی‌آنکه چیزی اشتباه باشد.
-             *
-             * اگر عملیاتش هنوز نرفته باشد، این اجرا کاری نمی‌کند و بی‌ضرر است —
-             * فیلترِ DAO عکس را برنمی‌گرداند.
-             */
-            uploads.requestUpload()
-            true
+            queueCompressed(clientRequestId, compressed)
         }
+
+    /**
+     * صف کردن فایلی که از قبل روی دستگاه فشرده شده (مسیر تأیید صوت را سبک نگه می‌دارد).
+     */
+    suspend fun attachReady(clientRequestId: String, compressed: File): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!compressed.exists() || compressed.length() == 0L) return@withContext false
+            queueCompressed(clientRequestId, compressed)
+        }
+
+    /**
+     * صف عکسِ چیدن — فایل از قبل فشرده است (مثل [attachReady]).
+     * پیشوند `wti:` یعنی بدون PendingOperation هم آماده‌ی آپلود است.
+     */
+    suspend fun attachReadyForWorkTaskItem(itemId: String, compressed: File): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!compressed.exists() || compressed.length() == 0L) return@withContext false
+            queueCompressed(workTaskItemKey(itemId), compressed)
+        }
+
+    private fun workTaskItemKey(itemId: String): String =
+        "wti:$itemId:${UUID.randomUUID()}"
+
+    private suspend fun queueCompressed(clientRequestId: String, compressed: File): Boolean {
+        dao.insert(
+            PendingPhotoEntity(
+                id = UUID.randomUUID().toString(),
+                clientRequestId = clientRequestId,
+                filePath = compressed.absolutePath,
+                bytes = compressed.length(),
+                status = PhotoStatus.PENDING,
+            ),
+        )
+
+        /*
+         * همین‌جا درخواستِ ارسال بده.
+         *
+         * تا امروز گرفتنِ عکس هیچ‌چیزی را زمان‌بندی نمی‌کرد: تنها محرک‌ها
+         * پایانِ موفقِ drainِ outbox بود و کارِ دوره‌ایِ ۳۰ دقیقه‌ای. پس عکسی
+         * که برای عملیاتی گرفته می‌شد که **از قبل** سینک شده بود، تا نیم
+         * ساعت در «انتظار» می‌ماند بی‌آنکه چیزی اشتباه باشد.
+         *
+         * اگر عملیاتش هنوز نرفته باشد، این اجرا کاری نمی‌کند و بی‌ضرر است —
+         * فیلترِ DAO عکس را برنمی‌گرداند.
+         */
+        uploads.requestUpload()
+        return true
+    }
 
     /**
      * Uploads every photo whose operation is on the server.
@@ -103,57 +134,69 @@ class PhotoRepository @Inject constructor(
         val rows = dao.getReadyToUpload()
         if (rows.isEmpty()) return@withContext true
 
-        var allTerminal = true
-        for (row in rows) {
-            val file = File(row.filePath)
-            if (!file.exists()) {
-                // Nothing left to send (cache cleared, or a failed write). Drop the
-                // row instead of retrying a file that will never come back.
+        val gate = Semaphore(UPLOAD_CONCURRENCY)
+        coroutineScope {
+            rows.map { row ->
+                async {
+                    gate.withPermit { uploadOne(row) }
+                }
+            }.awaitAll().all { it }
+        }
+    }
+
+    /** true = terminal for this row; false = retry later. */
+    private suspend fun uploadOne(row: PendingPhotoEntity): Boolean {
+        val file = File(row.filePath)
+        if (!file.exists()) {
+            dao.delete(row.id)
+            return true
+        }
+
+        val part = MultipartBody.Part.createFormData(
+            "file",
+            file.name,
+            file.asRequestBody(JPEG.toMediaType()),
+        )
+
+        val upload = if (row.clientRequestId.startsWith(WTI_PREFIX)) {
+            val itemId = row.clientRequestId.removePrefix(WTI_PREFIX).substringBefore(':')
+            safeApiCall { api.uploadWorkTaskItemPhoto(itemId, part) }
+        } else {
+            safeApiCall { api.uploadOperationPhoto(row.clientRequestId, part) }
+        }
+
+        return when (upload) {
+            is ApiResult.Success -> {
+                store.delete(row.filePath)
                 dao.delete(row.id)
-                continue
+                true
             }
 
-            val part = MultipartBody.Part.createFormData(
-                "file",
-                file.name,
-                file.asRequestBody(JPEG.toMediaType()),
-            )
+            is ApiResult.NetworkError -> false
+            ApiResult.Unauthorized -> false
 
-            when (val result = safeApiCall { api.uploadOperationPhoto(row.clientRequestId, part) }) {
-                is ApiResult.Success -> {
-                    // Stored server-side — reclaim the space on the worker's phone.
-                    store.delete(row.filePath)
-                    dao.delete(row.id)
-                }
-
-                // Server unreachable — keep it queued for the next Wi-Fi window.
-                is ApiResult.NetworkError -> allTerminal = false
-
-                // Token expired mid-drain. Same rule as the outbox: stay PENDING so
-                // a refreshed token retries. Marking FAILED here would silently
-                // discard photos once a day, right when the session rolls over.
-                ApiResult.Unauthorized -> allTerminal = false
-
-                is ApiResult.ServerError -> {
-                    if (result.code == HTTP_NOT_FOUND) {
-                        // The operation hasn't landed yet — the DAO filter normally
-                        // prevents this, but a concurrent outbox drain can race it.
-                        allTerminal = false
-                    } else {
-                        // A real rejection (bad format, too large). Surface it to the
-                        // worker rather than retrying forever.
-                        dao.updateStatus(
-                            row.id,
-                            PhotoStatus.FAILED,
-                            row.attemptCount + 1,
-                            result.message,
-                        )
-                    }
+            is ApiResult.ServerError -> {
+                if (resultIsRetryableNotFound(upload, row)) {
+                    false
+                } else {
+                    dao.updateStatus(
+                        row.id,
+                        PhotoStatus.FAILED,
+                        row.attemptCount + 1,
+                        upload.message,
+                    )
+                    true
                 }
             }
         }
-        allTerminal
     }
+
+    /** ۴۰۴ عملیات ورود = هنوز sync نشده؛ برای wti همیشه خطای قطعی است. */
+    private fun resultIsRetryableNotFound(
+        result: ApiResult.ServerError,
+        row: PendingPhotoEntity,
+    ): Boolean =
+        result.code == HTTP_NOT_FOUND && !row.clientRequestId.startsWith(WTI_PREFIX)
 
     /** Manual retry of a photo the server rejected. */
     suspend fun retry(id: String) = dao.retry(id)
@@ -181,5 +224,8 @@ class PhotoRepository @Inject constructor(
     private companion object {
         const val JPEG = "image/jpeg"
         const val HTTP_NOT_FOUND = 404
+        const val WTI_PREFIX = "wti:"
+        /** چند آپلود همزمان روی Wi‑Fi پایان شیفت را سریع‌تر خالی می‌کند. */
+        const val UPLOAD_CONCURRENCY = 3
     }
 }
