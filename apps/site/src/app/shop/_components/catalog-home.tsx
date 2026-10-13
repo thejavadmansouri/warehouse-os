@@ -9,7 +9,9 @@ import { ListFilter, SlidersHorizontal } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -28,7 +30,7 @@ import { ProductCard } from "./product-card";
 import { VehicleStrip, CategoryTiles, BrandStrip } from "./home-sections";
 import { getShopBanners, getShopFacets, getShopProducts } from "@/lib/shop-api";
 import { assetUrl } from "@/lib/shop-api";
-import { toFa } from "@/lib/format";
+import { toFa, faToEn, parseNum } from "@/lib/format";
 
 const SORTS: { value: string; label: string }[] = [
   { value: "newest", label: "جدیدترین" },
@@ -54,6 +56,13 @@ export function CatalogHome() {
     | "name";
   const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const inStock = searchParams.get("inStock") === "true";
+  // بازه‌ی قیمت به تومان (همان واحدِ سایت)؛ خالی یعنی بدون سقف/کف.
+  const minPriceParam = searchParams.get("minPrice") ?? "";
+  const maxPriceParam = searchParams.get("maxPrice") ?? "";
+  const numOrUndef = (s: string) => {
+    const n = Number(s.replace(/[^\d]/g, ""));
+    return s && Number.isFinite(n) ? n : undefined;
+  };
 
   const setParams = React.useCallback(
     (patch: Record<string, string | undefined>) => {
@@ -74,8 +83,8 @@ export function CatalogHome() {
   const bannerQuery = useQuery({ queryKey: ["shop", "banners"], queryFn: getShopBanners, staleTime: 60_000 });
 
   const productsQuery = useQuery({
-    queryKey: ["shop", "products", { q, categoryId, brandId, vehicleId, sort, page, inStock }],
-    queryFn: () => getShopProducts({ q: q || undefined, categoryId, brandId, vehicleModelId: vehicleId, sort, page, pageSize: 24, inStock }),
+    queryKey: ["shop", "products", { q, categoryId, brandId, vehicleId, sort, page, inStock, minPriceParam, maxPriceParam }],
+    queryFn: () => getShopProducts({ q: q || undefined, categoryId, brandId, vehicleModelId: vehicleId, sort, page, pageSize: 24, inStock, minPrice: numOrUndef(minPriceParam), maxPrice: numOrUndef(maxPriceParam) }),
     placeholderData: (prev) => prev,
   });
 
@@ -86,6 +95,17 @@ export function CatalogHome() {
   const activeCategory = facets?.categories.find((c) => c.id === categoryId)?.name;
   const activeVehicle = facets?.vehicles.find((v) => v.id === vehicleId)?.name;
   const activeBrand = facets?.brands.find((b) => b.id === brandId)?.name;
+
+  // ورودی‌های قیمت، state محلی دارند تا با هر رقم، کوئری refetch نشود؛ «اعمال»
+  // آن‌ها را وارد URL می‌کند. با عقب/جلو مرورگر، از URL همگام می‌شوند.
+  const [minInput, setMinInput] = React.useState(minPriceParam);
+  const [maxInput, setMaxInput] = React.useState(maxPriceParam);
+  React.useEffect(() => {
+    setMinInput(minPriceParam);
+    setMaxInput(maxPriceParam);
+  }, [minPriceParam, maxPriceParam]);
+
+  const faMoney = (n: number) => `${n.toLocaleString("fa-IR")} تومان`;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6">
@@ -168,6 +188,24 @@ export function CatalogHome() {
             </button>
           </Badge>
         )}
+        {inStock && (
+          <Badge variant="secondary" className="gap-1">
+            فقط موجودها
+            <button type="button" onClick={() => setParams({ inStock: undefined })} aria-label="حذف فیلتر موجودی">
+              ✕
+            </button>
+          </Badge>
+        )}
+        {(minPriceParam || maxPriceParam) && (
+          <Badge variant="secondary" className="gap-1">
+            {numOrUndef(minPriceParam) != null ? `از ${faMoney(numOrUndef(minPriceParam)!)}` : ""}
+            {numOrUndef(minPriceParam) != null && numOrUndef(maxPriceParam) != null ? " ـ " : ""}
+            {numOrUndef(maxPriceParam) != null ? `تا ${faMoney(numOrUndef(maxPriceParam)!)}` : ""}
+            <button type="button" onClick={() => setParams({ minPrice: undefined, maxPrice: undefined })} aria-label="حذف فیلتر قیمت">
+              ✕
+            </button>
+          </Badge>
+        )}
         <div className="ms-auto flex items-center gap-2">
           {facets && facets.categories.length > 0 && (
             <Select
@@ -200,6 +238,77 @@ export function CatalogHome() {
             </SelectContent>
           </Select>
         </div>
+      </div>
+
+      {/* ردیف دوم فیلترها: بازه‌ی قیمت و موجودی.
+          در موبایل به‌صورت کشویی محدود نیست ولی چون فقط دو ورودی است
+          (نه ۱۰ گزینه)، جای افقی کافیست؛ ورودی‌ها با کیبورد عددی باز می‌شوند. */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border bg-card px-3 py-2.5">
+        <span className="flex items-center gap-2 text-sm">
+          <Switch
+            id="filter-instock"
+            checked={inStock}
+            onCheckedChange={(v) => setParams({ inStock: v ? "true" : undefined })}
+          />
+          <label htmlFor="filter-instock" className="cursor-pointer select-none font-medium">
+            فقط کالاهای موجود
+          </label>
+        </span>
+
+        <div className="flex items-center gap-2">
+          <label htmlFor="filter-min" className="text-sm text-muted-foreground">
+            قیمت از
+          </label>
+          <Input
+            id="filter-min"
+            inputMode="numeric"
+            className="h-9 w-28 text-center"
+            placeholder="۰"
+            value={minInput}
+            onChange={(e) => {
+              const en = faToEn(e.target.value).replace(/[^\d]/g, "");
+              setMinInput(en ? toFa(Number(en).toLocaleString("en-US")) : "");
+            }}
+          />
+          <label htmlFor="filter-max" className="text-sm text-muted-foreground">
+            تا
+          </label>
+          <Input
+            id="filter-max"
+            inputMode="numeric"
+            className="h-9 w-28 text-center"
+            placeholder="۹۹۹,۹۹۹"
+            value={maxInput}
+            onChange={(e) => {
+              const en = faToEn(e.target.value).replace(/[^\d]/g, "");
+              setMaxInput(en ? toFa(Number(en).toLocaleString("en-US")) : "");
+            }}
+          />
+          <span className="text-xs text-muted-foreground">تومان</span>
+          <Button
+            size="sm"
+            onClick={() => {
+              // ورودیِ کاربر فارسی و با جداکننده است — parseNum هر دو را
+              // می‌پذیرد. (`.[^\d]` خالی رقم فارسی را کامل حذف می‌کرد.)
+              const min = parseNum(minInput);
+              const max = parseNum(maxInput);
+              setParams({
+                minPrice: min > 0 ? String(min) : undefined,
+                maxPrice: max > 0 ? String(max) : undefined,
+              });
+            }}
+          >
+            اعمال
+          </Button>
+        </div>
+
+        {(minPriceParam || maxPriceParam) && (
+          <span className="text-xs text-muted-foreground">
+            {numOrUndef(minPriceParam) != null ? `از ${faMoney(numOrUndef(minPriceParam)!)}` : ""}
+            {numOrUndef(minPriceParam) != null && numOrUndef(maxPriceParam) != null ? " ـ " : ""}
+            {numOrUndef(maxPriceParam) != null ? `تا ${faMoney(numOrUndef(maxPriceParam)!)}` : ""}
+          </span>
+        )}
       </div>
 
       {loading ? (
