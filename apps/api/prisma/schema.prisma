@@ -2410,12 +2410,14 @@ model OnlineOrder {
   siteCustomer SiteCustomer   @relation(fields: [siteCustomerId], references: [id])
   customer  Customer?         @relation(fields: [customerId], references: [id])
   warehouse Warehouse         @relation(fields: [warehouseId], references: [id])
-  invoice   SaleInvoice?      @relation(fields: [invoiceId], references: [id])
+  invoice     SaleInvoice?      @relation(fields: [invoiceId], references: [id])
   decidedBy User?             @relation("OnlineOrderDecider", fields: [decidedById], references: [id])
   coupon    Coupon?           @relation(fields: [couponId], references: [id])
   shippingZone ShippingZone?  @relation(fields: [shippingZoneId], references: [id])
   lines     OnlineOrderLine[]
   payments  PaymentAttempt[]
+  /// تاریخ وضعیت — با هر تغییر یک ردیف؛ پایه‌ی «پیگیری مرحله‌ای».
+  events    OnlineOrderEvent[]
 
   // صف کاری فروشنده: «سفارش‌های در انتظار، تازه‌ترین اول».
   @@index([status, createdAt])
@@ -2557,6 +2559,70 @@ enum OnlinePayMethod {
   ON_DELIVERY // پرداخت در محل
   TRANSFER // کارت‌به‌کارت
   GATEWAY // درگاه اینترنتی
+}
+
+/*
+ * ─── محتوای فروشگاه (مقاله و صفحه‌ی ثابت) ───
+ *
+ * یک مدل با دو نوع:
+ *   ARTICLE → وبلاگ (`/blog`)، با تاریخ انتشار و کاور — برای سئوی محتوایی
+ *   PAGE    → صفحه‌ی ثابت (`/page/[slug]`): درباره ما، تماس، شرایط بازگشت
+ *
+ * چرا یک مدل و نه دو تا؟ هر دو «یک متن با slug و وضعیت انتشار» هستند و
+ * جداکردنشان فقط دو UI شبیه‌به‌هم می‌ساخت. `kind` همان تفکیک است.
+ *
+ * `body` متن ساده نیست: Markdown نیست ولی چند پاراگراف با خطوط جداکننده —
+ * سمت سایت با `whitespace-pre-line` رندر می‌شود تا مدیر بدون HTML بنویسد و
+ * خطر تزریق اسکریپت هم نباشد.
+ */
+enum ShopContentKind {
+  ARTICLE
+  PAGE
+}
+
+enum ShopContentStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model ShopContent {
+  id     String            @id @default(uuid())
+  kind   ShopContentKind   @default(ARTICLE)
+  slug   String            @unique
+  title  String
+  /// یک خط معرفی — برای کارت مقاله و meta description.
+  excerpt String?
+  /// متن کامل؛ پاراگراف‌ها با خطِ خالی جدا می‌شوند.
+  body   String
+  /// کاور مقاله (اختیاری) — ادرسِ ریشه‌نسبی مثل بقیه‌ی فایل‌های فروشگاه.
+  coverImage String?
+  status ShopContentStatus @default(DRAFT)
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, status, publishedAt])
+}
+
+/*
+ * تاریخ وضعیتِ سفارش — پایه‌ی «پیگیری مرحله‌ای».
+ *
+ * بدون این جدول، مشتری فقط یک برچسب می‌بیند و نمی‌داند کجای مسیر است:
+ * چه‌وقتی سفارش قطعی شد، چه‌وقتی مغازه فاکتور زد، چه‌وقتی ارسال شد. هر
+ * تغییر وضعیت یک ردیف می‌گیرد (از سینکِ انبار یا از پنل سایت)، و `note`
+ * برای توضیحِ اختیاریِ همان مرحله.
+ */
+model OnlineOrderEvent {
+  id      String            @id @default(uuid())
+  orderId String
+  status  OnlineOrderStatus
+  note    String?
+  createdAt DateTime         @default(now())
+
+  order OnlineOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
 }
 
 /// کد یک‌بارمصرفِ ورود مشتری.
