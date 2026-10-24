@@ -11,14 +11,25 @@ import { faDate, toFa } from "@/lib/format";
  */
 export const CREDIT_TERMS = [0, 7, 15, 30, 45, 60, 90];
 
-/** سررسید پایان روز از مهلت روزشمار یا تاریخ سفارشی. */
+/** تاریخِ تنها-روز (YYYY-MM-DD). */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * سررسید پایان روز از مهلت روزشمار یا تاریخ سفارشی.
+ *
+ * «YYYY-MM-DD» را عمداً در تقویمِ محلی می‌خوانیم: `new Date("2026-12-01")`
+ * طبق استاندارد UTC تفسیر می‌شود و در منطقه‌های زمانیِ منفی یک روز عقب
+ * می‌افتد — فروشنده ۱ آذر را انتخاب می‌کند و برگه ۳۰ آبان نشان می‌دهد.
+ */
 export function computeCreditDueDate(
   creditDays: number | null,
   customDue: string,
   customerCreditDays?: number | null,
 ): Date {
   const effectiveDays = creditDays ?? customerCreditDays ?? 0;
-  const d = customDue ? new Date(customDue) : new Date();
+  const d = customDue
+    ? new Date(DATE_ONLY.test(customDue) ? `${customDue}T00:00:00` : customDue)
+    : new Date();
   if (!customDue) d.setDate(d.getDate() + effectiveDays);
   d.setHours(23, 59, 59, 999);
   return d;
