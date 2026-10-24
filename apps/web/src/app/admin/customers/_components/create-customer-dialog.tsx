@@ -74,7 +74,7 @@ export function CreateCustomerDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onDone(false)}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-base">مشتری جدید</DialogTitle>
         </DialogHeader>

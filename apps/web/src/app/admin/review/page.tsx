@@ -233,7 +233,7 @@ export function ReviewPanel({ embedded }: { embedded?: boolean } = {}) {
       />
 
       <Dialog open={showBulkConfirm} onOpenChange={setShowBulkConfirm}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-base">تأیید گروهی</DialogTitle>
           </DialogHeader>

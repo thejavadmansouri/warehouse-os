@@ -78,7 +78,7 @@ export function ProductSearch({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle className="text-base">جست‌وجوی کالا</DialogTitle>
         </DialogHeader>

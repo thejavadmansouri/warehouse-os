@@ -23,7 +23,7 @@ export function LocationPicker({
 }) {
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-base">
             این کالا در چند مکان موجود است

@@ -89,7 +89,7 @@ export function PaymentReversalDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md" dir="rtl">
+      <DialogContent className="sm:max-w-md" dir="rtl">
         <div className="space-y-4">
           <div>
             <h2 className="text-lg font-bold">برگشت پرداخت — فاکتور {toFa(invoiceNumber)}</h2>

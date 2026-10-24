@@ -158,7 +158,7 @@ export function SmsDialog({
         </DialogTrigger>
       )}
 
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>پیامک به {customer.fullName}</DialogTitle>
           <DialogDescription>

@@ -241,7 +241,7 @@ function TemplateCard({
       </CardContent>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>پیش‌نمایش قالب «{title}»</DialogTitle>
             <DialogDescription>

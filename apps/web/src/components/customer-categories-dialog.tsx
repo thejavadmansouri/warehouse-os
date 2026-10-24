@@ -126,7 +126,7 @@ export function CustomerCategoriesDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <Tag className="size-4" /> دسته‌های مشتری

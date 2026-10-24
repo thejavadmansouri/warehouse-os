@@ -92,7 +92,7 @@ export function AssetLightbox({
   const showSetButton = !!productId && canEdit && !!assetId;
   return (
     <Dialog open={open && !!assetId} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl overflow-hidden p-0 sm:max-w-4xl">
+      <DialogContent className="overflow-hidden p-0 sm:max-w-4xl">
         <DialogTitle className="sr-only">عکس عملیات</DialogTitle>
         <div className="relative flex max-h-[80vh] items-center justify-center bg-black/90 p-2">
           {url ? (

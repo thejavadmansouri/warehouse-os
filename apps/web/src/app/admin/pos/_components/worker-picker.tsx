@@ -63,7 +63,7 @@ export function WorkerPicker({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-base">
             {title ?? `ارسال ${toFa(itemCount)} کالا به کارگر`}

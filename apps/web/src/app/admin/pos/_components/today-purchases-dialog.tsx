@@ -44,7 +44,7 @@ export function TodayPurchasesDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="sm:max-w-3xl">
         {/* با بستن، Body unmount می‌شود و ردیفِ بازشده برای بازِ بعدی ریست می‌شود. */}
         {open && customer && <TodayPurchasesBody customer={customer} />}
       </DialogContent>

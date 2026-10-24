@@ -51,7 +51,7 @@ export function PriceWarningDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
             <AlertTriangle className="size-5" />

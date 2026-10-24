@@ -71,7 +71,7 @@ export function WorkTasksPanel({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <ClipboardList className="size-4" />

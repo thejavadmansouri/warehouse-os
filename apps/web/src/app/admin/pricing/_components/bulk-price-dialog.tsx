@@ -100,7 +100,7 @@ export function BulkPriceDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="text-base">قیمت‌گذاری گروهی</DialogTitle>
         </DialogHeader>

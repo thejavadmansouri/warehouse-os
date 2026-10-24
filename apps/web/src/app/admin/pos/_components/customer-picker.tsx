@@ -102,7 +102,7 @@ export function CustomerPicker({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg" dir="rtl">
+      <DialogContent className="sm:max-w-lg" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-base">
             {creating ? "مشتری جدید" : "انتخاب مشتری"}

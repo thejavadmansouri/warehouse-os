@@ -83,7 +83,7 @@ export function PaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-xl" dir="rtl">
+      <DialogContent className="sm:max-w-xl" dir="rtl">
         <DialogHeader>
           <DialogTitle className="text-base">پرداخت — {rial(total)}</DialogTitle>
         </DialogHeader>

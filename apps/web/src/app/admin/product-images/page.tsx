@@ -332,7 +332,7 @@ function DetailDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto" dir="rtl">
           <DialogHeader>
             <DialogTitle>{candidate.product.name}</DialogTitle>
           </DialogHeader>
@@ -435,7 +435,7 @@ function DetailDialog({
       {/* Zoom Dialog */}
       {zoomSrc && (
         <Dialog open onOpenChange={(v) => !v && setZoomSrc(null)}>
-          <DialogContent className="max-w-[90vw] max-h-[90vh] p-2">
+          <DialogContent className="sm:max-w-[90vw] max-h-[90vh] p-2">
             <img src={zoomSrc} alt="Zoomed" className="w-full h-full object-contain" />
           </DialogContent>
         </Dialog>

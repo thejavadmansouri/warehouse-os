@@ -254,7 +254,7 @@ export function NetSwapDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && !submit.isPending && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-5xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] sm:max-w-5xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <ArrowLeftRight className="size-4" />

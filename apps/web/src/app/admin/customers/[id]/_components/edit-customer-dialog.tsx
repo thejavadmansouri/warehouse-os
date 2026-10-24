@@ -191,7 +191,7 @@ export function EditCustomerDialog({
       )}
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">ویرایش مشخصات مشتری</DialogTitle>
           </DialogHeader>
