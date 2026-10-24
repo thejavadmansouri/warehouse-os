@@ -12,16 +12,19 @@ import {
   PaginationNext,
   PaginationEllipsis,
 } from "@/components/ui/pagination";
+import { cn } from "@/lib/utils";
 
 // کامپوننت صفحه‌بندی RTL — در جهت فارسی «قبلی» سمت راست و «بعدی» سمت چپ قرار می‌گیرد
 export function DataTablePagination({
   page,
   totalPages,
   onChange,
+  className,
 }: {
   page: number;
   totalPages: number;
   onChange: (page: number) => void;
+  className?: string;
 }) {
   if (totalPages <= 1) return null;
 
@@ -42,7 +45,7 @@ export function DataTablePagination({
 
   // در RTL: «قبلی» (صفحه کوچکتر) سمت راست، «بعدی» سمت چپ
   return (
-    <Pagination className="mt-4 justify-center sm:justify-start" dir="rtl">
+    <Pagination className={cn("mt-4 justify-center sm:justify-start", className)} dir="rtl">
       <PaginationContent>
         <PaginationItem>
           <PaginationPrevious

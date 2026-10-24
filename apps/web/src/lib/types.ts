@@ -3033,6 +3033,12 @@ export interface VoucherRow {
    * فاکتور؛ برای رسید/خرید null می‌ماند.
    */
   invoiceId: string | null;
+  /** طرفِ حساب (مشتری از خطوط، تأمین‌کننده از فاکتور خرید) — فقط برای نمایش. */
+  counterparty?: {
+    kind: "CUSTOMER" | "SUPPLIER";
+    id: string;
+    name: string;
+  } | null;
   lines: VoucherLineRow[];
 }
 

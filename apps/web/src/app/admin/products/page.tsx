@@ -34,6 +34,14 @@ import { formatPrice, toFa } from "@/lib/format";
 
 import { PageHeader } from "@/components/page-header";
 import { LoadingState, EmptyState, ErrorState } from "@/components/states";
+import {
+  ActiveFilters,
+  ListMoreMenu,
+  ListToolbar,
+  type ActiveFilter,
+} from "@/components/list-toolbar";
+import { DataTablePagination } from "@/components/data-table-pagination";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { LabelPrintDialog } from "@/components/labels/label-print-dialog";
 import { ProductFormDialog } from "./_components/product-form-dialog";
@@ -289,69 +297,86 @@ export default function ProductsListPage() {
     setFormOpen(true);
   };
 
+  const activeFilterChips: ActiveFilter[] = [];
+  if (searchInput) {
+    activeFilterChips.push({
+      key: "q",
+      label: `جستجو: ${searchInput}`,
+      onRemove: () => setSearchInput(""),
+    });
+  }
+  if (activeFilter !== "all") {
+    activeFilterChips.push({
+      key: "status",
+      label: activeFilter === "active" ? "وضعیت: فقط فعال" : "وضعیت: فقط غیرفعال",
+      onRemove: () => setActiveFilter("all"),
+    });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
         title="محصولات"
         description="مدیریت کاتالوگ قطعات و لوازم یدکی"
         icon={Package}
-        actions={
-          <>
-            {/* قیمت‌گذاری گروهی از منو برداشته شد: ویرایشِ انبوهِ قیمت یک
-                «کار» است روی همین فهرست، نه یک «جا» که به آن می‌روی. */}
-            {canCreate ? (
-              <Button asChild variant="outline" size="sm">
-                <Link href="/admin/pricing">
-                  <BadgeDollarSign className="h-4 w-4" />
-                  قیمت‌گذاری گروهی
-                </Link>
-              </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportM.mutate()}
-              disabled={exportM.isPending}
-            >
-              {exportM.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              خروجی CSV
-            </Button>
-            {canCreate ? (
-              <Button size="sm" onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                محصول جدید
-              </Button>
-            ) : null}
-          </>
-        }
       />
 
-      {/* جعبه جستجو + فیلتر */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative flex-1">
-          <Search className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="جستجو بر اساس نام، SKU، بارکد یا شماره فنی..."
-            className="pr-9"
-          />
-          {searchInput ? (
-            <button
-              type="button"
-              onClick={() => setSearchInput("")}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              aria-label="پاک کردن جستجو"
-            >
-              ✕
-            </button>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
+      {/* نوار ابزار: جستجو + فیلتر | اکشن‌ها */}
+      <div className="flex flex-col gap-2">
+        <ListToolbar
+          actions={
+            <>
+              {/* قیمت‌گذاری گروهی از منو برداشته شد: ویرایشِ انبوهِ قیمت یک
+                  «کار» است روی همین فهرست، نه یک «جا» که به آن می‌روی. */}
+              {canCreate ? (
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/admin/pricing">
+                    <BadgeDollarSign className="h-4 w-4" />
+                    قیمت‌گذاری گروهی
+                  </Link>
+                </Button>
+              ) : null}
+              {canCreate ? (
+                <Button size="sm" onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  محصول جدید
+                </Button>
+              ) : null}
+              <ListMoreMenu>
+                <DropdownMenuItem
+                  onSelect={() => exportM.mutate()}
+                  disabled={exportM.isPending}
+                >
+                  {exportM.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  خروجی CSV
+                </DropdownMenuItem>
+              </ListMoreMenu>
+            </>
+          }
+        >
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="جستجو بر اساس نام، SKU، بارکد یا شماره فنی..."
+              className="ps-9 pe-9"
+            />
+            {searchInput ? (
+              <button
+                type="button"
+                onClick={() => setSearchInput("")}
+                className="absolute end-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                aria-label="پاک کردن جستجو"
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
           <Select
             dir="rtl"
             value={activeFilter}
@@ -383,7 +408,14 @@ export default function ProductsListPage() {
               <SelectItem value="salePrice">قیمت فروش</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </ListToolbar>
+        <ActiveFilters
+          filters={activeFilterChips}
+          onClearAll={() => {
+            setSearchInput("");
+            setActiveFilter("all");
+          }}
+        />
       </div>
 
       {/* نوار ابزار انتخاب */}
@@ -470,9 +502,8 @@ export default function ProductsListPage() {
             }
           />
         ) : (
-          <div className="max-h-[60vh] overflow-y-auto scroll-thin">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-muted/60 backdrop-blur">
+          <Table containerClassName="max-h-[calc(100vh-16rem)] overflow-y-auto scroll-thin rounded-t-lg">
+              <TableHeader sticky>
                 <TableRow>
                   <TableHead className="w-10 text-center">
                     <Checkbox
@@ -495,14 +526,17 @@ export default function ProductsListPage() {
                   <TableHead>شماره فنی</TableHead>
                   <TableHead>برند</TableHead>
                   <TableHead>مدل خودرو</TableHead>
-                  <TableHead className="text-end">قیمت فروش</TableHead>
+                  <TableHead className="text-end tabular-nums">قیمت فروش</TableHead>
                   <TableHead className="text-center">وضعیت</TableHead>
                   <TableHead className="text-center">عملیات</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {products.map((p) => (
-                  <TableRow key={p.id}>
+                  <TableRow
+                    key={p.id}
+                    data-state={selectedIds.has(p.id) ? "selected" : undefined}
+                  >
                     <TableCell className="text-center">
                       <Checkbox
                         checked={selectedIds.has(p.id)}
@@ -530,7 +564,7 @@ export default function ProductsListPage() {
                         )}
                       </Link>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="min-w-[200px] whitespace-normal">
                       <Link
                         href={`/admin/products/${encodeURIComponent(p.id)}`}
                         className="text-[15px] font-semibold hover:text-accent hover:underline"
@@ -557,7 +591,7 @@ export default function ProductsListPage() {
                     <TableCell className="text-muted-foreground">
                       {p.vehicleModel?.name ?? "—"}
                     </TableCell>
-                    <TableCell className="text-end">
+                    <TableCell className="text-end tabular-nums">
                       <span
                         dir="ltr"
                         className="inline-block text-xl font-bold tabular-nums tracking-tight"
@@ -624,7 +658,6 @@ export default function ProductsListPage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
         )}
 
         {/* فوتر جدول + صفحه‌بندی */}
@@ -636,27 +669,12 @@ export default function ProductsListPage() {
                 : `مجموع ${totalCount.toLocaleString("fa-IR")} محصول`}
             </p>
             {!hasQuery && lastPage > 1 ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page <= 1 || productsQ.isFetching}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                >
-                  قبلی
-                </Button>
-                <span className="text-xs">
-                  صفحه {page.toLocaleString("fa-IR")} از {lastPage.toLocaleString("fa-IR")}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={page >= lastPage || productsQ.isFetching}
-                  onClick={() => setPage((p) => Math.min(lastPage, p + 1))}
-                >
-                  بعدی
-                </Button>
-              </div>
+              <DataTablePagination
+                page={page}
+                totalPages={lastPage}
+                onChange={setPage}
+                className="mx-0 mt-0 w-auto"
+              />
             ) : (
               <p className="text-xs">
                 برای دیدن جزئیات روی هر محصول کلیک کنید

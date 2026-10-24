@@ -20,6 +20,12 @@ type VoucherOut = {
   reversesVoucherId: string | null;
   /** فاکتوری که این سند به آن برمی‌گردد — برای مرجوعی/اصلاحیه از سندِ خودشان. */
   invoiceId: string | null;
+  /** طرفِ حساب برای نمایش در دفتر روزنامه — فقط خواندنی، در محاسبات نقشی ندارد. */
+  counterparty: {
+    kind: 'CUSTOMER' | 'SUPPLIER';
+    id: string;
+    name: string;
+  } | null;
   lines: {
     account: FixedAccount;
     accountLabel: string;
@@ -271,7 +277,22 @@ export class VouchersController {
       .filter((r) => r.sourceType === VoucherSourceType.PAYMENT_REVERSAL)
       .map((r) => r.sourceId);
 
-    const [returns, corrections, reversals] = await Promise.all([
+    const purchaseIds = rows
+      .filter(
+        (r) =>
+          r.sourceType === VoucherSourceType.PURCHASE_INVOICE ||
+          r.sourceType === VoucherSourceType.PURCHASE_CANCEL,
+      )
+      .map((r) => r.sourceId);
+    const customerIds = [
+      ...new Set(
+        rows.flatMap((r) =>
+          r.lines.map((l) => l.customerId).filter((id): id is string => !!id),
+        ),
+      ),
+    ];
+
+    const [returns, corrections, reversals, customers, purchases] = await Promise.all([
       returnIds.length
         ? this.prisma.saleReturn.findMany({
             where: { id: { in: returnIds } },
@@ -290,7 +311,24 @@ export class VouchersController {
             select: { id: true, invoiceId: true },
           })
         : Promise.resolve([]),
+      customerIds.length
+        ? this.prisma.customer.findMany({
+            where: { id: { in: customerIds } },
+            select: { id: true, firstName: true, lastName: true },
+          })
+        : Promise.resolve([]),
+      purchaseIds.length
+        ? this.prisma.purchaseInvoice.findMany({
+            where: { id: { in: purchaseIds } },
+            select: { id: true, supplier: { select: { id: true, name: true } } },
+          })
+        : Promise.resolve([]),
     ]);
+
+    const customerName = new Map(
+      customers.map((c) => [c.id, [c.firstName, c.lastName].filter(Boolean).join(' ')]),
+    );
+    const supplierByPurchase = new Map(purchases.map((p) => [p.id, p.supplier]));
 
     const invoiceByReturn = new Map(returns.map((r) => [r.id, r.invoiceId]));
     const invoiceByCorrection = new Map(
@@ -313,10 +351,20 @@ export class VouchersController {
                 ? v.sourceId
                 : null;
 
+      const supplier = supplierByPurchase.get(v.sourceId);
+      const lineCustomerId = v.lines.find((l) => l.customerId)?.customerId;
+      const lineCustomerName = lineCustomerId ? customerName.get(lineCustomerId) : undefined;
+      const counterparty: VoucherOut['counterparty'] = supplier
+        ? { kind: 'SUPPLIER', id: supplier.id, name: supplier.name }
+        : lineCustomerId && lineCustomerName !== undefined
+          ? { kind: 'CUSTOMER', id: lineCustomerId, name: lineCustomerName }
+          : null;
+
       return {
         ...v,
         sourceLabel: SOURCE_LABELS[v.sourceType] ?? v.sourceType,
         invoiceId,
+        counterparty,
         lines: v.lines.map((l) => ({
           ...l,
           accountLabel: ACCOUNT_LABELS[l.account] ?? l.account,

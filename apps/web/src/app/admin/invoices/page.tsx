@@ -13,7 +13,17 @@ import { InvoiceStoryStrip } from "./_components/invoice-story-strip";
 import { toast } from "sonner";
 import { Search, Undo2 } from "lucide-react";
 
-import { ErrorState } from "@/components/states";
+import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { ActiveFilters, ListToolbar } from "@/components/list-toolbar";
+import { DataTablePagination } from "@/components/data-table-pagination";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { JalaliDateInput } from "@/components/jalali-date-input";
@@ -50,9 +60,6 @@ import type { Invoice } from "@/lib/types";
  * راهی برای دیدنِ فاکتورهای روزهای قبل، جز از گزارش‌ها، نبود. این صفحه همان
  * فهرست است با جست‌وجو (نام/شماره/تلفن) و صفحه‌بندی.
  */
-const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
-const TD = "px-2 py-1.5 whitespace-nowrap";
-
 // برچسب‌ها از دیکشنری مرکزی می‌آیند — این صفحه حقِ نسخه‌برداریِ خودش را ندارد.
 const STATUS_TABS = ["", "OPEN", "CONFIRMED", "RETURNED", "CANCELLED"].map(
   (key) => ({
@@ -264,8 +271,15 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
         }
       }}
     >
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
-        <div className="relative order-first min-w-56 flex-1 basis-64">
+      <div className="shrink-0 space-y-2 border-b px-3 py-2">
+      <ListToolbar
+        actions={
+          <span className="text-xs tabular-nums text-muted-foreground">
+            {meta ? `${toFa(meta.total)} فاکتور` : ""}
+          </span>
+        }
+      >
+        <div className="relative min-w-56 flex-1 basis-64">
           <Search className="absolute end-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
@@ -317,116 +331,149 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
         <JalaliDateInput value={from} onChange={withPageReset(setFrom)} />
         <JalaliDateInput value={to} onChange={withPageReset(setTo)} />
 
-        {(hasDue || from || to || status) && (
-          <button
-            type="button"
-            onClick={() => {
-              setHasDue(false);
-              setFrom("");
-              setTo("");
-              setStatus("");
-            }}
-            className="h-8 rounded-md border border-dashed px-3 text-sm text-muted-foreground"
-          >
-            پاک‌کردن
-          </button>
-        )}
+      </ListToolbar>
 
-        <span className="text-xs text-muted-foreground">
-          {meta ? `${toFa(meta.total)} فاکتور` : ""}
-        </span>
+      {/* چیپِ هر فیلتر همان setterِ کنترلِ خودش را صدا می‌زند؛ «پاک کردن همه» همان دکمهٔ قبلی است. */}
+      <ActiveFilters
+        filters={[
+          ...(status
+            ? [
+                {
+                  key: "status",
+                  label: `وضعیت: ${INVOICE_STATUS_LABELS[status] ?? status}`,
+                  onRemove: withPageReset(() => setStatus("")),
+                },
+              ]
+            : []),
+          ...(hasDue
+            ? [
+                {
+                  key: "hasDue",
+                  label: "مانده‌دار",
+                  onRemove: withPageReset(() => setHasDue(false)),
+                },
+              ]
+            : []),
+          ...(from
+            ? [
+                {
+                  key: "from",
+                  label: `از: ${faDate(from)}`,
+                  onRemove: withPageReset(() => setFrom("")),
+                },
+              ]
+            : []),
+          ...(to
+            ? [
+                {
+                  key: "to",
+                  label: `تا: ${faDate(to)}`,
+                  onRemove: withPageReset(() => setTo("")),
+                },
+              ]
+            : []),
+        ]}
+        onClearAll={() => {
+          setHasDue(false);
+          setFrom("");
+          setTo("");
+          setStatus("");
+        }}
+      />
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {list.isError ? (
+      {list.isError ? (
+        <div className="min-h-0 flex-1 overflow-auto p-3">
           <ErrorState onRetry={() => list.refetch()} />
-        ) : !rows.length ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            {list.isFetching
-              ? "…"
-              : debouncedQ
-                ? "فاکتوری پیدا نشد"
-                : "هنوز فاکتوری ثبت نشده"}
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/70 backdrop-blur">
-              <tr>
-                <th className={`${TH} w-20`}>شماره</th>
-                <th className={`${TH} w-24`}>تاریخ</th>
-                <th className={`${TH} w-16`}>ساعت</th>
-                <th className={TH}>مشتری</th>
-                <th className={`${TH} w-28`}>وضعیت</th>
-                <th
-                  className={`${TH} w-32`}
+        </div>
+      ) : !rows.length ? (
+        <div className="min-h-0 flex-1 overflow-auto p-3">
+          {list.isFetching ? (
+            <LoadingState />
+          ) : (
+            <EmptyState
+              title={debouncedQ ? "فاکتوری پیدا نشد" : "هنوز فاکتوری ثبت نشده"}
+            />
+          )}
+        </div>
+      ) : (
+        <Table containerClassName="min-h-0 flex-1 overflow-y-auto">
+          <TableHeader sticky>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="h-9 w-20 px-2 text-xs font-bold">شماره</TableHead>
+              <TableHead className="h-9 w-24 px-2 text-xs font-bold">تاریخ</TableHead>
+              <TableHead className="h-9 w-16 px-2 text-xs font-bold">ساعت</TableHead>
+              <TableHead className="h-9 px-2 text-xs font-bold">مشتری</TableHead>
+              <TableHead className="h-9 w-28 px-2 text-xs font-bold">وضعیت</TableHead>
+              <TableHead
+                className="h-9 w-32 px-2 text-end text-xs font-bold tabular-nums"
+                title="مبلغِ فعلیِ فاکتور — پس از کسرِ مرجوعی‌ها و افزودنِ اصلاحیه‌ها"
+              >
+                مبلغ
+              </TableHead>
+              <TableHead
+                className="h-9 w-32 px-2 text-end text-xs font-bold tabular-nums"
+                title="ماندهٔ پرداخت‌نشدهٔ همین فاکتور"
+              >
+                مانده
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((inv, i) => (
+              <TableRow
+                key={inv.id}
+                data-active-row={i === row}
+                onMouseEnter={() => setRow(i)}
+                onClick={() => openInPos(inv)}
+                title="باز کردن این فاکتور در صندوق برای ویرایش"
+                className={`cursor-pointer odd:bg-muted/25 ${
+                  inv.status === "CANCELLED" ? "opacity-60" : ""
+                }`}
+              >
+                <TableCell className="px-2 py-1.5 font-bold tabular-nums">
+                  {toFa(inv.number)}
+                </TableCell>
+                <TableCell className="px-2 py-1.5 tabular-nums text-muted-foreground">
+                  {faDate(inv.createdAt)}
+                </TableCell>
+                <TableCell className="px-2 py-1.5 tabular-nums text-muted-foreground">
+                  {faTime(inv.createdAt)}
+                </TableCell>
+                <TableCell className="max-w-0 truncate px-2 py-1.5">
+                  {inv.customer?.fullName ?? "نقدی گذری"}
+                </TableCell>
+                <TableCell className="px-2 py-1.5 whitespace-normal">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusBadge kind="invoice" status={inv.status} />
+                    {/* وضعیت پرداخت — پرداخت کامل/نسیه/معوق، از دیکشنری مالی. */}
+                    <InvoicePayBadge invoice={inv} />
+                    {inv.hasReturns && (
+                      <Undo2 className="size-3.5 text-warning" />
+                    )}
+                  </div>
+                </TableCell>
+                <TableCell
+                  className="px-2 py-1.5 text-end font-semibold tabular-nums"
                   title="مبلغِ فعلیِ فاکتور — پس از کسرِ مرجوعی‌ها و افزودنِ اصلاحیه‌ها"
                 >
-                  مبلغ
-                </th>
-                <th
-                  className={`${TH} w-32`}
+                  {money(inv.total)}
+                </TableCell>
+                <TableCell
                   title="ماندهٔ پرداخت‌نشدهٔ همین فاکتور"
-                >
-                  مانده
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((inv, i) => (
-                <tr
-                  key={inv.id}
-                  data-active-row={i === row}
-                  onMouseEnter={() => setRow(i)}
-                  onClick={() => openInPos(inv)}
-                  title="باز کردن این فاکتور در صندوق برای ویرایش"
-                  className={`cursor-pointer border-b odd:bg-muted/25 ${
-                    inv.status === "CANCELLED" ? "opacity-60" : ""
+                  className={`px-2 py-1.5 text-end font-bold tabular-nums ${
+                    inv.dueAmount > 0
+                      ? balanceTextClass(inv.dueAmount)
+                      : "text-muted-foreground"
                   }`}
                 >
-                  <td className={`${TD} font-bold tabular-nums`}>
-                    {toFa(inv.number)}
-                  </td>
-                  <td className={`${TD} tabular-nums text-muted-foreground`}>
-                    {faDate(inv.createdAt)}
-                  </td>
-                  <td className={`${TD} tabular-nums text-muted-foreground`}>
-                    {faTime(inv.createdAt)}
-                  </td>
-                  <td className={`${TD} max-w-0 truncate`}>
-                    {inv.customer?.fullName ?? "نقدی گذری"}
-                  </td>
-                  <td className={`${TD} whitespace-normal`}>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <StatusBadge kind="invoice" status={inv.status} />
-                      {/* وضعیت پرداخت — پرداخت کامل/نسیه/معوق، از دیکشنری مالی. */}
-                      <InvoicePayBadge invoice={inv} />
-                      {inv.hasReturns && (
-                        <Undo2 className="size-3.5 text-warning" />
-                      )}
-                    </div>
-                  </td>
-                  <td
-                    className={`${TD} font-semibold tabular-nums`}
-                    title="مبلغِ فعلیِ فاکتور — پس از کسرِ مرجوعی‌ها و افزودنِ اصلاحیه‌ها"
-                  >
-                    {money(inv.total)}
-                  </td>
-                  <td
-                    title="ماندهٔ پرداخت‌نشدهٔ همین فاکتور"
-                    className={`${TD} font-bold tabular-nums ${
-                      inv.dueAmount > 0
-                        ? balanceTextClass(inv.dueAmount)
-                        : "text-muted-foreground"
-                    }`}
-                  >
-                    {inv.dueAmount > 0 ? money(inv.dueAmount) : "—"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                  {inv.dueAmount > 0 ? money(inv.dueAmount) : "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
 
       {/*
         نوارِ وضعیت مالی مشتری — برای ردیفِ فعال، همان طرحِ تأییدشده: هر جا

@@ -16,6 +16,7 @@ import { money, toFa } from "@/lib/format";
 import { useAuthStore } from "@/lib/auth-store";
 import { PageHeader } from "@/components/page-header";
 import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { ActiveFilters, ListToolbar } from "@/components/list-toolbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -144,26 +145,43 @@ export default function SuppliersPage() {
         title="تأمین‌کنندگان"
         description="شرکت‌هایی که از آن‌ها خرید می‌کنید — آدرس، مهلت و نحوهٔ تسویه"
         icon={Building2}
-        actions={
-          <Button onClick={() => setCreating(true)}>
-            <Plus className="me-2 size-4" />
-            تأمین‌کننده جدید
-          </Button>
-        }
       />
 
-      <Card className="p-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="ps-9"
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="جست‌وجوی نام، تلفن یا آدرس…"
-            aria-label="جست‌وجوی تأمین‌کننده"
-          />
-        </div>
-      </Card>
+      <div className="flex flex-col gap-2">
+        <ListToolbar
+          actions={
+            <>
+              {suppliersQ.data ? (
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {toFa(rows.length)} تأمین‌کننده
+                </span>
+              ) : null}
+              <Button size="sm" onClick={() => setCreating(true)}>
+                <Plus className="size-4" />
+                تأمین‌کننده جدید
+              </Button>
+            </>
+          }
+        >
+          <div className="relative min-w-[220px] flex-1">
+            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="ps-9"
+              value={term}
+              onChange={(e) => setTerm(e.target.value)}
+              placeholder="جست‌وجوی نام، تلفن یا آدرس…"
+              aria-label="جست‌وجوی تأمین‌کننده"
+            />
+          </div>
+        </ListToolbar>
+        <ActiveFilters
+          filters={
+            term.trim()
+              ? [{ key: "q", label: `جست‌وجو: ${term.trim()}`, onRemove: () => setTerm("") }]
+              : []
+          }
+        />
+      </div>
 
       <Card className="overflow-hidden p-0">
         {suppliersQ.isLoading ? (
@@ -178,17 +196,29 @@ export default function SuppliersPage() {
                 ? "عبارت را عوض کنید یا تأمین‌کنندهٔ جدید بسازید."
                 : "اولین طرف‌حساب خرید را اضافه کنید."
             }
+            icon={q ? Search : Building2}
+            action={
+              q ? (
+                <Button variant="outline" size="sm" onClick={() => setTerm("")}>
+                  پاک کردن جست‌وجو
+                </Button>
+              ) : (
+                <Button size="sm" onClick={() => setCreating(true)}>
+                  <Plus className="size-4" />
+                  تأمین‌کننده جدید
+                </Button>
+              )
+            }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
+            <Table containerClassName="max-h-[calc(100vh-16rem)] overflow-y-auto">
+              <TableHeader sticky>
                 <TableRow>
                   <TableHead>نام</TableHead>
-                  <TableHead>تلفن</TableHead>
+                  <TableHead className="text-end tabular-nums">تلفن</TableHead>
                   <TableHead>تسویه</TableHead>
-                  <TableHead className="text-end">فاکتورها</TableHead>
-                  <TableHead className="text-end">جمع خرید</TableHead>
+                  <TableHead className="text-end tabular-nums">فاکتورها</TableHead>
+                  <TableHead className="text-end tabular-nums">جمع خرید</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -196,7 +226,7 @@ export default function SuppliersPage() {
                   const st = stats.get(s.id);
                   return (
                     <TableRow key={s.id}>
-                      <TableCell className="font-medium">
+                      <TableCell className="min-w-[180px] whitespace-normal font-medium">
                         <Link
                           className="text-primary underline-offset-4 hover:underline"
                           href={`/admin/suppliers/${s.id}`}
@@ -230,7 +260,7 @@ export default function SuppliersPage() {
                       <TableCell className="text-end tabular-nums">
                         {toFa(st?.count ?? 0)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-end tabular-nums">
+                      <TableCell className="text-end tabular-nums">
                         {st ? money(st.total) : money(0)}
                       </TableCell>
                     </TableRow>
@@ -238,7 +268,6 @@ export default function SuppliersPage() {
                 })}
               </TableBody>
             </Table>
-          </div>
         )}
       </Card>
 
