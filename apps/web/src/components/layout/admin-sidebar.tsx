@@ -43,8 +43,8 @@ function NavLink({
       dir="ltr"
       className={cn(
         "relative flex w-full items-center justify-end gap-2.5 rounded-lg text-sm font-medium transition-colors",
-        collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2",
-        nested && !collapsed && "py-1.5 text-[13px]",
+        collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
+        nested && !collapsed && "py-2 text-[13px]",
         isActive
           ? "bg-sidebar-accent text-sidebar-accent-foreground"
           : "text-sidebar-foreground/85 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground",
@@ -61,11 +61,15 @@ function NavLink({
         />
       ) : null}
 
-      {/* dir=ltr + justify-end → [آیکن][متن] چسبیده به راست؛ متن راست‌ترین است */}
+      {/* dir=ltr + justify-end → [آیکن][متن] چسبیده به راست؛ متن راست‌ترین است.
+          آیکن‌ها ۲۰px هستند (نه ۱۸px) — روی مانیتور مغازه از فاصله‌ی یک متر هم
+          شکل‌شان از هم تشخیص داده می‌شود؛ `strokeWidth` کمی نازک‌تر تا در این
+          اندازه تودرتو و سیاه نشوند. */}
       <Icon
+        strokeWidth={nested ? 1.9 : 1.8}
         className={cn(
-          "size-[1.125rem] shrink-0",
-          nested && "size-4 opacity-80",
+          "size-5 shrink-0",
+          nested && "size-[1.125rem] opacity-80",
           isActive && "text-sidebar-primary",
         )}
       />
@@ -122,7 +126,13 @@ function NavGroup({
             !open && "-rotate-90",
           )}
         />
-        <Icon className="size-[1.125rem] shrink-0" />
+        <Icon
+          strokeWidth={1.8}
+          className={cn(
+            "size-5 shrink-0",
+            anyActive && "text-sidebar-primary",
+          )}
+        />
         <span className="min-w-0 truncate text-right">{item.title}</span>
       </button>
 
