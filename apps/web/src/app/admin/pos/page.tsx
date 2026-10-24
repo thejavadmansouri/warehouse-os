@@ -57,7 +57,8 @@ import {
   locateProducts,
   resolveForSale,
 } from "@/lib/api";
-import { faToEn, money, parseNum, qty, toFa, rial } from "@/lib/format";
+import { faToEn, money, parseNum, qty, rial, toFa } from "@/lib/format";
+import { unitLabel } from "@/lib/currency";
 import { uuid } from "@/lib/uuid";
 import type {
   CreateAdjustDto,
@@ -93,6 +94,7 @@ import {
   type CommandMap,
 } from "@/components/document/document-shell";
 import { DiscountField } from "./_components/discount-input";
+import { SummaryChip } from "./_components/summary-chip";
 import {
   LineItems,
   lineDiscount,
@@ -3222,71 +3224,63 @@ export default function PosPage() {
                 <div className="flex min-w-0 flex-wrap items-center gap-1">
                   {adjusting && adjustDraftState ? (
                     <>
-                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                        <span className="block text-[10px] leading-tight text-muted-foreground">
-                          ارزش مرجوعی
-                        </span>
-                        <b className="block text-xs leading-tight tabular-nums text-amber-600 dark:text-amber-400">
-                          − {money(adjustDraftState.refundAmount)}
-                        </b>
-                      </div>
-                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                        <span className="block text-[10px] leading-tight text-muted-foreground">
-                          ارزش افزوده
-                        </span>
-                        <b className="block text-xs leading-tight tabular-nums text-primary">
-                          + {money(adjustDraftState.additionsAmount)}
-                        </b>
-                      </div>
-                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                        <span className="block text-[10px] leading-tight text-muted-foreground">
-                          اثر تغییرات
-                        </span>
-                        <b
-                          className={`block text-xs leading-tight tabular-nums ${
-                            adjustDraftState.changesAdjust >= 0
-                              ? "text-primary"
-                              : "text-success"
-                          }`}
-                        >
-                          {adjustDraftState.changesAdjust >= 0 ? "+" : "−"}{" "}
-                          {money(Math.abs(adjustDraftState.changesAdjust))}
-                        </b>
-                      </div>
+                      <SummaryChip
+                        label="ارزش مرجوعی"
+                        tone="warning"
+                        className="w-40 shrink-0"
+                      >
+                        − {money(adjustDraftState.refundAmount)}
+                      </SummaryChip>
+                      <SummaryChip
+                        label="ارزش افزوده"
+                        tone="primary"
+                        className="w-40 shrink-0"
+                      >
+                        + {money(adjustDraftState.additionsAmount)}
+                      </SummaryChip>
+                      <SummaryChip
+                        label="اثر تغییرات"
+                        tone={
+                          adjustDraftState.changesAdjust >= 0
+                            ? "primary"
+                            : "success"
+                        }
+                        className="w-40 shrink-0"
+                      >
+                        {adjustDraftState.changesAdjust >= 0 ? "+" : "−"}{" "}
+                        {money(Math.abs(adjustDraftState.changesAdjust))}
+                      </SummaryChip>
                     </>
                   ) : (
                     <>
-                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                        <span className="block text-[10px] leading-tight text-muted-foreground">
-                          جمع اقلام
-                        </span>
-                        <b className="block text-xs leading-tight tabular-nums text-foreground">
-                          {money(grossSubtotal)}
-                        </b>
-                      </div>
-                      <div className="shrink-0 rounded border bg-background px-1.5 py-0.5">
-                        <span className="block text-[10px] leading-tight text-muted-foreground">
-                          تخفیف ردیف‌ها
-                        </span>
-                        <b className="block text-xs leading-tight tabular-nums text-success">
-                          − {money(linesDiscountTotal)}
-                        </b>
-                      </div>
-                      <div className="w-44 shrink-0 rounded border bg-background px-1.5 py-0.5">
-                        <span className="block text-[10px] leading-tight text-muted-foreground">
-                          تخفیف فاکتور
-                        </span>
+                      <SummaryChip
+                        label="جمع اقلام"
+                        className="w-40 shrink-0"
+                      >
+                        {money(grossSubtotal)}
+                      </SummaryChip>
+                      <SummaryChip
+                        label="تخفیف ردیف‌ها"
+                        tone="success"
+                        className="w-40 shrink-0"
+                      >
+                        − {money(linesDiscountTotal)}
+                      </SummaryChip>
+                      <SummaryChip
+                        label="تخفیف فاکتور"
+                        className="w-40 shrink-0"
+                      >
                         <DiscountField
                           id="invoice-discount"
                           value={invoiceDiscountInput}
                           base={subtotal}
-                          compact
+                          chip
                           onChange={(d) => {
                             invalidateIdem();
                             setInvoiceDiscountInput(d);
                           }}
                         />
-                      </div>
+                      </SummaryChip>
                     </>
                   )}
                 </div>
@@ -3382,7 +3376,7 @@ export default function PosPage() {
 
               <div className="flex min-w-0 shrink-0 flex-wrap items-end gap-3">
                 <div className="text-end">
-                  <div className="text-[10px] leading-none text-muted-foreground">
+                  <div className="text-[10px] leading-none text-muted-foreground" title="واحدِ نمایش از تنظیمات فروشگاه می‌آید">
                     {returning
                       ? "بازپرداخت به مشتری"
                       : adjusting
@@ -3404,7 +3398,7 @@ export default function PosPage() {
                           : total,
                     )}
                     <span className="ms-1 text-[10px] font-normal text-muted-foreground">
-                      ریال
+                      {unitLabel()}
                     </span>
                   </div>
                 </div>

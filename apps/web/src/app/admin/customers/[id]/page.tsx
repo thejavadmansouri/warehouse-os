@@ -1191,7 +1191,7 @@ export default function CustomerPage() {
                       setViewing(null);
                     }}
                   >
-                    <Undo2 className="size-4 text-amber-600" /> مرجوعی کامل
+                    <Undo2 className="size-4 text-amber-600" /> مرجوعی
                   </Button>
                 )}
               </div>
@@ -1200,10 +1200,9 @@ export default function CustomerPage() {
         </OverlayPanel>
       )}
 
-      {/* مرجوعیِ کامل — اقلامِ فاکتور از پیش تیک‌خورده‌اند؛ جمعِ برگشتی پایینِ دیالوگ زنده است. */}
+      {/* مرجوعی — «همهٔ اقلام» داخلِ همان پنجره یک کلیک است. */}
       <ReturnDialog
         invoiceId={returning}
-        initialAll
         onClose={() => setReturning(null)}
         onDone={refresh}
       />
@@ -1576,7 +1575,7 @@ function CustomerPurchaseRows({
                         <Button
                           variant="ghost"
                           size="sm"
-                          title="مرجوعی کامل — همه‌ی اقلام برگردند"
+                          title="مرجوعی — «همهٔ اقلام» داخلِ پنجره یک کلیک است"
                           onClick={(e) => {
                             e.stopPropagation();
                             onReturn(inv.id);

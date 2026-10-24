@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, PencilLine } from "lucide-react";
+import { Loader2, PencilLine, RotateCcw } from "lucide-react";
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { createCorrection, getCorrectableLines } from "@/lib/api";
 import { money, rial, toFa, faToEn } from "@/lib/format";
 import { ApiException } from "@/lib/api-error-messages";
+import { cn } from "@/lib/utils";
 import { EditDiffSummary, type EditDiffRow } from "./edit-diff-summary";
+import { SummaryChip } from "./summary-chip";
 
 /**
  * اصلاحیه‌ی فاکتور — تصحیحِ قیمت/تعدادِ یک فاکتورِ نهایی با سندِ جدا.
@@ -102,6 +104,20 @@ export function CorrectionDialog({
     [changedLines, qtyById, priceById],
   );
 
+  /** یک ردیف به حالتِ اول برگردد — «جدید»های همان ردیف پاک می‌شوند. */
+  const resetLine = (saleLogId: string) => {
+    setQtyById((m) => {
+      const next = { ...m };
+      delete next[saleLogId];
+      return next;
+    });
+    setPriceById((m) => {
+      const next = { ...m };
+      delete next[saleLogId];
+      return next;
+    });
+  };
+
   const submit = useMutation({
     mutationFn: () =>
       createCorrection({
@@ -137,7 +153,7 @@ export function CorrectionDialog({
 
   return (
     <Dialog open={!!invoiceId} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <PencilLine className="size-4" />
@@ -185,8 +201,18 @@ export function CorrectionDialog({
                 <p className="text-xs text-muted-foreground">
                   فقط ردیف‌هایی که تغییر می‌دهید ارسال می‌شوند؛ فاکتور اصلی دست
                   نمی‌خورد و دفتر و موجودی به‌اندازه‌ی همان تغییر جبران می‌شود.
-                  افزایش تعداد یعنی کسر بیشتر از انبار، کاهش یعنی برگشت.
+                  جای خالی یعنی «همان مقدارِ فعلی» — عددِ صفر یعنی صفر، نه
+                  دست‌نخوردگی.
                 </p>
+
+                {changedLines.some(
+                  (l) => parseNew(l.saleLogId, qtyById, priceById, l).qty === 0,
+                ) && (
+                  <p className="rounded-md border border-amber-600/40 bg-amber-600/10 px-2 py-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    یکی از ردیف‌ها تعدادِ صفر گرفته — یعنی آن قلم کلاً از فاکتور
+                    حذف می‌شود.
+                  </p>
+                )}
 
                 <div className="max-h-[45vh] overflow-y-auto rounded-lg border">
                   <table className="w-full text-sm">
@@ -196,7 +222,8 @@ export function CorrectionDialog({
                         <th className="w-20 p-2 text-center font-medium">فعلی</th>
                         <th className="w-24 p-2 text-center font-medium">تعداد جدید</th>
                         <th className="w-28 p-2 text-center font-medium">قیمت جدید</th>
-                        <th className="w-28 p-2 text-end font-medium">اثر</th>
+                        <th className="w-24 p-2 text-end font-medium">اثر</th>
+                        <th className="w-9 p-2" />
                       </tr>
                     </thead>
                     <tbody>
@@ -229,7 +256,13 @@ export function CorrectionDialog({
                                   setQtyById((m) => ({ ...m, [l.saleLogId]: e.target.value }))
                                 }
                                 placeholder={toFa(l.oldQuantity)}
-                                className="h-9 text-center tabular-nums"
+                                title={`فعلی: ${toFa(l.oldQuantity)} — خالی یعنی بدونِ تغییر`}
+                                className={cn(
+                                  "h-8 px-1 text-center text-xs tabular-nums",
+                                  qtyById[l.saleLogId] !== undefined &&
+                                    qtyById[l.saleLogId] !== "" &&
+                                    "border-primary/60 bg-primary/5",
+                                )}
                               />
                             </td>
                             <td className="p-2">
@@ -243,10 +276,32 @@ export function CorrectionDialog({
                                   }))
                                 }
                                 placeholder={toFa(l.oldUnitPrice)}
-                                className="h-9 text-center tabular-nums ltr"
+                                title={`فعلی: ${money(l.oldUnitPrice)} — خالی یعنی بدونِ تغییر`}
+                                className={cn(
+                                  "h-8 px-1 text-center text-xs tabular-nums ltr",
+                                  priceById[l.saleLogId] !== undefined &&
+                                    priceById[l.saleLogId] !== "" &&
+                                    "border-primary/60 bg-primary/5",
+                                )}
                               />
                             </td>
-                            <td className="p-2 text-end font-semibold tabular-nums">                              {changed ? money(lineEffect(l, qtyById, priceById)) : "—"}
+                            <td className="p-2 text-end font-semibold tabular-nums">
+                              {changed ? money(lineEffect(l, qtyById, priceById)) : "—"}
+                            </td>
+                            <td className="p-2">
+                              {changed ? (
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="size-7 text-muted-foreground"
+                                  title="بازگرداندن این ردیف به مقدارِ فعلی"
+                                  aria-label={`بازگرداندن ${l.product.name}`}
+                                  onClick={() => resetLine(l.saleLogId)}
+                                >
+                                  <RotateCcw className="size-3.5" />
+                                </Button>
+                              ) : null}
                             </td>
                           </tr>
                         );
@@ -282,24 +337,26 @@ export function CorrectionDialog({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between border-t pt-3">
-                  <div className="text-sm">
-                    اثر اصلاحیه:{" "}
-                    <span className={`font-bold tabular-nums ${adjustPreview < 0 ? "text-primary" : "text-amber-600"}`}>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <SummaryChip label="ردیف‌های تغییرکرده" className="w-28 shrink-0">
+                      {toFa(changedLines.length)} ردیف
+                    </SummaryChip>
+                    <SummaryChip
+                      label={
+                        adjustPreview > 0
+                          ? "اثر · بدهی زیاد می‌شود"
+                          : adjustPreview < 0
+                            ? "اثر · بدهی کم می‌شود"
+                            : "اثر اصلاحیه"
+                      }
+                      tone={adjustPreview > 0 ? "warning" : adjustPreview < 0 ? "primary" : "default"}
+                      className="w-52 shrink-0"
+                    >
                       {rial(adjustPreview > 0 ? adjustPreview : -adjustPreview)}
-                    </span>
-                    {adjustPreview > 0 && (
-                      <span className="ms-2 text-xs text-amber-600">
-                        (بدهیِ مشتری زیاد می‌شود)
-                      </span>
-                    )}
-                    {adjustPreview < 0 && (
-                      <span className="ms-2 text-xs text-primary">
-                        (بدهیِ مشتری کم می‌شود)
-                      </span>
-                    )}
+                    </SummaryChip>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     <Button variant="outline" disabled={submit.isPending} onClick={onClose}>
                       انصراف
                     </Button>

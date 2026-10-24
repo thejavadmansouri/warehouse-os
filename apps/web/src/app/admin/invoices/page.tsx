@@ -249,10 +249,18 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
             return;
           case "Enter":
             e.preventDefault();
-            // Alt+Enter = مرجوعی؛ همان قاعده‌ی پنلِ مشتری در صندوق.
-            if (e.altKey) {
+            // Alt+Enter = مرجوعی، Alt+Shift+Enter = اصلاحیه — همان قاعده‌ی صندوق.
+            // بدونِ این دومی، دیالوگِ اصلاحیه فقط از پنلِ صندوق باز می‌شد و
+            // در فهرستِ فاکتورها مسیرِ صریحی نداشت.
+            if (e.altKey && e.shiftKey) {
+              if (canManage && inv && inv.status === "CONFIRMED") {
+                setCorrecting(inv.id);
+              }
+            } else if (e.altKey) {
               if (canManage && inv) setReturning(inv.id);
-            } else openInPos(inv);
+            } else {
+              openInPos(inv);
+            }
             return;
         }
 
@@ -523,6 +531,7 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
             ["↑↓", "حرکت"],
             ["Enter", "ویرایش در صندوق"],
             ...(canManage ? [["Alt+Enter", "مرجوعی"]] : []),
+            ...(canManage ? [["Alt+Shift+Enter", "اصلاحیه"]] : []),
             ["F6", "دریافت از مشتری"],
             ["Ctrl+P", "چاپ"],
             ...(canManage ? [["Ctrl+Del", "ابطال"]] : []),
@@ -609,7 +618,7 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
           if (!v) setReceiving(null);
         }}
       >
-        <DialogContent className="max-w-lg overflow-auto max-h-[90vh]">
+        <DialogContent className="sm:max-w-lg overflow-auto max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>
               {receiving

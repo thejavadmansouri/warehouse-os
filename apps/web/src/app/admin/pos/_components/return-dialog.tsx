@@ -4,7 +4,13 @@ import * as React from "react";
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Loader2, Undo2 } from "lucide-react";
+import {
+  Loader2,
+  Minus,
+  PackageCheck,
+  Plus,
+  Undo2,
+} from "lucide-react";
 
 import {
   Dialog,
@@ -23,10 +29,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 import { createReturn, getReturnableLines } from "@/lib/api";
-import { money, rial, toFa, faToEn } from "@/lib/format";
+import { amount, faToEn, money, toFa } from "@/lib/format";
 import { ApiException } from "@/lib/api-error-messages";
 import type { PaymentMethod } from "@/lib/types";
+import { SummaryChip } from "./summary-chip";
 
 /**
  * ثبت مرجوعی برای یک فاکتور.
@@ -34,19 +42,24 @@ import type { PaymentMethod } from "@/lib/types";
  * قفل به فاکتور: کالا و قیمت از خودِ فاکتور می‌آیند؛ فروشنده فقط تعداد و
  * سالم/معیوب و روش برگشتِ وجه را تعیین می‌کند. سقفِ هر ردیف «قابل‌برگشت» است
  * (= فروخته − مرجوعیِ قبلی)، پس دو بار برگرداندنِ یک قلم ممکن نیست.
+ *
+ * سه تصمیمِ طراحی که عمدی‌اند:
+ *
+ * ۱. «همهٔ اقلام» داخلِ همین پنجره است، نه یک دکمه‌ی دومِ «مرجوعیِ کامل» در
+ *    فهرست. دو دکمه یعنی دو مسیرِ ذهنی برای یک کار؛ حالا یک مسیر هست و
+ *    برگرداندنِ کلِ فاکتور یک کلیک داخلِ آن است.
+ * ۲. شمارنده‌ی «− / +» جای تایپِ عدد گذاشته شده: مرجوعی در پیشخوان یا «۱»
+ *    است یا «همه»؛ تایپ کردنِ عدد برای هر قلم کندتر از دو کلیک است. ورودیِ
+ *    دستی هم سرِ جایش مانده.
+ * ۳. جمعِ برگشتی و تعداد در نوارِ پایین زنده‌اند، تا قبل از ثبت معلوم باشد
+ *    چه چیزی دارد از حساب/صندوق کم می‌شود.
  */
 export function ReturnDialog({
   invoiceId,
-  initialAll = false,
   onClose,
   onDone,
 }: {
   invoiceId: string | null;
-  /**
-   * مرجوعیِ کامل — همه‌ی اقلامِ قابل‌برگشت به محضِ بازشدن انتخاب شده‌اند؛
-   * فروشنده فقط نگاه می‌کند و ثبت می‌زند (یا چیزی را کم می‌کند).
-   */
-  initialAll?: boolean;
   onClose: () => void;
   onDone?: () => void;
 }) {
@@ -92,31 +105,40 @@ export function ReturnDialog({
     : ((method || defaultMethod) as PaymentMethod);
 
   const lines = data.data?.lines ?? [];
+  const returnableLines = useMemo(
+    () => lines.filter((l) => l.returnable > 0),
+    [lines],
+  );
 
-  /* مرجوعیِ کامل: با رسیدنِ اقلام، همه‌ی قابل‌برگشت‌ها یک‌جا تیک می‌خورند —
-   * فقط یک‌بار، نه با هر refetch (وگرنه ویرایشِ کاربر پاک می‌شد). */
-  const preFilled = React.useRef(false);
-  React.useEffect(() => {
-    if (!initialAll || preFilled.current || lines.length === 0) return;
-    preFilled.current = true;
+  const setQty = (saleLogId: string, next: number, max: number) =>
+    setQtyById((m) => ({
+      ...m,
+      [saleLogId]: Math.max(0, Math.min(max, next)),
+    }));
+
+  const selectAll = () =>
     setQtyById(
       Object.fromEntries(
-        lines
-          .filter((l) => l.returnable > 0)
-          .map((l) => [l.saleLogId, l.returnable]),
+        returnableLines.map((l) => [l.saleLogId, l.returnable]),
       ),
     );
-  }, [initialAll, lines]);
+  const clearAll = () => setQtyById({});
 
-  const refundPreview = useMemo(() => {
-    return lines.reduce((sum, l) => {
-      const q = qtyById[l.saleLogId] ?? 0;
-      return sum + q * l.effectiveUnitPrice;
-    }, 0);
-  }, [lines, qtyById]);
+  const refundPreview = useMemo(
+    () =>
+      lines.reduce(
+        (sum, l) => sum + (qtyById[l.saleLogId] ?? 0) * l.effectiveUnitPrice,
+        0,
+      ),
+    [lines, qtyById],
+  );
 
-  const selectedCount = useMemo(
+  const selectedLineCount = useMemo(
     () => lines.reduce((n, l) => n + (qtyById[l.saleLogId] ? 1 : 0), 0),
+    [lines, qtyById],
+  );
+  const selectedPieces = useMemo(
+    () => lines.reduce((n, l) => n + (qtyById[l.saleLogId] ?? 0), 0),
     [lines, qtyById],
   );
 
@@ -141,7 +163,7 @@ export function ReturnDialog({
     },
     onSuccess: (ret) => {
       toast.success(
-        `مرجوعی ${toFa(ret.number)} ثبت شد — برگشتی ${rial(ret.refundAmount)}`,
+        `مرجوعی ${toFa(ret.number)} ثبت شد — برگشتی ${amount(ret.refundAmount)}`,
       );
       qc.invalidateQueries({ queryKey: ["pos-recent-invoices"] });
       qc.invalidateQueries({ queryKey: ["invoice", invoiceId] });
@@ -159,25 +181,27 @@ export function ReturnDialog({
   const nothingReturnable =
     !data.isLoading && lines.every((l) => l.returnable <= 0);
   /* دلیل اختیاری است — مرجوعی نباید به تایپِ دلیل گره بخورد. */
-  const canSubmit = selectedCount > 0 && !submit.isPending;
+  const canSubmit = selectedLineCount > 0 && !submit.isPending;
 
-  function setQty(saleLogId: string, raw: string, max: number) {
-    // ارقام فارسی/عربی اول به لاتین تبدیل شوند؛ وگرنه `\d` (که فقط 0-9 لاتین است)
-    // آن‌ها را حذف می‌کرد و ورودیِ فارسی همیشه صفر می‌شد.
-    const n = Math.max(
-      0,
-      Math.min(max, Number(faToEn(raw).replace(/[^\d]/g, "")) || 0),
-    );
-    setQtyById((m) => ({ ...m, [saleLogId]: n }));
+  /** ارقام فارسی/عربی → لاتین، سپس عددِ امن. */
+  function setQtyFromInput(saleLogId: string, raw: string, max: number) {
+    const n = Number(faToEn(raw).replace(/[^\d]/g, "")) || 0;
+    setQty(saleLogId, n, max);
   }
 
   return (
     <Dialog open={!!invoiceId} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base">
-            <Undo2 className="size-4" />
+          <DialogTitle className="flex flex-wrap items-center gap-2 text-base">
+            <Undo2 className="size-4 text-amber-600" />
             مرجوعی فاکتور {invoice ? toFa(invoice.number) : ""}
+            {invoice && (
+              <span className="text-xs font-normal text-muted-foreground">
+                {invoice.customer?.fullName ?? "نقدی گذری"} · مبلغ{" "}
+                {amount(invoice.total)}
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
@@ -193,132 +217,230 @@ export function ReturnDialog({
           </p>
         )}
 
-        {data.data?.returnable && isOpenAccount && (
-          <p className="rounded-lg border border-amber-600/40 bg-amber-600/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-            فاکتورِ جاریِ حساب باز — هنوز پولی پرداخت نشده، پس برگشت از بدهیِ
-            همین حساب کم می‌شود.
-          </p>
-        )}
-
         {data.data && data.data.returnable && (
           <div className="flex flex-col gap-3">
-            {invoice && (
-              <div className="rounded-lg bg-muted/40 p-3 text-sm">
-                مشتری:{" "}
-                <span className="font-medium">
-                  {invoice.customer?.fullName ?? "نقدی گذری"}
-                </span>
-                {invoice.dueAmount > 0 && (
-                  <span className="ms-3 text-amber-600">
-                    مانده‌ی فاکتور: {money(invoice.dueAmount)}
-                  </span>
-                )}
-                {customerOwes && (
-                  <span className="ms-3 text-amber-600">
-                    مانده‌ی کل مشتری: {money(data.data!.customerBalance)} —
-                    برگشت پیش‌فرض از حساب کم می‌شود
-                  </span>
+            {invoice ? (
+              <div className="rounded-lg bg-muted/40 px-3 py-2">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs sm:grid-cols-3">
+                  <div>
+                    <div className="text-muted-foreground">مبلغ فاکتور</div>
+                    <div className="font-semibold tabular-nums">
+                      {amount(invoice.total)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">مانده‌ی فاکتور</div>
+                    <div
+                      className={cn(
+                        "font-semibold tabular-nums",
+                        invoice.dueAmount > 0
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground",
+                      )}
+                    >
+                      {invoice.dueAmount > 0
+                        ? amount(invoice.dueAmount)
+                        : "تسویه‌شده"}
+                    </div>
+                  </div>
+                  {hasCustomer && (
+                    <div>
+                      <div className="text-muted-foreground">
+                        مانده‌ی کل مشتری
+                      </div>
+                      <div
+                        className={cn(
+                          "font-semibold tabular-nums",
+                          customerOwes
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {amount(data.data.customerBalance)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {isOpenAccount && (
+                  <p className="mt-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                    فاکتورِ جاریِ حساب باز — هنوز پولی پرداخت نشده، پس برگشت از
+                    بدهیِ همین حساب کم می‌شود.
+                  </p>
                 )}
               </div>
-            )}
+            ) : null}
 
             {nothingReturnable ? (
               <p className="py-6 text-center text-sm text-muted-foreground">
                 همه‌ی اقلام این فاکتور قبلاً مرجوعی شده‌اند.
               </p>
             ) : (
-              <div className="max-h-[45vh] overflow-y-auto rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-muted/60 backdrop-blur">
-                    <tr className="text-muted-foreground">
-                      <th className="p-2 text-start font-medium">کالا</th>
-                      <th className="w-20 p-2 text-center font-medium">
-                        فروخته
-                      </th>
-                      <th className="w-24 p-2 text-center font-medium">
-                        قابل‌برگشت
-                      </th>
-                      <th className="w-28 p-2 text-center font-medium">
-                        تعداد برگشت
-                      </th>
-                      <th className="w-24 p-2 text-center font-medium">
-                        سالم؟
-                      </th>
-                      <th className="w-28 p-2 text-end font-medium">برگشتی</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lines.map((l) => {
-                      const disabled = l.returnable <= 0;
-                      const q = qtyById[l.saleLogId] ?? 0;
-                      const restock = restockById[l.saleLogId] ?? true;
-                      return (
-                        <tr
-                          key={l.saleLogId}
-                          className={`border-t ${disabled ? "opacity-40" : ""}`}
-                        >
-                          <td className="p-2">
-                            <div className="font-medium">{l.product.name}</div>
-                            <div className="text-xs text-muted-foreground">
-                              {money(l.effectiveUnitPrice)} / واحد
-                              {l.alreadyReturned > 0 && (
-                                <span className="ms-2 text-amber-600">
-                                  قبلاً برگشتی: {toFa(l.alreadyReturned)}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="p-2 text-center tabular-nums">
-                            {toFa(l.sold)}
-                          </td>
-                          <td className="p-2 text-center tabular-nums">
-                            {toFa(l.returnable)}
-                          </td>
-                          <td className="p-2">
-                            <Input
-                              inputMode="numeric"
-                              disabled={disabled}
-                              value={q ? toFa(q) : ""}
-                              onChange={(e) =>
-                                setQty(
-                                  l.saleLogId,
-                                  e.target.value,
-                                  l.returnable,
-                                )
-                              }
-                              placeholder="۰"
-                              className="h-9 text-center tabular-nums"
-                            />
-                          </td>
-                          <td className="p-2 text-center">
-                            <Checkbox
-                              checked={restock}
-                              disabled={disabled || q === 0}
-                              onCheckedChange={(v) =>
-                                setRestockById((m) => ({
-                                  ...m,
-                                  [l.saleLogId]: v === true,
-                                }))
-                              }
-                              aria-label="برگشت به موجودی"
-                            />
-                          </td>
-                          <td className="p-2 text-end font-semibold tabular-nums">
-                            {q > 0 ? money(q * l.effectiveUnitPrice) : "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            {!nothingReturnable && (
               <>
+                {/* نوارِ انتخاب — یک مسیر برای «همه» و «هیچ» */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 gap-1.5"
+                    onClick={selectAll}
+                  >
+                    <PackageCheck className="size-4 text-amber-600" />
+                    همهٔ اقلام
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8"
+                    onClick={clearAll}
+                    disabled={selectedLineCount === 0}
+                  >
+                    هیچ‌کدام
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedLineCount === 0
+                      ? `${toFa(returnableLines.length)} قلم قابلِ برگشت`
+                      : `${toFa(selectedLineCount)} قلم · ${toFa(selectedPieces)} عدد`}
+                  </span>
+                </div>
+
+                <div className="max-h-[42vh] overflow-y-auto rounded-lg border">
+                  <table className="w-full text-sm">
+                    <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
+                      <tr className="text-xs text-muted-foreground">
+                        <th className="p-2 text-start font-medium">کالا</th>
+                        <th className="w-14 p-2 text-center font-medium">فروش</th>
+                        <th className="w-16 p-2 text-center font-medium">
+                          قابلِ برگشت
+                        </th>
+                        <th className="w-36 p-2 text-center font-medium">
+                          تعداد برگشت
+                        </th>
+                        <th
+                          className="w-20 p-2 text-center font-medium"
+                          title="تیک یعنی کالا به موجودی برمی‌گردد؛ برای کالای معیوب تیک را بردارید"
+                        >
+                          به انبار
+                        </th>
+                        <th className="w-28 p-2 text-end font-medium">برگشتی</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((l) => {
+                        const disabled = l.returnable <= 0;
+                        const q = qtyById[l.saleLogId] ?? 0;
+                        const restock = restockById[l.saleLogId] ?? true;
+                        return (
+                          <tr
+                            key={l.saleLogId}
+                            className={cn(
+                              "border-t",
+                              disabled && "opacity-40",
+                              q > 0 && "bg-amber-600/5",
+                            )}
+                          >
+                            <td className="p-2">
+                              <div className="font-medium">{l.product.name}</div>
+                              <div className="text-xs text-muted-foreground">
+                                {money(l.effectiveUnitPrice)} / واحد
+                                {l.alreadyReturned > 0 && (
+                                  <span className="ms-2 text-amber-600">
+                                    قبلاً برگشتی: {toFa(l.alreadyReturned)}
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-2 text-center tabular-nums">
+                              {toFa(l.sold)}
+                            </td>
+                            <td className="p-2 text-center tabular-nums">
+                              {toFa(l.returnable)}
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center justify-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="size-7 shrink-0"
+                                  disabled={disabled || q === 0}
+                                  aria-label="یک عدد کمتر"
+                                  onClick={() =>
+                                    setQty(l.saleLogId, q - 1, l.returnable)
+                                  }
+                                >
+                                  <Minus className="size-3.5" />
+                                </Button>
+                                <Input
+                                  inputMode="numeric"
+                                  disabled={disabled}
+                                  value={q ? toFa(q) : ""}
+                                  onChange={(e) =>
+                                    setQtyFromInput(
+                                      l.saleLogId,
+                                      e.target.value,
+                                      l.returnable,
+                                    )
+                                  }
+                                  placeholder="۰"
+                                  aria-label={`تعداد برگشت ${l.product.name}`}
+                                  className="h-7 w-12 px-1 text-center text-xs tabular-nums"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="size-7 shrink-0"
+                                  disabled={disabled || q >= l.returnable}
+                                  aria-label="یک عدد بیشتر"
+                                  onClick={() =>
+                                    setQty(l.saleLogId, q + 1, l.returnable)
+                                  }
+                                >
+                                  <Plus className="size-3.5" />
+                                </Button>
+                                {l.returnable > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setQty(l.saleLogId, l.returnable, l.returnable)
+                                    }
+                                    disabled={disabled || q === l.returnable}
+                                    className="rounded px-1 text-[10px] font-semibold text-primary underline-offset-2 hover:underline disabled:text-muted-foreground disabled:no-underline"
+                                    title={`همهٔ ${toFa(l.returnable)} عدد`}
+                                  >
+                                    همه
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-2 text-center">
+                              <Checkbox
+                                checked={restock}
+                                disabled={disabled || q === 0}
+                                onCheckedChange={(v) =>
+                                  setRestockById((m) => ({
+                                    ...m,
+                                    [l.saleLogId]: v === true,
+                                  }))
+                                }
+                                aria-label="برگشت به موجودی انبار"
+                              />
+                            </td>
+                            <td className="p-2 text-end font-semibold tabular-nums">
+                              {q > 0 ? money(q * l.effectiveUnitPrice) : "—"}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
                 <p className="text-xs text-muted-foreground">
-                  «سالم» یعنی کالا به موجودی برمی‌گردد. اگر معیوب است تیک را
-                  بردارید — فقط وجهش برمی‌گردد و چیزی به انبار اضافه نمی‌شود.
+                  «به انبار» یعنی کالا به موجودی برمی‌گردد. برای کالای معیوب تیک
+                  را بردارید — فقط وجهش برمی‌گردد و چیزی به انبار اضافه نمی‌شود.
                 </p>
 
                 <div className="grid gap-3 sm:grid-cols-2">
@@ -331,7 +453,7 @@ export function ReturnDialog({
                       onValueChange={(v) => setMethod(v as PaymentMethod)}
                       disabled={isOpenAccount}
                     >
-                      <SelectTrigger className="h-10">
+                      <SelectTrigger className="h-9">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -346,12 +468,13 @@ export function ReturnDialog({
                         </SelectItem>
                       </SelectContent>
                     </Select>
-                    {effectiveMethod === "CREDIT" && (
-                      <span className="text-xs text-muted-foreground">
-                        از بدهیِ مشتری کم می‌شود؛ اگر بیشتر از بدهی باشد،
-                        بستانکار می‌شود.
-                      </span>
-                    )}
+                    <span className="text-[11px] text-muted-foreground">
+                      {effectiveMethod === "CREDIT"
+                        ? "از بدهیِ مشتری کم می‌شود؛ اگر بیشتر از بدهی باشد، بستانکار می‌شود."
+                        : effectiveMethod === "CARD"
+                          ? "مبلغ روی کارتخوان به مشتری برمی‌گردد."
+                          : "پول نقد از صندوق به مشتری داده می‌شود."}
+                    </span>
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -363,8 +486,25 @@ export function ReturnDialog({
                       onChange={(e) => setReason(e.target.value)}
                       maxLength={200}
                       placeholder="مثلاً: کالا معیوب بود"
-                      className="h-10"
+                      className="h-9 text-sm"
                     />
+                    <div className="flex flex-wrap gap-1">
+                      {REASONS.map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setReason(reason === r ? "" : r)}
+                          className={cn(
+                            "rounded-full border px-2 py-0.5 text-[11px] transition-colors",
+                            reason === r
+                              ? "border-primary bg-primary/10 text-primary"
+                              : "text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                          )}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
@@ -373,17 +513,31 @@ export function ReturnDialog({
                   onChange={(e) => setNote(e.target.value)}
                   maxLength={300}
                   placeholder="توضیح (اختیاری)"
-                  className="min-h-[60px]"
+                  className="min-h-[52px] text-sm"
                 />
 
-                <div className="flex items-center justify-between border-t pt-3">
-                  <div className="text-sm">
-                    جمع برگشتی:{" "}
-                    <span className="font-bold tabular-nums">
-                      {rial(refundPreview)}
-                    </span>
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <SummaryChip
+                      label="اقلام انتخابی"
+                      className="w-28 shrink-0"
+                    >
+                      {toFa(selectedLineCount)} قلم
+                    </SummaryChip>
+                    <SummaryChip
+                      label="جمع برگشتی"
+                      tone="warning"
+                      className="w-44 shrink-0"
+                    >
+                      {amount(refundPreview)}
+                    </SummaryChip>
+                    {selectedLineCount === 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        برای ثبت، حداقل یک قلم انتخاب کنید
+                      </span>
+                    )}
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex shrink-0 gap-2">
                     <Button
                       variant="outline"
                       disabled={submit.isPending}
@@ -407,3 +561,11 @@ export function ReturnDialog({
     </Dialog>
   );
 }
+
+/** دلیل‌های رایجِ پیشخوان — کلیک، نه تایپ. */
+const REASONS = [
+  "کالا معیوب بود",
+  "مشتری منصرف شد",
+  "اشتباه در فروش",
+  "ارسال اشتباه",
+];

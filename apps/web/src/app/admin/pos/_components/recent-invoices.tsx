@@ -59,8 +59,6 @@ export function RecentInvoices({
   const [cancelling, setCancelling] = useState<Invoice | null>(null);
   const [viewing, setViewing] = useState<string | null>(null);
   const [returning, setReturning] = useState<string | null>(null);
-  /** مرجوعیِ کامل — همان دیالوگ، ولی اقلام از پیش تیک‌خورده باز می‌شود. */
-  const [returningAll, setReturningAll] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState<string | null>(null);
 
   /*
@@ -107,7 +105,7 @@ export function RecentInvoices({
           if (!v && !returning && !correcting) onClose();
         }}
       >
-        <DialogContent className="max-w-6xl" dir="rtl">
+        <DialogContent className="sm:max-w-6xl" dir="rtl">
           <DialogHeader>
             <DialogTitle className="text-base">فاکتورهای امروز</DialogTitle>
           </DialogHeader>
@@ -375,17 +373,6 @@ export function RecentInvoices({
                                   <Button
                                     variant="ghost"
                                     size="sm"
-                                    title="مرجوعی کامل — همه‌ی اقلام از پیش انتخاب شده"
-                                    onClick={() => setReturningAll(inv.id)}
-                                  >
-                                    <Undo2 className="size-3.5 text-amber-600" />
-                                    <span className="ms-1 text-xs">
-                                      مرجوعی کامل
-                                    </span>
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
                                     onClick={() => setCancelling(inv)}
                                   >
                                     <Ban className="size-3.5 text-destructive" />
@@ -411,15 +398,6 @@ export function RecentInvoices({
       <ReturnDialog
         invoiceId={returning}
         onClose={() => setReturning(null)}
-        onDone={() =>
-          qc.invalidateQueries({ queryKey: ["pos-recent-invoices"] })
-        }
-      />
-
-      <ReturnDialog
-        invoiceId={returningAll}
-        initialAll
-        onClose={() => setReturningAll(null)}
         onDone={() =>
           qc.invalidateQueries({ queryKey: ["pos-recent-invoices"] })
         }

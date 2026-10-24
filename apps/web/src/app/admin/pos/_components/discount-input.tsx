@@ -32,11 +32,17 @@ export const DiscountField = forwardRef<
     onChange: (v: DiscountValue) => void;
     /** فشرده = داخل جدول ردیف‌ها؛ عادی = پنل جمع فاکتور. */
     compact?: boolean;
+    /**
+     * چیپ = داخل نوارِ پایینِ سبد، هم‌قدِ «جمع اقلام» و «تخفیف ردیف‌ها». در این
+     * حالت ورودی و دکمه‌ی واحد روی یک خطِ ۲۴پیکسلی می‌نشینند تا ارتفاعِ چیپ
+     * با بقیه یکی بماند.
+     */
+    chip?: boolean;
     id?: string;
     disabled?: boolean;
   }
 >(function DiscountField(
-  { value, base, onChange, compact = false, id, disabled },
+  { value, base, onChange, compact = false, chip = false, id, disabled },
   ref
 ) {
   const isPercent = value.mode === "percent";
@@ -48,8 +54,13 @@ export const DiscountField = forwardRef<
     onChange({ value: 0, mode: isPercent ? "amount" : "percent" });
 
   return (
-    <div className={compact ? "flex flex-col gap-0.5" : "flex flex-col gap-1"}>
-      <div className="flex items-stretch gap-1">
+    <div
+      className={
+        chip ? "flex flex-col" : compact ? "flex flex-col gap-0.5" : "flex flex-col gap-1"
+      }
+      title={chip && isPercent && applied > 0 ? `−${money(applied)}` : undefined}
+    >
+      <div className={chip ? "flex items-stretch gap-0.5" : "flex items-stretch gap-1"}>
         {isPercent ? (
           /* درصد جداکننده ندارد، پس همان Input ساده کافی است. */
           <Input
@@ -64,7 +75,7 @@ export const DiscountField = forwardRef<
               روی هر صفحه چند قلم کم‌تر دیده می‌شد.
             */
             className={`min-w-0 flex-1 text-right tabular-nums ${
-              compact ? "h-7" : "h-10 w-28"
+              chip ? "h-6 px-1 text-xs" : compact ? "h-7" : "h-10 w-28"
             } ${clipped ? "border-amber-600/70" : ""}`}
             value={value.value ? toFa(value.value) : ""}
             onChange={(e) => {
@@ -80,7 +91,7 @@ export const DiscountField = forwardRef<
             id={id}
             disabled={disabled}
             className={`min-w-0 flex-1 text-right tabular-nums ${
-              compact ? "h-7" : "h-10 w-28"
+              chip ? "h-6 px-1 text-xs" : compact ? "h-7" : "h-10 w-28"
             } ${clipped ? "border-amber-600/70" : ""}`}
             value={value.value}
             onChange={(n) => onChange({ ...value, value: Math.max(0, n) })}
@@ -94,7 +105,7 @@ export const DiscountField = forwardRef<
           title={isPercent ? "تبدیل به مبلغ ریالی" : "تبدیل به درصد"}
           aria-label={isPercent ? "حالت درصد — برای ریال کلیک کنید" : "حالت ریال — برای درصد کلیک کنید"}
           /* عرض ثابت: وگرنه «٪» و «ریال» دو عرض متفاوت می‌سازند و ستون ناهموار می‌شود. */
-          className={`${compact ? "h-7 w-10" : "w-14"} shrink-0 rounded-md border text-xs font-medium transition-colors
+          className={`${chip ? "h-6 w-8 text-[10px]" : compact ? "h-7 w-10" : "w-14"} shrink-0 rounded-md border text-xs font-medium transition-colors
                       hover:border-primary hover:text-primary focus:outline-none
                       focus:ring-2 focus:ring-primary disabled:opacity-50 ${
                         isPercent
@@ -106,13 +117,14 @@ export const DiscountField = forwardRef<
         </button>
       </div>
 
-      {/* معادلِ محاسبه‌شده — فقط وقتی چیزی برای گفتن هست. یک خط، بدون شکستن. */}
-      {isPercent && applied > 0 && (
+      {/* معادلِ محاسبه‌شده — فقط وقتی چیزی برای گفتن هست. یک خط، بدون شکستن.
+          در حالتِ چیپ جایی برای خط دوم نیست؛ همان عدد در title می‌آید. */}
+      {!chip && isPercent && applied > 0 && (
         <span className="truncate text-[11px] tabular-nums text-muted-foreground">
           −{money(applied)}
         </span>
       )}
-      {clipped && (
+      {!chip && clipped && (
         <span className="truncate text-[11px] text-amber-600">
           حداکثر {money(base)}
         </span>
