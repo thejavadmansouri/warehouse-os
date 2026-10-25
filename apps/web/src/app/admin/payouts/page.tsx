@@ -11,9 +11,9 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { User } from "lucide-react";
+import { HandCoins, User } from "lucide-react";
 
-import { LoadingState, ErrorState } from "@/components/states";
+import { LoadingState, ErrorState, EmptyState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -124,27 +124,29 @@ export function PayoutsPanel({ embedded }: { embedded?: boolean } = {}) {
           ) : list.isError ? (
             <ErrorState onRetry={() => list.refetch()} />
           ) : !list.data?.data.length ? (
-            <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-              هنوز پرداختی ثبت نشده است
-            </p>
+            <EmptyState
+              icon={HandCoins}
+              title="هنوز پرداختی ثبت نشده است"
+              description="پرداخت فقط برای مشتری بستانکار ممکن است و تاریخچه‌اش اینجا می‌آید."
+            />
           ) : (
             <Card className="overflow-hidden p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>شماره</TableHead>
+                    <TableHead className="w-20">شماره</TableHead>
                     <TableHead>مشتری</TableHead>
-                    <TableHead>روش</TableHead>
+                    <TableHead className="w-40">روش</TableHead>
                     <TableHead>دلیل</TableHead>
-                    <TableHead>تاریخ</TableHead>
-                    <TableHead className="text-start">مبلغ</TableHead>
+                    <TableHead className="w-32">تاریخ</TableHead>
+                    <TableHead className="w-40 text-end">مبلغ (ریال)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {list.data.data.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="tabular-nums">{toFa(p.number)}</TableCell>
-                      <TableCell className="font-medium">{p.customerName}</TableCell>
+                      <TableCell className="whitespace-normal font-medium">{p.customerName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{PAYMENT_LABELS[p.method] ?? p.method}</Badge>
                         {p.chequeNumber && (
@@ -159,7 +161,7 @@ export function PayoutsPanel({ embedded }: { embedded?: boolean } = {}) {
                       <TableCell className="text-xs text-muted-foreground">
                         {faDate(p.createdAt)}
                       </TableCell>
-                      <TableCell className="font-bold">
+                      <TableCell className="text-end font-bold">
                         <Money value={-p.amount} tone="danger" />
                       </TableCell>
                     </TableRow>

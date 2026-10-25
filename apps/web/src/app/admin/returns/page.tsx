@@ -2,14 +2,21 @@
 
 import * as React from "react";
 import { useQuery } from "@tanstack/react-query";
+import { RotateCcw } from "lucide-react";
 
-import { ErrorState } from "@/components/states";
+import { EmptyState, ErrorState, LoadingState } from "@/components/states";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 import { getReturns } from "@/lib/api";
 import { faDate, faTime, money, toFa, PAYMENT_LABELS } from "@/lib/format";
-
-const TH = "border-b px-2 py-1 text-start text-xs font-bold whitespace-nowrap";
-const TD = "px-2 py-1.5 whitespace-nowrap";
 
 /** برچسب روش برگشتِ وجه — CREDIT اینجا یعنی «کسر از حساب»، نه «نسیه». */
 const REFUND_LABELS: Record<string, string> = {
@@ -17,6 +24,8 @@ const REFUND_LABELS: Record<string, string> = {
   CARD: "کارتخوان",
   CREDIT: "کسر از حساب",
 };
+
+const NUM = "text-end tabular-nums";
 
 /** داخلِ صفحه‌ی «اسناد» سرتیترِ خودش را نشان نمی‌دهد. */
 export function ReturnsPanel({ embedded }: { embedded?: boolean } = {}) {
@@ -31,72 +40,70 @@ export function ReturnsPanel({ embedded }: { embedded?: boolean } = {}) {
     /* همان الگوی بقیه‌ی فهرست‌ها. مرجوعی از دلِ فاکتور ثبت می‌شود، پس اینجا
        فقط تاریخچه است و کاری روی ردیف‌ها نیست. */
     <div className={`flex flex-col ${embedded ? "min-h-0 flex-1" : "h-[calc(100vh-2.5rem)]"}`}>
-      <div className="min-h-0 flex-1 overflow-auto">
-        {list.isError ? (
-          <ErrorState onRetry={() => list.refetch()} />
-        ) : !rows.length ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">
-            {list.isFetching ? "…" : "هنوز مرجوعی‌ای ثبت نشده است"}
-          </p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead className="sticky top-0 bg-muted/70 backdrop-blur">
-              <tr>
-                <th className={`${TH} w-16`}>شماره</th>
-                <th className={`${TH} w-24`}>تاریخ</th>
-                <th className={`${TH} w-16`}>ساعت</th>
-                <th className={`${TH} w-20`}>فاکتور</th>
-                <th className={TH}>مشتری</th>
-                <th className={`${TH} w-16 text-center`}>اقلام</th>
-                <th className={`${TH} w-28`}>روش برگشت</th>
-                <th className={TH}>دلیل</th>
-                <th className={`${TH} w-36`}>مبلغ برگشتی</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id} className="border-b odd:bg-muted/25">
-                  <td className={`${TD} font-bold tabular-nums`}>{toFa(r.number)}</td>
-                  <td className={`${TD} tabular-nums text-muted-foreground`}>
-                    {faDate(r.createdAt)}
-                  </td>
-                  <td className={`${TD} tabular-nums text-muted-foreground`}>
-                    {faTime(r.createdAt)}
-                  </td>
-                  <td className={`${TD} tabular-nums text-muted-foreground`}>
-                    {r.invoice ? toFa(r.invoice.number) : "—"}
-                  </td>
-                  <td className={`${TD} max-w-0 truncate font-medium`}>
-                    {r.customer?.fullName ?? "نقدی گذری"}
-                  </td>
-                  <td className={`${TD} text-center tabular-nums`}>
-                    {toFa(r._count?.lines ?? 0)}
-                  </td>
-                  <td className={TD}>
-                    {REFUND_LABELS[r.refundMethod] ??
-                      PAYMENT_LABELS[r.refundMethod] ??
-                      r.refundMethod}
-                  </td>
-                  <td className={`${TD} max-w-0 truncate text-muted-foreground`}>
+      {list.isLoading ? (
+        <LoadingState label="در حال بارگذاری مرجوعی‌ها..." />
+      ) : list.isError ? (
+        <ErrorState onRetry={() => list.refetch()} />
+      ) : !rows.length ? (
+        <EmptyState
+          className="m-3"
+          icon={RotateCcw}
+          title="هنوز مرجوعی‌ای ثبت نشده است"
+          description="مرجوعی از داخلِ فاکتور فروش ثبت می‌شود و تاریخچه‌اش اینجا می‌آید."
+        />
+      ) : (
+        <Table containerClassName="min-h-0 flex-1 overflow-y-auto">
+          <TableHeader sticky>
+            <TableRow>
+              <TableHead className="w-20">شماره</TableHead>
+              <TableHead className="w-28">تاریخ</TableHead>
+              <TableHead className="w-20">ساعت</TableHead>
+              <TableHead className="w-24">فاکتور</TableHead>
+              <TableHead>مشتری</TableHead>
+              <TableHead className={`${NUM} w-20`}>اقلام</TableHead>
+              <TableHead className="w-32">روش برگشت</TableHead>
+              <TableHead>دلیل</TableHead>
+              <TableHead className={`${NUM} w-40`}>مبلغ برگشتی (ریال)</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-bold tabular-nums">{toFa(r.number)}</TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">{faDate(r.createdAt)}</TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">{faTime(r.createdAt)}</TableCell>
+                <TableCell className="tabular-nums text-muted-foreground">
+                  {r.invoice ? toFa(r.invoice.number) : "—"}
+                </TableCell>
+                <TableCell className="whitespace-normal font-medium">
+                  {r.customer?.fullName ?? "نقدی گذری"}
+                </TableCell>
+                <TableCell className={NUM}>{toFa(r._count?.lines ?? 0)}</TableCell>
+                <TableCell>
+                  {REFUND_LABELS[r.refundMethod] ??
+                    PAYMENT_LABELS[r.refundMethod] ??
+                    r.refundMethod}
+                </TableCell>
+                <TableCell className="max-w-0 whitespace-normal text-muted-foreground">
+                  <span className="line-clamp-2 text-sm">
                     {r.operationKey ? (
-                      <span
+                      <Badge
+                        variant="outline"
+                        className="me-1 border-violet-600/30 bg-violet-600/10 py-0 text-[0.7rem] font-semibold text-violet-700 dark:text-violet-400"
                         title="این مرجوعی نیمی از یک «عملیات یکپارچه» است — با اصلاحیه‌ی همان operationKey ثبت شده و در صفحه‌ی فاکتور به‌صورت یک سند دیده می‌شود"
-                        className="me-1 rounded bg-violet-600/10 px-1.5 py-0.5 text-[0.7rem] font-semibold text-violet-700 dark:bg-violet-600/10 dark:text-violet-400"
                       >
                         عملیات یکپارچه
-                      </span>
+                      </Badge>
                     ) : null}
                     {r.reason}
-                  </td>
-                  <td className={`${TD} text-end font-bold tabular-nums text-warning`}>
-                    {money(r.refundAmount)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+                  </span>
+                </TableCell>
+                <TableCell className={`${NUM} font-bold text-warning`}>{money(r.refundAmount)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
     </div>
   );
 }

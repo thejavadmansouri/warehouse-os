@@ -97,10 +97,15 @@ export default function ProductsListPage() {
   // صفحه‌بندی مرور کل کاتالوگ (فقط وقتی جستجو نیست)
   const PAGE_SIZE = 50;
   const [page, setPage] = React.useState(1);
-  // با تغییر/شروع جستجو به صفحه‌ی ۱ برگرد
-  React.useEffect(() => {
+  /*
+   * با تغییر/شروع جستجو به صفحه‌ی ۱ برگرد — همان الگوی «تطبیق state در رندر»
+   * (نه setState داخل effect، که رندر آبشاری می‌سازد و lint هم می‌گیرد).
+   */
+  const [pageQueryKey, setPageQueryKey] = React.useState(debouncedQ);
+  if (pageQueryKey !== debouncedQ) {
+    setPageQueryKey(debouncedQ);
     setPage(1);
-  }, [debouncedQ]);
+  }
 
   // GET /products?page=&limit= (بدون جستجو) — صفحه‌بندی‌شده با meta
   const productsQ = useQuery({

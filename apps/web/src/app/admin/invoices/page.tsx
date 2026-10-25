@@ -545,29 +545,16 @@ export function InvoicesPanel({ embedded }: { embedded?: boolean } = {}) {
           </span>
         ))}
 
-        {meta && meta.pageCount > 1 && (
-          <span className="ms-auto flex items-center gap-2">
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="rounded border bg-background px-2 py-0.5 disabled:opacity-40"
-            >
-              قبلی
-            </button>
-            <span className="tabular-nums">
-              {toFa(meta.page)} از {toFa(meta.pageCount)}
-            </span>
-            <button
-              type="button"
-              disabled={page >= meta.pageCount}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded border bg-background px-2 py-0.5 disabled:opacity-40"
-            >
-              بعدی
-            </button>
+        {meta ? (
+          <span className="ms-auto">
+            <DataTablePagination
+              className="mt-0 [&_a]:h-7 [&_a]:min-w-7 [&_li>*]:text-xs"
+              page={page}
+              totalPages={meta.pageCount}
+              onChange={setPage}
+            />
           </span>
-        )}
+        ) : null}
       </div>
 
       <ReturnDialog

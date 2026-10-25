@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { User } from "lucide-react";
+import { HandCoins, User } from "lucide-react";
 
-import { LoadingState, ErrorState } from "@/components/states";
+import { LoadingState, ErrorState, EmptyState } from "@/components/states";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -114,26 +114,28 @@ export function ReceiptsPanel({ embedded }: { embedded?: boolean } = {}) {
           ) : list.isError ? (
             <ErrorState onRetry={() => list.refetch()} />
           ) : !list.data?.data.length ? (
-            <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-              هنوز رسیدی ثبت نشده است
-            </p>
+            <EmptyState
+              icon={HandCoins}
+              title="هنوز رسیدی ثبت نشده است"
+              description="با انتخاب مشتری و ثبت دریافت، اولین رسید اینجا می‌نشیند."
+            />
           ) : (
             <Card className="overflow-hidden p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>شماره</TableHead>
+                    <TableHead className="w-20">شماره</TableHead>
                     <TableHead>مشتری</TableHead>
-                    <TableHead>روش</TableHead>
-                    <TableHead>تاریخ</TableHead>
-                    <TableHead className="text-start">مبلغ</TableHead>
+                    <TableHead className="w-40">روش</TableHead>
+                    <TableHead className="w-32">تاریخ</TableHead>
+                    <TableHead className="w-40 text-end">مبلغ (ریال)</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {list.data.data.map((r) => (
                     <TableRow key={r.id}>
                       <TableCell className="tabular-nums">{toFa(r.number)}</TableCell>
-                      <TableCell className="font-medium">{r.customerName}</TableCell>
+                      <TableCell className="whitespace-normal font-medium">{r.customerName}</TableCell>
                       <TableCell>
                         <Badge variant="outline">{PAYMENT_LABELS[r.method] ?? r.method}</Badge>
                         {chequesOf(r).map((c) => (
@@ -148,7 +150,7 @@ export function ReceiptsPanel({ embedded }: { embedded?: boolean } = {}) {
                       <TableCell className="text-xs text-muted-foreground">
                         {faDate(r.createdAt)}
                       </TableCell>
-                      <TableCell className="font-bold">
+                      <TableCell className="text-end font-bold">
                         <Money value={r.amount} tone="positive" />
                       </TableCell>
                     </TableRow>

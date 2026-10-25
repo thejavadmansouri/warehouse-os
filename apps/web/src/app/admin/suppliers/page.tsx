@@ -111,14 +111,10 @@ export default function SuppliersPage() {
       toast.error(e instanceof ApiException ? e.message : "افزودن تأمین‌کننده ناموفق بود"),
   });
 
-  if (!canUse) {
-    return (
-      <Card className="p-6 text-center text-muted-foreground">
-        این بخش فقط برای مدیر است.
-      </Card>
-    );
-  }
-
+  /*
+   * آمار خرید هر تأمین‌کننده — باید پیش از هر returnِ شرطی محاسبه شود؛ هوک
+   * نمی‌تواند بعد از `if (!canUse) return` بیاید (ترتیب هوک‌ها ثابت است).
+   */
   const stats = React.useMemo(() => {
     const map = new Map<string, { count: number; total: number }>();
     for (const p of purchasesQ.data?.data ?? []) {
@@ -130,6 +126,14 @@ export default function SuppliersPage() {
     }
     return map;
   }, [purchasesQ.data]);
+
+  if (!canUse) {
+    return (
+      <Card className="p-6 text-center text-muted-foreground">
+        این بخش فقط برای مدیر است.
+      </Card>
+    );
+  }
 
   const q = term.trim().toLocaleLowerCase();
   const rows = (suppliersQ.data ?? []).filter((s) => {
