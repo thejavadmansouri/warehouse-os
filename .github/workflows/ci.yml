@@ -1,0 +1,145 @@
+# CI — دروازه‌ی تغییرات کاردو
+#
+# چرا این فایل وجود دارد: تا امروز هر بررسی (تایپ‌چک، تست، lint) دستی و روی
+# ماشینِ یک نفر اجرا می‌شد. نتیجه‌اش دو چیز بود: باگِ مقدار اعشاری (H‑1 گزارشِ
+# QA) فقط در اجرای دستی دیده شد، و ناپایداریِ سوئیت (۲ اجرا از ۵ اجرا قرمز، H‑4)
+# هیچ‌جا ثبت نشد. این ورک‌فلو همان بررسی‌ها را روی هر push و هر pull request
+# تکرار می‌کند تا ادغامِ تغییرِ خراب ممکن نباشد.
+#
+# تست‌های این ورک‌فلو **به دیتابیس وصل نمی‌شوند**: `jest` روی api همه mock است و
+# `vitest` روی وب jsdom. هارنسِ QA (`apps/api/test/qa`) که دیتابیسِ واقعی
+# می‌خواهد عمداً اینجا نیست — آن یک جابِ شبانه‌ی جدا می‌خواهد (سرویس Postgres +
+# `warehouse_os_qa`)، و تا آماده‌شدنش دستی اجرا می‌شود.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# push دومی که روی همان برنچ می‌آید، اجرای قبلی را کنسل می‌کند — منابع هدر نرود.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: "1"
+  # هیچ‌کدام از این‌ها به یک دیتابیسِ واقعی وصل نمی‌شود؛ فقط برای این هستند که
+  # `prisma validate/generate` و ایمپورتِ `@prisma/client` بدون خطا اجرا شوند.
+  DATABASE_URL: postgresql://ci:ci@localhost:5432/warehouse_os_ci?schema=public
+  JWT_SECRET: ci-placeholder-secret-not-used-anywhere
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # دروازه‌ی اصلی — اگر این جاب قرمز شود، ادغام ممنوع است.
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Typecheck & tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `ci` نه `install`: از lockfile نصب می‌کند و اگر lockfile با
+      # package.json نخواند، قرمز می‌شود — همان چیزی که در استقرار می‌خواهیم.
+      - name: Install
+        run: npm ci --no-audit --fund=false
+
+      # قبل از هر تایپ‌چک لازم است: کلاینتِ Prisma تولید است، در گیت نیست.
+      - name: Prisma generate
+        run: npm run db:generate
+
+      - name: Prisma validate
+        run: npx prisma validate
+
+      # api و web با هم — اسکریپت `typecheck` در package.json ریشه.
+      - name: Typecheck (api + web)
+        run: npm run typecheck
+
+      # ۳۶۰+ تستِ واحدِ api با mock، بدون دیتابیس.
+      - name: Test API
+        run: npm run test:api
+
+      # ۲۶۰+ تستِ وب در jsdom.
+      - name: Test web
+        run: npm run test:web
+
+  # ---------------------------------------------------------------------------
+  # Build — تایپ‌چک خطاهای تایپ را می‌گیرد، ولی «ساختن» چیزهای دیگری را هم
+  # می‌گیرد: ایمپورتِ سروری در کلاینت، مسیرِ اشتباهِ App Router، خطای
+  # `generateStaticParams`، و شکستنِ خروجیِ standalone. تجربه‌ی رایج این است که
+  # شاخه‌ای با تستِ سبز و بیلدِ قرمز ادغام شود؛ این جاب جلوی همان را می‌گیرد.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build (api + web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --fund=false
+
+      - name: Prisma generate
+        run: npm run db:generate
+
+      - name: Build API
+        run: npm run build:api
+
+      - name: Build web
+        run: npm run build:web
+
+  # ---------------------------------------------------------------------------
+  # ESLint — فعلاً advisory، نه blocking.
+  #
+  # این روزها `eslint` روی api حدود ۱۹۰۰ خطا دارد که ۱۵۰۰تایش خانواده‌ی
+  # `no-unsafe-*` است؛ یعنی نتیجه‌ی مستقیمِ ۲۴۴ مورد `any` در کد. تا وقتی
+  # `no-explicit-any` خاموش است، این قواعد فقط نویز تولید می‌کنند. برنامه‌ی
+  # بدهی‌زدایی: اول `--fix` (prettier)، بعد any‌ها به‌ترتیبِ فایل، و بعد این جاب
+  # blocking می‌شود. تا آن روز، خطاها دیده می‌شوند ولی ادغام را نمی‌بندند.
+  # ---------------------------------------------------------------------------
+  lint:
+    name: ESLint (advisory)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --fund=false
+
+      - name: Lint web
+        run: npm run lint:web
+
+      - name: Lint api
+        run: npm run lint:api

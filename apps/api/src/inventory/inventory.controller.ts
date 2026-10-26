@@ -18,6 +18,7 @@ import { ScanBarcodeDto } from './dto/scan-barcode.dto';
 import { ScanOutDto } from './dto/scan-out.dto';
 import { VoiceInventoryDto } from './dto/voice-inventory.dto';
 import { QueryInventoryLogsDto } from './dto/query-inventory-logs.dto';
+import { AdjustInventoryDto } from './dto/adjust-inventory.dto';
 
 import { InventoryService } from './inventory.service';
 import { VoiceInventoryService } from './voice-inventory.service';
@@ -227,7 +228,7 @@ export class InventoryController {
   // تعدیل دستی موجودی (ADJUST)
   @Roles(Role.ADMIN, Role.MANAGER)
   @Post('adjust')
-  adjust(@Body() dto: any, @Req() req: any) {
+  adjust(@Body() dto: AdjustInventoryDto, @Req() req: any) {
     return this.service.adjust({
       ...dto,
       userId: req.user.userId,

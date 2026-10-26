@@ -16,7 +16,17 @@
     "build:web": "npm run build --workspace=@warehouse-os/web",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "typecheck:api": "tsc --noEmit -p apps/api/tsconfig.json",
+    "typecheck:web": "tsc --noEmit -p apps/web/tsconfig.json",
+    "typecheck": "npm run typecheck:api && npm run typecheck:web",
+    "test:api": "npm test --workspace=@warehouse-os/api",
+    "test:web": "npm test --workspace=@warehouse-os/web",
+    "test": "npm run test:api && npm run test:web",
+    "lint:api": "npm run lint --workspace=@warehouse-os/api",
+    "lint:web": "npm run lint --workspace=@warehouse-os/web",
+    "lint": "npm run lint:web && npm run lint:api",
+    "verify": "npm run typecheck && npm run test"
   },
   "devDependencies": {
     "@types/multer": "^2.2.0",

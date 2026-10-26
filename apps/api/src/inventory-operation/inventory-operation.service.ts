@@ -159,7 +159,7 @@ export class InventoryOperationService {
     const quantity = Number(dto.quantity);
 
     /*
-     * تعداد باید عددِ صحیح باشد — برای **همه‌ی** حرکت‌ها، حتی ADJUST.
+     * تعداد باید عددِ صحیح باشد.
      *
      * چرا: ستون `quantity` از نوع INT4 است. یک `2.5` که تا اینجا برسد، در
      * پستگرس بی‌صدا به `2` گرد می‌شود، در حالی که مبلغِ فاکتور در جاوااسکریپت
@@ -170,20 +170,27 @@ export class InventoryOperationService {
      * صداکننده‌های دیگری هم دارد (صفِ آفلاینِ موبایل، sync، صوت) که از آن پایپ
      * رد نمی‌شوند. گارد باید همین‌جا باشد، نه فقط در لبه.
      *
-     * `Number.isInteger` هم `NaN` را می‌گیرد — که برای ADJUST از فیلترِ پایین
-     * رد می‌شد.
+     * **ADJUST جدا است**: مقدارش دلتا نیست، «موجودیِ مقصد» است و در
+     * `targetQuantity` می‌آید. قبل‌تر همین گارد روی `quantity` اجرا می‌شد که
+     * در این مسیر همیشه `undefined` است، پس هر تعدیلِ دستی و هر پایانِ
+     * انبارگردانی با `INVALID_QUANTITY` رد می‌شد. برای ADJUST همان عددِ مقصد
+     * چک می‌شود؛ `quantity` در این شاخه خوانده نمی‌شود.
      */
-    if (!Number.isInteger(quantity)) {
+    if (type === 'ADJUST') {
+      const targetQuantity = Number(dto.targetQuantity);
+
+      if (!Number.isInteger(targetQuantity) || targetQuantity < 0) {
+        throw new BadRequestException({
+          error: 'INVALID_TARGET_QUANTITY',
+          targetQuantity: dto.targetQuantity,
+          message: 'موجودیِ مقصد باید عدد صحیحِ نامنفی باشد',
+        });
+      }
+    } else if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BadRequestException({
         error: 'INVALID_QUANTITY',
         quantity: dto.quantity,
-        message: 'تعداد باید عدد صحیح باشد',
-      });
-    }
-
-    if (type !== 'ADJUST' && (!quantity || quantity <= 0)) {
-      throw new BadRequestException({
-        error: 'INVALID_QUANTITY',
+        message: 'تعداد باید عدد صحیح و بزرگ‌تر از صفر باشد',
       });
     }
 
@@ -520,13 +527,9 @@ export class InventoryOperationService {
     // =========================
 
     if (type === 'ADJUST') {
+      // صحیح‌بودن و نامنفی‌بودنِ همین عدد بالاتر (گاردِ INVALID_TARGET_QUANTITY)
+      // چک شده است؛ اینجا فقط محاسبه.
       const targetQty = Number(dto.targetQuantity);
-
-      if (isNaN(targetQty) || targetQty < 0) {
-        throw new BadRequestException({
-          error: 'INVALID_TARGET_QUANTITY',
-        });
-      }
 
       return runInTx(async (tx) => {
         const inventory = await tx.inventory.findUnique({
