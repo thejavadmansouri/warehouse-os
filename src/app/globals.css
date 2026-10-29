@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #14202e;
+  --primary: #0f2f4f;        /* blue پฤیتو — رنگ برند کاردو */
+  --primary-foreground: #ffffff;
+  --accent: #e8a413;         /* زرد خودرویی */
+  --muted: #64748b;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-vazirmatn), Vazirmatn, Tahoma, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+/*
+   اعداد و قیمت‌ها همیشه با ارقام فارسی دیده می‌شوند — کلاس کمکی
+   (تبدیل واقعی با تابع toFaDigits در src/lib/digits.ts انجام می‌شود)
+*/
+.nums {
+  font-feature-settings: "ss02";
+}

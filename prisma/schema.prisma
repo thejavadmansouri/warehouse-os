@@ -1,0 +1,81 @@
+// کاردو B2B — اسکیمای فاز ۱ (ورود، مشتری، تأیید ادمین)
+// قیمت‌گذاری پله‌ای و استعلام در فازهای ۲–۴ اضافه می‌شوند.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// یک شرکت/مشتری عمده — ورود با موبایل یا یوزرنیم
+model Customer {
+  id            String   @id @default(cuid())
+  companyName   String   // نام شرکت/فروشگاه
+  contactName   String   // نام نماینده
+  phone         String   @unique // شماره موبایل — مبنای ورود
+  username      String?  @unique // اختیاری: ورود با یوزرنیم/پسورد
+  passwordHash  String?  // پکنگ argon2 — فقط برای ورود یوزرنیم
+  nationalId    String?  // کد ملی نماینده
+  address       String?
+  status        CustomerStatus @default(PENDING) // تأیید دستی ادمین
+  tierId        String?
+  tier          Tier?    @relation(fields: [tierId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime? // حذف نرم
+
+  @@map("customers")
+}
+
+/// طبقه مشتری: طلایی/نقره‌ای/… — مبنای سقف اعتبار و تخفیف پایه
+model Tier {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  creditLimit Decimal? @db.Decimal(18, 0) // سقف اعتبار (تومان)
+  baseDiscount Decimal? @db.Decimal(5, 2) // تخفیف پایه ٪
+  sortOrder   Int      @default(0)
+  customers   Customer[]
+
+  @@map("tiers")
+}
+
+/// کد OTP برای ورود با موبایل — در فاز ۱ ارزش «شبیه‌سازی‌شده» دارد
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String // هش‌شده ذخیره شود
+  expiresAt DateTime
+  consumedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([phone, createdAt])
+  @@map("otp_codes")
+}
+
+/// ادمین پنل B2B — با یوزرنیم/پسورد وارد می‌شود (seed دستی)
+model AdminUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String?
+  createdAt    DateTime @default(now())
+
+  @@map("admin_users")
+}
+
+enum CustomerStatus {
+  PENDING // در انتظار تأیید ادمین
+  REJECTED
+  ACTIVE
+  BLOCKED
+}
+
+/*
+  نکته‌های فاز بعد (به یاد بود — در Prisma سمت فاز ۲/۴ اضافه می‌شود):
+  - Product / Brand / VehicleModel / Fitment (اتصال قطعه به مدل خودرو)
+  - PriceRule: قیمت پله‌ای + تخفیف اختصاصی مشتری
+  - Inquiry (استعلام) و PreInvoice (پیش‌فاکتور) با ردیف‌ها و وضعیت‌ها
+*/

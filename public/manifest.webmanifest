@@ -1,0 +1,25 @@
+{
+  "name": "کاردو B2B — عمده‌فروشی لوازم یدکی کرمان",
+  "short_name": "کاردو B2B",
+  "description": "پورتال B2B عمده‌فروشی لوازم یدکی خودرو در کرمان",
+  "lang": "fa",
+  "dir": "rtl",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0f2f4f",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
