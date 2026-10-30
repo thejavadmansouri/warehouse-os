@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/current-user";
 import { apiError } from "@/lib/api";
+import { notifyChequeStatus } from "@/lib/notifications";
 
 const updateChequeSchema = z.object({
   status: z.enum(["RECEIVED", "REGISTERED_SAYAD", "CLEARED", "BOUNCED", "REJECTED"]),
@@ -78,6 +79,26 @@ export async function PATCH(
 
     return updated;
   });
+
+  try {
+    if (status === "REGISTERED_SAYAD" || status === "CLEARED") {
+      await notifyChequeStatus({
+        customerId: cheque.customerId,
+        sayadId: cheque.sayadId,
+        status: "PASSED",
+        amountToman: Number(cheque.amount),
+      });
+    } else if (status === "BOUNCED") {
+      await notifyChequeStatus({
+        customerId: cheque.customerId,
+        sayadId: cheque.sayadId,
+        status: "BOUNCED",
+        amountToman: Number(cheque.amount),
+      });
+    }
+  } catch {
+    // نادیده گرفتن خطا در ارسال نوتیفیکیشن
+  }
 
   return NextResponse.json({
     ok: true,

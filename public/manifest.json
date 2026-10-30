@@ -1,0 +1,31 @@
+{
+  "name": "سامانه کاردو B2B — عمده‌فروشی لوازم یدکی خودرو استان کرمان",
+  "short_name": "کاردو B2B",
+  "description": "پلتفرم تخصصی B2B توزیع و پخش قطعات یدکی خودروهای داخلی در استان کرمان",
+  "start_url": "/catalog",
+  "display": "standalone",
+  "background_color": "#0b1329",
+  "theme_color": "#1d4ed8",
+  "orientation": "portrait",
+  "dir": "rtl",
+  "lang": "fa-IR",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "categories": ["business", "shopping"]
+}

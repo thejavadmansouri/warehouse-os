@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { formatToman, toFaDigits } from "@/lib/digits";
 import { LogoutButton } from "@/app/dashboard/logout-button";
+import { NotificationBell } from "@/components/notification-bell";
 
 export type CustomerShellProps = {
   companyName: string;
@@ -15,7 +16,7 @@ export type CustomerShellProps = {
   wallet: number;
   creditLimit?: number;
   availableCredit?: number;
-  active: "catalog" | "orders" | "wallet" | "inquiries" | "cheques" | "rma";
+  active?: "catalog" | "orders" | "wallet" | "inquiries" | "cheques" | "rma" | "bulk-order" | "statement";
   children: React.ReactNode;
 };
 
@@ -62,6 +63,38 @@ export function CustomerShell(props: CustomerShellProps) {
           <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
             <path d="m9 11 3 3L22 4" />
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+        </span>
+      ),
+    },
+    {
+      key: "bulk-order",
+      href: "/orders/bulk",
+      label: "سفارش دسته‌جمعی / اکسل",
+      shortLabel: "سفارش اکسل",
+      badge: "سریع",
+      icon: (
+        <span className="size-8 rounded-lg bg-cyan-100 text-cyan-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" x2="8" y1="13" y2="13" />
+            <line x1="16" x2="8" y1="17" y2="17" />
+          </svg>
+        </span>
+      ),
+    },
+    {
+      key: "statement",
+      href: "/statement",
+      label: "صورت‌حساب و معین مالی",
+      shortLabel: "معین حساب",
+      icon: (
+        <span className="size-8 rounded-lg bg-teal-100 text-teal-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <rect width="18" height="18" x="3" y="3" rx="2" />
+            <path d="M3 9h18" />
+            <path d="M9 21V9" />
           </svg>
         </span>
       ),
@@ -193,6 +226,9 @@ export function CustomerShell(props: CustomerShellProps) {
 
           {/* بخش ۲: بالا سمت چپ — وضعیت مالی، لوگو و دکمه خروج */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {/* زنگوله اعلان‌های هوشمند و پیامک باربری */}
+            <NotificationBell />
+
             {/* کیف پول و خط اعتبار با رنگ پرانرژی زمردی و طلایی */}
             <Link
               href="/wallet"

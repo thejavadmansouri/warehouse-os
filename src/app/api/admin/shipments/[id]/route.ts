@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@/lib/current-user";
 import { apiError } from "@/lib/api";
+import { notifyBijakIssued } from "@/lib/notifications";
 
 const updateShipmentSchema = z.object({
   status: z.enum(["PREPARING", "HANDED_TO_CARRIER", "DELIVERED", "CANCELLED"]).optional(),
@@ -54,6 +55,29 @@ export async function PATCH(
     where: { id },
     data: updatePayload,
   });
+
+  if (
+    (data.status === "HANDED_TO_CARRIER" || data.waybillNumber) &&
+    updated.waybillNumber
+  ) {
+    try {
+      const fullOrder = await prisma.order.findUnique({
+        where: { id: updated.orderId },
+        select: { customerId: true, number: true },
+      });
+      if (fullOrder) {
+        await notifyBijakIssued({
+          customerId: fullOrder.customerId,
+          orderNumber: fullOrder.number,
+          carrierName: updated.carrierName,
+          waybillNumber: updated.waybillNumber,
+          destinationCity: updated.destinationCity,
+        });
+      }
+    } catch {
+      // نادیده گرفتن خطای ثانویه نوتیفیکیشن
+    }
+  }
 
   return NextResponse.json({
     ok: true,

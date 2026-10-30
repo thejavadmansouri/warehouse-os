@@ -34,6 +34,7 @@ model Customer {
   inquiries     Inquiry[]
   cheques       Cheque[]
   rmaRequests   RmaRequest[]
+  notifications Notification[]
 
   @@index([status])
   @@map("customers")
@@ -529,6 +530,35 @@ model StockTransferItem {
   qty        Int
 
   @@map("stock_transfer_items")
+}
+
+/// انواع اعلان‌های مشتری و سیستم
+enum NotificationType {
+  ORDER_STATUS
+  BIJAK_ISSUED
+  CHEQUE_STATUS
+  CREDIT_UPDATE
+  RMA_UPDATE
+  PROMO
+  SYSTEM
+}
+
+/// اعلان‌های درون‌برنامه‌ای و پیامک‌های اطلاع‌رسانی
+model Notification {
+  id          String           @id @default(cuid())
+  customerId  String
+  customer    Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type        NotificationType @default(SYSTEM)
+  title       String
+  message     String
+  link        String?
+  read        Boolean          @default(false)
+  smsSent     Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+
+  @@index([customerId, read])
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 

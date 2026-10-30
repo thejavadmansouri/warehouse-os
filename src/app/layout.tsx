@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Vazirmatn } from "next/font/google";
 import "./globals.css";
+import { PwaRegister } from "@/components/pwa-register";
 
 const vazirmatn = Vazirmatn({
   variable: "--font-vazirmatn",
@@ -16,19 +17,16 @@ export const metadata: Metadata = {
   },
   description:
     "پورتال B2B عمده‌فروشی لوازم یدکی خودرو در کرمان — کاتالوگ، استعلام قیمت و پیش‌فاکتور برای مشتریان عمده.",
-  manifest: "/manifest.webmanifest",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     title: "کاردو B2B",
-    statusBarStyle: "default",
+    statusBarStyle: "black-translucent",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
-    { media: "(prefers-color-scheme: dark)", color: "#0f172a" },
-  ],
+  themeColor: "#1d4ed8",
   width: "device-width",
   initialScale: 1,
   maximumScale: 5,
@@ -42,7 +40,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       dir="rtl"
       className={`${vazirmatn.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        <PwaRegister />
+        {children}
+      </body>
     </html>
   );
 }
