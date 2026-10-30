@@ -4,8 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 
 /*
- * ثبت‌نام شرکت — حساب PENDING می‌سازد؛ پیام پایانی شفاف می‌گوید
- * تا تأیید ادمین، قیمت‌ها بسته است.
+ * ثبت‌نام شرکت / فروشگاه همکار — ساخت حساب B2B در انتظار تأیید کارشناسان
  */
 export default function RegisterPage() {
   const [form, setForm] = useState({
@@ -52,21 +51,28 @@ export default function RegisterPage() {
 
   if (done) {
     return (
-      <main className="min-h-dvh flex flex-col">
+      <main className="min-h-dvh flex flex-col bg-slate-50 text-slate-900">
         <TopBar />
         <div className="flex-1 grid place-items-center px-4 py-10">
-          <div className="card w-full max-w-sm p-6 text-center">
-            <div className="mx-auto size-12 grid place-items-center rounded-full bg-ledger-green/10 text-ledger-green text-xl">
+          <div className="card w-full max-w-sm p-6 sm:p-7 text-center bg-white border border-slate-200 rounded-2xl shadow-xs space-y-3">
+            <div className="mx-auto size-14 grid place-items-center rounded-full bg-emerald-50 text-emerald-600 text-2xl border border-emerald-200">
               ✓
             </div>
-            <h1 className="mt-3 text-lg font-bold">ثبت‌نام انجام شد</h1>
-            <p className="mt-2 text-xs text-ink-soft leading-6">
-              حساب «{form.companyName}» ساخته شد و در انتظار تأیید ادمین است.
-              می‌توانید همین حالا وارد شوید؛ به‌محض تأیید، قیمت‌ها و موجودی فعال می‌شود.
+            <h1 className="text-lg sm:text-xl font-extrabold text-slate-900">درخواست ثبت‌نام ارسال شد</h1>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              حساب «<b>{form.companyName}</b>» با موفقیت ثبت شد و در صف تأیید کارشناسان کاردو قرار گرفت.
+              می‌توانید وارد حساب شوید و پیشرفت را مشاهده کنید.
             </p>
-            <span className="stamp text-brass mt-4">در انتظار تأیید</span>
-            <Link href="/login" className="btn btn-primary w-full mt-5 py-2.5">
-              ورود به حساب
+            <div className="py-2">
+              <span className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full inline-block">
+                در انتظار تأیید احراز هویت
+              </span>
+            </div>
+            <Link
+              href="/login"
+              className="w-full h-12 rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm flex items-center justify-center transition-all"
+            >
+              ورود به حساب کاربری
             </Link>
           </div>
         </div>
@@ -75,45 +81,47 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-dvh flex flex-col">
+    <main className="min-h-dvh flex flex-col bg-slate-50 text-slate-900">
       <TopBar />
 
       <div className="flex-1 grid place-items-center px-4 py-8">
         <div className="w-full max-w-sm">
-          <div className="mb-5">
-            <p className="label">افتتاح حساب عمده</p>
-            <h1 className="text-xl font-bold tracking-tight mt-1">ثبت‌نام مشتری</h1>
-            <p className="text-xs text-ink-soft mt-1">
-              اطلاعات شرکت را وارد کنید — تأیید حساب دستِ ادمین است.
+          <div className="mb-5 text-center sm:text-start">
+            <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full inline-block">
+              افتتاح حساب همکار عمده
+            </span>
+            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 mt-2">ثبت‌نام همکار و خریدار</h1>
+            <p className="text-xs text-slate-500 mt-1">
+              اطلاعات فروشگاه یا شرکت خود را جهت تخصیص قیمت همکاری وارد نمایید.
             </p>
           </div>
 
-          <div className="card p-5 flex flex-col gap-3">
+          <div className="card p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col gap-3">
             {error && (
-              <p className="rounded-[2px] border border-alarm/40 bg-alarm-soft px-3 py-2 text-xs text-alarm">
+              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700">
                 {error}
               </p>
             )}
 
-            <Field label="نام شرکت / فروشگاه *" value={form.companyName} onChange={set("companyName")} placeholder="فروشگاه پخش مرکزی کرمان" />
-            <Field label="نام نماینده *" value={form.contactName} onChange={set("contactName")} placeholder="نام و نام خانوادگی" />
-            <Field label="شماره موبایل *" value={form.phone} onChange={set("phone")} placeholder="0912 345 6789" dir="ltr" inputMode="tel" type="tel" />
-            <Field label="کد ملی نماینده (اختیاری)" value={form.nationalId} onChange={set("nationalId")} placeholder="۱۰ رقم" dir="ltr" inputMode="numeric" />
-            <Field label="آدرس (اختیاری)" value={form.address} onChange={set("address")} placeholder="کرمان، …" />
+            <Field label="نام شرکت / فروشگاه لوازم یدکی *" value={form.companyName} onChange={set("companyName")} placeholder="مثلاً: یدک‌گستر دیار کریمان" />
+            <Field label="نام و نام خانوادگی مسئول خرید *" value={form.contactName} onChange={set("contactName")} placeholder="نام نماینده" />
+            <Field label="شماره تلفن همراه *" value={form.phone} onChange={set("phone")} placeholder="0912 345 6789" dir="ltr" inputMode="tel" type="tel" />
+            <Field label="کد ملی نماینده (اختیاری)" value={form.nationalId} onChange={set("nationalId")} placeholder="۱۰ رقم کد ملی" dir="ltr" inputMode="numeric" />
+            <Field label="شهر و نشانی فروشگاه (اختیاری)" value={form.address} onChange={set("address")} placeholder="کرمان، خیابان شریعتی، …" />
 
             <button
               onClick={submit}
               disabled={busy || !form.companyName || !form.contactName || !form.phone}
-              className="btn btn-primary w-full py-3 mt-1"
+              className="w-full h-12 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 mt-1"
             >
-              {busy ? "در حال ثبت…" : "ثبت‌نام"}
+              {busy ? "در حال ثبت اطلاعات…" : "ثبت‌نام و افتتاح حساب"}
             </button>
           </div>
 
-          <p className="mt-4 text-center text-xs text-ink-soft">
-            قبلاً ثبت‌نام کرده‌اید؟{" "}
-            <Link href="/login" className="text-brass font-bold underline underline-offset-4">
-              ورود
+          <p className="mt-4 text-center text-xs text-slate-500">
+            قبلاً حساب ساخته‌اید؟{" "}
+            <Link href="/login" className="text-blue-600 font-bold hover:underline">
+              ورود به حساب
             </Link>
           </p>
         </div>
@@ -124,15 +132,18 @@ export default function RegisterPage() {
 
 function TopBar() {
   return (
-    <header className="border-b border-rule">
-      <div className="mx-auto w-full max-w-lg px-4 h-14 flex items-center">
-        <Link href="/" className="flex items-center gap-2">
-          <span className="size-7 grid place-items-center bg-ink text-paper text-sm font-bold rounded-[2px]">
+    <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
+      <div className="mx-auto w-full max-w-lg px-4 h-14 sm:h-15 flex items-center justify-between">
+        <Link href="/" className="flex items-center gap-2.5">
+          <span className="size-8 grid place-items-center bg-slate-900 text-white text-sm font-bold rounded-lg shadow-sm">
             ک
           </span>
-          <span className="font-bold tracking-tight">
-            کاردو <span className="text-brass text-xs align-top">B2B</span>
+          <span className="font-extrabold tracking-tight text-base text-slate-900">
+            کاردو <span className="text-blue-600 text-[10px] font-bold bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60 align-top">B2B</span>
           </span>
+        </Link>
+        <Link href="/" className="text-xs text-slate-500 hover:text-blue-600 font-medium">
+          صفحه اصلی ←
         </Link>
       </div>
     </header>
@@ -150,7 +161,7 @@ function Field(props: {
 }) {
   return (
     <label className="block">
-      <span className="label block mb-1">{props.label}</span>
+      <span className="text-xs font-semibold text-slate-700 block mb-1">{props.label}</span>
       <input
         dir={props.dir}
         inputMode={props.inputMode}
@@ -158,7 +169,7 @@ function Field(props: {
         placeholder={props.placeholder}
         value={props.value}
         onChange={props.onChange}
-        className="input py-2.5"
+        className="input h-11 border-slate-300 rounded-xl text-xs sm:text-sm"
       />
     </label>
   );

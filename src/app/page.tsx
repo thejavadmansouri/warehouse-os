@@ -31,32 +31,32 @@ export default function Home() {
       </header>
 
       {/* بخش مرکزی: معرفی کوتاه و دکمه‌های ورود و ثبت‌نام */}
-      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-12 sm:py-20">
-        <div className="w-full max-w-xl text-center space-y-8">
+      <main className="flex-1 flex items-center justify-center px-4 sm:px-6 py-8 sm:py-16">
+        <div className="w-full max-w-xl text-center space-y-6 sm:space-y-8">
           {/* نشان وضعیت سامانه */}
-          <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200/80 px-3.5 py-1.5 rounded-full text-xs text-blue-700 font-bold shadow-2xs">
-            <span className="size-2 rounded-full bg-blue-600 animate-pulse" />
-            <span>پورتال اختصاصی همکاران، فروشگاه‌ها و پخش‌کنندگان لوازم یدکی</span>
+          <div className="inline-flex items-center gap-2 bg-blue-50 border border-blue-200/80 px-3 py-1.5 rounded-full text-[11px] sm:text-xs text-blue-700 font-bold shadow-2xs">
+            <span className="size-2 rounded-full bg-blue-600 animate-pulse shrink-0" />
+            <span>پورتال اختصاصی همکاران، فروشگاه‌ها و پخش لوازم یدکی</span>
           </div>
 
           {/* تیتر اصلی */}
           <div className="space-y-3">
-            <h1 className="text-3xl sm:text-4xl sm:leading-tight font-extrabold text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-4xl leading-snug sm:leading-tight font-extrabold text-slate-900 tracking-tight">
               سامانه فروش و توزیع عمده
               <br />
               <span className="text-blue-600">قطعات یدکی خودرو کاردو</span>
             </h1>
-            <p className="text-sm sm:text-base text-slate-600 max-w-md mx-auto leading-relaxed">
+            <p className="text-xs sm:text-base text-slate-600 max-w-md mx-auto leading-relaxed">
               دسترسی مستقیم به موجودی انبار مرکزی، قیمت‌های مصوب همکار، استعلام چندردیفی آنلاین و صدور پیش‌فاکتور رسمی.
             </p>
           </div>
 
           {/* فقط ۲ دکمه اصلی: ورود و ثبت‌نام */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2 max-w-md mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-1 max-w-md mx-auto">
             <Link
               href="/login"
               prefetch={false}
-              className="w-full sm:flex-1 py-3.5 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm sm:text-base shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              className="w-full sm:flex-1 h-13 sm:h-14 px-6 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-sm sm:text-base shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98"
             >
               <svg className="size-5 text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
@@ -69,7 +69,7 @@ export default function Home() {
             <Link
               href="/register"
               prefetch={false}
-              className="w-full sm:flex-1 py-3.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+              className="w-full sm:flex-1 h-13 sm:h-14 px-6 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm sm:text-base shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 active:scale-98"
             >
               <svg className="size-5 text-blue-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -82,7 +82,7 @@ export default function Home() {
           </div>
 
           {/* مزایای کوتاه و معتبر زیر دکمه‌ها */}
-          <div className="pt-6 border-t border-slate-200/80 flex items-center justify-center gap-6 text-xs text-slate-500 font-medium flex-wrap">
+          <div className="pt-5 border-t border-slate-200/80 flex items-center justify-center gap-4 sm:gap-6 text-xs text-slate-500 font-medium flex-wrap">
             <span className="flex items-center gap-1.5">
               <span className="size-1.5 rounded-full bg-emerald-500" />
               ورود سریع با پیامک OTP یا کلمه عبور

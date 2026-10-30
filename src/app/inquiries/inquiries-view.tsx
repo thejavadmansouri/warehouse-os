@@ -53,6 +53,13 @@ const emptyRow = (): RowInput => ({
   targetPrice: "",
 });
 
+const toneClass: Record<string, string> = {
+  amber: "text-amber-700 bg-amber-50 border border-amber-200",
+  green: "text-emerald-700 bg-emerald-50 border border-emerald-200",
+  red: "text-rose-700 bg-rose-50 border border-rose-200",
+  ink: "text-slate-700 bg-slate-100 border border-slate-200",
+};
+
 export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
   const router = useRouter();
   const [inquiries, setInquiries] = useState<InquiryRecord[]>(props.initialInquiries);
@@ -132,39 +139,39 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-4 py-6 pb-24">
+    <div className="mx-auto w-full max-w-5xl px-3 sm:px-6 py-6 pb-24">
       {/* هدر صفحه */}
-      <div className="flex items-center justify-between gap-4 flex-wrap pb-4 border-b border-rule">
+      <div className="flex items-center justify-between gap-4 flex-wrap pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-xl font-bold tracking-tight">استعلام چندردیفی قیمت (RFQ)</h1>
-          <p className="text-xs text-ink-soft mt-1">
+          <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">استعلام چندردیفی قیمت (RFQ)</h1>
+          <p className="text-xs text-slate-500 mt-1">
             اقلام ناموجود یا تیراژهای خاص را استعلام کنید؛ کارشناسان کاردو کمتر از ۲ ساعت قیمت‌گذاری می‌کنند.
           </p>
         </div>
 
         <button
           onClick={() => setShowCreateModal(true)}
-          className="btn btn-brass text-xs px-4 py-2 flex items-center gap-1.5 shadow-sm"
+          className="btn btn-brass text-xs px-4 py-2.5 flex items-center gap-1.5 shadow-sm rounded-lg font-bold"
         >
           <span className="text-base leading-none font-bold">+</span>
           <span>ثبت استعلام جدید</span>
         </button>
       </div>
 
-      {/* فرم استعلام جدید */}
+      {/* فرم استعلام جدید — کشوی تمام‌صفحه در موبایل و مدال در دسکتاپ */}
       {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-ink/50 backdrop-blur-xs">
-          <div className="card w-full max-w-3xl max-h-[90vh] overflow-y-auto p-4 sm:p-6 bg-paper-raised shadow-xl border-2 border-brass/50 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-rule">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="card w-full sm:max-w-3xl max-h-[92dvh] overflow-y-auto p-4 sm:p-6 bg-white shadow-2xl border border-slate-200 rounded-t-2xl sm:rounded-2xl animate-in slide-in-from-bottom duration-200">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-200 sticky top-0 bg-white/95 backdrop-blur-md z-10">
               <div>
-                <h2 className="font-bold text-base">درخواست استعلام قیمت B2B</h2>
-                <p className="text-[11px] text-ink-soft mt-0.5">
+                <h2 className="font-extrabold text-base text-slate-900">درخواست استعلام قیمت B2B</h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
                   ردیف‌های مورد نیاز را وارد کنید. کارشناسان ما قیمت روز و موجودی را ثبت می‌کنند.
                 </p>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="text-ink-soft hover:text-ink text-xl font-bold p-1"
+                className="size-8 grid place-items-center text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 text-lg"
               >
                 ✕
               </button>
@@ -172,7 +179,7 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
 
             <form onSubmit={submitInquiry} className="mt-4 space-y-4">
               {error && (
-                <div className="p-3 bg-alarm-soft border border-alarm/30 rounded text-alarm text-xs">
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-700 text-xs">
                   {error}
                 </div>
               )}
@@ -182,24 +189,24 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                 {rows.map((row, idx) => (
                   <div
                     key={idx}
-                    className="p-3 bg-paper border border-rule rounded-[3px] space-y-2 relative"
+                    className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 relative"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-brass nums">
+                      <span className="text-xs font-bold text-blue-700 nums bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
                         ردیف {toFaDigits(idx + 1)}
                       </span>
                       {rows.length > 1 && (
                         <button
                           type="button"
                           onClick={() => removeRow(idx)}
-                          className="text-[11px] text-alarm hover:underline"
+                          className="text-xs text-rose-600 hover:underline font-medium"
                         >
-                          حذف ردیف
+                          حذف این ردیف
                         </button>
                       )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       <div>
                         <label className="label block mb-1">نام قطعه یا شرح کالا *</label>
                         <input
@@ -207,7 +214,7 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                           value={row.partName}
                           onChange={(e) => updateRow(idx, "partName", e.target.value)}
                           placeholder="مثلاً: لنت ترمز جلو، دیسک چرخ..."
-                          className="input text-xs"
+                          className="input text-xs h-10 border-slate-300 rounded-lg"
                         />
                       </div>
                       <div>
@@ -215,8 +222,8 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                         <input
                           value={row.brand}
                           onChange={(e) => updateRow(idx, "brand", e.target.value)}
-                          placeholder="مثلاً: پژو ۲۰۶ / گلد، امکو..."
-                          className="input text-xs"
+                          placeholder="مثلاً: پژو ۲۰۶ / ایساکو، والئو..."
+                          className="input text-xs h-10 border-slate-300 rounded-lg"
                         />
                       </div>
                       <div>
@@ -224,13 +231,13 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                         <input
                           value={row.sku}
                           onChange={(e) => updateRow(idx, "sku", e.target.value)}
-                          placeholder="کد فنی یا شماره برچسب"
-                          className="input text-xs"
+                          placeholder="کد فنی یا شماره قطعه"
+                          className="input text-xs h-10 border-slate-300 rounded-lg"
                         />
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
                       <div>
                         <label className="label block mb-1">تعداد درخواستی *</label>
                         <input
@@ -239,7 +246,7 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                           required
                           value={row.qty}
                           onChange={(e) => updateRow(idx, "qty", Number(e.target.value))}
-                          className="input text-xs nums"
+                          className="input text-xs nums h-10 border-slate-300 rounded-lg"
                         />
                       </div>
                       <div>
@@ -247,7 +254,7 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                         <select
                           value={row.unit}
                           onChange={(e) => updateRow(idx, "unit", e.target.value)}
-                          className="input text-xs"
+                          className="input text-xs h-10 border-slate-300 rounded-lg bg-white"
                         >
                           <option value="عدد">عدد</option>
                           <option value="جین">جین (دست)</option>
@@ -263,7 +270,7 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                           value={row.targetPrice}
                           onChange={(e) => updateRow(idx, "targetPrice", e.target.value)}
                           placeholder="مثلاً: ۳۵۰٬۰۰۰"
-                          className="input text-xs nums"
+                          className="input text-xs nums h-10 border-slate-300 rounded-lg"
                         />
                       </div>
                     </div>
@@ -274,10 +281,10 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
               <button
                 type="button"
                 onClick={addRow}
-                className="w-full py-2 border border-dashed border-rule-strong hover:border-brass text-ink-soft hover:text-ink text-xs rounded transition-colors flex items-center justify-center gap-1"
+                className="w-full h-11 border border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/50 text-slate-600 hover:text-blue-700 text-xs rounded-xl font-bold transition-all flex items-center justify-center gap-1.5"
               >
                 <span>+</span>
-                <span>افزودن قلم کالای دیگر به استعلام</span>
+                <span>افزودن قلم کالای دیگر به این استعلام</span>
               </button>
 
               <div>
@@ -287,24 +294,24 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
                   value={customerNote}
                   onChange={(e) => setCustomerNote(e.target.value)}
                   placeholder="مثلاً: تحویل فوری تا پس‌فردا در باربری کرمان نیاز است..."
-                  className="input text-xs"
+                  className="input text-xs border-slate-300 rounded-lg"
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-rule">
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={() => setShowCreateModal(false)}
-                  className="btn btn-ghost text-xs px-4 py-2"
+                  className="btn btn-ghost text-xs px-4 py-2.5 rounded-lg"
                 >
                   انصراف
                 </button>
                 <button
                   type="submit"
                   disabled={busy}
-                  className="btn btn-brass text-xs px-5 py-2"
+                  className="btn btn-brass text-xs px-5 py-2.5 font-bold rounded-lg shadow-sm"
                 >
-                  {busy ? "در حال ثبت..." : "ارسال استعلام به کارشناسان"}
+                  {busy ? "در حال ثبت..." : "ارسال استعلام به کارشناسان فروش"}
                 </button>
               </div>
             </form>
@@ -313,90 +320,143 @@ export function InquiriesView(props: { initialInquiries: InquiryRecord[] }) {
       )}
 
       {/* لیست استعلام‌ها */}
-      <div className="mt-6">
+      <div className="mt-5">
         {inquiries.length === 0 ? (
-          <div className="card p-10 text-center text-ink-soft text-sm">
-            <p className="font-semibold text-ink">هنوز استعلام قیمتی ثبت نکرده‌اید.</p>
-            <p className="text-xs mt-1">
+          <div className="card p-12 text-center text-slate-500 bg-white border border-slate-200 rounded-xl space-y-3">
+            <div className="size-12 rounded-full bg-slate-100 text-slate-400 grid place-items-center mx-auto text-xl">
+              📝
+            </div>
+            <p className="font-bold text-slate-800 text-base">هنوز استعلام قیمتی ثبت نکرده‌اید.</p>
+            <p className="text-xs text-slate-500 max-w-sm mx-auto">
               اگر قطعه‌ای در کاتالوگ نیست یا تخفیف تیراژ ویژه می‌خواهید، روی «ثبت استعلام جدید» کلیک کنید.
             </p>
           </div>
         ) : (
-          <div className="card overflow-hidden">
-            <div className="hidden md:grid grid-cols-[8.5rem_1fr_6rem_8rem_7rem_6.5rem] gap-2 px-4 py-2.5 border-b border-rule bg-brass-soft/40 text-[11px] text-ink-soft">
-              <span>شماره استعلام</span>
-              <span>شرح اقلام</span>
-              <span className="text-center">تعداد اقلام</span>
-              <span className="text-left">مجموع قیمت اعلامی</span>
-              <span className="text-center">وضعیت</span>
-              <span className="text-center">عملیات</span>
-            </div>
-
-            <ul className="divide-y divide-rule/60">
+          <>
+            {/* نمای موبایل استعلام‌ها (Mobile Cards) */}
+            <div className="md:hidden space-y-3">
               {inquiries.map((inq) => {
                 const st = INQUIRY_STATUS[inq.status] ?? INQUIRY_STATUS.PENDING;
                 return (
-                  <li
+                  <div
                     key={inq.id}
-                    className="p-4 md:grid md:grid-cols-[8.5rem_1fr_6rem_8rem_7rem_6.5rem] md:items-center gap-2 hover:bg-brass-soft/10 transition-colors"
+                    className="p-4 bg-white border border-slate-200 rounded-xl shadow-2xs space-y-3"
                   >
-                    <div>
-                      <p className="font-bold text-xs nums text-brass">{inq.number}</p>
-                      <p className="text-[10px] text-ink-soft mt-0.5">{faDate(inq.createdAt)}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span className="nums font-mono font-bold text-xs text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded">
+                          {inq.number}
+                        </span>
+                        <span className="text-[11px] text-slate-500">{faDate(inq.createdAt)}</span>
+                      </div>
+                      <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${toneClass[st.tone]}`}>
+                        {st.label}
+                      </span>
                     </div>
 
-                    <div className="mt-2 md:mt-0 min-w-0">
-                      <p className="text-xs font-medium truncate">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-900 leading-snug">
                         {inq.items.map((i) => i.partName).join("، ")}
                       </p>
                       {inq.customerNote && (
-                        <p className="text-[11px] text-ink-soft truncate mt-0.5">
+                        <p className="text-[11px] text-slate-500 truncate mt-1">
                           یادداشت: {inq.customerNote}
                         </p>
                       )}
                     </div>
 
-                    <div className="mt-1 md:mt-0 md:text-center text-xs text-ink-soft">
-                      <span className="nums">{toFaDigits(inq.items.length)}</span> قلم
-                    </div>
-
-                    <div className="mt-1 md:mt-0 md:text-left text-xs font-bold nums">
-                      {inq.totalQuoted && inq.totalQuoted > 0 ? (
-                        <span>{formatToman(inq.totalQuoted)} تومان</span>
-                      ) : (
-                        <span className="text-[11px] text-ink-soft font-normal">در حال بررسی</span>
-                      )}
-                    </div>
-
-                    <div className="mt-2 md:mt-0 md:text-center">
-                      <span
-                        className={`stamp text-[10px] ${
-                          st.tone === "green"
-                            ? "text-ledger-green"
-                            : st.tone === "red"
-                            ? "text-alarm"
-                            : st.tone === "ink"
-                            ? "text-ink"
-                            : "text-brass"
-                        }`}
-                      >
-                        {st.label}
+                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                      <span className="text-slate-500 nums">
+                        {toFaDigits(inq.items.length)} قلم کالا
                       </span>
+                      <div className="nums font-bold">
+                        {inq.totalQuoted && inq.totalQuoted > 0 ? (
+                          <span className="text-blue-700 font-extrabold">{formatToman(inq.totalQuoted)} تومان</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">در انتظار قیمت‌گذاری</span>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="mt-3 md:mt-0 md:text-center">
-                      <Link
-                        href={`/inquiries/${inq.id}`}
-                        className="btn btn-ghost text-xs px-3 py-1.5 w-full md:w-auto"
-                      >
-                        مشاهده و پیگیری
-                      </Link>
-                    </div>
-                  </li>
+                    <Link
+                      href={`/inquiries/${inq.id}`}
+                      className="h-10 w-full rounded-lg text-xs font-bold border border-slate-300 hover:border-blue-400 bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700 flex items-center justify-center gap-1 transition-all"
+                    >
+                      <span>مشاهده جزئیات و پیگیری</span>
+                      <span>←</span>
+                    </Link>
+                  </div>
                 );
               })}
-            </ul>
-          </div>
+            </div>
+
+            {/* نمای دسکتاپ استعلام‌ها (Desktop Table) */}
+            <div className="hidden md:block card overflow-hidden border-slate-200 shadow-2xs rounded-xl bg-white">
+              <div className="grid grid-cols-[8.5rem_1fr_6rem_9rem_8rem_7rem] gap-2 px-5 py-3 border-b border-slate-200 bg-slate-50 text-xs font-semibold text-slate-600">
+                <span>شماره استعلام</span>
+                <span>شرح اقلام</span>
+                <span className="text-center">تعداد اقلام</span>
+                <span className="text-left">مجموع اعلامی</span>
+                <span className="text-center">وضعیت</span>
+                <span className="text-center">عملیات</span>
+              </div>
+
+              <ul className="divide-y divide-slate-100">
+                {inquiries.map((inq) => {
+                  const st = INQUIRY_STATUS[inq.status] ?? INQUIRY_STATUS.PENDING;
+                  return (
+                    <li
+                      key={inq.id}
+                      className="px-5 py-4 grid grid-cols-[8.5rem_1fr_6rem_9rem_8rem_7rem] items-center gap-2 hover:bg-slate-50/60 transition-colors"
+                    >
+                      <div>
+                        <p className="font-bold text-xs nums text-blue-700">{inq.number}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{faDate(inq.createdAt)}</p>
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-slate-900 truncate">
+                          {inq.items.map((i) => i.partName).join("، ")}
+                        </p>
+                        {inq.customerNote && (
+                          <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                            یادداشت: {inq.customerNote}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="text-center text-xs text-slate-600 nums">
+                        {toFaDigits(inq.items.length)} قلم
+                      </div>
+
+                      <div className="text-left text-xs font-bold nums">
+                        {inq.totalQuoted && inq.totalQuoted > 0 ? (
+                          <span className="text-slate-900 font-extrabold">{formatToman(inq.totalQuoted)} ت</span>
+                        ) : (
+                          <span className="text-slate-400 font-normal">در حال بررسی</span>
+                        )}
+                      </div>
+
+                      <div className="text-center">
+                        <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full ${toneClass[st.tone]}`}>
+                          {st.label}
+                        </span>
+                      </div>
+
+                      <div className="text-center">
+                        <Link
+                          href={`/inquiries/${inq.id}`}
+                          className="btn btn-ghost text-xs px-3 py-1.5 rounded-lg border border-slate-200 hover:border-blue-400"
+                        >
+                          پیگیری
+                        </Link>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </>
         )}
       </div>
     </div>

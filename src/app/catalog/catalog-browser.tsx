@@ -417,105 +417,218 @@ export function CatalogBrowser(props: {
         </button>
       </div>
 
-      {/* ۴. پنل کشویی فیلترهای پیشرفته (برند قطعه‌ساز، مدل خودرو، تاریخ، وضعیت موجودی و مرتب‌سازی) */}
+      {/* ۴. پنل فیلترهای پیشرفته: در دسکتاپ پنل آکاردئونی و در موبایل Bottom Sheet استاندارد */}
       {showAdvancedFilters && (
-        <div className="mt-3 p-4 sm:p-5 card bg-white border border-slate-200 rounded-xl shadow-xs space-y-4 animate-in fade-in slide-in-from-top-2 duration-150">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-            <span className="font-bold text-xs sm:text-sm text-slate-800">
-              تنظیمات فیلترهای تخصصی و مرتب‌سازی
-            </span>
-            <button
-              onClick={resetAllFilters}
-              className="text-xs text-rose-600 hover:underline font-medium"
-            >
-              پاک‌سازی همه فیلترها
-            </button>
+        <>
+          {/* نسخه دسکتاپ (md به بالا) */}
+          <div className="hidden md:block mt-3 p-5 card bg-white border border-slate-200 rounded-xl shadow-xs space-y-4 animate-in fade-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span className="font-bold text-sm text-slate-800">
+                تنظیمات فیلترهای تخصصی و مرتب‌سازی
+              </span>
+              <button
+                onClick={resetAllFilters}
+                className="text-xs text-rose-600 hover:underline font-medium"
+              >
+                پاک‌سازی همه فیلترها
+              </button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-3.5 text-xs">
+              <div>
+                <label className="label block mb-1">برند سازنده قطعه (پارت برند):</label>
+                <select
+                  value={partBrand}
+                  onChange={(e) => setPartBrand(e.target.value)}
+                  className="input text-xs border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="">همه برندهای سازنده</option>
+                  {allPartBrands.map((pb) => (
+                    <option key={pb} value={pb}>
+                      {pb}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label block mb-1">مدل دقیق خودرو:</label>
+                <select
+                  value={carModel}
+                  onChange={(e) => setCarModel(e.target.value)}
+                  className="input text-xs border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="">همه مدل‌ها</option>
+                  {allModels.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="label block mb-1">تاریخ ورود به انبار:</label>
+                <select
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                  className="input text-xs border-slate-300 rounded-lg bg-white"
+                >
+                  <option value="all">همه زمان‌ها</option>
+                  <option value="week">اقلام جدید (۷ روز اخیر)</option>
+                  <option value="month">اقلام ماه اخیر (۳۰ روز)</option>
+                  <option value="quarter">سه ماه اخیر (۹۰ روز)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="label block mb-1">مرتب‌سازی بر اساس:</label>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                  className="input text-xs border-slate-300 rounded-lg bg-white font-medium"
+                >
+                  <option value="default">پیش‌فرض (خودرو و گروه کالا)</option>
+                  <option value="newest">جدیدترین قطعات اضافه شده</option>
+                  <option value="price_asc">ارزان‌ترین به گران‌ترین</option>
+                  <option value="price_desc">گران‌ترین به ارزان‌ترین</option>
+                  <option value="stock_desc">بیشترین موجودی انبار</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-700 font-medium">
+                <input
+                  type="checkbox"
+                  checked={inStockOnly}
+                  onChange={(e) => setInStockOnly(e.target.checked)}
+                  className="size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span>فقط نمایش قطعات موجود در انبار مرکزی</span>
+              </label>
+
+              <span className="nums text-xs text-slate-500">
+                تعداد نتایج منطبق: <b className="text-slate-900 font-bold">{toFaDigits(items.length)}</b> قلم کالا
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
-            {/* فیلتر برند سازنده قطعه */}
-            <div>
-              <label className="label block mb-1">برند سازنده قطعه (پارت برند):</label>
-              <select
-                value={partBrand}
-                onChange={(e) => setPartBrand(e.target.value)}
-                className="input text-xs border-slate-300 rounded-lg bg-white"
-              >
-                <option value="">همه برندهای سازنده</option>
-                {allPartBrands.map((pb) => (
-                  <option key={pb} value={pb}>
-                    {pb}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* نسخه موبایل: کشوی لغزنده از پایین (Mobile Filter Bottom Sheet) */}
+          <div className="md:hidden fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="bg-white w-full rounded-t-2xl max-h-[85vh] overflow-y-auto p-4 flex flex-col border-t border-slate-200 shadow-2xl animate-in slide-in-from-bottom duration-200">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-slate-900">فیلترهای تخصصی و مرتب‌سازی</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="size-5 rounded-full bg-blue-600 text-white grid place-items-center text-[10px] font-bold nums">
+                      {toFaDigits(activeFiltersCount)}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="size-8 grid place-items-center text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 text-base"
+                  aria-label="بستن فیلترها"
+                >
+                  ✕
+                </button>
+              </div>
 
-            {/* فیلتر مدل خودرو */}
-            <div>
-              <label className="label block mb-1">مدل دقیق خودرو:</label>
-              <select
-                value={carModel}
-                onChange={(e) => setCarModel(e.target.value)}
-                className="input text-xs border-slate-300 rounded-lg bg-white"
-              >
-                <option value="">همه مدل‌ها</option>
-                {allModels.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
+              <div className="py-4 space-y-3.5 text-xs">
+                <div>
+                  <label className="label block mb-1">برند سازنده قطعه (پارت برند):</label>
+                  <select
+                    value={partBrand}
+                    onChange={(e) => setPartBrand(e.target.value)}
+                    className="input text-xs border-slate-300 rounded-lg bg-white h-11"
+                  >
+                    <option value="">همه برندهای سازنده</option>
+                    {allPartBrands.map((pb) => (
+                      <option key={pb} value={pb}>
+                        {pb}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* فیلتر تاریخ ورود به انبار */}
-            <div>
-              <label className="label block mb-1">تاریخ ورود به انبار:</label>
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-                className="input text-xs border-slate-300 rounded-lg bg-white"
-              >
-                <option value="all">همه زمان‌ها</option>
-                <option value="week">اقلام جدید (۷ روز اخیر)</option>
-                <option value="month">اقلام ماه اخیر (۳۰ روز)</option>
-                <option value="quarter">سه ماه اخیر (۹۰ روز)</option>
-              </select>
-            </div>
+                <div>
+                  <label className="label block mb-1">مدل دقیق خودرو:</label>
+                  <select
+                    value={carModel}
+                    onChange={(e) => setCarModel(e.target.value)}
+                    className="input text-xs border-slate-300 rounded-lg bg-white h-11"
+                  >
+                    <option value="">همه مدل‌ها</option>
+                    {allModels.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* مرتب‌سازی */}
-            <div>
-              <label className="label block mb-1">مرتب‌سازی بر اساس:</label>
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                className="input text-xs border-slate-300 rounded-lg bg-white font-medium"
-              >
-                <option value="default">پیش‌فرض (خودرو و گروه کالا)</option>
-                <option value="newest">جدیدترین قطعات اضافه شده</option>
-                <option value="price_asc">ارزان‌ترین به گران‌ترین</option>
-                <option value="price_desc">گران‌ترین به ارزان‌ترین</option>
-                <option value="stock_desc">بیشترین موجودی انبار</option>
-              </select>
+                <div>
+                  <label className="label block mb-1">تاریخ ورود به انبار:</label>
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value)}
+                    className="input text-xs border-slate-300 rounded-lg bg-white h-11"
+                  >
+                    <option value="all">همه زمان‌ها</option>
+                    <option value="week">اقلام جدید (۷ روز اخیر)</option>
+                    <option value="month">اقلام ماه اخیر (۳۰ روز)</option>
+                    <option value="quarter">سه ماه اخیر (۹۰ روز)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label block mb-1">مرتب‌سازی بر اساس:</label>
+                  <select
+                    value={sort}
+                    onChange={(e) => setSort(e.target.value)}
+                    className="input text-xs border-slate-300 rounded-lg bg-white h-11 font-medium"
+                  >
+                    <option value="default">پیش‌فرض (خودرو و گروه کالا)</option>
+                    <option value="newest">جدیدترین قطعات اضافه شده</option>
+                    <option value="price_asc">ارزان‌ترین به گران‌ترین</option>
+                    <option value="price_desc">گران‌ترین به ارزان‌ترین</option>
+                    <option value="stock_desc">بیشترین موجودی انبار</option>
+                  </select>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-2.5 p-3 rounded-lg border border-slate-200 bg-slate-50 cursor-pointer select-none text-xs text-slate-800 font-medium">
+                    <input
+                      type="checkbox"
+                      checked={inStockOnly}
+                      onChange={(e) => setInStockOnly(e.target.checked)}
+                      className="size-4.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span>فقط نمایش قطعات موجود در انبار مرکزی</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="btn btn-ghost text-xs px-3 py-3 rounded-lg text-rose-600 hover:bg-rose-50"
+                >
+                  پاک‌سازی همه
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(false)}
+                  className="btn btn-brass flex-1 text-xs py-3 rounded-lg font-bold shadow-sm"
+                >
+                  اعمال و مشاهده نتایج ({toFaDigits(items.length)})
+                </button>
+              </div>
             </div>
           </div>
-
-          {/* فیلتر فقط کالاهای موجود */}
-          <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
-            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-700 font-medium">
-              <input
-                type="checkbox"
-                checked={inStockOnly}
-                onChange={(e) => setInStockOnly(e.target.checked)}
-                className="size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span>فقط نمایش قطعات موجود در انبار مرکزی</span>
-            </label>
-
-            <span className="nums text-xs text-slate-500">
-              تعداد نتایج منطبق: <b className="text-slate-900 font-bold">{toFaDigits(items.length)}</b> قلم کالا
-            </span>
-          </div>
-        </div>
+        </>
       )}
 
       {/* برچسب‌های فیلترهای فعال با امکان حذف تک‌تک */}
@@ -595,28 +708,20 @@ export function CatalogBrowser(props: {
         </div>
       )}
 
-      {/* جدول نمایش قطعات کاتالوگ */}
-      <div className="mt-4 card overflow-hidden border-slate-200 shadow-2xs rounded-xl bg-white">
-        <div className="hidden md:grid grid-cols-[8.5rem_1.4fr_6rem_9.5rem_9.5rem] gap-2 px-5 py-3 border-b border-slate-200 bg-slate-50/90 text-xs font-semibold text-slate-600">
-          <span>کد فنی و برند</span>
-          <span>شرح قطعه و مشخصات</span>
-          <span className="text-center">موجودی انبار</span>
-          <span className="text-left">قیمت همکار</span>
-          <span className="text-center">اقدام سفارش</span>
-        </div>
-
+      {/* نمایش قطعات کاتالوگ: طراحی اختصاصی دوگانه (جدول متراکم برای دسکتاپ، کارت‌های لمسی مدرن برای موبایل) */}
+      <div className="mt-4">
         {loading ? (
-          <div className="p-14 text-center text-xs text-slate-500 flex flex-col items-center gap-2.5">
+          <div className="card p-14 text-center text-xs text-slate-500 flex flex-col items-center gap-2.5 bg-white border border-slate-200 rounded-xl">
             <span className="size-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span>در حال واکشی قطعات مطابق فیلترها...</span>
           </div>
         ) : items.length === 0 ? (
-          <div className="p-14 text-center text-xs text-slate-500 space-y-2.5">
+          <div className="card p-10 sm:p-14 text-center text-xs text-slate-500 space-y-3 bg-white border border-slate-200 rounded-xl">
             <p className="font-bold text-slate-800 text-base">قطعه‌ای مطابق با این فیلترها پیدا نشد.</p>
-            <p className="text-slate-500">
+            <p className="text-slate-500 max-w-md mx-auto">
               می‌توانید فیلترها را حذف کنید، یا قطعه مورد نظر را در استعلام چندردیفی (RFQ) ثبت نمایید.
             </p>
-            <div className="flex items-center justify-center gap-2 mt-2">
+            <div className="flex items-center justify-center gap-2 pt-2">
               <button onClick={resetAllFilters} className="btn btn-ghost text-xs px-4 py-2">
                 پاک‌سازی فیلترها
               </button>
@@ -629,136 +734,263 @@ export function CatalogBrowser(props: {
             </div>
           </div>
         ) : (
-          <ul className="divide-y divide-slate-100">
-            {items.map((item) => {
-              const inCart = cart.find((c) => c.item.id === item.id);
-              const hasVolumeDiscount = item.volumePrices && item.volumePrices.length > 0;
+          <>
+            {/* ۱. نمای موبایل (Mobile Cards) — کاملاً لمسی، خوانا و با استانداردهای اپلیکیشن‌های B2B برتر دنیا */}
+            <div className="md:hidden space-y-3">
+              {items.map((item) => {
+                const inCart = cart.find((c) => c.item.id === item.id);
+                const hasVolumeDiscount = item.volumePrices && item.volumePrices.length > 0;
 
-              return (
-                <li
-                  key={item.id}
-                  className="p-3.5 sm:px-5 sm:py-4 md:grid md:grid-cols-[8.5rem_1.4fr_6rem_9.5rem_9.5rem] md:items-center gap-2 hover:bg-slate-50/60 transition-colors"
-                >
-                  {/* کد فنی و سازنده */}
-                  <div className="flex flex-col gap-1">
-                    <span className="nums text-[11px] font-mono font-semibold text-slate-700 border border-slate-200 rounded px-2 py-0.5 bg-slate-50 self-start">
-                      {item.sku}
-                    </span>
-                    {item.partBrand && (
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 rounded px-1.5 py-0.2 self-start">
-                        {item.partBrand}
-                      </span>
-                    )}
-                    {item.oemCode && (
-                      <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">
-                        OEM: {item.oemCode}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* نام و مدل */}
-                  <div className="mt-1 md:mt-0 min-w-0">
-                    <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
-                      <span className="font-semibold text-slate-800">{item.brand}</span>
-                      {item.model && <span>· {item.model}</span>}
-                      <span className="text-slate-400">· {item.category}</span>
-                      {item.packSize > 1 && (
-                        <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
-                          بسته {toFaDigits(item.packSize)} تایی
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3.5 bg-white border border-slate-200/90 rounded-xl shadow-2xs space-y-3 transition-shadow hover:shadow-xs"
+                  >
+                    {/* ردیف اول: برند سازنده قطعه + کد فنی SKU + برچسب موجودی */}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                        {item.partBrand && (
+                          <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200/80 rounded-md px-2 py-0.5">
+                            {item.partBrand}
+                          </span>
+                        )}
+                        <span className="nums text-[11px] font-mono font-semibold text-slate-700 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5">
+                          {item.sku}
                         </span>
-                      )}
-                      {hasVolumeDiscount && (
-                        <span className="text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
-                          تخفیف تیراژ
+                      </div>
+
+                      {item.stockQty > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full font-medium text-[11px] shrink-0">
+                          <span className="size-1.5 rounded-full bg-emerald-600" />
+                          <span className="nums font-bold">{toFaDigits(item.stockQty)}</span> {item.unit}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-full font-medium text-[11px] shrink-0">
+                          <span className="size-1.5 rounded-full bg-rose-600" />
+                          <span>ناموجود</span>
                         </span>
                       )}
                     </div>
-                  </div>
 
-                  {/* موجودی */}
-                  <div className="mt-2 md:mt-0 md:text-center text-xs">
-                    {item.stockQty > 0 ? (
-                      <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                        <span className="size-1.5 rounded-full bg-emerald-600" />
-                        <span className="nums font-bold">{toFaDigits(item.stockQty)}</span> {item.unit}
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-full font-medium text-[11px]">
-                        <span className="size-1.5 rounded-full bg-rose-600" />
-                        <span>ناموجود</span>
-                      </span>
-                    )}
-                  </div>
-
-                  {/* قیمت */}
-                  <div className="mt-2 md:mt-0 md:text-left text-xs">
-                    {item.price !== null ? (
-                      <div className="nums">
-                        {item.priceBefore && item.priceBefore > item.price && (
-                          <span className="block text-[10px] text-slate-400 line-through">
-                            {formatToman(item.priceBefore)}
+                    {/* نام قطعه و جزئیات سازگاری */}
+                    <div>
+                      <h3 className="font-bold text-sm text-slate-900 leading-snug">{item.name}</h3>
+                      <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2 flex-wrap">
+                        <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
+                          {item.brand} {item.model ? `· ${item.model}` : ""}
+                        </span>
+                        <span className="text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
+                          {item.category}
+                        </span>
+                        {item.packSize > 1 && (
+                          <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px] nums">
+                            بسته {toFaDigits(item.packSize)} تایی
                           </span>
                         )}
-                        <span className="font-extrabold text-base text-slate-900">{formatToman(item.price)}</span>
-                        <span className="text-[11px] text-slate-400 font-normal ms-1">تومان</span>
+                        {hasVolumeDiscount && (
+                          <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[11px] font-medium">
+                            تخفیف تیراژ
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <span className="text-xs text-slate-400 font-medium">پس از تأیید حساب</span>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* دکمه‌های اقدام خرید */}
-                  <div className="mt-3 md:mt-0 flex items-center gap-2 justify-end">
-                    <button
-                      onClick={() => addToCart(item)}
-                      disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                      className={`btn text-xs px-2.5 py-1.5 rounded-lg flex-1 md:flex-initial transition-all ${
-                        inCart
-                          ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
-                          : "btn-ghost border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
-                      }`}
-                      title="افزودن به سبد سفارش"
-                    >
-                      {inCart ? `✓ در سبد (${toFaDigits(inCart.qty)})` : "+ سبد"}
-                    </button>
+                    {/* ردیف قیمت */}
+                    <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
+                      <span className="text-xs text-slate-500 font-medium">قیمت همکاری:</span>
+                      <div className="text-left nums">
+                        {item.priceBefore && item.priceBefore > (item.price ?? 0) && (
+                          <span className="block text-[11px] text-slate-400 line-through">
+                            {formatToman(item.priceBefore)} تومان
+                          </span>
+                        )}
+                        <div className="flex items-baseline gap-1">
+                          {item.price !== null ? (
+                            <>
+                              <span className="font-extrabold text-lg text-slate-900">
+                                {formatToman(item.price)}
+                              </span>
+                              <span className="text-xs text-slate-500">تومان</span>
+                            </>
+                          ) : (
+                            <span className="text-xs text-slate-400">پس از تأیید حساب</span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
 
-                    <button
-                      onClick={() => setSelectedQuickBuy(item)}
-                      disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                      className="btn btn-brass text-xs px-3.5 py-1.5 rounded-lg flex-1 md:flex-initial font-bold shadow-xs"
-                    >
-                      خرید فوری
-                    </button>
+                    {/* دکمه‌های لمسی خرید با حداقل ارتفاع ۴۴ پیکسل برای کار با انگشت */}
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <button
+                        onClick={() => addToCart(item)}
+                        disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
+                        className={`h-11 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border active:scale-98 ${
+                          inCart
+                            ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs"
+                            : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="8" cy="21" r="1" />
+                          <circle cx="19" cy="21" r="1" />
+                          <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+                        </svg>
+                        <span>{inCart ? `در سبد (${toFaDigits(inCart.qty)})` : "+ سبد سفارش"}</span>
+                      </button>
+
+                      <button
+                        onClick={() => setSelectedQuickBuy(item)}
+                        disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
+                        className="h-11 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:scale-98 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      >
+                        <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                        </svg>
+                        <span>خرید فوری</span>
+                      </button>
+                    </div>
                   </div>
-                </li>
-              );
-            })}
-          </ul>
+                );
+              })}
+            </div>
+
+            {/* ۲. نمای دسکتاپ (Desktop Table View) */}
+            <div className="hidden md:block card overflow-hidden border-slate-200 shadow-2xs rounded-xl bg-white">
+              <div className="grid grid-cols-[8.5rem_1.4fr_6rem_9.5rem_9.5rem] gap-2 px-5 py-3 border-b border-slate-200 bg-slate-50/90 text-xs font-semibold text-slate-600">
+                <span>کد فنی و برند</span>
+                <span>شرح قطعه و مشخصات</span>
+                <span className="text-center">موجودی انبار</span>
+                <span className="text-left">قیمت همکار</span>
+                <span className="text-center">اقدام سفارش</span>
+              </div>
+
+              <ul className="divide-y divide-slate-100">
+                {items.map((item) => {
+                  const inCart = cart.find((c) => c.item.id === item.id);
+                  const hasVolumeDiscount = item.volumePrices && item.volumePrices.length > 0;
+
+                  return (
+                    <li
+                      key={item.id}
+                      className="px-5 py-4 grid grid-cols-[8.5rem_1.4fr_6rem_9.5rem_9.5rem] items-center gap-2 hover:bg-slate-50/60 transition-colors"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <span className="nums text-[11px] font-mono font-semibold text-slate-700 border border-slate-200 rounded px-2 py-0.5 bg-slate-50 self-start">
+                          {item.sku}
+                        </span>
+                        {item.partBrand && (
+                          <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 rounded px-1.5 py-0.2 self-start">
+                            {item.partBrand}
+                          </span>
+                        )}
+                        {item.oemCode && (
+                          <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">
+                            OEM: {item.oemCode}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
+                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
+                          <span className="font-semibold text-slate-800">{item.brand}</span>
+                          {item.model && <span>· {item.model}</span>}
+                          <span className="text-slate-400">· {item.category}</span>
+                          {item.packSize > 1 && (
+                            <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
+                              بسته {toFaDigits(item.packSize)} تایی
+                            </span>
+                          )}
+                          {hasVolumeDiscount && (
+                            <span className="text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
+                              تخفیف تیراژ
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="text-center text-xs">
+                        {item.stockQty > 0 ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full font-medium text-[11px]">
+                            <span className="size-1.5 rounded-full bg-emerald-600" />
+                            <span className="nums font-bold">{toFaDigits(item.stockQty)}</span> {item.unit}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-full font-medium text-[11px]">
+                            <span className="size-1.5 rounded-full bg-rose-600" />
+                            <span>ناموجود</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-left text-xs">
+                        {item.price !== null ? (
+                          <div className="nums">
+                            {item.priceBefore && item.priceBefore > item.price && (
+                              <span className="block text-[10px] text-slate-400 line-through">
+                                {formatToman(item.priceBefore)}
+                              </span>
+                            )}
+                            <span className="font-extrabold text-base text-slate-900">{formatToman(item.price)}</span>
+                            <span className="text-[11px] text-slate-400 font-normal ms-1">تومان</span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-medium">پس از تأیید حساب</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 justify-end">
+                        <button
+                          onClick={() => addToCart(item)}
+                          disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
+                          className={`btn text-xs px-2.5 py-1.5 rounded-lg transition-all ${
+                            inCart
+                              ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
+                              : "btn-ghost border border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                          }`}
+                          title="افزودن به سبد سفارش"
+                        >
+                          {inCart ? `✓ (${toFaDigits(inCart.qty)})` : "+ سبد"}
+                        </button>
+
+                        <button
+                          onClick={() => setSelectedQuickBuy(item)}
+                          disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
+                          className="btn btn-brass text-xs px-3.5 py-1.5 rounded-lg font-bold shadow-xs"
+                        >
+                          خرید فوری
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </>
         )}
       </div>
 
-      {/* نوار شناور پایین صفحه در صورت داشتن کالا در سبد */}
+      {/* نوار شناور پایین صفحه در صورت داشتن کالا در سبد — با فاصله امن از نوار پایین موبایل */}
       {cart.length > 0 && (
-        <div className="fixed bottom-18 md:bottom-6 inset-x-4 md:inset-x-auto md:left-8 md:right-8 md:max-w-2xl md:mx-auto z-30 animate-in slide-in-from-bottom-4 duration-200">
-          <div className="card bg-slate-900 text-white p-3.5 sm:px-5 sm:py-3.5 rounded-xl shadow-2xl flex items-center justify-between gap-4 border border-slate-800">
-            <div className="flex items-center gap-3">
-              <span className="size-10 grid place-items-center bg-blue-600 text-white rounded-lg font-bold text-sm">
+        <div className="fixed bottom-[calc(4.2rem+env(safe-area-inset-bottom))] md:bottom-6 inset-x-3 md:inset-x-auto md:left-8 md:right-8 md:max-w-2xl md:mx-auto z-30 animate-in slide-in-from-bottom-4 duration-200">
+          <div className="card bg-slate-900 text-white p-3 sm:px-5 sm:py-3.5 rounded-xl shadow-2xl flex items-center justify-between gap-3 border border-slate-800">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <span className="size-9 sm:size-10 grid place-items-center bg-blue-600 text-white rounded-lg font-bold text-xs sm:text-sm shrink-0">
                 {toFaDigits(cartSummary.distinctCount)}
               </span>
-              <div>
-                <p className="text-xs sm:text-sm font-bold text-white leading-tight">سبد سفارش همکار</p>
-                <p className="text-[11px] text-slate-400 mt-0.5 nums">
-                  {toFaDigits(cartSummary.itemCount)} عدد قطعه · مجموع: {formatToman(cartSummary.subtotal)} تومان
+              <div className="min-w-0">
+                <p className="text-xs sm:text-sm font-bold text-white leading-tight truncate">سبد سفارش همکار</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-400 mt-0.5 nums truncate">
+                  {toFaDigits(cartSummary.itemCount)} قطعه · مجموع: {formatToman(cartSummary.subtotal)} ت
                 </p>
               </div>
             </div>
 
             <button
               onClick={() => setShowCartDrawer(true)}
-              className="btn btn-brass text-xs px-4 py-2 font-bold shadow-sm hover:scale-102 transition-transform"
+              className="btn btn-brass text-xs px-3 sm:px-4 py-2 font-bold shadow-sm hover:scale-102 transition-transform shrink-0"
             >
-              مشاهده و صدور پیش‌فاکتور
+              مشاهده سبد
             </button>
           </div>
         </div>
