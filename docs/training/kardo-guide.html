@@ -1,0 +1,1850 @@
+﻿<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>راهنمای جامع کاردو — Warehouse OS</title>
+<style>
+  @font-face{
+    font-family:Vazir;
+    src:url(data:font/ttf;base64,__VAZIR_REG__) format('truetype');
+    font-weight:400;font-style:normal;font-display:swap;
+  }
+  @font-face{
+    font-family:Vazir;
+    src:url(data:font/ttf;base64,__VAZIR_BOLD__) format('truetype');
+    font-weight:700;font-style:normal;font-display:swap;
+  }
+  :root{
+    --ink:#0f172a; --muted:#52627a; --line:#dbe3ee;
+    --brand:#0e7490; --brand-dark:#0b4f63; --navy:#0f2a43;
+    --soft:#f2f7fa; --soft2:#eef4f8; --gold:#b45309;
+    --green:#0f766e; --red:#b91c1c; --white:#fff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:Vazir,Tahoma,sans-serif;
+    color:var(--ink); font-size:9.1pt; line-height:1.75;
+    background:#fff; direction:rtl;
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+  p{margin:0 0 8px}
+  strong{font-weight:700;color:#0b3040}
+  .ltr{direction:ltr;unicode-bidi:isolate;display:inline-block;font-family:Tahoma,Vazir,sans-serif}
+  code,.mono{font-family:Consolas,monospace;font-size:9pt;direction:ltr;unicode-bidi:isolate;background:#eef3f7;border:1px solid #dbe5ee;border-radius:4px;padding:0 4px}
+  @page{size:A4;margin:10mm 11mm 10mm 11mm}
+  .page{page-break-before:auto;margin-top:9mm}
+  .first-chapter{page-break-before:always;margin-top:0}
+  .newpage{break-before:page;margin-top:0}
+  .page:first-child{page-break-before:auto}
+
+  /* ---------- cover ---------- */
+  .cover{
+    position:relative;height:270mm;border-radius:16px;overflow:hidden;
+    background:linear-gradient(140deg,#0b3b4d 0%,#0e7490 55%,#155e75 100%);
+    color:#fff;padding:20mm 16mm;page-break-after:always;
+  }
+  .cover .grid{position:absolute;inset:0;opacity:.16;
+    background-image:linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px);
+    background-size:16mm 16mm}
+  .cover .orb{position:absolute;border-radius:50%;filter:blur(2px);opacity:.30}
+  .orb.a{width:90mm;height:90mm;background:#67e8f9;top:-30mm;left:-20mm}
+  .orb.b{width:60mm;height:60mm;background:#fbbf24;bottom:18mm;right:-14mm;opacity:.22}
+  .orb.c{width:34mm;height:34mm;background:#a5f3fc;bottom:80mm;left:30mm;opacity:.18}
+  .cover .inner{position:relative;z-index:2;display:flex;flex-direction:column;height:100%}
+  .cover .top{display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:10px}
+  .logo .mark{width:12mm;height:12mm;border-radius:4mm;background:#fff;color:#0e7490;
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16pt}
+  .logo .name{font-size:15pt;font-weight:700;letter-spacing:.3px}
+  .logo .sub{font-size:8pt;opacity:.8;margin-top:-3px}
+  .cover .badge{border:1px solid rgba(255,255,255,.45);border-radius:99px;padding:4px 12px;font-size:8.5pt;background:rgba(255,255,255,.08)}
+  .cover .mid{margin-top:26mm;flex:1}
+  .cover .kicker{font-size:10pt;letter-spacing:1px;opacity:.9;margin-bottom:5mm}
+  .cover h1{font-size:34pt;line-height:1.35;margin:0 0 4mm;font-weight:700}
+  .cover h1 span{color:#fde68a}
+  .cover .lead{font-size:12pt;line-height:1.9;max-width:135mm;opacity:.95;color:#f0fdfa}
+  .cover .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:9mm}
+  .chip{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.10);
+    border-radius:99px;padding:4px 11px;font-size:8.6pt}
+  .cover .foot{display:flex;justify-content:space-between;align-items:flex-end;
+    border-top:1px solid rgba(255,255,255,.25);padding-top:5mm;font-size:8.6pt;opacity:.9}
+  .cover .foot b{display:block;font-size:10pt;opacity:1}
+
+  /* ---------- headings ---------- */
+  h1.sec{
+    display:flex;align-items:center;gap:10px;margin:0 0 4mm;
+    font-size:18pt;line-height:1.4;color:var(--navy);
+    border-bottom:2.5px solid var(--brand);padding-bottom:3mm;break-after:avoid;
+  }
+  h1.sec .num{
+    flex:0 0 auto;width:9.5mm;height:9.5mm;border-radius:3mm;
+    background:var(--brand);color:#fff;font-size:12pt;
+    display:flex;align-items:center;justify-content:center
+  }
+  h2{font-size:11.8pt;color:var(--brand-dark);margin:4.5mm 0 1.8mm;line-height:1.5;page-break-after:avoid}
+  h2:first-of-type{margin-top:2mm}
+  h3{font-size:11pt;color:var(--navy);margin:4.5mm 0 1.5mm;page-break-after:avoid}
+  .lead{font-size:10.2pt;color:#334155;line-height:1.85;margin-bottom:4mm}
+  .muted{color:var(--muted)}
+  .small{font-size:9pt}
+  ul,ol{margin:0 0 8px;padding-right:18px}
+  li{margin-bottom:3px}
+  .tight li{margin-bottom:1px}
+
+  /* ---------- cards & grids ---------- */
+  .grid{display:grid;gap:4mm}
+  .g2{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr 1fr}
+  .g4{grid-template-columns:1fr 1fr 1fr 1fr}
+  .card{
+    background:var(--white);border:1px solid var(--line);border-radius:4mm;
+    padding:3.4mm 4mm;break-inside:avoid;
+  }
+  .card h3{margin-top:0}
+  .card .ico{font-size:14pt;line-height:1;margin-bottom:1mm}
+  .soft{background:var(--soft);border:1px solid #d8e7ef}
+  .soft2{background:#f7fafc;border:1px solid var(--line)}
+
+  /* ---------- callouts ---------- */
+  .callout{border-radius:3.5mm;padding:3.5mm 4.5mm;margin:4mm 0;break-inside:avoid;
+    border-right:4px solid var(--brand);background:#eef8fb}
+  .callout > b:first-child{display:block;margin-bottom:1mm;font-size:10.3pt}
+  .callout.tip{border-right-color:var(--green);background:#eefaf6}
+  .callout.warn{border-right-color:var(--gold);background:#fff7ec}
+  .callout.danger{border-right-color:var(--red);background:#fef2f2}
+  .callout p:last-child,.callout ul:last-child{margin-bottom:0}
+
+  /* ---------- steps ---------- */
+  .steps{counter-reset:st;margin:3mm 0}
+  .step{position:relative;padding:0 12mm 3mm 0;border-right:1.5px dashed #c7d8e4;margin-right:4mm}
+  .step:last-child{border-right-color:transparent;padding-bottom:0}
+  .step:before{
+    counter-increment:st;content:counter(st);
+    position:absolute;right:-5.2mm;top:0;width:8mm;height:8mm;border-radius:50%;
+    background:var(--brand);color:#fff;font-size:9.5pt;font-weight:700;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .step b{display:block;font-size:10.6pt;color:#0b3040;margin-bottom:1mm}
+  .step p{margin:0;color:#334155}
+
+  /* ---------- tables ---------- */
+  table{width:100%;border-collapse:collapse;margin:2.5mm 0 4mm;font-size:8.7pt;break-inside:auto}
+  thead{display:table-header-group}
+  th{background:#e8f1f6;color:#0b3b4d;text-align:right;font-weight:700;padding:1.8mm 2.2mm;border:1px solid #cddfe9}
+  td{padding:1.7mm 2.2mm;border:1px solid var(--line);vertical-align:top;line-height:1.75}
+  tr:nth-child(even) td{background:#fafcfd}
+  td.c,th.c{text-align:center}
+  table:not(.shortcuts):not(.glossary){break-inside:avoid}
+  .shortcuts td{padding:0.75mm 2mm;font-size:8.3pt;line-height:1.35}
+  .shortcuts th{padding:1.1mm 2mm;font-size:8.6pt}
+  .shortcuts{margin:2mm 0 3.5mm}
+  .compact td{padding:1.3mm 2mm;font-size:8.5pt;line-height:1.6}
+  .compact th{padding:1.35mm 2mm;font-size:8.6pt}
+  .dense .card{padding:2.6mm 3.2mm}
+  .dense .card .small{font-size:8.7pt;line-height:1.7}
+  .kbd{display:inline-block;direction:ltr;font-family:Tahoma,sans-serif;font-size:8.4pt;
+    background:#0f2a43;color:#fff;border-radius:3px;padding:1px 6px;margin:0 2px;
+    box-shadow:0 1.5px 0 #061726;white-space:nowrap}
+  .kbd.light{background:#eef3f7;color:#0f2a43;border:1px solid #c9d7e3;box-shadow:none}
+
+  /* ---------- toc ---------- */
+  .toc{margin-top:4mm}
+  .toc a{color:var(--ink);text-decoration:none}
+  .toc .row{display:flex;align-items:baseline;gap:4px;padding:1.4mm 0;border-bottom:1px dotted #cbd7e2}
+  .toc .n{width:8mm;color:var(--brand);font-weight:700}
+  .toc .t{flex:1}
+  .toc .d{color:var(--muted);font-size:8.8pt}
+
+  /* ---------- misc ---------- */
+  .badge{display:inline-block;border-radius:99px;padding:1px 8px;font-size:8.2pt;font-weight:700}
+  .b-green{background:#dcfce7;color:#166534}
+  .b-blue{background:#e0f2fe;color:#075985}
+  .b-amber{background:#fef3c7;color:#92400e}
+  .b-red{background:#fee2e2;color:#991b1b}
+  .b-gray{background:#e2e8f0;color:#334155}
+  .flow{display:flex;align-items:center;gap:2mm;flex-wrap:wrap;margin:3mm 0}
+  .flow .box{background:#fff;border:1px solid var(--line);border-radius:3mm;padding:2mm 3mm;font-size:9pt}
+  .flow .arr{color:var(--brand);font-weight:700}
+  .kv{display:grid;grid-template-columns:30mm 1fr;gap:1mm 3mm;font-size:9.6pt}
+  .kv dt{color:var(--muted)}
+  .kv dd{margin:0}
+  .checklist{list-style:none;padding:0}
+  .checklist li{position:relative;padding-right:8mm;margin-bottom:2.2mm}
+  .checklist li:before{content:"✓";position:absolute;right:0;top:0;width:5.2mm;height:5.2mm;
+    border-radius:1.6mm;background:#dcfce7;color:#166534;font-weight:700;font-size:9pt;
+    display:flex;align-items:center;justify-content:center}
+  .two-col{columns:2;column-gap:8mm}
+  .two-col li{break-inside:avoid}
+  .divider{height:1px;background:var(--line);margin:5mm 0}
+  .screen{border:1px solid #c9d7e3;border-radius:3mm;background:#f8fbfd;padding:3mm}
+  .screen .bar{display:flex;gap:1.6mm;margin-bottom:2mm}
+  .screen .bar i{width:2.6mm;height:2.6mm;border-radius:50%;background:#cbd5e1;display:block}
+  .screen .line{height:2.2mm;background:#e2edf4;border-radius:99px;margin-bottom:1.6mm}
+  .screen .line.w70{width:70%}.screen .line.w45{width:45%}.screen .line.w88{width:88%}
+  .no-break{break-inside:avoid}
+  .footer-note{margin-top:6mm;border-top:1px solid var(--line);padding-top:2.5mm;color:var(--muted);font-size:8.6pt}
+</style>
+</head>
+<body>
+
+<!-- ================= COVER ================= -->
+<div class="cover">
+  <div class="grid"></div>
+  <div class="orb a"></div><div class="orb b"></div><div class="orb c"></div>
+  <div class="inner">
+    <div class="top">
+      <div class="logo">
+        <div class="mark">ک</div>
+        <div>
+          <div class="name">کاردو</div>
+          <div class="sub">Warehouse OS</div>
+        </div>
+      </div>
+      <div class="badge">نسخهٔ ۰.۵.۰</div>
+    </div>
+
+    <div class="mid">
+      <div class="kicker">راهنمای کاربری و آموزش گام‌به‌گام</div>
+      <h1>همهٔ امکانات<br><span>کاردو</span> در یک راهنما</h1>
+      <p class="lead">
+        از صندوق فروش و فاکتور تا انبارگردانی، لیبل، حساب مشتری، فروشگاه اینترنتی
+        و اپ اندروید انباردار — هر چیزی که برای راه‌اندازی و کار روزانه با
+        سیستم مدیریت انبار کاردو لازم دارید.
+      </p>
+      <div class="chips">
+        <span class="chip">صندوق فروش</span>
+        <span class="chip">انبار و قفسه</span>
+        <span class="chip">انبارگردانی</span>
+        <span class="chip">لیبل و بارکد</span>
+        <span class="chip">حساب مشتری</span>
+        <span class="chip">گزارش‌ها</span>
+        <span class="chip">فروشگاه اینترنتی</span>
+        <span class="chip">اپ اندروید</span>
+        <span class="chip">اپ ویندوز</span>
+      </div>
+    </div>
+
+    <div class="foot">
+      <div>
+        <b>نسخهٔ سند</b>
+        مهر ۱۴۰۵ — منطبق با نسخهٔ ۰.۵.۰ نرم‌افزار
+      </div>
+      <div style="text-align:left">
+        <b>مخاطب</b>
+        مدیر فروشگاه، فروشنده، انباردار
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================= TOC ================= -->
+<section>
+  <h1 class="sec"><span class="num">۰</span> فهرست راهنما</h1>
+  <p class="lead">
+    این راهنما به ترتیبِ کارِ واقعی فروشگاه چیده شده است: اول سیستم را می‌شناسید،
+    بعد صندوق را راه می‌اندازید، سپس انبار، لیبل، حساب‌ها و گزارش‌ها را.
+    هر فصل مستقل است؛ می‌توانید مستقیم سراغ بخش مورد نیازتان بروید.
+  </p>
+
+  <div class="toc">
+    <div class="row"><span class="n">۱</span><span class="t">کاردو در یک نگاه <span class="d">— اجزای سیستم، نقش‌ها و قواعد طلایی</span></span></div>
+    <div class="row"><span class="n">۲</span><span class="t">شروع سریع <span class="d">— نصب، اجرا، ورود و اولین تنظیمات</span></span></div>
+    <div class="row"><span class="n">۳</span><span class="t">صندوق فروش <span class="d">— فروش سریع، پرداخت، مرجوعی و اصلاحیه</span></span></div>
+    <div class="row"><span class="n">۴</span><span class="t">کلیدهای میانبر صندوق <span class="d">— جدول کامل و تمرین فروش بدون موس</span></span></div>
+    <div class="row"><span class="n">۵</span><span class="t">مشتریان و حساب‌ها <span class="d">— پرونده، حساب باز، چک، رسید و صورتحساب</span></span></div>
+    <div class="row"><span class="n">۶</span><span class="t">اسناد فروش و خرید <span class="d">— فاکتور، پیش‌فاکتور، فاکتور سفید، تأمین‌کننده</span></span></div>
+    <div class="row"><span class="n">۷</span><span class="t">انبار، قفسه و انتقال <span class="d">— موجودی، کاردکس و جابه‌جایی</span></span></div>
+    <div class="row"><span class="n">۸</span><span class="t">انبارگردانی <span class="d">— شمارش، مغایرت و تأیید</span></span></div>
+    <div class="row"><span class="n">۹</span><span class="t">لیبل و بارکد <span class="d">— چاپ قفسه و کالا، رول حرارتی</span></span></div>
+    <div class="row"><span class="n">۱۰</span><span class="t">کارتابل و کارهای انبار <span class="d">— صف تصمیم‌ها و ارسال کار به کارگر</span></span></div>
+    <div class="row"><span class="n">۱۱</span><span class="t">گزارش‌ها <span class="d">— فروش، سود، بدهکاران، چک و موجودی</span></span></div>
+    <div class="row"><span class="n">۱۲</span><span class="t">محصولات، قیمت و تصاویر <span class="d">— کاتالوگ و تاریخچهٔ قیمت</span></span></div>
+    <div class="row"><span class="n">۱۳</span><span class="t">ورودی صوتی <span class="d">— ثبت موجودی با حرف زدن</span></span></div>
+    <div class="row"><span class="n">۱۴</span><span class="t">تنظیمات و پشتیبان‌گیری <span class="d">— کاربران، مغازه، اکسل، بکاپ</span></span></div>
+    <div class="row"><span class="n">۱۵</span><span class="t">فروشگاه اینترنتی <span class="d">— سایت مشتری و پنل مدیریت سایت</span></span></div>
+    <div class="row"><span class="n">۱۶</span><span class="t">اپ اندروید انباردار <span class="d">— اسکن، صدا، آفلاین و کارها</span></span></div>
+    <div class="row"><span class="n">۱۷</span><span class="t">اپ ویندوز فروشنده <span class="d">— نصب، پرینتر فیش و میانبرها</span></span></div>
+    <div class="row"><span class="n">۱۸</span><span class="t">عیب‌یابی و چک‌لیست روزانه <span class="d">— مشکلات رایج و کارهای ابتدا/پایان روز</span></span></div>
+    <div class="row"><span class="n">۱۹</span><span class="t">واژه‌نامه <span class="d">— اصطلاح‌هایی که در سیستم می‌بینید</span></span></div>
+  </div>
+
+  <div class="callout tip" style="margin-top:7mm">
+    <b>چطور از این راهنما استفاده کنیم؟</b>
+    <p>
+      اگر تازه سیستم را نصب کرده‌اید، فصل‌های ۱ تا ۳ را به ترتیب بخوانید.
+      اگر فروشنده‌اید، فصل ۴ (کلیدها) را کنار صندوق نگه دارید.
+      اگر انباردار هستید، فصل‌های ۷ تا ۹ و ۱۶ را بخوانید.
+      اگر مدیر هستید، فصل‌های ۵، ۶، ۱۱، ۱۴ و ۱۵ بیشترین کاربرد را دارند.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 1 ================= -->
+<section class="page first-chapter">
+  <h1 class="sec"><span class="num">۱</span> کاردو در یک نگاه</h1>
+  <p class="lead">
+    کاردو یک سیستم یکپارچهٔ مدیریت انبار و فروش است که برای فروشگاه‌های لوازم یدکی
+    خودرو ساخته شده، اما ساختار آن برای هر صنفی که کالا، قفسه و مشتری دارد قابل
+    استفاده است. همهٔ بخش‌ها روی یک دیتابیس مرکزی کار می‌کنند؛ بنابراین موجودی‌ای
+    که در انبار تغییر می‌کند، بلافاصله در صندوق و سایت دیده می‌شود.
+  </p>
+
+  <h2>اجزای سیستم</h2>
+  <div class="grid g3">
+    <div class="card soft">
+      <div class="ico">🖥️</div>
+      <h3>پنل مدیریت و فروش</h3>
+      <p class="small">صندوق، مشتریان، اسناد، انبار، گزارش‌ها و تنظیمات. روی مرورگر یا اپ ویندوز اجرا می‌شود.</p>
+    </div>
+    <div class="card soft">
+      <div class="ico">⚙️</div>
+      <h3>سرور مرکزی (API)</h3>
+      <p class="small">قلب سیستم؛ همهٔ عملیات، موجودی و حساب‌ها را ثبت و کنترل می‌کند. در شبکهٔ فروشگاه روی پورت ۳۰۰۰ اجرا می‌شود.</p>
+    </div>
+    <div class="card soft">
+      <div class="ico">📱</div>
+      <h3>اپ اندروید انباردار</h3>
+      <p class="small">اسکن بارکد، ثبت صوتی، چیدن کالا، انتقال و انبارگردانی روی گوشی؛ با پشتیبانی از حالت آفلاین.</p>
+    </div>
+    <div class="card soft">
+      <div class="ico">🧾</div>
+      <h3>اپ ویندوز فروشنده</h3>
+      <p class="small">همان پنل وب داخل یک قاب دسکتاپ، با دسترسی مستقیم به پرینتر فیش حرارتی (ESC/POS).</p>
+    </div>
+    <div class="card soft">
+      <div class="ico">🛒</div>
+      <h3>فروشگاه اینترنتی</h3>
+      <p class="small">سایت مشتری برای دیدن کالا، سبد خرید، ثبت سفارش و پیگیری؛ به‌همراه پنل مدیریت محتوا و سفارش‌ها.</p>
+    </div>
+    <div class="card soft">
+      <div class="ico">🗄️</div>
+      <h3>دیتابیس PostgreSQL</h3>
+      <p class="small">نگهداری کالا، موجودی، فاکتورها، حساب مشتری و لاگ همهٔ حرکات انبار. تصاویر روی دیسک سرور ذخیره می‌شوند.</p>
+    </div>
+  </div>
+
+  <h2>نقش‌ها و دسترسی‌ها</h2>
+  <table>
+    <thead>
+      <tr><th style="width:26mm">نقش</th><th>چه کسی است</th><th>به چه بخش‌هایی دسترسی دارد</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>مدیر کل</b><br><span class="small muted">ADMIN</span></td>
+        <td>صاحب فروشگاه</td>
+        <td>همه‌چیز: صندوق، اسناد، انبار، گزارش‌ها، کاربران، پشتیبان‌گیری، تنظیمات سایت و مغازه.</td>
+      </tr>
+      <tr>
+        <td><b>مدیر</b><br><span class="small muted">MANAGER</span></td>
+        <td>مدیر فروش یا انبار</td>
+        <td>عملیات روزانه، خرید، گزارش‌ها، کالا و انبار؛ بدون مدیریت کاربران و بازگردانی پشتیبان.</td>
+      </tr>
+      <tr>
+        <td><b>فروشنده</b><br><span class="small muted">SALES</span></td>
+        <td>پشت صندوق</td>
+        <td>صندوق فروش، مشتریان، اسناد فروش و پیش‌فاکتورها. بعد از ورود مستقیم وارد صندوق می‌شود.</td>
+      </tr>
+      <tr>
+        <td><b>انباردار</b><br><span class="small muted">STAFF</span></td>
+        <td>کارگر انبار</td>
+        <td>موجودی، انبارگردانی، کالاها و جست‌وجو. کار اصلی‌اش روی اپ اندروید است.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>چهار قاعدهٔ طلایی سیستم</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>۱. موجودی فقط از عملیات تغییر می‌کند</h3>
+      <p class="small">هیچ‌کس عدد موجودی را دستی «ویرایش» نمی‌کند. هر تغییر باید از یک عملیات رسمی (ورود، خروج، فروش، مرجوعی، انتقال، اصلاح، شمارش) عبور کند.</p>
+    </div>
+    <div class="card">
+      <h3>۲. هر حرکت، یک رد پا دارد</h3>
+      <p class="small">برای هر تغییر موجودی یک «لاگ» ثبت می‌شود: چه کالایی، چقدر، از کجا به کجا، توسط چه کسی و چه زمانی. کاردکس کالا همین تاریخچه است.</p>
+    </div>
+    <div class="card">
+      <h3>۳. حذف، پنهان‌سازی است</h3>
+      <p class="small">رکوردها به‌صورت «حذف نرم» کنار گذاشته می‌شوند تا سابقهٔ مالی و انبار خراب نشود. کالای حذف‌شده از فهرست‌ها می‌رود، اما تاریخچه‌اش می‌ماند.</p>
+    </div>
+    <div class="card">
+      <h3>۴. اعداد از یک منبع می‌آیند</h3>
+      <p class="small">صندوق، گزارش‌ها، کاردکس و سایت همه از یک دیتابیس می‌خوانند. اگر جایی عدد متفاوت دیدید، اول کاردکس و لاگ را بررسی کنید، نه اینکه عدد را دستی عوض کنید.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>مسیر پیشنهادی یادگیری</b>
+    <p>ورود ← صندوق (یک فروش آزمایشی) ← ثبت یک مشتری ← ثبت یک فاکتور خرید ← چیدن کالا در قفسه ← چاپ لیبل ← یک انبارگردانی کوچک ← نگاه به گزارش «یک نگاه».</p>
+  </div>
+</section>
+
+<!-- ================= 2 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۲</span> شروع سریع</h1>
+  <p class="lead">
+    این فصل برای کسی است که می‌خواهد سیستم را روی سیستم فروشگاه بالا بیاورد و
+    اولین فروش را ثبت کند. اگر سیستم از قبل نصب و در حال اجراست، از بخش
+    «ورود به سیستم» ادامه دهید.
+  </p>
+
+  <h2>پیش‌نیازها</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>روی سرور / کامپیوتر اصلی</h3>
+      <ul class="small">
+        <li>ویندوز ۱۰ یا ۱۱ (۶۴ بیتی)</li>
+        <li>Node.js نسخهٔ ۲۲ یا بالاتر</li>
+        <li>PostgreSQL با دیتابیس <code>warehouse_os</code></li>
+        <li>حداقل ۸ گیگابایت رم و فضای کافی برای تصاویر و پشتیبان‌ها</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>روی دستگاه‌های فروشگاه</h3>
+      <ul class="small">
+        <li>مرورگر به‌روز (Chrome یا Edge) برای پنل</li>
+        <li>اتصال به همان شبکهٔ محلی سرور</li>
+        <li>گوشی اندروید ۸ به بالا برای اپ انباردار</li>
+        <li>پرینتر لیبل حرارتی و پرینتر فیش (اختیاری ولی توصیه‌شده)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>اجرای سیستم</h2>
+  <div class="steps">
+    <div class="step">
+      <b>سرویس PostgreSQL را روشن کنید</b>
+      <p>از <span class="ltr">Services.msc</span> سرویس <code>postgresql</code> را Start کنید. بدون دیتابیس، سرور بالا نمی‌آید.</p>
+    </div>
+    <div class="step">
+      <b>اسکریپت استک توسعه را اجرا کنید</b>
+      <p>فایل <code>C:\warehouse-os\start-dev-stack.ps1</code> را اجرا کنید. این اسکریپت سرور API و پنل وب را در پنجره‌های جدا بالا می‌آورد.</p>
+    </div>
+    <div class="step">
+      <b>آدرس‌ها را باز کنید</b>
+      <p>پنل روی <code>http://localhost:3001</code> و API روی <code>http://localhost:3000</code> در دسترس است. آدرس شبکهٔ محلی (مثلاً <code>http://192.168.1.50:3001</code>) را برای گوشی و بقیهٔ دستگاه‌ها استفاده کنید.</p>
+    </div>
+    <div class="step">
+      <b>وارد شوید</b>
+      <p>با نام کاربری و رمز مدیر وارد شوید. فروشنده مستقیم به صندوق، و انباردار مستقیم به صفحهٔ موجودی می‌رود.</p>
+    </div>
+    <div class="step">
+      <b>اطلاعات مغازه را کامل کنید</b>
+      <p>در «تنظیمات ← مشخصات مغازه» نام، تلفن، آدرس و اطلاعات چاپ را وارد کنید؛ این اطلاعات روی فاکتورها می‌آید.</p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <b>محیط تولید را با محیط توسعه اشتباه نگیرید</b>
+    <p>
+      نسخهٔ نصب‌شدهٔ فروشگاه در <code>C:\WarehouseOS</code> قرار دارد و نسخهٔ
+      توسعه در <code>C:\warehouse-os</code>. برای کار روزانه همیشه از نسخهٔ نصب‌شده
+      و پشتیبان‌گیری منظم استفاده کنید.
+    </p>
+  </div>
+
+  <h2>اولین تنظیمات پیشنهادی</h2>
+  <table>
+    <thead><tr><th style="width:34mm">ترتیب</th><th>کار</th><th>کجای سیستم</th></tr></thead>
+    <tbody>
+      <tr><td class="c">۱</td><td>ساخت انبار و موقعیت‌ها (طبقه، راهرو، قفسه، سبد)</td><td>انبار ← موقعیت‌ها / قفسه‌ها</td></tr>
+      <tr><td class="c">۲</td><td>ثبت داده‌های پایه: دسته، برند، مدل خودرو</td><td>داده‌های پایه</td></tr>
+      <tr><td class="c">۳</td><td>ثبت تأمین‌کنندگان</td><td>اسناد ← تأمین‌کنندگان</td></tr>
+      <tr><td class="c">۴</td><td>ورود کالاها (دستی، اکسل یا از فاکتور خرید)</td><td>محصولات / تنظیمات ← ورود اکسل</td></tr>
+      <tr><td class="c">۵</td><td>چاپ لیبل قفسه‌ها و کالاها</td><td>لیبل‌ها / بارکدها</td></tr>
+      <tr><td class="c">۶</td><td>تعریف کاربران و نقش‌ها</td><td>تنظیمات ← کاربران</td></tr>
+      <tr><td class="c">۷</td><td>تنظیم پرینترها و پشتیبان‌گیری خودکار</td><td>تنظیمات ← مشخصات مغازه / پشتیبان‌گیری</td></tr>
+    </tbody>
+  </table>
+
+  <h2>ورود به سیستم</h2>
+  <p>
+    ورود با نام کاربری و رمز انجام می‌شود و نشست شما امن نگه داشته می‌شود. اگر رمز
+    را فراموش کردید، مدیر کل می‌تواند از «تنظیمات ← کاربران» رمز را بازنشانی کند.
+    برای امنیت بیشتر، رمز پیش‌فرض را در اولین ورود تغییر دهید و برای هر فروشنده
+    یک حساب جدا بسازید تا در گزارش «فروشندگان» مشخص باشد چه کسی چه فروشی زده است.
+  </p>
+  <div class="callout tip">
+    <b>یک حساب برای هر نفر</b>
+    <p>حساب مشترک، گزارش فروشندگان و رد پای عملیات را بی‌معنی می‌کند. حتی در یک فروشگاه کوچک هم برای هر نفر حساب جدا بسازید.</p>
+  </div>
+</section>
+
+<!-- ================= 3 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۳</span> صندوق فروش</h1>
+  <p class="lead">
+    صندوق، پرکاربردترین صفحهٔ سیستم است و برای سرعت ساخته شده: بارکد را اسکن
+    می‌کنید، Enter می‌زنید، مبلغ را می‌گیرید و فاکتور چاپ می‌شود. همهٔ کارهای
+    روزمرهٔ فروش — از نسیه و چک تا مرجوعی و اصلاحیه — از همین صفحه انجام می‌شود.
+  </p>
+
+  <h2>چیدمان صفحه</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>نوار بالای سند</h3>
+      <p class="small">
+        تب‌های چند سند هم‌زمان، وضعیت سند، مشتریِ انتخاب‌شده و دکمه‌های اصلی.
+        هر تب یک سبد مستقل است؛ مثلاً می‌توانید مشتری اول را نگه دارید و
+        مشتری دوم را بفروشید و بعد برگردید.
+      </p>
+    </div>
+    <div class="card">
+      <h3>ستون اقلام</h3>
+      <p class="small">
+        هر ردیف: کالا، تعداد، قیمت واحد، تخفیف و جمع. ردیف فعال با فلش‌ها انتخاب
+        می‌شود و با <span class="kbd">Delete</span> حذف یا با
+        <span class="kbd">Insert</span> ردیف دستی اضافه می‌شود.
+      </p>
+    </div>
+    <div class="card">
+      <h3>پنل مشتری</h3>
+      <p class="small">
+        با <span class="kbd">F4</span> باز می‌شود: اطلاعات مشتری، فاکتورهای قبلی،
+        مانده‌حساب و میان‌برهای ویرایش/کپی اقلام.
+      </p>
+    </div>
+    <div class="card">
+      <h3>خلاصه و پرداخت</h3>
+      <p class="small">
+        جمع کل، تخفیف، مانده و دکمهٔ تسویه. مبلغ نهایی همیشه پایین صفحه می‌ماند
+        تا با بلند شدن فهرست اقلام از دید خارج نشود.
+      </p>
+    </div>
+  </div>
+
+  <h2>فروش در شش گام</h2>
+  <div class="steps">
+    <div class="step">
+      <b>کالا را پیدا کنید</b>
+      <p>بارکد را اسکن کنید یا نام/کد کالا را تایپ کنید. جست‌وجو زنده است؛ با Enter نتیجهٔ انتخاب‌شده به سبد اضافه می‌شود.</p>
+    </div>
+    <div class="step">
+      <b>تعداد و قیمت را بررسی کنید</b>
+      <p>با <span class="kbd">Tab</span> از بارکد به تعداد و بعد قیمت بروید. قیمت پیش‌فرض از کاتالوگ می‌آید و در صورت نیاز قابل ویرایش است.</p>
+    </div>
+    <div class="step">
+      <b>مشتری را انتخاب کنید (اختیاری)</b>
+      <p>با <span class="kbd">F4</span> مشتری را پیدا کنید. برای فروش نقدی می‌توانید خالی بگذارید؛ برای نسیه و حساب، مشتری الزامی است.</p>
+    </div>
+    <div class="step">
+      <b>تخفیف بدهید (در صورت نیاز)</b>
+      <p><span class="kbd">F6</span> تخفیف فاکتور را باز می‌کند. تخفیف روی جمع کل اعمال می‌شود و در فاکتور ثبت می‌ماند.</p>
+    </div>
+    <div class="step">
+      <b>پرداخت را ثبت کنید</b>
+      <p><span class="kbd">F2</span> پنجرهٔ تسویه را باز می‌کند: نقد، کارتخوان، چک یا نسیه. با <span class="kbd">F7</span> می‌توانید پرداخت ترکیبی بسازید.</p>
+    </div>
+    <div class="step">
+      <b>فاکتور را چاپ کنید</b>
+      <p>بعد از ثبت، فاکتور آمادهٔ چاپ است. با <span class="kbd">Ctrl+P</span> چاپ و با <span class="kbd">Ctrl+Shift+P</span> پیش‌نمایش بگیرید.</p>
+    </div>
+  </div>
+
+  <h2>روش‌های پرداخت</h2>
+  <table>
+    <thead><tr><th style="width:28mm">روش</th><th>توضیح</th><th>چه زمانی</th></tr></thead>
+    <tbody>
+      <tr><td><b>نقد</b></td><td>وجه نقد دریافت می‌شود و فاکتور کامل تسویه می‌شود.</td><td>فروش روزمره</td></tr>
+      <tr><td><b>کارت</b></td><td>پرداخت با کارتخوان؛ مبلغ در فاکتور به‌عنوان پرداخت کارتی ثبت می‌شود.</td><td>پرداخت با کارت بانکی</td></tr>
+      <tr><td><b>چک</b></td><td>چک با شماره، بانک، تاریخ و وضعیت ثبت می‌شود و در گزارش چک‌ها می‌آید.</td><td>فروش چکی</td></tr>
+      <tr><td><b>نسیه</b></td><td>فاکتور ثبت می‌شود ولی وجهی دریافت نمی‌شود؛ مانده به بدهی مشتری می‌رود.</td><td>مشتری حساب‌دار</td></tr>
+      <tr><td><b>ترکیبی</b></td><td>چند ردیف پرداخت هم‌زمان: مثلاً نصف نقد، نصف کارت یا چک.</td><td>تسویهٔ جزئی</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <b>پرداخت ترکیبی چطور کار می‌کند؟</b>
+    <p>
+      با <span class="kbd">F7</span> پنجرهٔ پرداخت ترکیبی باز می‌شود. هر ردیف یک روش
+      و یک مبلغ دارد؛ جمع ردیف‌ها باید با مبلغ قابل پرداخت برابر شود. اگر کمتر باشد،
+      باقی‌مانده به‌عنوان نسیه روی حساب مشتری می‌نشیند.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 3b ================= -->
+<section class="page">
+  <h2 style="margin-top:0">حالت‌های ویژهٔ صندوق</h2>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>🧾 مرجوعی</h3>
+      <p class="small">
+        فاکتور مشتری را باز کنید و از مسیر مرجوعی، اقلام برگشتی را ثبت کنید.
+        موجودی به انبار برمی‌گردد و سند مرجوعی به فاکتور مبدأ وصل می‌شود.
+        مرجوعی جزئی هم ممکن است.
+      </p>
+    </div>
+    <div class="card">
+      <h3>✏️ اصلاحیه</h3>
+      <p class="small">
+        برای تغییر اقلام یا مبلغ فاکتورِ ثبت‌شده (بدون برگشت کالا) از اصلاحیه
+        استفاده کنید. فاکتور اصلی باطل نمی‌شود؛ سند اصلاح روی آن می‌نشیند تا
+        رد مالی کامل بماند.
+      </p>
+    </div>
+    <div class="card">
+      <h3>📄 پیش‌فاکتور</h3>
+      <p class="small">
+        با <span class="kbd">F8</span> سبد فعلی به پیش‌فاکتور تبدیل می‌شود یا
+        برعکس. پیش‌فاکتور موجودی را کم نمی‌کند تا وقتی به فاکتور تبدیل شود.
+      </p>
+    </div>
+    <div class="card">
+      <h3>📝 فاکتور سفید</h3>
+      <p class="small">
+        برگه‌ای برای کالاهایی که هنوز در سیستم نیستند یا قیمتشان قطعی نیست.
+        فروشنده اقلام را می‌نویسد و مدیر قیمت‌گذاری و به فاکتور تبدیل می‌کند.
+      </p>
+    </div>
+    <div class="card">
+      <h3>💳 حساب باز</h3>
+      <p class="small">
+        با <span class="kbd">F3</span> فهرست بدهکاران و طلبکاران باز می‌شود.
+        فاکتورِ حساب باز بعداً تسویه می‌شود و تا آن موقع جزو بدهی مشتری است.
+      </p>
+    </div>
+    <div class="card">
+      <h3>↩️ برگشت پرداخت</h3>
+      <p class="small">
+        اگر کارتخوان تراکنش را برگشت زد، پرداخت را «برگشت» بزنید؛ دلیل الزامی است
+        و مانده به بدهی برمی‌گردد. تاریخچه حذف نمی‌شود.
+      </p>
+    </div>
+  </div>
+
+  <h2>چند نکتهٔ سرعتی</h2>
+  <ul>
+    <li><b>Enter طلایی است:</b> در خانهٔ خالیِ اسکن، Enter شما را به تسویه می‌برد؛ در جای دیگر، کالا را اضافه می‌کند.</li>
+    <li><b>Ctrl+Z</b> آخرین افزودن را برمی‌گرداند — مخصوص وقتی بارکد اشتباه اسکن شده است.</li>
+    <li><b>Ctrl+B</b> صدای بیپ اسکن را روشن/خاموش می‌کند؛ در محیط شلوغ مفید است.</li>
+    <li><b>چند تب:</b> با <span class="kbd">Alt+N</span> سند نو و با <span class="kbd">Alt+PgUp/PgDn</span> بین تب‌ها جابه‌جا شوید.</li>
+    <li><b>حافظهٔ فاکتور:</b> هنگام ویرایش فاکتور قبلی، با <span class="kbd">Alt+H</span> می‌بینید چه اقلامی قبلاً در این فاکتور بوده‌اند.</li>
+    <li><b>بزرگ‌نمایی:</b> با <span class="kbd">Ctrl+Alt+↑/↓</span> اندازهٔ رابط را برای مانیتور فروشگاه تنظیم کنید.</li>
+    <li><b>راهنمای کلیدها:</b> هر وقت کلیدی یادتان رفت، <span class="kbd">F1</span> همهٔ میان‌برها را نشان می‌دهد.</li>
+  </ul>
+
+  <div class="callout warn">
+    <b>قبل از بستن مرورگر</b>
+    <p>
+      اگر سندی نیمه‌کاره دارید، سیستم معمولاً هشدار می‌دهد. ولی مطمئن‌ترین کار
+      این است که سند را ثبت کنید یا تب را عمداً ببندید. رفرش کردن صفحه وسط
+      فاکتور، سبد را پاک می‌کند.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 4 ================= -->
+<section class="page newpage">
+  <h1 class="sec"><span class="num">۴</span> کلیدهای میانبر صندوق</h1>
+  <p class="lead">
+    صندوق برای کار با کیبورد طراحی شده است؛ هدف این است که فروشنده دستش را از
+    کیبورد برندارد. لازم نیست همهٔ کلیدها را حفظ کنید — چند کلید اصلی و بقیه
+    به‌مرور در دستتان می‌آید. <span class="kbd">F1</span> همیشه همین فهرست را
+    نشان می‌دهد.
+  </p>
+
+  <h2>فروش و ثبت</h2>
+  <table class="shortcuts">
+    <thead><tr><th style="width:34mm">کلید</th><th>کار</th></tr></thead>
+    <tbody>
+      <tr><td><span class="kbd">Enter</span></td><td>افزودن بارکد / رفتن به تسویه از خانهٔ خالی</td></tr>
+      <tr><td><span class="kbd">F2</span></td><td>تسویه و ثبت فاکتور (در مرجوعی: ثبت مرجوعی؛ در اصلاح: ثبت اصلاح)</td></tr>
+      <tr><td><span class="kbd">Tab</span></td><td>از بارکد به تعداد، بعد قیمت</td></tr>
+      <tr><td><span class="kbd">F7</span></td><td>پرداخت ترکیبی</td></tr>
+      <tr><td><span class="kbd">Insert</span></td><td>افزودن قلم دستی</td></tr>
+      <tr><td><span class="kbd">Delete</span></td><td>حذف ردیف فعال</td></tr>
+      <tr><td><span class="kbd">Ctrl+Z</span></td><td>برگرداندن آخرین افزودن (خطای اسکن)</td></tr>
+      <tr><td><span class="kbd">Ctrl+B</span></td><td>صدای اسکن روشن/خاموش</td></tr>
+      <tr><td><span class="kbd">F6</span></td><td>تخفیف فاکتور</td></tr>
+      <tr><td><span class="kbd">F8</span></td><td>پیش‌فاکتور ↔ فروش</td></tr>
+      <tr><td><span class="kbd">F9</span></td><td>ارسال سبد به کارگر انبار</td></tr>
+      <tr><td><span class="kbd">Alt+Q</span></td><td>پیش‌فاکتورهای باز — بارگذاری در سبد</td></tr>
+      <tr><td><span class="kbd">Alt+B</span></td><td>فاکتورهای سفید — قیمت‌گذاری و اتصال اقلام</td></tr>
+      <tr><td><span class="kbd">Alt+T</span></td><td>توضیح قلم فعال</td></tr>
+      <tr><td><span class="kbd">Alt+H</span></td><td>دیدن حافظهٔ فاکتور در ویرایش</td></tr>
+      <tr><td><span class="kbd">Alt+W</span></td><td>کارهای انبار</td></tr>
+      <tr><td><span class="kbd">Alt+A</span></td><td>افزودن کالای جدید</td></tr>
+      <tr><td><span class="kbd">Alt+S</span></td><td>ثبت کسری کالا</td></tr>
+    </tbody>
+  </table>
+
+  <h2>مشتری و فاکتورها</h2>
+  <table class="shortcuts">
+    <thead><tr><th style="width:34mm">کلید</th><th>کار</th></tr></thead>
+    <tbody>
+      <tr><td><span class="kbd">F4</span></td><td>مشتری و فاکتورهایش</td></tr>
+      <tr><td><span class="kbd">F3</span></td><td>حساب‌بازها — بدهکار و طلبکار</td></tr>
+      <tr><td><span class="kbd">Ctrl+F</span></td><td>یافتن فاکتور</td></tr>
+      <tr><td><span class="kbd">Alt+N</span></td><td>فاکتور نو (تب جدید)</td></tr>
+      <tr><td><span class="kbd">Alt+PgUp / PgDn</span></td><td>تب قبلی / بعدی</td></tr>
+      <tr><td><span class="kbd">F10</span></td><td>تعویض (برگشت + خرید) برای همان مشتری</td></tr>
+      <tr><td><span class="kbd">C</span></td><td>در پنل مشتری: کپی اقلام فاکتور در سبد تازه</td></tr>
+      <tr><td><span class="kbd">Ctrl+Shift+X</span></td><td>جدا کردن مشتری از این تب</td></tr>
+      <tr><td><span class="kbd">Ctrl+Del</span></td><td>لغو ویرایش / لغو مرجوعی</td></tr>
+      <tr><td><span class="kbd">Ctrl+P</span></td><td>چاپ فاکتور در حال ویرایش</td></tr>
+      <tr><td><span class="kbd">Alt+K</span></td><td>کاردکس کالای ردیف فعال</td></tr>
+    </tbody>
+  </table>
+
+  <h2>حرکت و خوانایی</h2>
+  <table class="shortcuts">
+    <thead><tr><th style="width:34mm">کلید</th><th>کار</th></tr></thead>
+    <tbody>
+      <tr><td><span class="kbd">↑ ↓</span></td><td>انتخاب ردیف در سبد و فهرست‌ها</td></tr>
+      <tr><td><span class="kbd">← →</span></td><td>جابه‌جایی بین ستون‌های پنل مشتری</td></tr>
+      <tr><td><span class="kbd">Ctrl+Alt+↑ ↓</span></td><td>بزرگ‌نمایی رابط</td></tr>
+      <tr><td><span class="kbd">Ctrl+Alt+C</span></td><td>کنتراست بالا</td></tr>
+      <tr><td><span class="kbd">F1</span></td><td>راهنمای کلیدها</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <b>تمرین ۱۰ دقیقه‌ای برای فروشندهٔ جدید</b>
+    <p>
+      یک کالا را سه بار فقط با کیبورد بفروش: اسکن ← Enter ← F4 (مشتری) ←
+      Enter ← F2 ← Enter ← Ctrl+P. بعد یک بار مرجوعی بزن و با Ctrl+Del لغوش کن.
+      همین چند کلید، ۸۰٪ کار روزانه را پوشش می‌دهد.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 5 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۵</span> مشتریان و حساب‌ها</h1>
+  <p class="lead">
+    پروندهٔ مشتری فقط یک دفترچهٔ تلفن نیست؛ مرکز همهٔ حساب‌های مالی است. هر
+    فاکتور، چک، رسید و پرداخت به پروندهٔ مشتری وصل می‌شود و مانده‌حساب او را
+    به‌روز نگه می‌دارد. با یک نگاه به پرونده می‌فهمید مشتری چقدر بدهکار است،
+    چه چک‌هایی دارد و آخرین خریدش چه بوده.
+  </p>
+
+  <h2>ساخت و پیدا کردن مشتری</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>اطلاعات اصلی</h3>
+      <ul class="small">
+        <li>نام مشتری یا نام فروشگاه</li>
+        <li>یک یا چند شماره تلفن (شمارهٔ اصلی مشخص می‌شود)</li>
+        <li>دسته‌بندی مشتری (مثلاً همکار، تعمیرکار، مشتری عادی)</li>
+        <li>آدرس و توضیحات</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>جست‌وجوی سریع</h3>
+      <p class="small">
+        در صندوق با <span class="kbd">F4</span> پنجرهٔ مشتری باز می‌شود؛ با تایپ
+        بخشی از نام یا شماره، نتایج زنده می‌شوند. جست‌وجو با اعداد فارسی و
+        انگلیسی و با شکل‌های مختلف «آ / ا» کار می‌کند.
+      </p>
+    </div>
+  </div>
+
+  <h2>حساب مشتری چه چیزهایی را نشان می‌دهد؟</h2>
+  <table>
+    <thead><tr><th style="width:36mm">بخش</th><th>کاربرد</th></tr></thead>
+    <tbody>
+      <tr><td><b>فاکتورها</b></td><td>همهٔ خریدهای مشتری با وضعیت پرداخت، مانده و لینک به سند.</td></tr>
+      <tr><td><b>مانده‌حساب</b></td><td>جمع بدهی یا طلب مشتری بر اساس فاکتورها، رسیدها و اصلاحیه‌ها.</td></tr>
+      <tr><td><b>چک‌ها</b></td><td>چک‌های دریافتی/پرداختی با سررسید و وضعیت (در جریان، پاس، برگشتی).</td></tr>
+      <tr><td><b>رسیدها</b></td><td>پرداخت‌های مشتری و این‌که به کدام فاکتور تخصیص خورده‌اند.</td></tr>
+      <tr><td><b>گردش حساب</b></td><td>دفتر زمانی همهٔ بدهکاری‌ها و بستانکاری‌ها؛ برای پیگیری اختلاف.</td></tr>
+      <tr><td><b>صورتحساب</b></td><td>چاپ صورت‌حساب دوره‌ای برای مشتری، با گردش و مانده.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>حساب باز و تسویهٔ بعدی</h2>
+  <p>
+    در فروشگاه‌های قطعات، خیلی وقت‌ها مشتری جنس می‌برد و بعداً تسویه می‌کند.
+    «حساب باز» همین را ممکن می‌کند: فاکتور ثبت می‌شود، موجودی کم می‌شود، اما
+    وجهی دریافت نمی‌شود. فاکتور در وضعیت باز می‌ماند و در فهرست حساب‌بازها
+    دیده می‌شود. هر زمان مشتری پرداخت کرد، رسید ثبت می‌کنید و سیستم مبلغ را
+    به قدیمی‌ترین بدهی تخصیص می‌دهد.
+  </p>
+
+  <div class="flow">
+    <span class="box">فاکتور فروش</span><span class="arr">←</span>
+    <span class="box">حساب باز (بدهی)</span><span class="arr">←</span>
+    <span class="box">ثبت رسید</span><span class="arr">←</span>
+    <span class="box">تخصیص به فاکتورها</span><span class="arr">←</span>
+    <span class="box">مانده صفر / باقی‌مانده</span>
+  </div>
+
+  <h2>چک، رسید و پرداخت به مشتری</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>چک</h3>
+      <p class="small">
+        هنگام فروش یا دریافت، چک را با شماره، بانک، تاریخ سررسید و مبلغ ثبت
+        کنید. چک در گزارش چک‌ها و در پروندهٔ مشتری می‌آید. وضعیت چک را می‌توان
+        بعداً به پاس‌شده یا برگشتی تغییر داد.
+      </p>
+    </div>
+    <div class="card">
+      <h3>رسید</h3>
+      <p class="small">
+        رسید می‌تواند ترکیبی باشد: نقد + کارت + چک. مبلغ به‌طور خودکار به
+        قدیمی‌ترین فاکتور بدهکار تخصیص می‌خورد، اما امکان تخصیص دستی هم هست.
+      </p>
+    </div>
+    <div class="card">
+      <h3>پرداخت به مشتری</h3>
+      <p class="small">
+        اگر فروشگاه به مشتری پول بدهد (مثلاً برگشت وجه یا تسویهٔ طلب)، از
+        «پرداخت به مشتری» ثبت کنید. این مبلغ در گردش حساب می‌آید و با فروش
+        قاطی نمی‌شود.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <b>فاکتور را حذف نکنید؛ اصلاح یا برگشت بزنید</b>
+    <p>
+      حذف فاکتور، رد مالی و لاگ انبار را پاره می‌کند. اگر فاکتور اشتباه است،
+      از اصلاحیه یا مرجوعی استفاده کنید تا هم موجودی درست برگردد و هم سابقه
+      قابل پیگیری بماند.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 6 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۶</span> اسناد فروش و خرید</h1>
+  <p class="lead">
+    همهٔ برگه‌های مالی سیستم زیر منوی «اسناد» جمع شده‌اند: فروش، فاکتور خرید و
+    تأمین‌کنندگان. هر سند یک وضعیت روشن دارد و مسیرش مشخص است؛ از پیش‌نویس تا
+    ثبت، تبدیل، چاپ و بایگانی.
+  </p>
+
+  <h2>خانوادهٔ اسناد فروش</h2>
+  <table>
+    <thead><tr><th style="width:32mm">سند</th><th>چه کاری می‌کند</th><th>اثر روی موجودی</th></tr></thead>
+    <tbody>
+      <tr><td><b>فاکتور فروش</b></td><td>سند اصلی فروش؛ قابل چاپ، پیامک و خروجی اکسل.</td><td>کم می‌کند</td></tr>
+      <tr><td><b>پیش‌فاکتور</b></td><td>پیشنهاد قیمت به مشتری؛ بعداً به فاکتور تبدیل می‌شود.</td><td>اثری ندارد</td></tr>
+      <tr><td><b>فاکتور سفید</b></td><td>برگهٔ قیمت‌گذاری برای کالای بدون کد یا بدون قیمت قطعی.</td><td>اثری ندارد تا تبدیل</td></tr>
+      <tr><td><b>مرجوعی</b></td><td>برگشت کالا از مشتری؛ به فاکتور مبدأ وصل می‌شود.</td><td>برمی‌گرداند</td></tr>
+      <tr><td><b>اصلاحیه</b></td><td>اصلاح مبلغ یا اقلام فاکتور بدون برگشت فیزیکی کالا.</td><td>مطابق اصلاح</td></tr>
+      <tr><td><b>حساب باز</b></td><td>فاکتور نسیه‌ای که بعداً تسویه می‌شود.</td><td>کم می‌کند</td></tr>
+    </tbody>
+  </table>
+
+  <h2>وضعیت‌های یک سند</h2>
+  <div class="grid g3">
+    <div class="card soft2">
+      <span class="badge b-blue">باز / پیش‌نویس</span>
+      <p class="small" style="margin-top:2mm">سند در حال تکمیل است. هنوز نهایی نشده و بعضی اثرها اعمال نشده‌اند.</p>
+    </div>
+    <div class="card soft2">
+      <span class="badge b-green">ثبت‌شده</span>
+      <p class="small" style="margin-top:2mm">سند قطعی شده، موجودی و حساب به‌روز شده و قابل چاپ است.</p>
+    </div>
+    <div class="card soft2">
+      <span class="badge b-red">باطل</span>
+      <p class="small" style="margin-top:2mm">سند خنثی شده اما حذف نشده؛ اثر آن با سند اصلاحی برگشته است.</p>
+    </div>
+  </div>
+
+  <h2>فاکتور خرید و تأمین‌کننده</h2>
+  <p>
+    خرید هم مثل فروش است، فقط طرف حساب تأمین‌کننده است. فاکتور خرید را از
+    «اسناد ← فاکتور خرید» بسازید: تأمین‌کننده را انتخاب کنید، اقلام را اسکن یا
+    تایپ کنید، قیمت خرید را وارد کنید و ثبت کنید. اگر کالایی در سیستم نباشد،
+    همان لحظه ساخته می‌شود و به کاتالوگ اضافه می‌شود.
+  </p>
+  <div class="grid g2">
+    <div class="card">
+      <h3>پروندهٔ تأمین‌کننده</h3>
+      <ul class="small">
+        <li>نام شرکت، شخص رابط و شماره‌های تماس</li>
+        <li>آدرس و اطلاعات بانکی</li>
+        <li>مهلت پرداخت و نحوهٔ تسویه</li>
+        <li>فهرست همهٔ فاکتورهای خرید هر تأمین‌کننده</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>ارسال خرید به انبار</h3>
+      <p class="small">
+        بعد از ثبت فاکتور خرید، اقلام را به کارگر انبار «ارسال» کنید. کارگر روی
+        گوشی فهرست چیدن را می‌بیند، کالا را در قفسه می‌گذارد و تیک می‌زند.
+        می‌توانید چند کارگر را هم‌زمان انتخاب کنید؛ هر قلم را اولین نفر تیک بزند
+        ثبت می‌شود.
+      </p>
+    </div>
+  </div>
+
+  <h2>چاپ، پیامک و اکسل</h2>
+  <p>
+    هر سند از نوار فرمان‌ها قابل چاپ است (<span class="kbd">Ctrl+P</span>)،
+    پیش‌نمایش دارد (<span class="kbd">Ctrl+Shift+P</span>)، به اکسل می‌رود
+    (<span class="kbd">Ctrl+E</span>) و برای مشتری پیامک می‌شود
+    (<span class="kbd">Ctrl+M</span>). قالب پیامک از «تنظیمات ← قالب‌های پیامک»
+    قابل ویرایش است.
+  </p>
+
+  <div class="callout tip">
+    <b>ویرایش با حافظه</b>
+    <p>
+      وقتی فاکتور قبلی را برای ویرایش باز می‌کنید، با
+      <span class="kbd">Shift+Enter</span> یا <span class="kbd">Alt+H</span>
+      اقلام قبلی را می‌بینید. این کار جلوی دوباره‌فروشی یا جاافتادن قلم را
+      می‌گیرد.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 7 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۷</span> انبار، قفسه و انتقال</h1>
+  <p class="lead">
+    انبار در کاردو یک ساختار درختی است که خودتان می‌سازید: انبار ← طبقه ←
+    راهرو ← قفسه ← سبد. هر گره یک «موقعیت» است با بارکد یکتا. موجودی هر کالا
+    به موقعیت گره خورده است، بنابراین همیشه می‌دانید کالا کجاست.
+  </p>
+
+  <h2>ساختار موقعیت‌ها</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>انواع موقعیت</h3>
+      <p class="small">
+        در «موقعیت‌ها / قفسه‌ها» می‌توانید انواع دلخواه بسازید: انبار، سالن،
+        طبقه، راهرو، قفسه، ستون، سبد و… . هر نوع می‌تواند سطح بعدی مجاز خودش
+        را داشته باشد.
+      </p>
+    </div>
+    <div class="card">
+      <h3>بارکد خودکار</h3>
+      <p class="small">
+        هر موقعیت هنگام ساخت یک بارکد یکتا می‌گیرد. با اسکن آن بارکد، سیستم
+        می‌فهمد کجای انبار ایستاده‌اید و عملیات بعدی (ثبت کالا، شمارش، انتقال)
+        روی همان موقعیت انجام می‌شود.
+      </p>
+    </div>
+  </div>
+
+  <div class="flow">
+    <span class="box">انبار</span><span class="arr">←</span>
+    <span class="box">طبقه</span><span class="arr">←</span>
+    <span class="box">راهرو</span><span class="arr">←</span>
+    <span class="box">قفسه</span><span class="arr">←</span>
+    <span class="box">سبد</span>
+  </div>
+
+  <h2>صفحهٔ موجودی</h2>
+  <p>صفحهٔ «موجودی» سه تب دارد:</p>
+  <table>
+    <thead><tr><th style="width:28mm">تب</th><th>چه چیزی نشان می‌دهد</th></tr></thead>
+    <tbody>
+      <tr><td><b>موجودی</b></td><td>موجودی فعلی هر کالا به تفکیک موقعیت؛ جست‌وجو بر اساس نام، کد یا بارکد؛ نمایش حداقل موجودی و کسری.</td></tr>
+      <tr><td><b>انتقال</b></td><td>جابه‌جایی موجودی از یک قفسه به قفسهٔ دیگر با ثبت مبدأ، مقصد و تعداد.</td></tr>
+      <tr><td><b>تاریخچه</b></td><td>همهٔ حرکات انبار: ورود، خروج، فروش، مرجوعی، انتقال، اصلاح و شمارش.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>کاردکس کالا</h2>
+  <p>
+    کاردکس، دفترِ حرکت یک کالاست: هر ردیف می‌گوید چه زمانی، با چه سندی و توسط
+    چه کسی موجودی تغییر کرده. با <span class="kbd">Alt+K</span> از صندوق یا از
+    صفحهٔ کالا باز می‌شود. اگر عدد موجودی با واقعیت نمی‌خواند، اول کاردکس را
+    ببینید؛ معمولاً یک انتقال ثبت‌نشده یا یک فروش/مرجوعی پیدا می‌شود.
+  </p>
+
+  <h2>انتقال بین قفسه‌ها</h2>
+  <div class="steps">
+    <div class="step">
+      <b>مبدأ را انتخاب کنید</b>
+      <p>قفسه‌ای که کالا الان در آن است. می‌توانید بارکد قفسه را اسکن کنید.</p>
+    </div>
+    <div class="step">
+      <b>کالا و تعداد را وارد کنید</b>
+      <p>کالا را اسکن/جست‌وجو کنید و تعداد جابه‌جا شده را بزنید.</p>
+    </div>
+    <div class="step">
+      <b>مقصد را انتخاب کنید</b>
+      <p>قفسهٔ جدید را اسکن یا انتخاب کنید. انتقال بین دو انبار هم ممکن است.</p>
+    </div>
+    <div class="step">
+      <b>ثبت کنید</b>
+      <p>موجودی مبدأ کم و مقصد زیاد می‌شود و یک ردیف انتقال در تاریخچه ثبت می‌گردد.</p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>چرا انتقال مهم است؟</b>
+    <p>
+      اگر کالا را فیزیکی جابه‌جا کنید ولی در سیستم ثبت نکنید، اسکن قفسه اشتباه
+      جواب می‌دهد و انبارگردانی بعدی مغایرت نشان می‌دهد. انتقال، «حافظهٔ مکان»
+      سیستم را به‌روز نگه می‌دارد.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 8 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۸</span> انبارگردانی</h1>
+  <p class="lead">
+    انبارگردانی یعنی شمارش واقعی قفسه‌ها و مقایسه با عدد سیستم. در کاردو این کار
+    در قالب یک «جلسهٔ شمارش» انجام می‌شود: انتخاب موقعیت، شمارش با اسکن یا صدا،
+    بررسی مغایرت و تأیید نهایی. تا لحظهٔ تأیید، موجودی سیستم دست نمی‌خورد.
+  </p>
+
+  <h2>جریان کامل</h2>
+  <div class="steps">
+    <div class="step">
+      <b>جلسهٔ شمارش بسازید</b>
+      <p>در «انبارگردانی» یک جلسه برای یک موقعیت (یا مجموعه‌ای از موقعیت‌ها) باز کنید. سیستم فهرست کالاهای آن موقعیت را آماده می‌کند.</p>
+    </div>
+    <div class="step">
+      <b>شمارش کنید</b>
+      <p>بارکد هر کالا را اسکن کنید و تعداد واقعی را بزنید؛ یا با اپ اندروید و ورودی صوتی شمارش کنید. کالایی که در سیستم هست ولی پیدا نمی‌شود، صفر ثبت می‌شود.</p>
+    </div>
+    <div class="step">
+      <b>مغایرت‌ها را ببینید</b>
+      <p>سیستم تعداد سیستم و تعداد شمارش‌شده را کنار هم نشان می‌دهد و اختلاف را مشخص می‌کند.</p>
+    </div>
+    <div class="step">
+      <b>تأیید کنید</b>
+      <p>با تأیید، برای هر اختلاف یک عملیات اصلاح (ADJUST) ثبت می‌شود؛ موجودی با واقعیت هماهنگ می‌شود و همه‌چیز در کاردکس می‌ماند.</p>
+    </div>
+  </div>
+
+  <h2>وضعیت‌های جلسه</h2>
+  <table>
+    <thead><tr><th style="width:32mm">وضعیت</th><th>معنی</th><th>کار شما</th></tr></thead>
+    <tbody>
+      <tr><td><b>باز</b></td><td>شمارش شروع شده و هنوز تمام نشده.</td><td>ادامهٔ شمارش</td></tr>
+      <tr><td><b>در حال بررسی</b></td><td>شمارش تمام شده؛ مغایرت‌ها منتظر تصمیم‌اند.</td><td>بررسی و تأیید</td></tr>
+      <tr><td><b>تأییدشده</b></td><td>اصلاحات اعمال شده و موجودی نهایی است.</td><td>فقط مشاهده/آرشیو</td></tr>
+    </tbody>
+  </table>
+
+  <div class="grid g2">
+    <div class="card">
+      <h3>شمارش با گوشی</h3>
+      <p class="small">
+        انباردار روی اپ اندروید جلسه را باز می‌کند، قفسه را اسکن می‌کند و
+        کالاها را یکی‌یکی می‌شمارد. شمارش آفلاین هم ثبت می‌شود و بعد از وصل
+        شدن شبکه همگام می‌شود.
+      </p>
+    </div>
+    <div class="card">
+      <h3>قانون طلایی شمارش</h3>
+      <p class="small">
+        در طول شمارش، فروش و انتقال را متوقف کنید یا حداقل همان قفسه را قفل
+        نگه دارید. شمارش روی انبارِ در حال حرکت، همیشه مغایرت کاذب می‌سازد.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <b>تأیید انبارگردانی برگشت‌پذیر نیست</b>
+    <p>
+      بعد از تأیید، اصلاحات در کاردکس ثبت می‌شوند. اگر اشتباه شد، دوباره شمارش
+      کنید؛ رکورد قبلی حذف نمی‌شود. برای همین قبل از تأیید، مغایرت‌های بزرگ را
+      یک بار دیگر فیزیکی چک کنید.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 9 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۹</span> لیبل و بارکد</h1>
+  <p class="lead">
+    لیبل، پل بین دنیای فیزیکی قفسه و سیستم است. با یک اسکن، انباردار می‌فهمد
+    کجاست و چه کالایی در دست دارد. کاردو هم لیبل قفسه می‌سازد و هم لیبل کالا،
+    با چاپ روی برگهٔ A4، نیم‌برگ یا رول حرارتی.
+  </p>
+
+  <h2>سه تب صفحهٔ لیبل‌ها</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>صف تأیید چاپ</h3>
+      <p class="small">
+        کالاهایی که به انبار آمده‌اند و لیبلشان هنوز چاپ/تأیید نشده. مناسب
+        برای چاپ دسته‌ای روی PC.
+      </p>
+    </div>
+    <div class="card">
+      <h3>چاپ‌نشده‌ها</h3>
+      <p class="small">
+        فهرست کالاهای بدون لیبل، با امکان انتخاب و ارسال به چاپ. می‌توانید
+        به تعداد موجودی لیبل بگیرید.
+      </p>
+    </div>
+    <div class="card">
+      <h3>انبار / قفسه</h3>
+      <p class="small">
+        پوشش لیبل به تفکیک انبار و قفسه؛ می‌بینید کدام قفسه هنوز لیبل ندارد و
+        می‌توانید کل زیرشاخه یا انتخاب‌شده‌ها را چاپ کنید.
+      </p>
+    </div>
+  </div>
+
+  <h2>چاپ لیبل قفسه</h2>
+  <ol>
+    <li>در «موقعیت‌ها / قفسه‌ها» قفسهٔ مورد نظر را باز کنید.</li>
+    <li>«چاپ لیبل» را بزنید؛ می‌توانید کل زیرشاخه یا فقط چند قفسه را انتخاب کنید.</li>
+    <li>اندازهٔ برچسب را از پیش‌تنظیم‌ها انتخاب کنید.</li>
+    <li>خروجی PDF بگیرید یا مستقیم روی پرینتر حرارتی چاپ کنید.</li>
+  </ol>
+
+  <h2>چاپ مستقیم روی پرینتر حرارتی</h2>
+  <p>
+    در ویندوز، چاپ مستقیم از مرورگر یا اپ ویندوزی انجام می‌شود و لازم نیست
+    فایل را ذخیره کنید. دکمهٔ اصلی دیالوگ چاپ «چاپ مستقیم روی پرینتر» است و
+    پرینتر پیش‌فرض را نشان می‌دهد. برای پرینترهای حرارتی TSPL (مثل TTP-244)
+    فرمان‌ها به‌صورت خام به پرینتر فرستاده می‌شوند.
+  </p>
+
+  <div class="callout tip">
+    <b>تنظیم رول ۱۰۴ میلی‌متری</b>
+    <p>
+      برای رول قفسه، عرض رول را <b>۱۰۴</b>، عرض لیبل را <b>۳۴</b> و ارتفاع را
+      <b>۲۵</b> میلی‌متر بگذارید تا سه لیبل در هر ردیف با کیوآر حدود ۲۱ میلی‌متر
+      دربیاید. اگر عرض ۳۵ بدهید، فقط دو لیبل در ردیف جا می‌شود.
+    </p>
+  </div>
+
+  <h2>انواع بارکد</h2>
+  <table>
+    <thead><tr><th style="width:32mm">نوع</th><th>کاربرد</th></tr></thead>
+    <tbody>
+      <tr><td><b>داخلی</b></td><td>کد ساختهٔ خود سیستم برای کالاهای بدون بارکد کارخانه.</td></tr>
+      <tr><td><b>کارخانه</b></td><td>بارکد اصلی قطعه که از روی جعبه اسکن می‌شود.</td></tr>
+      <tr><td><b>QR</b></td><td>برای لیبل قفسه و انتقال سریع اطلاعات موقعیت.</td></tr>
+      <tr><td><b>سایر</b></td><td>هر بارکد دیگری که فروشگاه استفاده می‌کند.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <b>یک کالا، چند بارکد</b>
+    <p>
+      هر کالا می‌تواند چند بارکد داشته باشد (مثلاً بارکد کارخانه و بارکد داخلی).
+      هنگام جست‌وجو، هر کدام اسکن شود همان کالا پیدا می‌شود. برای کالاهای فاقد
+      بارکد، از «افزودن کالا» در صندوق استفاده کنید تا کد داخلی ساخته شود.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 10 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۰</span> کارتابل و کارهای انبار</h1>
+  <p class="lead">
+    کارتابل جایی است که هر چیزی «منتظر تصمیم مدیر» است، یک‌جا جمع می‌شود.
+    به‌جای گشتن در سه صفحهٔ مختلف، تعداد کارهای باز را می‌بینید و یکی‌یکی
+    رسیدگی می‌کنید.
+  </p>
+
+  <h2>سه تب کارتابل</h2>
+  <table>
+    <thead><tr><th style="width:34mm">تب</th><th>چه چیزی منتظر شماست</th><th>اقدام</th></tr></thead>
+    <tbody>
+      <tr><td><b>بازبینی عملیات</b></td><td>عملیات انبار که کارگر ثبت کرده و نیاز به تأیید دارد.</td><td>تأیید / رد با دلیل</td></tr>
+      <tr><td><b>درخواست کالا</b></td><td>درخواست ساخت کالای جدید از سمت گوشی/انبار.</td><td>ساخت کالا / ادغام با کالای موجود / رد</td></tr>
+      <tr><td><b>لیبل‌ها</b></td><td>لیبل‌های در انتظار تأیید چاپ.</td><td>چاپ / تأیید</td></tr>
+    </tbody>
+  </table>
+
+  <h2>کارهای انبار (Work Tasks)</h2>
+  <p>
+    وقتی در صندوق <span class="kbd">F9</span> می‌زنید یا فاکتور خرید را به انبار
+    می‌فرستید، یک «کار» ساخته می‌شود. دو نوع کار داریم:
+  </p>
+  <div class="grid g2">
+    <div class="card">
+      <h3>برداشتن (PICK)</h3>
+      <p class="small">
+        کالا را از قفسه بردار و برای تحویل/ارسال بیاور. کارگر روی گوشی فهرست
+        اقلام و قفسهٔ هر کدام را می‌بیند.
+      </p>
+    </div>
+    <div class="card">
+      <h3>چیدن (PUTAWAY)</h3>
+      <p class="small">
+        کالای تازه‌رسیده در انبار موقت است؛ ببر و سر جایش در قفسه بچین. هنگام
+        چیدن می‌توان عکس هم گرفت تا تصویر کالا برای سایت آماده شود.
+      </p>
+    </div>
+  </div>
+
+  <h2>وضعیت کار و همکاری چند کارگر</h2>
+  <div class="flow">
+    <span class="box">در انتظار</span><span class="arr">←</span>
+    <span class="box">در حال انجام</span><span class="arr">←</span>
+    <span class="box">تکمیل‌شده</span>
+    <span class="box" style="background:#fef2f2">لغو‌شده</span>
+  </div>
+  <p>
+    می‌توانید چند کارگر را با تیک کنار نامشان به یک کار مشترک بگذارید. هر قلم
+    را اولین کسی که انجام داد تیک می‌زند و قلم از فهرست بقیه خارج می‌شود؛
+    بنابراین دو نفر سر یک قلم کار نمی‌کنند.
+  </p>
+
+  <div class="callout tip">
+    <b>اعلان روی گوشی</b>
+    <p>
+      کار جدید از طریق اتصال زنده به گوشی کارگر اعلام می‌شود. اگر گوشی در
+      شبکه باشد، لازم نیست کارگر مدام صفحه را رفرش کند.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 11 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۱</span> گزارش‌ها</h1>
+  <p class="lead">
+    گزارش‌ها جواب سؤال‌های واقعی مدیر هستند: امروز چقدر فروختیم؟ سود کردیم؟
+    چه کسی بدهکار است؟ چه کالایی خوابیده؟ کدام قیمت اشتباه است؟ هر تب یک
+    سؤال، با جدول و جمع و امکان خروجی اکسل.
+  </p>
+
+  <h2>ده تب گزارش</h2>
+  <table>
+    <thead><tr><th style="width:38mm">تب</th><th>به چه سؤالی جواب می‌دهد</th></tr></thead>
+    <tbody>
+      <tr><td><b>یک نگاه</b></td><td>خلاصهٔ امروز/دوره: فروش، تعداد فاکتور، سود، وضعیت بدهی‌ها و هشدارها.</td></tr>
+      <tr><td><b>فروش</b></td><td>فروش به تفکیک روز/دوره، تعداد سند، میانگین فاکتور و روند.</td></tr>
+      <tr><td><b>سود</b></td><td>سود ناخالص بر اساس قیمت خرید و فروش؛ شناسایی روزهای پرسود و کم‌سود.</td></tr>
+      <tr><td><b>دسته مشتری</b></td><td>فروش و بدهی به تفکیک دسته‌بندی مشتری (همکار، تعمیرکار، عادی).</td></tr>
+      <tr><td><b>بدهکاران</b></td><td>فهرست مشتریان بدهکار با مانده و سن بدهی؛ ابزار پیگیری وصول.</td></tr>
+      <tr><td><b>چک‌ها</b></td><td>چک‌های دریافتی/پرداختی، سررسیدها، پاس‌شده و برگشتی.</td></tr>
+      <tr><td><b>پرفروش / راکد</b></td><td>کالاهای پرفروش و کالاهایی که مدت‌ها فروش نرفته‌اند.</td></tr>
+      <tr><td><b>موجودی زیر حد</b></td><td>کالاهایی که به حداقل موجودی رسیده‌اند؛ لیست خرید.</td></tr>
+      <tr><td><b>قیمت‌های مشکوک</b></td><td>قیمت فروش کمتر از خرید، جهش غیرعادی قیمت یا قیمت صفر.</td></tr>
+      <tr><td><b>فروشندگان</b></td><td>عملکرد هر فروشنده: تعداد سند، مبلغ و سهم از فروش.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>چطور از گزارش‌ها استفاده کنیم؟</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>🔎 بررسی روزانه</h3>
+      <p class="small">
+        صبح: «یک نگاه» و «موجودی زیر حد». عصر: «فروش» امروز و «بدهکاران»
+        جدید. هفته‌ای یک بار: «سود» و «پرفروش/راکد».
+      </p>
+    </div>
+    <div class="card">
+      <h3>📤 خروجی و بایگانی</h3>
+      <p class="small">
+        هر جدول را می‌توان به اکسل برد. برای حسابداری یا مقایسهٔ ماه‌به‌ماه،
+        خروجی پایان ماه را نگه دارید.
+      </p>
+    </div>
+    <div class="card">
+      <h3>⚠️ هشدار قیمت</h3>
+      <p class="small">
+        «قیمت‌های مشکوک» را جدی بگیرید؛ یک قیمت صفر یا کمتر از خرید، سود
+        گزارش‌شده را خراب می‌کند و معمولاً نشانهٔ اشتباه ورود داده است.
+      </p>
+    </div>
+    <div class="card">
+      <h3>📦 برنامهٔ خرید</h3>
+      <p class="small">
+        «موجودی زیر حد» + «پرفروش» = لیست هوشمند خرید. کالای پرفروشی که زیر
+        حد است، اولویت اول تأمین است.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>اعداد گزارش از کجا می‌آیند؟</b>
+    <p>
+      همهٔ گزارش‌ها از فاکتورها، پرداخت‌ها و لاگ انبار محاسبه می‌شوند؛ نه از
+      عددی که دستی وارد شده. اگر فروش امروز صفر است، اول مطمئن شوید فاکتورها
+      ثبت شده‌اند و تاریخ دستگاه درست است.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 12 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۲</span> محصولات، قیمت و تصاویر</h1>
+  <p class="lead">
+    کاتالوگ، قلب اطلاعات فروشگاه است. هر کالا یک هویت دارد (نام، کد، برند،
+    خودروی سازگار)، یک یا چند بارکد، قیمت خرید و فروش با تاریخچه، و تصویر.
+    هرچه کاتالوگ تمیزتر باشد، جست‌وجو و اسکن سریع‌تر جواب می‌دهد.
+  </p>
+
+  <h2>اطلاعات یک کالا</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>هویت کالا</h3>
+      <ul class="small">
+        <li>نام فارسی و در صورت نیاز نام لاتین</li>
+        <li>کد داخلی (SKU) و بارکدهای کارخانه</li>
+        <li>برند و دسته‌بندی</li>
+        <li>مدل خودروهای سازگار (چند مدل ممکن است)</li>
+        <li>واحد شمارش (عدد، جفت، دست، بسته)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>قیمت و موجودی</h3>
+      <ul class="small">
+        <li>قیمت خرید و قیمت فروش</li>
+        <li>تاریخ اثر قیمت خرید (تاریخ فاکتور یا انتخاب دستی)</li>
+        <li>حداقل موجودی و هشدار کسری</li>
+        <li>موجودی به تفکیک قفسه (از انبار خوانده می‌شود)</li>
+        <li>تاریخچهٔ قیمت و کاردکس حرکت‌ها</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>صفحهٔ کالا</h2>
+  <p>
+    با کلیک روی هر کالا، صفحه‌ای باز می‌شود که همه‌چیز را یک‌جا دارد: مشخصات،
+    موجودی در قفسه‌ها، کاردکس، تاریخچهٔ قیمت و تصاویر. این صفحه مرجع اصلی
+    پاسخ به سؤال «این کالا چه وضعی دارد؟» است.
+  </p>
+
+  <h2>قیمت‌گذاری</h2>
+  <div class="grid g3 dense">
+    <div class="card">
+      <h3>قیمت خرید</h3>
+      <p class="small">
+        از فاکتور خرید می‌آید یا دستی وارد می‌شود. با هر خرید جدید، تاریخ اثر
+        قیمت هم ثبت می‌شود تا سود دوره دقیق حساب شود.
+      </p>
+    </div>
+    <div class="card">
+      <h3>قیمت فروش</h3>
+      <p class="small">
+        قیمت پیش‌فرض صندوق. در لحظهٔ فروش قابل ویرایش است، ولی تغییر دائمی را
+        از صفحهٔ کالا یا قیمت‌گذاری گروهی انجام دهید.
+      </p>
+    </div>
+    <div class="card">
+      <h3>قیمت‌گذاری گروهی</h3>
+      <p class="small">
+        از نوار ابزار فهرست محصولات می‌توانید چند کالا را انتخاب و قیمتشان را
+        با درصد یا مبلغ ثابت تغییر دهید.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout warn">
+    <b>قیمت صفر، دشمن گزارش سود است</b>
+    <p>
+      کالایی که قیمت خرید ندارد، در گزارش سود با سود کامل نشان داده می‌شود و
+      تصمیم شما را خراب می‌کند. بعد از ورود اکسل یا فاکتور خرید، یک بار گزارش
+      «قیمت‌های مشکوک» را ببینید.
+    </p>
+  </div>
+
+  <h2>تصاویر محصولات</h2>
+  <p>
+    تصاویر روی دیسک سرور ذخیره می‌شوند (نه در دیتابیس) و از مسیر امن سرو
+    می‌شوند. سه مسیر برای رسیدن تصویر به کاتالوگ وجود دارد:
+  </p>
+  <ul>
+    <li><b>آپلود مستقیم:</b> از صفحهٔ کالا یا «تصاویر محصولات»؛ فایل فشرده و بندانگشتی ساخته می‌شود.</li>
+    <li><b>عکس کارگر هنگام چیدن:</b> کارگر موقع چیدن کالا عکس می‌گیرد؛ تصویر با واترمارک فروشگاه آمادهٔ استفاده در سایت می‌شود.</li>
+    <li><b>گالری سایت:</b> تصویر اصلی روی پس‌زمینهٔ سفید و بندانگشتی‌ها کنار آن نمایش داده می‌شوند.</li>
+  </ul>
+
+  <div class="callout tip">
+    <b>ساخت سریع کالا از صندوق</b>
+    <p>
+      وقتی کالایی در سیستم نیست، لازم نیست صندوق را ترک کنید:
+      <span class="kbd">Alt+A</span> فرم کالای جدید را باز می‌کند و کالا همان
+      لحظه به سبد و کاتالوگ اضافه می‌شود.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 13 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۳</span> ورودی صوتی</h1>
+  <p class="lead">
+    ثبت موجودی با حرف زدن، مخصوص وقتی است که دست کارگر پُر است و اسکن ممکن
+    نیست. کارگر نام کالا، برند و تعداد را می‌گوید و سیستم آن را به یک عملیات
+    انبار تبدیل می‌کند.
+  </p>
+
+  <h2>چطور کار می‌کند؟</h2>
+  <div class="steps">
+    <div class="step">
+      <b>موقعیت را مشخص کنید</b>
+      <p>قفسه را اسکن کنید یا از فهرست انتخاب کنید. صدا بدون موقعیت، مقصد ندارد.</p>
+    </div>
+    <div class="step">
+      <b>میکروفن را روشن کنید</b>
+      <p>در صفحهٔ «ورودی صوتی» یا اپ اندروید، دکمهٔ میکروفن را بزنید و شمرده صحبت کنید.</p>
+    </div>
+    <div class="step">
+      <b>جملهٔ استاندارد بگویید</b>
+      <p>مثلاً: «فیلتر روغن بوش دو عدد». نام کالا + برند + تعداد با واحد.</p>
+    </div>
+    <div class="step">
+      <b>نتیجه را تأیید کنید</b>
+      <p>سیستم کالا را پیدا یا می‌سازد و تعداد را نشان می‌دهد. با تأیید، عملیات ثبت و موجودی به‌روز می‌شود.</p>
+    </div>
+  </div>
+
+  <h2>نمونهٔ جمله‌ها</h2>
+  <table>
+    <thead><tr><th style="width:52mm">می‌گویید</th><th>سیستم چه می‌فهمد</th></tr></thead>
+    <tbody>
+      <tr><td>«فیلتر روغن بوش ۲ عدد»</td><td>کالا: فیلتر روغن، برند: بوش، تعداد: ۲</td></tr>
+      <tr><td>«لنت جلو پراید یک جفت»</td><td>کالا: لنت جلو، خودرو: پراید، تعداد: ۱ جفت</td></tr>
+      <tr><td>«روغن موتور بهران ۴ لیتر»</td><td>کالا: روغن موتور، برند: بهران، مقدار: ۴ لیتر</td></tr>
+      <tr><td>«واشر سرسیلندر ۱۰ تا»</td><td>کالا: واشر سرسیلندر، تعداد: ۱۰</td></tr>
+    </tbody>
+  </table>
+
+  <h2>نکته‌های دقت</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>✅ بهتر بشنود</h3>
+      <ul class="small">
+        <li>در محیط کم‌صدا صحبت کنید.</li>
+        <li>عدد را با واحد بگویید: «دو عدد»، «یک جفت»، «سه بسته».</li>
+        <li>نام کالا را کامل بگویید، نه فقط کد.</li>
+        <li>بعد از هر ثبت، میکروفن را دوباره روشن کنید.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>⛔ باعث خطا می‌شود</h3>
+      <ul class="small">
+        <li>گفتن عدد بدون واحد («فیلتر روغن دو»).</li>
+        <li>نام‌های خیلی محاوره‌ای و کوتاه‌شده.</li>
+        <li>صحبت چند نفر هم‌زمان.</li>
+        <li>ثبت صدا بدون انتخاب قفسه.</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="callout">
+    <b>مانیتور صوتی</b>
+    <p>
+      در «تنظیمات ← مانیتور صوتی» می‌توانید خروجی زندهٔ موتور تشخیص گفتار را
+      ببینید. این صفحه برای عیب‌یابی است: اگر جمله‌ای درست فهمیده نمی‌شود،
+      همان‌جا می‌بینید کدام بخش اشتباه تحلیل شده است.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 14 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۴</span> تنظیمات و پشتیبان‌گیری</h1>
+  <p class="lead">
+    تنظیمات، جایی است که سیستم را با فروشگاه شما هماهنگ می‌کند: کاربران،
+    مشخصات مغازه، ورود اکسل، پشتیبان‌گیری، مانیتور صوتی و قالب‌های پیامک.
+  </p>
+
+  <h2>شش تب تنظیمات</h2>
+  <table>
+    <thead><tr><th style="width:34mm">تب</th><th>چه کاری انجام می‌دهد</th><th>دسترسی</th></tr></thead>
+    <tbody>
+      <tr><td><b>کاربران</b></td><td>ساخت کاربر، تعیین نقش، تغییر رمز و غیرفعال کردن حساب.</td><td>مدیر کل</td></tr>
+      <tr><td><b>مشخصات مغازه</b></td><td>نام، تلفن، آدرس، لوگو و اطلاعاتی که روی فاکتور چاپ می‌شود.</td><td>مدیر کل</td></tr>
+      <tr><td><b>ورود اکسل</b></td><td>ورود دسته‌ای کالاها از فایل اکسل؛ با پیش‌نمایش و گزارش خطا.</td><td>مدیر</td></tr>
+      <tr><td><b>پشتیبان‌گیری</b></td><td>گرفتن نسخهٔ پشتیبان، زمان‌بندی خودکار و بازگردانی.</td><td>مدیر کل / مدیر</td></tr>
+      <tr><td><b>مانیتور صوتی</b></td><td>مشاهدهٔ زندهٔ خروجی تشخیص گفتار برای عیب‌یابی.</td><td>مدیر</td></tr>
+      <tr><td><b>قالب‌های پیامک</b></td><td>متن پیامک فاکتور، یادآوری بدهی و اطلاع موجودی.</td><td>مدیر</td></tr>
+    </tbody>
+  </table>
+
+  <h2>پشتیبان‌گیری</h2>
+  <p>
+    پشتیبان شامل دیتابیس و فایل‌های ضروری است. می‌توانید دستی پشتیبان بگیرید
+    یا زمان‌بندی خودکار تعیین کنید. پشتیبان‌ها در سرور نگه داشته می‌شوند و
+    تاریخ اجرا و وضعیت هر کدام در فهرست دیده می‌شود.
+  </p>
+  <div class="grid g2">
+    <div class="card">
+      <h3>چه زمانی پشتیبان بگیریم؟</h3>
+      <ul class="small">
+        <li>هر شب، بعد از پایان کار فروشگاه</li>
+        <li>قبل از ورود اکسل بزرگ یا انبارگردانی</li>
+        <li>قبل از به‌روزرسانی نسخهٔ نرم‌افزار</li>
+        <li>قبل از تغییرات گستردهٔ قیمت</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>بازگردانی</h3>
+      <p class="small">
+        بازگردانی فقط توسط مدیر کل انجام می‌شود و کل داده‌های فعلی را با نسخهٔ
+        پشتیبان جایگزین می‌کند. قبل از بازگردانی، یک پشتیبان تازه بگیرید.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout danger">
+    <b>پشتیبان روی همان سرور، پشتیبان نیست</b>
+    <p>
+      حتماً نسخه‌ای از پشتیبان را روی درایو دیگر یا فضای ابری/فلش نگه دارید.
+      اگر هارد سرور بسوزد، پشتیبانِ روی همان هارد هم از بین می‌رود.
+    </p>
+  </div>
+
+  <h2>ورود اکسل</h2>
+  <ol>
+    <li>فایل نمونه را از همان صفحه دانلود کنید و ستون‌ها را پر کنید.</li>
+    <li>فایل را انتخاب کنید؛ سیستم پیش‌نمایش ردیف‌ها و خطاها را نشان می‌دهد.</li>
+    <li>اگر خطایی بود، اصلاح کنید و دوباره بارگذاری کنید.</li>
+    <li>ورود نهایی را تأیید کنید؛ گزارش موفق/ناموفق ذخیره می‌شود.</li>
+  </ol>
+  <p class="small muted">
+    نکته: قبل از ورود دسته‌ای، از دیتابیس پشتیبان بگیرید و بعد از ورود،
+    «قیمت‌های مشکوک» و «موجودی» را یک بار بررسی کنید.
+  </p>
+</section>
+
+<!-- ================= 15 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۵</span> فروشگاه اینترنتی</h1>
+  <p class="lead">
+    کاردو یک فروشگاه اینترنتی متصل به همان انبار دارد. مشتری در سایت کالا را
+    می‌بیند، سفارش می‌دهد و سفارش مستقیماً در پنل مغازه ظاهر می‌شود؛ با ثبت
+    سفارش، فاکتور داخلی ساخته و موجودی کم می‌شود.
+  </p>
+
+  <h2>بخش مشتری (سایت)</h2>
+  <div class="grid g3">
+    <div class="card">
+      <h3>🛍️ خرید</h3>
+      <p class="small">صفحهٔ اصلی، دسته‌بندی، جست‌وجو، صفحهٔ کالا با تصاویر و مشخصات، سبد خرید و تسویه.</p>
+    </div>
+    <div class="card">
+      <h3>👤 حساب کاربری</h3>
+      <p class="small">ورود با شماره موبایل و کد یک‌بارمصرف، آدرس‌ها، سفارش‌های من و پیگیری وضعیت.</p>
+    </div>
+    <div class="card">
+      <h3>❤️ تعامل</h3>
+      <p class="small">علاقه‌مندی‌ها، نظر و امتیاز روی کالا، اطلاع‌رسانی موجود شدن کالا.</p>
+    </div>
+  </div>
+
+  <h2>پنل مدیریت سایت</h2>
+  <p>
+    مدیریت محتوای سایت از پنل جداگانهٔ سایت انجام می‌شود تا پنل مغازه شلوغ نشود.
+    موارد قابل مدیریت:
+  </p>
+  <table class="compact">
+    <thead><tr><th style="width:38mm">بخش</th><th>کاربرد</th></tr></thead>
+    <tbody>
+      <tr><td><b>سفارش‌ها</b></td><td>مشاهده و تغییر وضعیت سفارش‌های آنلاین.</td></tr>
+      <tr><td><b>کوپن‌ها</b></td><td>ساخت کد تخفیف درصدی یا مبلغی با محدودیت زمان و تعداد.</td></tr>
+      <tr><td><b>بنرها</b></td><td>مدیریت بنرهای صفحهٔ اصلی و لینک هر بنر.</td></tr>
+      <tr><td><b>نظرات</b></td><td>تأیید، رد یا پاسخ به نظرات مشتریان.</td></tr>
+      <tr><td><b>مناطق ارسال</b></td><td>تعریف منطقه، هزینه و شرایط ارسال.</td></tr>
+      <tr><td><b>اطلاع موجودی</b></td><td>فهرست درخواست‌های «موجود شد خبرم کن».</td></tr>
+      <tr><td><b>SEO</b></td><td>عنوان، توضیح و تنظیمات موتور جست‌وجو برای صفحات.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>سفارش آنلاین در پنل مغازه</h2>
+  <div class="flow">
+    <span class="box">ثبت سفارش در سایت</span><span class="arr">←</span>
+    <span class="box">ورود به پنل مغازه</span><span class="arr">←</span>
+    <span class="box">آماده‌سازی</span><span class="arr">←</span>
+    <span class="box">ارسال</span><span class="arr">←</span>
+    <span class="box">تحویل</span>
+  </div>
+  <p>
+    با ورود سفارش، فاکتور داخلی ساخته می‌شود و موجودی رزرو/کم می‌شود. اگر
+    کالا واقعاً موجود نباشد، سفارش را لغو کنید تا موجودی و حساب درست بماند.
+    وضعیت‌ها: ثبت‌شده، در حال آماده‌سازی، ارسال‌شده، تحویل‌شده و لغو‌شده.
+  </p>
+
+  <div class="callout">
+    <b>روش‌های پرداخت سایت</b>
+    <p>
+      پرداخت در محل، کارت‌به‌کارت و درگاه اینترنتی. هر روش در تنظیمات سایت
+      قابل فعال/غیرفعال کردن است. برای کارت‌به‌کارت، اطلاعات واریز را در
+      تنظیمات وارد کنید.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 16 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۶</span> اپ اندروید انباردار</h1>
+  <p class="lead">
+    اپ اندروید برای کار روی زمین ساخته شده: گوشی در دست، بارکد را می‌گیرد،
+    کارگر حرف می‌زند و کالا ثبت می‌شود. اپ به سرور شبکهٔ محلی وصل می‌شود و در
+    قطعی شبکه، عملیات را صف می‌کند تا بعداً بفرستد.
+  </p>
+
+  <h2>قابلیت‌های اصلی</h2>
+  <div class="grid g2">
+    <div class="card">
+      <h3>📷 اسکن بارکد و QR</h3>
+      <p class="small">با دوربین گوشی و بدون باز کردن اپ دوربین جداگانه؛ تشخیص بارکد کالا و لیبل قفسه.</p>
+    </div>
+    <div class="card">
+      <h3>🎙️ ثبت صوتی</h3>
+      <p class="small">گفتن نام کالا و تعداد؛ با تأیید سریع و ادامهٔ خودکار میکروفن برای قلم بعدی.</p>
+    </div>
+    <div class="card">
+      <h3>📸 عکس کالا</h3>
+      <p class="small">گرفتن تا چهار عکس هنگام ورود کالا؛ فشرده‌سازی در لحظه و آپلود در پس‌زمینه.</p>
+    </div>
+    <div class="card">
+      <h3>📍 یافتن کالا</h3>
+      <p class="small">اسکن یا جست‌وجوی کالا و دیدن قفسه‌هایی که موجودی دارند، با چیپ موجودی هر قفسه.</p>
+    </div>
+    <div class="card">
+      <h3>📦 کارهای من</h3>
+      <p class="small">فهرست چیدن و برداشتن، تیک زدن اقلام و اعلان کار جدید روی گوشی.</p>
+    </div>
+    <div class="card">
+      <h3>🔁 آفلاین و همگام‌سازی</h3>
+      <p class="small">کاتالوگ روی گوشی ذخیره می‌شود؛ عملیات در صف می‌مانند و با وصل شدن شبکه ارسال می‌شوند.</p>
+    </div>
+  </div>
+
+  <h2>راه‌اندازی اولیه</h2>
+  <div class="steps">
+    <div class="step">
+      <b>اپ را نصب کنید</b>
+      <p>فایل APK را روی گوشی نصب کنید. برای نصب، اجازهٔ «نصب از منابع ناشناس» لازم است.</p>
+    </div>
+    <div class="step">
+      <b>آدرس سرور را وارد کنید</b>
+      <p>در صفحهٔ تنظیمات، آدرس شبکهٔ محلی سرور را بزنید (مثلاً <code>192.168.1.50:3000</code>). نیازی به نوشتن <code>http://</code> نیست.</p>
+    </div>
+    <div class="step">
+      <b>اتصال را تست کنید</b>
+      <p>دکمهٔ تست اتصال باید سبز شود. اگر نشد، گوشی و سرور باید روی یک شبکه باشند و فایروال پورت ۳۰۰۰ را باز کرده باشد.</p>
+    </div>
+    <div class="step">
+      <b>وارد شوید</b>
+      <p>با حساب انباردار وارد شوید. بعد از اولین همگام‌سازی، کاتالوگ روی گوشی ذخیره می‌شود و جست‌وجو آفلاین هم کار می‌کند.</p>
+    </div>
+  </div>
+
+  <h2>نکته‌های میدانی</h2>
+  <ul>
+    <li><b>میکروفن خودکار:</b> بعد از ثبت هر قلم، میکروفن دوباره روشن می‌شود تا پشت‌سرهم ثبت کنید.</li>
+    <li><b>عکس اختیاری است:</b> بعداً هم می‌توانید از فهرست قفسه یا اعلان ذخیره، عکس اضافه کنید.</li>
+    <li><b>صف آفلاین:</b> اگر اینترنت قطع شد، ثبت را ادامه دهید؛ نشانگر صف تعداد عملیات منتظر را نشان می‌دهد.</li>
+    <li><b>باتری:</b> دوربین و آپلود عکس بیشترین مصرف را دارند؛ برای شیفت‌های طولانی پاوربانک همراه داشته باشید.</li>
+    <li><b>نسخه:</b> قبل از شروع شیفت، مطمئن شوید نسخهٔ اپ روی گوشی‌ها یکسان است.</li>
+  </ul>
+
+  <div class="callout warn">
+    <b>اولین همگام‌سازی را در شبکهٔ خوب انجام دهید</b>
+    <p>
+      دانلود کاتالوگ (چند ده هزار کالا) در شبکهٔ ضعیف می‌تواند طول بکشد یا
+      نیمه‌کاره بماند. صبر کنید همگام‌سازی کامل شود، بعد وارد انبار شوید.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 17 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۷</span> اپ ویندوز فروشنده</h1>
+  <p class="lead">
+    اپ ویندوز همان پنل وب است داخل یک قاب دسکتاپ. مزیت اصلی‌اش دسترسی مستقیم
+    به پرینتر فیش حرارتی است که از مرورگر ممکن نیست؛ به‌علاوه میان‌برهای
+    ویندوزی و اجرای تمام‌صفحه.
+  </p>
+
+  <h2>نصب و اولین اجرا</h2>
+  <div class="steps">
+    <div class="step">
+      <b>نصب‌کننده را اجرا کنید</b>
+      <p>نصب در حالت کاربر جاری انجام می‌شود و به دسترسی ادمین نیاز ندارد.</p>
+    </div>
+    <div class="step">
+      <b>آدرس سرور را وارد کنید</b>
+      <p>در اولین اجرا پنجرهٔ تنظیمات باز می‌شود. آدرس سرور فروشگاه را وارد کنید و «تست اتصال» بزنید.</p>
+    </div>
+    <div class="step">
+      <b>پرینتر فیش را انتخاب کنید</b>
+      <p>پرینتر را از فهرست انتخاب و «چاپ آزمایشی» بگیرید. اگر چاپ نشد، درایور پرینتر را بررسی کنید.</p>
+    </div>
+    <div class="step">
+      <b>ذخیره و ورود</b>
+      <p>بعد از ذخیره، پنجرهٔ اصلی باز می‌شود و از این به بعد مستقیم وارد صندوق می‌شوید.</p>
+    </div>
+  </div>
+
+  <h2>میان‌برها و تنظیمات</h2>
+  <table>
+    <thead><tr><th style="width:34mm">کلید</th><th>کار</th></tr></thead>
+    <tbody>
+      <tr><td><span class="kbd">F11</span></td><td>تمام‌صفحه</td></tr>
+      <tr><td><span class="kbd">Ctrl+R</span></td><td>بارگذاری مجدد</td></tr>
+      <tr><td><span class="kbd">Ctrl+Alt+↑ ↓</span></td><td>بزرگ‌نمایی رابط (همانند پنل وب)</td></tr>
+    </tbody>
+  </table>
+  <p>
+    تنظیمات اتصال و پرینتر بعداً از منوی «برنامه ← تنظیمات اتصال و پرینتر»
+    در دسترس است. اگر آدرس سرور عوض شد، فقط همین تنظیم را به‌روز کنید؛
+    نیازی به نصب دوباره نیست.
+  </p>
+
+  <div class="callout tip">
+    <b>کدام را انتخاب کنیم: مرورگر یا اپ ویندوز؟</b>
+    <p>
+      اگر فقط فاکتور A4 چاپ می‌کنید، مرورگر کافی است. اگر پرینتر فیش حرارتی
+      دارید یا می‌خواهید صندوق تمام‌صفحه و بدون نوار مرورگر باشد، اپ ویندوز
+      گزینهٔ بهتر است.
+    </p>
+  </div>
+</section>
+
+<!-- ================= 18 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۸</span> عیب‌یابی و چک‌لیست روزانه</h1>
+  <p class="lead">
+    بیشتر مشکلات روزمره سه ریشه دارند: سرور بالا نیست، شبکه وصل نیست، یا داده
+    اشتباه وارد شده. این فصل کمک می‌کند سریع ریشه را پیدا کنید و بی‌دلیل
+    داده‌ها را دستکاری نکنید.
+  </p>
+
+  <h2>مشکلات رایج</h2>
+  <table>
+    <thead><tr><th style="width:42mm">نشانه</th><th>احتمالاً</th><th>راه‌حل</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>صفحهٔ پنل باز نمی‌شود</td>
+        <td>سرور API یا پنل خاموش است</td>
+        <td>سرویس PostgreSQL و اسکریپت start را اجرا کنید؛ پورت ۳۰۰۱ را چک کنید.</td>
+      </tr>
+      <tr>
+        <td>گوشی به سرور وصل نمی‌شود</td>
+        <td>شبکهٔ متفاوت یا IP عوض شده</td>
+        <td>گوشی و سرور روی یک Wi-Fi باشند؛ IP سرور را در تنظیمات اپ به‌روز کنید؛ فایروال پورت ۳۰۰۰.</td>
+      </tr>
+      <tr>
+        <td>فاکتور چاپ نمی‌شود</td>
+        <td>پرینتر پیش‌فرض یا درایور</td>
+        <td>پرینتر را در تنظیمات انتخاب و چاپ آزمایشی بگیرید؛ عرض رول را چک کنید.</td>
+      </tr>
+      <tr>
+        <td>بارکد کالا پیدا نمی‌شود</td>
+        <td>بارکد ثبت نشده یا کالای جدید است</td>
+        <td>با <span class="kbd">Alt+A</span> کالا را بسازید و بارکد را ثبت کنید.</td>
+      </tr>
+      <tr>
+        <td>موجودی با قفسه نمی‌خواند</td>
+        <td>انتقال ثبت‌نشده یا فروش/مرجوعی</td>
+        <td>کاردکس را ببینید؛ اگر لازم است انبارگردانی همان قفسه را انجام دهید.</td>
+      </tr>
+      <tr>
+        <td>مشتری بدهی‌اش اشتباه است</td>
+        <td>رسید تخصیص‌نیافته یا اصلاحیه</td>
+        <td>گردش حساب و رسیدها را ببینید؛ مبلغ را دستی تغییر ندهید.</td>
+      </tr>
+      <tr>
+        <td>صفحه وسط کار رفرش شد</td>
+        <td>رفرش مرورگر یا قطعی موقت</td>
+        <td>سند را دوباره بسازید؛ برای جلوگیری، وسط فاکتور رفرش نکنید.</td>
+      </tr>
+      <tr>
+        <td>ورود رد می‌شود</td>
+        <td>رمز یا نقش کاربر</td>
+        <td>مدیر از تنظیمات ← کاربران رمز را بازنشانی کند؛ پس از چند تلاش، محدودیت ورود فعال می‌شود.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>چک‌لیست شروع روز</h2>
+  <ul class="checklist two-col">
+    <li>سرور و پنل بالا هستند</li>
+    <li>پرینتر فیش و لیبل آماده‌اند</li>
+    <li>گوشی‌های انبار شارژ و همگام‌اند</li>
+    <li>گزارش «یک نگاه» دیروز بررسی شد</li>
+    <li>موجودی زیر حد دیده شد</li>
+    <li>سفارش‌های آنلاین جدید بررسی شدند</li>
+    <li>کارتابل خالی یا رسیدگی‌شده است</li>
+    <li>صندوق با کاربر درست باز است</li>
+  </ul>
+
+  <h2>چک‌لیست پایان روز</h2>
+  <ul class="checklist two-col">
+    <li>همهٔ فاکتورهای نیمه‌کاره بسته شدند</li>
+    <li>فروش امروز با صندوق/کارتخوان خوانده شد</li>
+    <li>رسیدها و چک‌های امروز ثبت شدند</li>
+    <li>کارهای انبار تکمیل یا تعیین‌تکلیف شدند</li>
+    <li>پشتیبان شبانه اجرا/بررسی شد</li>
+    <li>گزارش فروش و سود روز مرور شد</li>
+    <li>گوشی‌ها در شارژ قرار گرفتند</li>
+    <li>درِ انبار و صندوق بسته شد</li>
+  </ul>
+
+  <div class="callout danger">
+    <b>سه کار که هرگز نکنید</b>
+    <ul>
+      <li>عدد موجودی را مستقیم در دیتابیس عوض نکنید؛ از عملیات اصلاح/شمارش استفاده کنید.</li>
+      <li>فاکتور ثبت‌شده را حذف نکنید؛ مرجوعی یا اصلاحیه بزنید.</li>
+      <li>بدون پشتیبان تازه، بازگردانی یا به‌روزرسانی انجام ندهید.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= 19 ================= -->
+<section class="page">
+  <h1 class="sec"><span class="num">۱۹</span> واژه‌نامه</h1>
+  <p class="lead">
+    اصطلاح‌هایی که در صفحه‌های مختلف سیستم می‌بینید، یک معنی ثابت دارند.
+    این جدول را برای آموزش کاربر جدید استفاده کنید.
+  </p>
+
+  <table class="glossary">
+    <thead><tr><th style="width:40mm">اصطلاح</th><th>معنی در کاردو</th></tr></thead>
+    <tbody>
+      <tr><td><b>موقعیت (Location)</b></td><td>یک گره در ساختار انبار: انبار، طبقه، راهرو، قفسه، سبد. هر موقعیت بارکد یکتا دارد.</td></tr>
+      <tr><td><b>موجودی (Inventory)</b></td><td>تعداد یک کالا در یک موقعیت مشخص. موجودی فقط از عملیات تغییر می‌کند.</td></tr>
+      <tr><td><b>عملیات (Operation)</b></td><td>هر حرکت رسمی موجودی: ورود، خروج، فروش، مرجوعی، انتقال، اصلاح، شمارش.</td></tr>
+      <tr><td><b>کاردکس</b></td><td>تاریخچهٔ حرکت یک کالا: چه زمانی، چه مقدار، با چه سندی و توسط چه کسی.</td></tr>
+      <tr><td><b>لاگ انبار</b></td><td>رد پای هر تغییر موجودی؛ پایهٔ کاردکس و حسابرسی.</td></tr>
+      <tr><td><b>پیش‌فاکتور</b></td><td>پیشنهاد قیمت؛ موجودی را کم نمی‌کند تا به فاکتور تبدیل شود.</td></tr>
+      <tr><td><b>فاکتور سفید</b></td><td>برگهٔ قیمت‌گذاری برای کالای بدون کد/قیمت قطعی؛ بعداً به فاکتور تبدیل می‌شود.</td></tr>
+      <tr><td><b>حساب باز</b></td><td>فاکتور نسیه که هنوز تسویه نشده و در فهرست بدهکاران می‌ماند.</td></tr>
+      <tr><td><b>مرجوعی</b></td><td>برگشت کالا از مشتری؛ موجودی را برمی‌گرداند و به فاکتور مبدأ وصل است.</td></tr>
+      <tr><td><b>اصلاحیه</b></td><td>سند اصلاح مبلغ/اقلام فاکتور بدون برگشت فیزیکی کالا.</td></tr>
+      <tr><td><b>برگشت پرداخت</b></td><td>خنثی‌سازی یک پرداخت ثبت‌شده (مثلاً برگشت تراکنش کارتخوان) با دلیل.</td></tr>
+      <tr><td><b>تخصیص (Allocation)</b></td><td>وصل کردن مبلغ یک رسید به یک یا چند فاکتور بدهکار.</td></tr>
+      <tr><td><b>کار (Work Task)</b></td><td>دستور کار انبار: برداشتن کالا (PICK) یا چیدن آن (PUTAWAY).</td></tr>
+      <tr><td><b>کارتابل</b></td><td>صف کارهایی که منتظر تصمیم مدیر هستند: بازبینی عملیات، درخواست کالا، لیبل.</td></tr>
+      <tr><td><b>انبارگردانی</b></td><td>شمارش فیزیکی و مقایسه با سیستم؛ با تأیید، اصلاحات ثبت می‌شوند.</td></tr>
+      <tr><td><b>حداقل موجودی</b></td><td>آستانه‌ای که زیر آن، کالا در گزارش «موجودی زیر حد» هشدار می‌دهد.</td></tr>
+      <tr><td><b>کاتالوگ آفلاین</b></td><td>نسخهٔ ذخیره‌شدهٔ کالاها روی گوشی برای جست‌وجو و ثبت بدون اینترنت.</td></tr>
+      <tr><td><b>Outbox</b></td><td>صف عملیات ثبت‌شده روی گوشی که منتظر ارسال به سرور است.</td></tr>
+      <tr><td><b>SKU</b></td><td>کد داخلی یکتای کالا در فروشگاه.</td></tr>
+      <tr><td><b>TSPL</b></td><td>زبان فرمان پرینترهای لیبل حرارتی؛ برای چاپ مستقیم لیبل قفسه استفاده می‌شود.</td></tr>
+      <tr><td><b>ESC/POS</b></td><td>زبان فرمان پرینترهای فیش حرارتی؛ اپ ویندوز از آن استفاده می‌کند.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <div class="grid g2">
+    <div class="card soft">
+      <h3>🎯 هدف این راهنما</h3>
+      <p class="small">
+        این سند بر اساس کد و مستندات نسخهٔ ۰.۵.۰ کاردو تهیه شده است. اگر
+        نسخهٔ نرم‌افزار شما جدیدتر است، ممکن است بعضی صفحه‌ها یا کلیدها تغییر
+        کرده باشند؛ در این صورت راهنمای همین نسخه را از تیم پشتیبانی بگیرید.
+      </p>
+    </div>
+    <div class="card soft">
+      <h3>📌 پیشنهاد برای آموزش تیم</h3>
+      <p class="small">
+        برای هر نقش یک جلسهٔ ۳۰ دقیقه‌ای بگذارید: فروشنده فقط فصل ۳ و ۴،
+        انباردار فصل ۷ تا ۹ و ۱۶، مدیر فصل ۵، ۶، ۱۱ و ۱۴. در پایان، یک فروش
+        آزمایشی و یک انبارگردانی کوچک انجام دهید.
+      </p>
+    </div>
+  </div>
+
+  <p class="footer-note">
+    کاردو — سیستم مدیریت انبار و فروش | راهنمای کاربری نسخهٔ ۰.۵.۰ | مهر ۱۴۰۵
+  </p>
+</section>
+
+</body>
+</html>
+
+
+
+
+
+
+

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Undo2 } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/status-badge";
@@ -162,6 +163,9 @@ export function OpenInvoices({
                 <th className={`${TH} w-28`}>وضعیت</th>
                 <th className={`${TH} w-36`}>مبلغ</th>
                 <th className={`${TH} w-36`}>مانده</th>
+                <th className={`${TH} w-12 text-center`} title="برگشت از فروش">
+                  برگشت
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -198,6 +202,26 @@ export function OpenInvoices({
                     }`}
                   >
                     {inv.dueAmount > 0 ? money(inv.dueAmount) : "—"}
+                  </td>
+                  {/*
+                    فقط Alt+Enter کافی نبود: فروشنده‌ای که ماوس دارد هیچ
+                    چیزی روی ردیف نمی‌دید و باید از پیش می‌دانست چه کلیدی
+                    مرجوعی را باز می‌کند. دکمه همان کار را می‌کند و کلیکش
+                    به onPick (ویرایش) هم نمی‌رسد.
+                  */}
+                  <td className={`${TD} text-center`}>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onReturn(inv.id);
+                      }}
+                      title="برگشت از فروش از همین فاکتور — بدون نیاز به کلید میان‌بر"
+                      aria-label={`برگشت از فروش از فاکتور ${toFa(inv.number)}`}
+                      className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-warning/10 hover:text-warning focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    >
+                      <Undo2 className="size-4" />
+                    </button>
                   </td>
                 </tr>
               ))}

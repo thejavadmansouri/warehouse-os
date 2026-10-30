@@ -73,6 +73,7 @@ export class ReturnsService {
         subtotal: true,
         discount: true,
         total: true,
+        paidAmount: true,
         dueAmount: true,
         customerId: true,
         accountId: true,
@@ -87,7 +88,7 @@ export class ReturnsService {
       });
     }
 
-    const [saleLines, customerBalance] = await Promise.all([
+    const [saleLines, customerBalance, cashRefundedAgg] = await Promise.all([
       this.prisma.inventoryLog.findMany({
         where: { invoiceId, action: 'SALE' },
         orderBy: { createdAt: 'asc' },
@@ -106,6 +107,18 @@ export class ReturnsService {
       invoice.customerId
         ? this.ledger.balance(invoice.customerId)
         : Promise.resolve(0),
+      /*
+       * سقفِ واقعیِ برگشتِ نقد/کارت — همان چیزی که نگهبانِ صندوق در ثبت
+       * اجازه می‌دهد. بدون این عدد، فروشنده تا لحظهٔ «ثبت» نمی‌فهمد پولی که
+       * نگرفته نمی‌تواند نقدی پس بدهد و فقط خطای سرور می‌بیند.
+       */
+      this.prisma.saleReturn.aggregate({
+        where: {
+          invoiceId,
+          refundMethod: { in: [PaymentMethod.CASH, PaymentMethod.CARD] },
+        },
+        _sum: { refundAmount: true },
+      }),
     ]);
 
     /*
@@ -120,6 +133,10 @@ export class ReturnsService {
       saleLines.map((l) => l.id),
       new Map(saleLines.map((l) => [l.id, l.quantity])),
     );
+
+    const cashRefunded =
+      (cashRefundedAgg as { _sum: { refundAmount: number | null } })._sum
+        .refundAmount ?? 0;
 
     const lines = saleLines.map((l) => {
       const b = balances.get(l.id)!;
@@ -154,6 +171,7 @@ export class ReturnsService {
         number: invoice.number,
         status: invoice.status,
         total: invoice.total,
+        paidAmount: invoice.paidAmount,
         dueAmount: invoice.dueAmount,
         customer: invoice.customer
           ? {
@@ -185,6 +203,12 @@ export class ReturnsService {
        * اشتباهی روی حسابش به‌عنوان اعتبار معلق نشود.
        */
       customerBalance,
+      /**
+       * سقفِ برگشتِ نقد/کارت = پولِ گرفته‌شده − نقد/کارتی که قبلاً برگشته.
+       * بیش از این فقط «کسر از حساب» ممکن است — همان چیزی که نگهبانِ سرور
+       * در ثبت هم اجرا می‌کند؛ اینجا تا فروشنده قبل از «ثبت» بداند.
+       */
+      cashRefundable: Math.max(0, invoice.paidAmount - cashRefunded),
       accountId: invoice.accountId,
     };
   }
@@ -420,6 +444,43 @@ export class ReturnsService {
         error: 'CUSTOMER_REQUIRED_FOR_CREDIT',
         message: 'برگشت به حساب برای فروش نقدیِ بدون مشتری ممکن نیست',
       });
+    }
+
+    /*
+     * نگهبانِ صندوق: برگشتِ نقد/کارت از پولی که واقعاً برای همین فاکتور گرفته
+     * شده بیشتر نمی‌شود — نه فقط برای همین سند، بلکه برای جمعِ همهٔ برگشت‌های
+     * نقد/کارتِ آن. بدون این، فاکتورِ نسیه‌ای که یک ریال هم نگرفته‌ایم می‌توانست
+     * کلِ اقلامش را نقدی برگرداند و صندوق پولی را بدهد که هرگز نیامده بود.
+     * سبدِ خالص همین قاعده را از قبل دارد (REFUND_EXCEEDS_PAID)؛ اینجا همان
+     * قاعده، انباشته، روی مسیرِ مستقل و عملیاتِ یکپارچه می‌نشیند.
+     *
+     * استثنا: فاکتورِ جاریِ حساب باز با `allowCashOnOpen` — آنجا paidAmount ذاتاً
+     * صفر است (هیچ پولی پرداخت نشده) و نقدی‌بودن را خودِ مدیر در عملیاتِ
+     * یکپارچه صریحاً انتخاب کرده؛ آن تصمیمِ آگاهانه است، نه سهل‌انگاری.
+     */
+    const refundIsCash =
+      dto.refundMethod === PaymentMethod.CASH ||
+      dto.refundMethod === PaymentMethod.CARD;
+    if (refundIsCash && !(isOpenAccount && allowCashOnOpen)) {
+      const prior = await tx.saleReturn.aggregate({
+        where: {
+          invoiceId: invoice.id,
+          refundMethod: { in: [PaymentMethod.CASH, PaymentMethod.CARD] },
+        },
+        _sum: { refundAmount: true },
+      });
+      const alreadyRefunded = prior._sum.refundAmount ?? 0;
+      if (alreadyRefunded + refundAmount > invoice.paidAmount) {
+        throw new ConflictException({
+          error: 'REFUND_EXCEEDS_PAID',
+          invoiceId: invoice.id,
+          refund: refundAmount,
+          alreadyRefunded,
+          paid: invoice.paidAmount,
+          message:
+            'برگشتِ نقدی از پولِ پرداخت‌شدهِ این فاکتور بیشتر است — اگر کالا نسیه بوده، از مسیرِ مرجوعیِ اعتباری برگردانید',
+        });
+      }
     }
 
     const saleReturn = await tx.saleReturn.create({

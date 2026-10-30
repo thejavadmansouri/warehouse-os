@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<title>کاردو — معرفی</title>
+<style>
+  @font-face{
+    font-family:Vazir;
+    src:url(data:font/ttf;base64,__VAZIR_REG__) format('truetype');
+    font-weight:400;
+  }
+  @font-face{
+    font-family:Vazir;
+    src:url(data:font/ttf;base64,__VAZIR_BOLD__) format('truetype');
+    font-weight:700;
+  }
+  *{box-sizing:border-box}
+  html,body{
+    margin:0;padding:0;width:1920px;height:1080px;overflow:hidden;
+    background:#050f18;
+  }
+  body{
+    font-family:Vazir,Tahoma,sans-serif;color:#fff;direction:rtl;
+    -webkit-font-smoothing:antialiased;
+  }
+  .stage{
+    position:relative;width:1920px;height:1080px;overflow:hidden;
+    background:
+      radial-gradient(1300px 850px at 12% 4%, rgba(14,116,144,.38), transparent 62%),
+      radial-gradient(1000px 760px at 92% 100%, rgba(180,83,9,.20), transparent 62%),
+      radial-gradient(900px 600px at 70% 20%, rgba(8,145,178,.16), transparent 60%),
+      linear-gradient(145deg,#061a26 0%,#082330 48%,#05121c 100%);
+  }
+  .grid-bg{
+    position:absolute;inset:0;pointer-events:none;
+    background-image:
+      linear-gradient(rgba(255,255,255,.045) 1px,transparent 1px),
+      linear-gradient(90deg,rgba(255,255,255,.045) 1px,transparent 1px);
+    background-size:120px 120px;
+    -webkit-mask-image:radial-gradient(ellipse at 50% 45%,#000 25%,transparent 78%);
+    mask-image:radial-gradient(ellipse at 50% 45%,#000 25%,transparent 78%);
+  }
+  .glow{position:absolute;border-radius:50%;pointer-events:none}
+  .glow.g1{width:760px;height:760px;right:-260px;top:-300px;
+    background:radial-gradient(circle,rgba(34,211,238,.20),transparent 66%)}
+  .glow.g2{width:700px;height:700px;left:-280px;bottom:-320px;
+    background:radial-gradient(circle,rgba(251,191,36,.14),transparent 66%)}
+
+  .scene{position:absolute;inset:0;padding:96px 120px;opacity:0;visibility:hidden}
+
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:12px;
+    font-size:26px;font-weight:700;color:#67e8f9;letter-spacing:.5px;
+    background:rgba(34,211,238,.10);border:1px solid rgba(34,211,238,.28);
+    border-radius:99px;padding:10px 22px;
+  }
+  .eyebrow .dot{width:10px;height:10px;border-radius:50%;background:#22d3ee}
+  h2{font-size:78px;line-height:1.28;margin:26px 0 12px;font-weight:700;letter-spacing:-.5px}
+  h2 .accent{color:#fbbf24}
+  .sub{font-size:34px;line-height:1.7;color:#a8c6d6;margin:0}
+
+  .rise{animation:rise .9s cubic-bezier(.2,.72,.2,1) both}
+  @keyframes rise{
+    from{opacity:0;transform:translateY(46px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+  .fade{animation:fade .9s ease both}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+
+  /* ---------------- intro ---------------- */
+  #s1{display:flex;align-items:center;justify-content:center;text-align:center;padding:0}
+  .intro{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center}
+  .logo-mark{
+    width:176px;height:176px;border-radius:52px;background:#fff;color:#0e7490;
+    display:flex;align-items:center;justify-content:center;
+    font-size:96px;font-weight:700;line-height:1;
+    box-shadow:0 0 0 1px rgba(255,255,255,.4),0 30px 80px rgba(0,0,0,.35);
+    animation:logoIn 1.05s cubic-bezier(.2,.9,.2,1.1) both;
+  }
+  @keyframes logoIn{
+    0%{opacity:0;transform:scale(.55) rotate(-8deg)}
+    100%{opacity:1;transform:scale(1) rotate(0deg)}
+  }
+  .intro h1{font-size:156px;line-height:1.1;margin:34px 0 0;font-weight:700;letter-spacing:-2px}
+  .intro .en{
+    font-family:Tahoma,sans-serif;font-size:30px;letter-spacing:10px;
+    color:#9fd8e6;margin-top:6px;text-transform:uppercase;
+  }
+  .intro .tag{font-size:40px;color:#d7ebf4;margin-top:34px}
+  .intro .chips{display:flex;gap:14px;margin-top:44px}
+  .intro .chip{
+    font-size:24px;color:#d9f3fa;border:1px solid rgba(255,255,255,.22);
+    background:rgba(255,255,255,.07);border-radius:99px;padding:10px 24px;
+  }
+  .intro .beam{
+    position:absolute;top:-60px;bottom:-60px;width:2px;
+    background:linear-gradient(transparent,#22d3ee,transparent);
+    opacity:.6;animation:beamMove 3.4s ease-in-out infinite;
+  }
+  @keyframes beamMove{
+    0%,100%{right:8%;opacity:.05}
+    50%{right:92%;opacity:.6}
+  }
+
+  /* ---------------- features ---------------- */
+  #s2 .head{max-width:1500px}
+  .feature-grid{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:24px;margin-top:52px;
+  }
+  .fcard{
+    background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.035));
+    border:1px solid rgba(255,255,255,.13);border-radius:26px;
+    padding:30px 30px 26px;min-height:196px;
+    box-shadow:0 20px 60px rgba(0,0,0,.18);
+  }
+  .fcard .ico{
+    width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;
+    background:rgba(34,211,238,.12);border:1px solid rgba(34,211,238,.28);color:#67e8f9;
+  }
+  .fcard .ico svg{width:30px;height:30px}
+  .fcard h3{font-size:32px;margin:20px 0 8px;font-weight:700}
+  .fcard p{font-size:23px;line-height:1.65;color:#a9c6d5;margin:0}
+  .feature-note{
+    margin-top:34px;font-size:25px;color:#8fb6c7;display:flex;align-items:center;gap:14px;
+  }
+  .feature-note b{color:#fbbf24;font-weight:700}
+
+  /* ---------------- POS ---------------- */
+  .two-col{display:grid;grid-template-columns:1fr 1.12fr;gap:74px;align-items:center;height:100%}
+  .bullets{list-style:none;margin:40px 0 0;padding:0;display:flex;flex-direction:column;gap:20px}
+  .bullets li{display:flex;align-items:center;gap:16px;font-size:30px;color:#d8e9f2}
+  .bullets .tick{
+    width:34px;height:34px;border-radius:10px;background:rgba(16,185,129,.14);
+    border:1px solid rgba(16,185,129,.34);color:#6ee7b7;display:flex;align-items:center;justify-content:center;
+    font-size:19px;font-weight:700;flex:0 0 auto;
+  }
+  .keys{display:flex;gap:14px;margin-top:42px}
+  .key{
+    min-width:86px;height:64px;padding:0 20px;border-radius:14px;
+    background:#0b2230;border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 6px 0 #041019,0 10px 24px rgba(0,0,0,.28);
+    display:flex;align-items:center;justify-content:center;
+    font-family:Tahoma,sans-serif;font-size:22px;color:#e7f6fb;
+  }
+  .key.hot{background:#0e7490;border-color:#22d3ee;box-shadow:0 6px 0 #07485b,0 10px 30px rgba(34,211,238,.25)}
+
+  .pos-window{
+    background:#f7fbfd;color:#0f172a;border-radius:26px;overflow:hidden;
+    box-shadow:0 50px 120px rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.5);
+    width:100%;
+  }
+  .pos-bar{
+    height:62px;background:#e6f1f7;display:flex;align-items:center;justify-content:space-between;
+    padding:0 22px;border-bottom:1px solid #cfe0ea;
+  }
+  .pos-bar .dots{display:flex;gap:8px}
+  .pos-bar .dots i{width:11px;height:11px;border-radius:50%;background:#9fb9c9;display:block}
+  .pos-bar .ttl{font-size:21px;font-weight:700;color:#31566a}
+  .pos-scan{
+    margin:18px 22px 0;height:62px;border-radius:14px;border:1.5px solid #9fc9dc;
+    background:#fff;position:relative;overflow:hidden;display:flex;align-items:center;
+    padding:0 18px;color:#6b8b9c;font-size:20px;gap:12px;
+  }
+  .pos-scan .scanline{
+    position:absolute;top:0;bottom:0;width:3px;background:#0e7490;
+    box-shadow:0 0 18px 4px rgba(14,116,144,.35);
+    animation:scanX 2.2s cubic-bezier(.5,0,.5,1) infinite;
+  }
+  @keyframes scanX{
+    0%,100%{right:4%;opacity:.15}
+    50%{right:92%;opacity:1}
+  }
+  .pos-rows{padding:16px 22px 0;display:flex;flex-direction:column;gap:10px}
+  .pos-row{
+    display:grid;grid-template-columns:1fr 54px 150px;gap:12px;align-items:center;
+    background:#fff;border:1px solid #dbe8ef;border-radius:12px;padding:13px 16px;
+    font-size:20px;
+  }
+  .pos-row .nm{color:#173b4d;font-weight:700}
+  .pos-row .qty{text-align:center;color:#5d7d8e;font-size:18px}
+  .pos-row .pr{text-align:left;font-family:Tahoma,Vazir;color:#0e7490;font-weight:700;font-size:19px}
+  .pos-total{
+    margin:16px 22px 0;display:flex;align-items:center;justify-content:space-between;
+    padding:16px 18px;border-radius:14px;background:#0f2a43;color:#fff;
+  }
+  .pos-total .lbl{font-size:20px;color:#b9d5e2}
+  .pos-total .amt{font-size:30px;font-weight:700;color:#fde68a;font-family:Tahoma,Vazir;direction:ltr}
+  .pos-pay{display:flex;gap:10px;margin:14px 22px 0}
+  .pay-chip{
+    flex:1;text-align:center;font-size:19px;padding:11px 0;border-radius:11px;
+    background:#eef6fa;border:1px solid #d3e4ee;color:#456b7d;
+  }
+  .pay-chip.on{background:#0e7490;border-color:#0e7490;color:#fff;font-weight:700}
+  .pos-bottom{height:18px}
+  .stamp{
+    position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) scale(.6) rotate(-8deg);
+    background:#0f766e;color:#fff;border-radius:22px;padding:20px 46px;
+    font-size:44px;font-weight:700;box-shadow:0 30px 80px rgba(0,0,0,.35);
+    opacity:0;display:flex;align-items:center;gap:14px;
+  }
+  .pos-window-wrap{position:relative}
+  .receipt{
+    position:absolute;left:-26px;bottom:-38px;width:330px;background:#fff;color:#173b4d;
+    border-radius:8px;padding:20px 22px;box-shadow:0 30px 70px rgba(0,0,0,.4);
+    transform:rotate(-4deg);font-size:15px;opacity:0;
+  }
+  .receipt .rhead{font-size:19px;font-weight:700;text-align:center;margin-bottom:10px;color:#0e7490}
+  .receipt .rline{display:flex;justify-content:space-between;border-bottom:1px dashed #d5e3ea;padding:6px 0;color:#4a6b7c}
+  .receipt .rtot{display:flex;justify-content:space-between;margin-top:10px;font-weight:700;color:#0f2a43}
+
+  /* ---------------- warehouse ---------------- */
+  .shelf-panel{
+    background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.12);
+    border-radius:28px;padding:34px;
+  }
+  .shelf-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+  .shelf-top .t{font-size:26px;color:#9fc3d4}
+  .shelf-top .b{font-size:20px;color:#67e8f9;background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);border-radius:99px;padding:6px 16px}
+  .shelves{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .shelf{
+    position:relative;height:142px;border-radius:18px;
+    background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,.03));
+    border:1px solid rgba(255,255,255,.14);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  }
+  .shelf .code{font-family:Tahoma,sans-serif;font-size:21px;color:#cfeaf2;letter-spacing:1px}
+  .shelf .qr{
+    width:72px;height:72px;border-radius:8px;background:
+      linear-gradient(#0b2a3a,#0b2a3a) padding-box,
+      repeating-conic-gradient(#0b2a3a 0 25%, #e6f7fb 0 50%) border-box;
+    border:9px solid transparent;position:relative;overflow:hidden;opacity:.9;
+  }
+  .shelf .qr:after{
+    content:"";position:absolute;inset:10px;background:
+      linear-gradient(90deg,#0b2a3a 33%,transparent 33% 40%,#0b2a3a 40% 66%,transparent 66% 73%,#0b2a3a 73%),
+      linear-gradient(#0b2a3a 33%,transparent 33% 40%,#0b2a3a 40% 66%,transparent 66% 73%,#0b2a3a 73%);
+    background-blend-mode:multiply;opacity:.55;
+  }
+  .shelf.hot{
+    border-color:#22d3ee;background:linear-gradient(160deg,rgba(34,211,238,.22),rgba(34,211,238,.06));
+    box-shadow:0 0 0 2px rgba(34,211,238,.25),0 24px 60px rgba(34,211,238,.2);
+  }
+  .shelf.hot .code{color:#a5f3fc}
+  .transfer{
+    margin-top:26px;background:rgba(15,42,67,.9);border:1px solid rgba(34,211,238,.28);
+    border-radius:18px;padding:20px 24px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .transfer .from,.transfer .to{display:flex;flex-direction:column;gap:4px}
+  .transfer .cap{font-size:17px;color:#7fa9bb}
+  .transfer .loc{font-size:24px;font-weight:700;color:#e6f7fb;font-family:Tahoma,Vazir}
+  .transfer .arrow{flex:1;height:2px;margin:0 22px;background:linear-gradient(90deg,transparent,#22d3ee,transparent);position:relative}
+  .transfer .arrow:after{
+    content:"";position:absolute;left:0;top:-6px;width:14px;height:14px;border-left:3px solid #22d3ee;border-bottom:3px solid #22d3ee;
+    transform:rotate(-45deg);border-radius:2px;
+  }
+  .stock-card{
+    margin-top:26px;background:linear-gradient(150deg,rgba(14,116,144,.30),rgba(255,255,255,.03));
+    border:1px solid rgba(34,211,238,.28);border-radius:22px;padding:26px 30px;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .stock-card .n{font-size:82px;font-weight:700;color:#fde68a;line-height:1;font-family:Tahoma,Vazir}
+  .stock-card .l{font-size:22px;color:#b6d7e4;margin-bottom:6px}
+  .stock-card .ok{font-size:24px;color:#6ee7b7;font-weight:700;display:flex;align-items:center;gap:8px}
+
+  /* ---------------- android ---------------- */
+  #s5 .two-col{grid-template-columns:1fr 1fr}
+  .phone-wrap{position:relative;display:flex;align-items:center;justify-content:center;height:100%}
+  .phone{
+    width:392px;height:790px;border-radius:56px;background:#0a1a24;
+    border:10px solid #122c3a;box-shadow:0 50px 120px rgba(0,0,0,.5),0 0 0 1px rgba(255,255,255,.15);
+    position:relative;overflow:hidden;transform:rotate(-4deg);
+  }
+  .phone:before{
+    content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:140px;height:28px;background:#122c3a;border-radius:0 0 18px 18px;z-index:5;
+  }
+  .cam{
+    position:absolute;inset:0;background:
+      radial-gradient(500px 400px at 50% 30%,rgba(34,211,238,.16),transparent 65%),
+      linear-gradient(180deg,#0d2a3a,#07131c);
+  }
+  .cam .barcode{
+    position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
+    width:250px;height:150px;background:repeating-linear-gradient(90deg,#e9fbff 0 5px,#0b2230 5px 9px,#e9fbff 9px 16px,#0b2230 16px 21px);
+    opacity:.92;border-radius:6px;
+  }
+  .cam .frame{
+    position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
+    width:300px;height:210px;
+  }
+  .cam .frame i{position:absolute;width:46px;height:46px;border:4px solid #22d3ee;border-radius:8px}
+  .cam .frame i:nth-child(1){top:0;right:0;border-left:0;border-bottom:0;border-radius:0 12px 0 0}
+  .cam .frame i:nth-child(2){top:0;left:0;border-right:0;border-bottom:0;border-radius:12px 0 0 0}
+  .cam .frame i:nth-child(3){bottom:0;right:0;border-left:0;border-top:0;border-radius:0 0 12px 0}
+  .cam .frame i:nth-child(4){bottom:0;left:0;border-right:0;border-top:0;border-radius:0 0 0 12px}
+  .cam .frame{animation:framePulse 1.8s ease-in-out infinite}
+  @keyframes framePulse{0%,100%{opacity:.55;transform:translate(-50%,-50%) scale(.97)}50%{opacity:1;transform:translate(-50%,-50%) scale(1.02)}}
+  .cam .hint{
+    position:absolute;bottom:250px;left:0;right:0;text-align:center;font-size:20px;color:#9fd8e6;
+  }
+  .voice{
+    position:absolute;bottom:120px;right:22px;left:22px;background:#f8fcfe;color:#12384a;
+    border-radius:18px;padding:16px 18px;font-size:19px;box-shadow:0 20px 50px rgba(0,0,0,.4);
+    display:flex;align-items:center;gap:12px;
+  }
+  .voice .mic{width:34px;height:34px;border-radius:10px;background:#0e7490;color:#fff;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .wave{display:flex;align-items:center;gap:4px;height:26px;margin-top:10px;justify-content:center}
+  .wave i{width:4px;border-radius:2px;background:#0e7490;display:block;animation:waveBt 1s ease-in-out infinite}
+  .wave i:nth-child(1){height:8px;animation-delay:.0s}
+  .wave i:nth-child(2){height:16px;animation-delay:.1s}
+  .wave i:nth-child(3){height:24px;animation-delay:.2s}
+  .wave i:nth-child(4){height:14px;animation-delay:.3s}
+  .wave i:nth-child(5){height:20px;animation-delay:.4s}
+  .wave i:nth-child(6){height:10px;animation-delay:.5s}
+  @keyframes waveBt{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1.15)}}
+  .phone-chips{position:absolute;inset:0;pointer-events:none}
+  .pchip{
+    position:absolute;background:rgba(8,32,44,.94);border:1px solid rgba(34,211,238,.3);
+    border-radius:99px;padding:12px 22px;font-size:21px;color:#d9f3fa;
+    box-shadow:0 16px 40px rgba(0,0,0,.28);display:flex;align-items:center;gap:10px;
+  }
+  .pchip .d{width:9px;height:9px;border-radius:50%;background:#22d3ee}
+  .pchip.off .d{background:#fbbf24}
+  .pchip.p1{right:-10px;top:70px}
+  .pchip.p2{left:-18px;top:210px}
+  .pchip.p3{right:-30px;bottom:190px}
+  .pchip.p4{left:-24px;bottom:90px}
+  .offline-badge{
+    position:absolute;top:120px;left:50%;transform:translateX(-50%);
+    background:rgba(251,191,36,.14);border:1px solid rgba(251,191,36,.45);color:#fde68a;
+    border-radius:99px;padding:9px 20px;font-size:19px;white-space:nowrap;
+  }
+
+  /* ---------------- reports ---------------- */
+  #s6 .two-col{grid-template-columns:1.18fr 1fr}
+  .chart-card{
+    background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);
+    border-radius:28px;padding:34px 38px;height:660px;display:flex;flex-direction:column;
+  }
+  .chart-head{display:flex;align-items:flex-start;justify-content:space-between}
+  .chart-head .t{font-size:30px;font-weight:700}
+  .chart-head .s{font-size:20px;color:#8fb6c7;margin-top:6px}
+  .legend{display:flex;align-items:center;gap:8px;font-size:19px;color:#a9c6d5}
+  .legend i{width:14px;height:14px;border-radius:4px;background:#22d3ee;display:block}
+  .chart{
+    flex:1;display:flex;align-items:flex-end;gap:26px;margin-top:34px;
+    border-bottom:1.5px solid rgba(255,255,255,.14);padding:0 8px 0;
+    position:relative;
+  }
+  .chart .glines{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.07) 1px,transparent 1px);background-size:100% 25%}
+  .bar{
+    flex:1;position:relative;border-radius:10px 10px 0 0;
+    background:linear-gradient(180deg,#67e8f9,#0e7490);
+    transform-origin:bottom;transform:scaleY(0);
+    box-shadow:0 0 30px rgba(34,211,238,.25);
+  }
+  .bar.b2{background:linear-gradient(180deg,#a5f3fc,#0891b2)}
+  .bar.last{background:linear-gradient(180deg,#fde68a,#d97706)}
+  .bar .v{position:absolute;top:-34px;left:0;right:0;text-align:center;font-size:18px;color:#cfeaf2;font-family:Tahoma,Vazir}
+  .chart .days{display:flex;gap:26px;margin-top:12px;padding:0 8px}
+  .chart .days span{flex:1;text-align:center;font-size:19px;color:#7fa9bb}
+  .kpis{display:flex;flex-direction:column;gap:20px}
+  .kpi{
+    background:linear-gradient(150deg,rgba(255,255,255,.075),rgba(255,255,255,.03));
+    border:1px solid rgba(255,255,255,.13);border-radius:22px;padding:24px 28px;
+  }
+  .kpi .l{font-size:21px;color:#9fc3d4}
+  .kpi .v{font-size:48px;font-weight:700;margin-top:6px;font-family:Tahoma,Vazir;direction:ltr;text-align:right}
+  .kpi .v small{font-size:22px;font-weight:400;color:#9fc3d4;margin-right:6px}
+  .kpi.amber .v{color:#fde68a}
+  .kpi.green .v{color:#6ee7b7}
+  .report-note{margin-top:26px;font-size:22px;color:#8fb6c7;display:flex;align-items:center;gap:12px}
+  .report-note b{color:#67e8f9}
+
+  /* ---------------- closing ---------------- */
+  #s7{display:flex;align-items:center;justify-content:center;text-align:center;padding:0}
+  .close{display:flex;flex-direction:column;align-items:center;position:relative;z-index:2}
+  .close .mark{
+    width:130px;height:130px;border-radius:40px;background:#fff;color:#0e7490;
+    display:flex;align-items:center;justify-content:center;font-size:72px;font-weight:700;
+    box-shadow:0 30px 80px rgba(0,0,0,.4);
+  }
+  .close h2{font-size:120px;margin:26px 0 0;letter-spacing:-2px}
+  .close .tag{font-size:38px;color:#cfeaf2;margin-top:10px}
+  .close .words{display:flex;gap:16px;margin-top:38px}
+  .close .word{
+    font-size:24px;color:#fde68a;border:1px solid rgba(251,191,36,.35);
+    background:rgba(251,191,36,.08);border-radius:99px;padding:9px 22px;
+  }
+  .close .ver{margin-top:44px;font-size:21px;color:#7fa9bb;font-family:Tahoma,Vazir}
+  .close .pdf{margin-top:14px;font-size:22px;color:#9fc3d4}
+
+  .progress{
+    position:absolute;left:0;bottom:0;height:4px;background:linear-gradient(90deg,#22d3ee,#fbbf24);
+    width:0;z-index:20;box-shadow:0 0 20px rgba(34,211,238,.5);
+  }
+  .corner{
+    position:absolute;left:44px;bottom:34px;font-size:17px;color:rgba(255,255,255,.35);
+    font-family:Tahoma,Vazir;z-index:10;letter-spacing:1px;
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="grid-bg"></div>
+  <div class="glow g1"></div><div class="glow g2"></div>
+
+  <!-- ================= 1. INTRO ================= -->
+  <section class="scene" id="s1">
+    <div class="beam"></div>
+    <div class="intro">
+      <div class="logo-mark rise" style="animation-delay:.15s">ک</div>
+      <h1 class="rise" style="animation-delay:.45s">کاردو</h1>
+      <div class="en rise" style="animation-delay:.7s">WAREHOUSE OS</div>
+      <div class="tag rise" style="animation-delay:.95s">سیستم یکپارچهٔ انبار، فروش و حساب</div>
+      <div class="chips rise" style="animation-delay:1.25s">
+        <span class="chip">صندوق</span>
+        <span class="chip">انبار</span>
+        <span class="chip">حساب مشتری</span>
+        <span class="chip">فروشگاه آنلاین</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 2. FEATURES ================= -->
+  <section class="scene" id="s2">
+    <div class="head">
+      <div class="eyebrow rise" style="animation-delay:4.45s"><span class="dot"></span> یک پنل، همهٔ کارها</div>
+      <h2 class="rise" style="animation-delay:4.6s">همه‌چیز در <span class="accent">یک سیستم</span></h2>
+      <p class="sub rise" style="animation-delay:4.78s">از قفسه تا صندوق، بدون کاغذبازی و بدون دادهٔ تکراری.</p>
+    </div>
+
+    <div class="feature-grid">
+      <div class="fcard rise" style="animation-delay:5.0s">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M3 4h2l2.4 10.2a2 2 0 0 0 2 1.6h7.8a2 2 0 0 0 2-1.6L21 7H6"/></svg></div>
+        <h3>صندوق فروش</h3>
+        <p>فروش سریع با بارکد و کیبورد؛ پرداخت ترکیبی و چاپ فاکتور.</p>
+      </div>
+      <div class="fcard rise" style="animation-delay:5.14s">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9l9-5 9 5-9 5-9-5z"/><path d="M3 9v9l9 5 9-5V9"/><path d="M12 14v9"/></svg></div>
+        <h3>انبار و قفسه</h3>
+        <p>موجودی دقیق تا آخرین سبد؛ انتقال و کاردکس کامل.</p>
+      </div>
+      <div class="fcard rise" style="animation-delay:5.28s">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c.6-3.4 3.2-5.2 6.5-5.2s5.9 1.8 6.5 5.2"/><path d="M17 8.5a2.8 2.8 0 1 1 0 5.6"/><path d="M18 14.5c2.1.5 3.4 2.3 3.7 5.5"/></svg></div>
+        <h3>حساب مشتری</h3>
+        <p>نسیه، چک، رسید و صورتحساب؛ مانده‌حساب همیشه درست.</p>
+      </div>
+      <div class="fcard rise" style="animation-delay:5.42s">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3"/><path d="M7 8v8M10 8v8M13 8v8M17 8v8"/></svg></div>
+        <h3>لیبل و بارکد</h3>
+        <p>چاپ لیبل قفسه و کالا؛ مستقیم روی پرینتر حرارتی.</p>
+      </div>
+      <div class="fcard rise" style="animation-delay:5.56s">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></div>
+        <h3>گزارش زنده</h3>
+        <p>فروش، سود، بدهکاران و موجودی زیر حد — با خروجی اکسل.</p>
+      </div>
+      <div class="fcard rise" style="animation-delay:5.7s">
+        <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.5 4 5.6 4 9s-1.4 6.5-4 9c-2.6-2.5-4-5.6-4-9s1.4-6.5 4-9z"/></svg></div>
+        <h3>فروشگاه آنلاین</h3>
+        <p>سفارش سایت مستقیم در پنل مغازه؛ موجودی هم‌زمان کم می‌شود.</p>
+      </div>
+    </div>
+
+    <div class="feature-note rise" style="animation-delay:6.15s">
+      <b>یک دیتابیس</b> — صندوق، انبار، سایت و گزارش‌ها همیشه یک عدد می‌گویند.
+    </div>
+  </section>
+
+  <!-- ================= 3. POS ================= -->
+  <section class="scene" id="s3">
+    <div class="two-col">
+      <div>
+        <div class="eyebrow rise" style="animation-delay:10.45s"><span class="dot"></span> صندوق فروش</div>
+        <h2 class="rise" style="animation-delay:10.6s">فروش سریع،<br><span class="accent">بدون موس</span></h2>
+        <ul class="bullets">
+          <li class="rise" style="animation-delay:10.85s"><span class="tick">✓</span> بارکد را اسکن کن؛ Enter بزن</li>
+          <li class="rise" style="animation-delay:11.05s"><span class="tick">✓</span> مشتری، تخفیف و پرداخت ترکیبی</li>
+          <li class="rise" style="animation-delay:11.25s"><span class="tick">✓</span> فاکتور چاپ‌شده، همان لحظه</li>
+        </ul>
+        <div class="keys rise" style="animation-delay:11.5s">
+          <div class="key hot">Enter</div>
+          <div class="key">F2</div>
+          <div class="key">F4</div>
+          <div class="key">F7</div>
+        </div>
+      </div>
+
+      <div class="pos-window-wrap rise" style="animation-delay:10.8s">
+        <div class="pos-window">
+          <div class="pos-bar">
+            <div class="dots"><i></i><i></i><i></i></div>
+            <div class="ttl">صندوق فروش — فاکتور ۱۰۲۴</div>
+            <div style="width:46px"></div>
+          </div>
+          <div class="pos-scan">
+            <span class="scanline"></span>
+            <span style="font-family:Tahoma">⌁</span>
+            اسکن بارکد یا جست‌وجوی کالا…
+          </div>
+          <div class="pos-rows">
+            <div class="pos-row rise" style="animation-delay:12.0s">
+              <span class="nm">فیلتر روغن بوش</span><span class="qty">×۲</span><span class="pr">۴۸۰٬۰۰۰</span>
+            </div>
+            <div class="pos-row rise" style="animation-delay:12.35s">
+              <span class="nm">لنت جلو پراید</span><span class="qty">×۱</span><span class="pr">۹۸۰٬۰۰۰</span>
+            </div>
+            <div class="pos-row rise" style="animation-delay:12.7s">
+              <span class="nm">واشر سرسیلندر</span><span class="qty">×۴</span><span class="pr">۴۰۰٬۰۰۰</span>
+            </div>
+          </div>
+          <div class="pos-total rise" style="animation-delay:13.1s">
+            <span class="lbl">جمع کل</span>
+            <span class="amt" id="posTotal">۰</span>
+          </div>
+          <div class="pos-pay rise" style="animation-delay:13.5s">
+            <div class="pay-chip on">نقد</div>
+            <div class="pay-chip">کارت</div>
+            <div class="pay-chip">چک</div>
+            <div class="pay-chip">نسیه</div>
+          </div>
+          <div class="pos-bottom"></div>
+        </div>
+
+        <div class="stamp" id="posStamp">✓ ثبت شد</div>
+
+        <div class="receipt" id="posReceipt">
+          <div class="rhead">فاکتور فروش</div>
+          <div class="rline"><span>فیلتر روغن بوش</span><span>۴۸۰٬۰۰۰</span></div>
+          <div class="rline"><span>لنت جلو پراید</span><span>۹۸۰٬۰۰۰</span></div>
+          <div class="rline"><span>واشر سرسیلندر</span><span>۴۰۰٬۰۰۰</span></div>
+          <div class="rtot"><span>جمع</span><span>۱٬۸۶۰٬۰۰۰</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 4. WAREHOUSE ================= -->
+  <section class="scene" id="s4">
+    <div class="two-col">
+      <div>
+        <div class="eyebrow rise" style="animation-delay:18.45s"><span class="dot"></span> انبار و قفسه</div>
+        <h2 class="rise" style="animation-delay:18.6s">هر قفسه،<br><span class="accent">یک بارکد</span></h2>
+        <p class="sub rise" style="animation-delay:18.8s">موجودی، انتقال و انبارگردانی — همه با یک اسکن.</p>
+        <div class="transfer rise" style="animation-delay:20.4s">
+          <div class="from"><span class="cap">از قفسه</span><span class="loc">A۲</span></div>
+          <div class="arrow"></div>
+          <div class="to"><span class="cap">به قفسه</span><span class="loc">B۳</span></div>
+        </div>
+        <div class="stock-card rise" style="animation-delay:20.9s">
+          <div>
+            <div class="l">موجودی قفسه B۳</div>
+            <div class="n" id="stockNum">۰</div>
+          </div>
+          <div class="ok" id="stockOk">✓ انتقال ثبت شد</div>
+        </div>
+      </div>
+
+      <div class="shelf-panel rise" style="animation-delay:18.85s">
+        <div class="shelf-top">
+          <div class="t">انبار ← طبقه ۱ ← قفسه B</div>
+          <div class="b">بارکددار</div>
+        </div>
+        <div class="shelves">
+          <div class="shelf"><span class="code">A۱</span><span class="qr"></span></div>
+          <div class="shelf" id="shelfHot"><span class="code">A۲</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">A۳</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">B۱</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">B۲</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">B۳</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">C۱</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">C۲</span><span class="qr"></span></div>
+          <div class="shelf"><span class="code">C۳</span><span class="qr"></span></div>
+        </div>
+        <div class="transfer" style="animation-delay:21.1s">
+          <div class="from"><span class="cap">کالا</span><span class="loc" style="font-size:21px">فیلتر روغن × ۶</span></div>
+          <div class="arrow"></div>
+          <div class="to"><span class="cap">وضعیت</span><span class="loc" style="font-size:21px;color:#6ee7b7">در حال انتقال</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 5. ANDROID ================= -->
+  <section class="scene" id="s5">
+    <div class="two-col">
+      <div>
+        <div class="eyebrow rise" style="animation-delay:25.45s"><span class="dot"></span> اپ اندروید انباردار</div>
+        <h2 class="rise" style="animation-delay:25.6s">انبار،<br><span class="accent">در جیب تو</span></h2>
+        <p class="sub rise" style="animation-delay:25.8s">اسکن، ثبت صوتی و عکس — حتی وقتی اینترنت قطع است.</p>
+        <ul class="bullets">
+          <li class="rise" style="animation-delay:26.0s"><span class="tick">✓</span> اسکن بارکد کالا و لیبل قفسه</li>
+          <li class="rise" style="animation-delay:26.2s"><span class="tick">✓</span> ثبت صوتی با تأیید سریع</li>
+          <li class="rise" style="animation-delay:26.4s"><span class="tick">✓</span> صف آفلاین و همگام‌سازی خودکار</li>
+          <li class="rise" style="animation-delay:26.6s"><span class="tick">✓</span> اعلان زندهٔ کارهای انبار</li>
+        </ul>
+      </div>
+
+      <div class="phone-wrap">
+        <div class="phone rise" style="animation-delay:25.85s">
+          <div class="cam">
+            <div class="barcode"></div>
+            <div class="frame"><i></i><i></i><i></i><i></i></div>
+            <div class="hint">بارکد قفسه را داخل کادر بگیر</div>
+            <div class="voice">
+              <span class="mic">🎙</span>
+              <div>
+                «فیلتر روغن بوش، دو عدد»
+                <div class="wave"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="offline-badge rise" style="animation-delay:29.2s">آفلاین هم کار می‌کند</div>
+        <div class="phone-chips">
+          <div class="pchip p1 rise" style="animation-delay:28.0s"><span class="d"></span> اسکن سریع</div>
+          <div class="pchip p2 rise" style="animation-delay:28.2s"><span class="d"></span> ثبت صوتی</div>
+          <div class="pchip p3 rise" style="animation-delay:28.4s"><span class="d"></span> چهار عکس</div>
+          <div class="pchip p4 off rise" style="animation-delay:28.6s"><span class="d"></span> صف آفلاین</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 6. REPORTS ================= -->
+  <section class="scene" id="s6">
+    <div class="two-col">
+      <div>
+        <div class="eyebrow rise" style="animation-delay:32.45s"><span class="dot"></span> گزارش‌ها</div>
+        <h2 class="rise" style="animation-delay:32.6s">تصمیم با عدد،<br><span class="accent">نه حدس</span></h2>
+        <p class="sub rise" style="animation-delay:32.8s">فروش، سود، بدهکاران و موجودی — همه زنده و قابل پیگیری.</p>
+
+        <div class="chart-card rise" style="animation-delay:33.0s">
+          <div class="chart-head">
+            <div>
+              <div class="t">فروش هفته</div>
+              <div class="s">۷ روز گذشته</div>
+            </div>
+            <div class="legend"><i></i> فروش روزانه</div>
+          </div>
+          <div class="chart">
+            <div class="glines"></div>
+            <div class="bar" style="height:38%;animation:grow .8s 33.3s cubic-bezier(.2,.8,.2,1) both"></div>
+            <div class="bar b2" style="height:56%;animation:grow .8s 33.45s cubic-bezier(.2,.8,.2,1) both"></div>
+            <div class="bar" style="height:44%;animation:grow .8s 33.6s cubic-bezier(.2,.8,.2,1) both"></div>
+            <div class="bar b2" style="height:72%;animation:grow .8s 33.75s cubic-bezier(.2,.8,.2,1) both"></div>
+            <div class="bar" style="height:60%;animation:grow .8s 33.9s cubic-bezier(.2,.8,.2,1) both"></div>
+            <div class="bar b2" style="height:84%;animation:grow .8s 34.05s cubic-bezier(.2,.8,.2,1) both"></div>
+            <div class="bar last" style="height:96%;animation:grow .8s 34.2s cubic-bezier(.2,.8,.2,1) both"></div>
+          </div>
+          <div class="days"><span>شنبه</span><span>یکشنبه</span><span>دوشنبه</span><span>سه‌شنبه</span><span>چهارشنبه</span><span>پنجشنبه</span><span>جمعه</span></div>
+        </div>
+        <div class="report-note rise" style="animation-delay:35.5s">📤 خروجی اکسل، آمادهٔ حسابداری</div>
+      </div>
+
+      <div class="kpis">
+        <div class="kpi rise" style="animation-delay:34.6s">
+          <div class="l">فروش امروز</div>
+          <div class="v"><span id="kpiSales">۰</span> <small>تومان</small></div>
+        </div>
+        <div class="kpi green rise" style="animation-delay:34.8s">
+          <div class="l">سود ناخالص</div>
+          <div class="v"><span id="kpiProfit">۰</span> <small>تومان</small></div>
+        </div>
+        <div class="kpi amber rise" style="animation-delay:35.0s">
+          <div class="l">فاکتورهای امروز</div>
+          <div class="v"><span id="kpiCount">۰</span> <small>سند</small></div>
+        </div>
+        <div class="kpi rise" style="animation-delay:35.2s">
+          <div class="l">بدهکاران</div>
+          <div class="v">۱۲ <small>مشتری</small></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 7. CLOSING ================= -->
+  <section class="scene" id="s7">
+    <div class="close">
+      <div class="mark rise" style="animation-delay:38.95s">ک</div>
+      <h2 class="rise" style="animation-delay:39.2s">کاردو</h2>
+      <div class="tag rise" style="animation-delay:39.45s">انبار، فروش و حساب — یکجا</div>
+      <div class="words">
+        <span class="word rise" style="animation-delay:39.75s">سریع‌تر</span>
+        <span class="word rise" style="animation-delay:39.9s">دقیق‌تر</span>
+        <span class="word rise" style="animation-delay:40.05s">یکپارچه</span>
+      </div>
+      <div class="ver rise" style="animation-delay:40.4s">WAREHOUSE OS · نسخهٔ ۰.۵.۰</div>
+      <div class="pdf rise" style="animation-delay:40.7s">راهنمای کامل، در فایل PDF همراه</div>
+    </div>
+  </section>
+
+  <div class="progress" id="progress"></div>
+  <div class="corner">KARDO · WAREHOUSE OS</div>
+</div>
+
+<script>
+  const DURATION = 45;
+  const scenes = [
+    { el: document.getElementById('s1'), start: -1,   end: 4.2  },
+    { el: document.getElementById('s2'), start: 4.2,  end: 10.2 },
+    { el: document.getElementById('s3'), start: 10.2, end: 18.2 },
+    { el: document.getElementById('s4'), start: 18.2, end: 25.2 },
+    { el: document.getElementById('s5'), start: 25.2, end: 32.2 },
+    { el: document.getElementById('s6'), start: 32.2, end: 38.7 },
+    { el: document.getElementById('s7'), start: 38.7, end: 46   },
+  ];
+
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const fa = (n) => new Intl.NumberFormat('fa-IR').format(Math.round(n));
+  const ease = (t) => 1 - Math.pow(1 - clamp(t), 3);
+
+  window.__setTime = function (t) {
+    // scrub every CSS animation deterministically
+    for (const a of document.getAnimations()) {
+      try { a.pause(); a.currentTime = t * 1000; } catch (e) {}
+    }
+
+    // scene fades
+    for (const s of scenes) {
+      const fin = s.start < 0 ? 1 : ease((t - s.start) / 0.55);
+      const fout = ease((t - (s.end - 0.55)) / 0.55);
+      const o = clamp(Math.min(fin, 1 - fout));
+      s.el.style.opacity = o;
+      s.el.style.visibility = o > 0.001 ? 'visible' : 'hidden';
+      s.el.style.transform = `translateY(${(1 - fin) * 26 - fout * 18}px)`;
+    }
+
+    // POS total counts up
+    const posT = clamp((t - 13.2) / 1.5);
+    document.getElementById('posTotal').textContent = fa(1860000 * posT);
+
+    // success stamp + receipt
+    const stampIn = clamp((t - 15.55) / 0.45);
+    const stampOut = clamp((t - 17.2) / 0.5);
+    const st = document.getElementById('posStamp');
+    st.style.opacity = clamp(stampIn - stampOut);
+    st.style.transform = `translate(-50%,-50%) scale(${0.6 + 0.4 * ease(stampIn)}) rotate(-8deg)`;
+
+    const rec = clamp((t - 16.05) / 0.6);
+    const rc = document.getElementById('posReceipt');
+    rc.style.opacity = rec;
+    rc.style.transform = `translateY(${(1 - ease(rec)) * 60}px) rotate(-4deg)`;
+
+    // warehouse
+    const stockT = clamp((t - 20.95) / 0.9);
+    document.getElementById('stockNum').textContent = fa(12 * stockT);
+    const ok = document.getElementById('stockOk');
+    ok.style.opacity = clamp((t - 21.75) / 0.4);
+
+    // KPI counters
+    const k1 = clamp((t - 34.65) / 1.15);
+    const k2 = clamp((t - 34.85) / 1.15);
+    const k3 = clamp((t - 35.05) / 1.0);
+    document.getElementById('kpiSales').textContent  = fa(48250000 * k1);
+    document.getElementById('kpiProfit').textContent = fa(9120000 * k2);
+    document.getElementById('kpiCount').textContent  = fa(37 * k3);
+
+    // progress bar
+    document.getElementById('progress').style.width = (clamp(t / DURATION) * 100) + '%';
+  };
+
+  // grow keyframes for bars
+  const style = document.createElement('style');
+  style.textContent = `@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}`;
+  document.head.appendChild(style);
+
+  // lab: allow ?t=12.5 to render a still
+  window.addEventListener('load', async () => {
+    try { await document.fonts.ready; } catch (e) {}
+    const q = new URLSearchParams(location.search);
+    const t = parseFloat(q.get('t') || '0');
+    window.__setTime(t);
+    window.__ready = true;
+  });
+</script>
+</body>
+</html>

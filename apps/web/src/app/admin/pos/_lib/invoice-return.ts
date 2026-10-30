@@ -59,6 +59,7 @@ export function returningStateOf(data: ReturnableInvoice): Returning {
     ),
     isOpenAccount: data.isOpenAccount,
     hasCustomer: !!data.invoice.customer,
+    cashRefundable: data.cashRefundable,
   };
 }
 

@@ -142,6 +142,15 @@ export function ReturnDialog({
     [lines, qtyById],
   );
 
+  /*
+   * سقفِ نقد/کارت — همان قاعده‌ای که سرور هنگام ثبت اجرا می‌کند (پولی که
+   * واقعاً گرفته شده). نمایشِ آن قبل از «ثبت»، یعنی فروشنده به‌جای دیدنِ
+   * خطای قرمز بعد از کلیک، همان‌جا روش را عوض می‌کند.
+   */
+  const cashRefundable = data.data?.cashRefundable ?? 0;
+  const isCashMethod = effectiveMethod === "CASH" || effectiveMethod === "CARD";
+  const cashOverCap = isCashMethod && refundPreview > cashRefundable;
+
   const submit = useMutation({
     mutationFn: () => {
       const payload = lines
@@ -163,7 +172,7 @@ export function ReturnDialog({
     },
     onSuccess: (ret) => {
       toast.success(
-        `مرجوعی ${toFa(ret.number)} ثبت شد — برگشتی ${amount(ret.refundAmount)}`,
+        `مرجوعی شماره ${toFa(ret.number)} ثبت شد — برگشتی ${amount(ret.refundAmount)}`,
       );
       qc.invalidateQueries({ queryKey: ["pos-recent-invoices"] });
       qc.invalidateQueries({ queryKey: ["invoice", invoiceId] });
@@ -181,7 +190,8 @@ export function ReturnDialog({
   const nothingReturnable =
     !data.isLoading && lines.every((l) => l.returnable <= 0);
   /* دلیل اختیاری است — مرجوعی نباید به تایپِ دلیل گره بخورد. */
-  const canSubmit = selectedLineCount > 0 && !submit.isPending;
+  const canSubmit =
+    selectedLineCount > 0 && !submit.isPending && !cashOverCap;
 
   /** ارقام فارسی/عربی → لاتین، سپس عددِ امن. */
   function setQtyFromInput(saleLogId: string, raw: string, max: number) {
@@ -475,6 +485,20 @@ export function ReturnDialog({
                           ? "مبلغ روی کارتخوان به مشتری برمی‌گردد."
                           : "پول نقد از صندوق به مشتری داده می‌شود."}
                     </span>
+                    {isCashMethod && (
+                      <span
+                        className={cn(
+                          "text-[11px]",
+                          cashOverCap
+                            ? "font-medium text-red-600 dark:text-red-400"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {cashOverCap
+                          ? `بیش از سقفِ نقدیِ این فاکتور (${amount(cashRefundable)}) — باقیمانده فقط با «کسر از حساب» برگشت می‌خورد.`
+                          : `سقفِ برگشت نقد/کارت: ${amount(cashRefundable)}`}
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex flex-col gap-1">
@@ -534,6 +558,12 @@ export function ReturnDialog({
                     {selectedLineCount === 0 && (
                       <span className="text-xs text-muted-foreground">
                         برای ثبت، حداقل یک قلم انتخاب کنید
+                      </span>
+                    )}
+                    {cashOverCap && (
+                      <span className="text-xs font-medium text-red-600 dark:text-red-400">
+                        روشِ برگشت را عوض کنید یا از تعداد کم کنید — نقدِ بیش از
+                        سقف از صندوق برنمی‌گردد
                       </span>
                     )}
                   </div>

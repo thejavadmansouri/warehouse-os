@@ -1531,6 +1531,18 @@ export default function PosPage() {
       if (!draft.lines.length)
         throw new Error("هیچ قلمی برای برگشت انتخاب نشده");
       if (!refundMethod) throw new Error("روش برگشت وجه را انتخاب کنید");
+      /*
+       * نگهبانِ سرور همین‌جا تکرار می‌شود — F2 مستقیم ثبت می‌کند و بدون این
+       * بررسی، فروشنده فقط خطای سرور را می‌بیند، نه دلیلش را.
+       */
+      if (
+        (refundMethod === "CASH" || refundMethod === "CARD") &&
+        draft.refundAmount > doc.cashRefundable
+      ) {
+        throw new Error(
+          `برگشتِ نقدی از سقفِ این فاکتور (${rial(doc.cashRefundable)}) بیشتر است — روش را عوض کنید یا از تعداد کم کنید`,
+        );
+      }
 
       return createReturn({
         idempotencyKey: ensureIdem(),
@@ -1543,7 +1555,8 @@ export default function PosPage() {
     },
     onSuccess: (r) => {
       toast.success(
-        `مرجوعی ${toFa(r.number)} ثبت شد — ${rial(r.refundAmount)}`,
+        // «شماره» صریح است: «مرجوعی ۵۰ ثبت شد» شبیه «۵۰ عدد برگشت خورد» خوانده می‌شد.
+        `مرجوعی شماره ${toFa(r.number)} ثبت شد — ${rial(r.refundAmount)}`,
       );
       const cid = customer?.id;
       endLockedDoc();
@@ -2226,6 +2239,18 @@ export default function PosPage() {
     [returning, lines],
   );
 
+  /*
+   * نقد/کارت بیش از سقفِ صندوق (پولِ واقعاً گرفته‌شدهی این فاکتور). سرور در
+   * ثبت ردش می‌کند — اینجا همان هشدار، قبل از کلیک، کنار مبلغِ بازپرداخت.
+   * فروشنده در پیشخوان معمولاً اصلاً نمی‌داند فاکتور چقدر نقدی بوده؛ دیدنِ
+   * عدد همان‌جا کافی است تا روش را عوض کند.
+   */
+  const cashOverCap = useMemo(() => {
+    if (!returning) return false;
+    if (refundMethod !== "CASH" && refundMethod !== "CARD") return false;
+    return returnTotal > returning.cashRefundable;
+  }, [returning, refundMethod, returnTotal]);
+
   /**
    * خلاصه‌ی محاسباتیِ عملیاتِ یکپارچه — خوراکِ نوارِ پایین (ارزش مرجوعی، ارزش
    * افزوده، اثر تغییرات، اختلاف) و دکمه‌ی ثبت. از همان تابعِ pure که سند را
@@ -2418,7 +2443,7 @@ export default function PosPage() {
         ? {
             run: () => saveReturn.mutate(),
             label: "ثبت مرجوعی",
-            disabled: !returnTotal,
+            disabled: !returnTotal || cashOverCap,
             pending: saveReturn.isPending,
           }
         : adjusting
@@ -3410,6 +3435,16 @@ export default function PosPage() {
                     مانده فاکتور {money(dueAfterAdjust)}
                     <br />
                     مانده مشتری {money(balanceAfterAdjust)}
+                  </div>
+                )}
+
+                {returning && cashOverCap && (
+                  <div className="text-[10px] font-semibold leading-4 text-red-600 dark:text-red-400">
+                    نقدِ بیش از سقف نمی‌رود
+                    <br />
+                    سقف نقد/کارت {money(returning.cashRefundable)}
+                    <br />
+                    باقیمانده فقط «کسر از حساب»
                   </div>
                 )}
 

@@ -94,6 +94,8 @@ describe('ReturnsService — اثرِ مرجوعی روی مبلغِ فاکتو�
     },
     saleReturn: {
       create: jest.fn(async () => ({ id: 'r1', number: 500 })),
+      // جمعِ برگشت‌های نقد/کارتِ قبلیِ همین فاکتور — نگهبانِ صندوق از همین می‌خواند.
+      aggregate: jest.fn(async () => ({ _sum: { refundAmount: 0 } })),
     },
     saleInvoice: {
       updateMany: jest.fn(async (args: any) => {
@@ -110,6 +112,9 @@ describe('ReturnsService — اثرِ مرجوعی روی مبلغِ فاکتو�
     invoice = makeInvoice();
     updates = [];
     tx.$queryRaw.mockImplementation(async () => [invoice]);
+    // پیش‌فرض: فاکتور هنوز نقد/کارتی برنگردانده — هر تستی که جزئیات دیگری
+    // بخواهد خودش روی همین ماک می‌نویسد.
+    tx.saleReturn.aggregate.mockResolvedValue({ _sum: { refundAmount: 0 } });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -154,12 +159,56 @@ describe('ReturnsService — اثرِ مرجوعی روی مبلغِ فاکتو�
   });
 
   it('مرجوعیِ نقد: مبلغِ فاکتور دست‌نخورده می‌ماند و دفتر ردیف نمی‌سازد', async () => {
+    /*
+     * نقد فقط از پولِ گرفته‌شده برمی‌گردد — پس برای این تست فاکتور باید
+     * واقعاً پرداخت شده باشد. خودِ همین قاعده تستِ بعدی جداگانه قفلش می‌کند.
+     */
+    invoice.paidAmount = 10_000;
+
     await service.createReturnInTx(tx, dto(PaymentMethod.CASH), {
       userId: 'u1',
     });
 
     expect(updates).toEqual([]);
     expect(ledger.record).not.toHaveBeenCalled();
+  });
+
+  it('نگهبانِ صندوق: برگشتِ نقدیِ بیش از پولِ پرداخت‌شده رد می‌شود', async () => {
+    // فاکتورِ نسیه‌ایِ صفر‌پرداخت — نقد دادن یعنی پولی که نیامده از صندوق برود.
+    invoice.paidAmount = 0;
+
+    const err = await service
+      .createReturnInTx(tx, dto(PaymentMethod.CASH), { userId: 'u1' })
+      .catch((e) => e);
+
+    expect(err.getResponse()).toMatchObject({ error: 'REFUND_EXCEEDS_PAID' });
+    expect(tx.saleReturn.create).not.toHaveBeenCalled();
+  });
+
+  it('نگهبانِ صندوق: جمعِ برگشت‌های نقدیِ قبلی هم حساب می‌شود، نه فقط همین سند', async () => {
+    // قبلاً ۸٬۰۰۰ نقد برگشته؛ فاکتور ۱۰٬۰۰۰ گرفته. ۳٬۰۰۰ِ دیگر یعنی ۱۱٬۰۰۰ از ۱۰٬۰۰۰.
+    invoice.paidAmount = 10_000;
+    tx.saleReturn.aggregate.mockResolvedValue({ _sum: { refundAmount: 8_000 } });
+
+    const err = await service
+      .createReturnInTx(tx, dto(PaymentMethod.CASH), { userId: 'u1' })
+      .catch((e) => e);
+
+    expect(err.getResponse()).toMatchObject({
+      error: 'REFUND_EXCEEDS_PAID',
+      alreadyRefunded: 8_000,
+      paid: 10_000,
+    });
+
+    // همان ۲٬۰۰۰ِ آخر دقیقاً تا سقفِ پرداختی مجاز است.
+    tx.saleReturn.create.mockClear();
+    const ok = await service.createReturnInTx(
+      tx,
+      { ...dto(PaymentMethod.CASH), lines: [{ saleLogId: 's1', quantity: 2 }] },
+      { userId: 'u1' },
+    );
+    expect(ok.refundAmount).toBe(2_000);
+    expect(tx.saleReturn.create).toHaveBeenCalled();
   });
 
   it('مرجوعیِ اعتباری بیشتر از مبلغِ فاکتور، مبلغ را منفی نمی‌کند', async () => {

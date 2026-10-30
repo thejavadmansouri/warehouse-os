@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import type { PosLine } from "../_components/line-items";
 import { NO_DISCOUNT } from "./discount";
-import { returnDraft } from "./invoice-return";
+import { returnDraft, returningStateOf } from "./invoice-return";
+import type { ReturnableInvoice } from "@/lib/types";
 import type { CartDoc } from "./carts";
 
 type Returning = Extract<CartDoc, { type: "return" }>;
@@ -17,6 +18,7 @@ const doc: Returning = {
   },
   isOpenAccount: false,
   hasCustomer: true,
+  cashRefundable: 2500,
 };
 
 function line(over: Partial<PosLine> & { key: string }): PosLine {
@@ -70,5 +72,29 @@ describe("returnDraft", () => {
       line({ key: "ghost", quantity: 5 }),
     ]);
     expect(d.lines).toEqual([]);
+  });
+});
+
+describe("returningStateOf", () => {
+  it("سقفِ نقد از پاسخِ سرور تا سندِ سبد می‌رسد — نگهبانِ صندوق همان‌جاست", () => {
+    const data = {
+      invoice: {
+        id: "inv-9",
+        number: 9,
+        status: "CONFIRMED",
+        total: 1_000,
+        paidAmount: 400,
+        dueAmount: 600,
+        customer: { id: "c1", firstName: "الف", fullName: "الف ب" },
+      },
+      lines: [],
+      returnable: true,
+      isOpenAccount: false,
+      customerBalance: 0,
+      cashRefundable: 400,
+      accountId: null,
+    } as ReturnableInvoice;
+
+    expect(returningStateOf(data).cashRefundable).toBe(400);
   });
 });

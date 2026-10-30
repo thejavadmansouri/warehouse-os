@@ -2141,6 +2141,7 @@ export interface ReturnableInvoice {
     number: number;
     status: InvoiceStatus;
     total: number;
+    paidAmount: number;
     dueAmount: number;
     customer: {
       id: string;
@@ -2156,6 +2157,12 @@ export interface ReturnableInvoice {
   isOpenAccount: boolean;
   /** مانده‌ی کلِ مشتری — مثبت یعنی بدهکار؛ پایه‌ی پیش‌فرضِ روشِ برگشت. */
   customerBalance: number;
+  /**
+   * سقفِ برگشتِ نقد/کارت = پولِ گرفته‌شده − نقد/کارتِ قبلاً برگشت‌شده.
+   * بیش از این فقط «کسر از حساب» ممکن است — نگهبانِ سرور همین را در ثبت
+   * اجرا می‌کند؛ اینجا تا قبل از «ثبت» دیده شود.
+   */
+  cashRefundable: number;
   accountId: string | null;
 }
 
