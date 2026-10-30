@@ -51,6 +51,17 @@ export default async function WalletPage() {
                 </p>
               </div>
             </div>
+
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">نیاز به خط اعتبار بالاتر دارید؟</span>
+              <a
+                href="/cheques"
+                className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"
+              >
+                <span>ثبت چک صیادی و افزایش سقف اعتبار</span>
+                <span>←</span>
+              </a>
+            </div>
           </div>
 
           <TopupForm />

@@ -32,6 +32,7 @@ model Customer {
   walletTx      WalletTransaction[]
   payments      Payment[]
   inquiries     Inquiry[]
+  cheques       Cheque[]
 
   @@index([status])
   @@map("customers")
@@ -310,5 +311,44 @@ enum InquiryStatus {
   ANSWERED  // قیمت‌گذاری شده توسط ادمین
   CONVERTED // تبدیل‌شده به پیش‌فاکتور
   REJECTED  // رد شده
+}
+
+/// وضعیت‌های فرآیند اعتبارسنجی چک صیادی
+enum ChequeStatus {
+  RECEIVED          // ثبت و دریافت شده (در انتظار تایید مدارک و استعلام صیاد)
+  REGISTERED_SAYAD  // تایید ثبت در سامانه پیچک/صیاد بانک مرکزی
+  CLEARED           // وصول و پاس شده
+  BOUNCED           // برگشت خورده (نکول)
+  REJECTED          // رد شده توسط کارشناس مالی
+}
+
+/// چک صیادی بنفش جهت تأمین اعتبار و خرید اقساطی ۳۰ تا ۶۰ روزه همکاران
+model Cheque {
+  id               String       @id @default(cuid())
+  customerId       String
+  customer         Customer     @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  sayadId          String       // شناسه ۱۶ رقمی یکتای صیاد
+  chequeNumber     String       // شماره سریال چک
+  bankName         String       // نام بانک صادرکننده (ملی، ملت، صادرات، تجارت، ...)
+  branchName       String?      // نام یا کد شعبه
+  accountNumber    String?      // شماره حساب
+  drawerName       String       // نام و نام خانوادگی صاحب حساب
+  drawerNationalId String?      // کدملی یا شناسه ملی صاحب حساب
+  amount           Decimal      @db.Decimal(18, 0) // مبلغ چک به تومان
+  issueDate        DateTime     // تاریخ صدور
+  dueDate          DateTime     // تاریخ سررسید
+  status           ChequeStatus @default(RECEIVED)
+  adminNote        String?      // یادداشت واحد مالی
+  sayadVerified    Boolean      @default(false) // آیا استعلام اهلیت صیاد انجام شده است؟
+  imagePath        String?      // تصویر فیزیکی روی چک
+  clearedAt        DateTime?
+  bouncedAt        DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([customerId, status])
+  @@index([sayadId])
+  @@index([dueDate])
+  @@map("cheques")
 }
 
