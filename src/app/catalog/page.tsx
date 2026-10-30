@@ -41,7 +41,12 @@ export default async function CatalogPage() {
   return (
     <CustomerShell
       companyName={acc.customer.companyName}
+      contactName={acc.customer.contactName}
+      phone={acc.customer.phone}
+      tierName={acc.customer.tier?.name}
+      tierDiscount={acc.tierDiscount}
       wallet={acc.wallet}
+      availableCredit={acc.availableCredit}
       active="catalog"
     >
       <CatalogBrowser

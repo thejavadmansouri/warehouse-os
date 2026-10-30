@@ -13,7 +13,8 @@ export default async function InquiryPage({
   params: Promise<{ id: string }>;
 }) {
   await connection();
-  const { customer, wallet } = await requireCustomer();
+  const acc = await requireCustomer();
+  const { customer, wallet } = acc;
   const { id } = await params;
 
   const [inquiry, shippingMethods] = await Promise.all([
@@ -62,7 +63,16 @@ export default async function InquiryPage({
   }));
 
   return (
-    <CustomerShell companyName={customer.companyName} wallet={wallet} active="inquiries">
+    <CustomerShell
+      companyName={customer.companyName}
+      contactName={customer.contactName}
+      phone={customer.phone}
+      tierName={customer.tier?.name}
+      tierDiscount={acc.tierDiscount}
+      wallet={wallet}
+      availableCredit={acc.availableCredit}
+      active="inquiries"
+    >
       <InquiryDetail inquiry={serialized} shippingMethods={formattedShipping} />
     </CustomerShell>
   );

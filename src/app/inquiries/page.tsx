@@ -8,7 +8,8 @@ export const instant = false;
 
 export default async function InquiriesPage() {
   await connection();
-  const { customer, wallet } = await requireCustomer();
+  const acc = await requireCustomer();
+  const { customer, wallet } = acc;
 
   const inquiries = await prisma.inquiry.findMany({
     where: { customerId: customer.id },
@@ -45,7 +46,12 @@ export default async function InquiriesPage() {
   return (
     <CustomerShell
       companyName={customer.companyName}
+      contactName={customer.contactName}
+      phone={customer.phone}
+      tierName={customer.tier?.name}
+      tierDiscount={acc.tierDiscount}
       wallet={wallet}
+      availableCredit={acc.availableCredit}
       active="inquiries"
     >
       <InquiriesView initialInquiries={serialized} />

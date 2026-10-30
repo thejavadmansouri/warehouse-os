@@ -21,7 +21,16 @@ export default async function WalletPage() {
   });
 
   return (
-    <CustomerShell companyName={acc.customer.companyName} wallet={acc.wallet} active="wallet">
+    <CustomerShell
+      companyName={acc.customer.companyName}
+      contactName={acc.customer.contactName}
+      phone={acc.customer.phone}
+      tierName={acc.customer.tier?.name}
+      tierDiscount={acc.tierDiscount}
+      wallet={acc.wallet}
+      availableCredit={acc.availableCredit}
+      active="wallet"
+    >
       <div className="mx-auto w-full max-w-4xl px-3 sm:px-6 py-6 pb-24">
         <div className="pb-4 border-b border-slate-200">
           <h1 className="text-lg sm:text-xl font-extrabold tracking-tight text-slate-900">کیف پول و اعتبار مالی</h1>

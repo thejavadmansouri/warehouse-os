@@ -30,7 +30,16 @@ export default async function CustomerChequesPage() {
   }));
 
   return (
-    <CustomerShell companyName={acc.customer.companyName} wallet={acc.wallet} active="wallet">
+    <CustomerShell
+      companyName={acc.customer.companyName}
+      contactName={acc.customer.contactName}
+      phone={acc.customer.phone}
+      tierName={acc.customer.tier?.name}
+      tierDiscount={acc.tierDiscount}
+      wallet={acc.wallet}
+      availableCredit={acc.availableCredit}
+      active="cheques"
+    >
       <div className="mx-auto w-full max-w-4xl px-3 sm:px-6 py-6 pb-24">
         <ChequesView
           initialCheques={initialCheques}

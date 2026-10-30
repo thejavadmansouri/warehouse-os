@@ -301,120 +301,129 @@ export function CatalogBrowser(props: {
         </div>
       </div>
 
-      {/* ۱. چیپس‌های لمسی سریع برای برند خودروها */}
-      <div className="mt-4">
-        <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
-          <span>انتخاب خودرو:</span>
-          {carBrand && (
-            <button onClick={() => setCarBrand("")} className="text-blue-600 hover:underline">
+      {/* مرکز صفحه: بخش جست‌وجوی هوشمند محصول و فیلترهای انتخابی */}
+      <div className="mt-4 p-4 sm:p-5 bg-white border border-slate-200/90 rounded-2xl shadow-2xs space-y-4">
+        {/* ۱. نوار جست‌وجوی هوشمند قطعه در مرکز */}
+        <div className="flex flex-col gap-2.5 sm:flex-row items-center">
+          <div className="relative flex-1 w-full">
+            <div className="absolute inset-y-0 right-3.5 flex items-center pointer-events-none text-slate-400">
+              <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" x2="16.65" y1="21" y2="16.65" />
+              </svg>
+            </div>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="جست‌وجوی نام قطعه، کد فنی SKU، کد OEM، بارکد یا برند سازنده قطعه..."
+              className="input py-3 pr-11 pl-9 text-xs sm:text-sm border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-100 rounded-xl bg-slate-50/50 hover:bg-white transition-all w-full font-medium"
+              autoComplete="off"
+            />
+            {query && (
+              <button
+                onClick={() => setQuery("")}
+                className="absolute inset-y-0 left-2.5 px-2 text-slate-400 hover:text-slate-700 text-sm"
+                aria-label="پاک کردن"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* دکمه فیلترهای تکمیلی */}
+          <button
+            onClick={() => setShowAdvancedFilters((prev) => !prev)}
+            className={`btn text-xs px-4 py-3 rounded-xl flex items-center gap-2 border transition-all w-full sm:w-auto shrink-0 min-h-[46px] ${
+              activeFiltersCount > 0 || showAdvancedFilters
+                ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
+                : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+            </svg>
+            <span>فیلترهای پیشرفته و سازنده</span>
+            {activeFiltersCount > 0 && (
+              <span className="size-5 rounded-full bg-blue-600 text-white grid place-items-center text-[10px] font-bold nums">
+                {toFaDigits(activeFiltersCount)}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* ۲. چیپس‌های لمسی سریع برای برند خودروها */}
+        <div className="pt-1 border-t border-slate-100">
+          <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
+            <span className="font-bold text-slate-700">انتخاب خودرو:</span>
+            {carBrand && (
+              <button onClick={() => setCarBrand("")} className="text-blue-600 hover:underline">
+                همه خودروها
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+            <button
+              onClick={() => setCarBrand("")}
+              className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
+                carBrand === ""
+                  ? "bg-slate-900 text-white shadow-xs font-bold"
+                  : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
+              }`}
+            >
               همه خودروها
             </button>
-          )}
+            {allCarBrands.map((b) => (
+              <button
+                key={b}
+                onClick={() => setCarBrand(b === carBrand ? "" : b)}
+                className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
+                  carBrand === b
+                    ? "bg-blue-600 text-white shadow-xs font-bold"
+                    : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
+                }`}
+              >
+                {b}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-          <button
-            onClick={() => setCarBrand("")}
-            className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-              carBrand === ""
-                ? "bg-slate-900 text-white shadow-xs font-bold"
-                : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            همه خودروها
-          </button>
-          {allCarBrands.map((b) => (
+
+        {/* ۳. چیپس‌های لمسی سریع برای قسمت‌ها و بخش‌های فنی خودرو */}
+        <div>
+          <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
+            <span className="font-bold text-slate-700">قسمت و بخش خودرو:</span>
+            {category && (
+              <button onClick={() => setCategory("")} className="text-blue-600 hover:underline">
+                همه قسمت‌ها
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
             <button
-              key={b}
-              onClick={() => setCarBrand(b === carBrand ? "" : b)}
+              onClick={() => setCategory("")}
               className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-                carBrand === b
-                  ? "bg-blue-600 text-white shadow-xs font-bold"
-                  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+                category === ""
+                  ? "bg-blue-50 text-blue-700 border border-blue-200 font-bold"
+                  : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
               }`}
             >
-              {b}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ۲. چیپس‌های لمسی سریع برای قسمت‌ها و بخش‌های فنی خودرو */}
-      <div className="mt-3">
-        <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
-          <span>قسمت و بخش خودرو:</span>
-          {category && (
-            <button onClick={() => setCategory("")} className="text-blue-600 hover:underline">
               همه قسمت‌ها
             </button>
-          )}
+            {allCategories.map((c) => (
+              <button
+                key={c}
+                onClick={() => setCategory(c === category ? "" : c)}
+                className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
+                  category === c
+                    ? "bg-blue-600 text-white shadow-xs font-bold"
+                    : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
+                }`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-          <button
-            onClick={() => setCategory("")}
-            className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-              category === ""
-                ? "bg-blue-50 text-blue-700 border border-blue-200 font-bold"
-                : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-            }`}
-          >
-            همه قسمت‌ها
-          </button>
-          {allCategories.map((c) => (
-            <button
-              key={c}
-              onClick={() => setCategory(c === category ? "" : c)}
-              className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-                category === c
-                  ? "bg-blue-600 text-white shadow-xs font-bold"
-                  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ۳. نوار جست‌وجو و دکمه بازکردن فیلترهای پیشرفته */}
-      <div className="mt-4 flex flex-col gap-2.5 sm:flex-row items-center">
-        <div className="relative flex-1 w-full">
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="جست‌وجو با نام قطعه، کد فنی SKU، کد OEM یا قطعه‌ساز..."
-            className="input py-2.5 text-xs sm:text-sm pl-8 border-slate-300 focus:border-blue-600 rounded-lg bg-white"
-            autoComplete="off"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute inset-y-0 left-2.5 px-1.5 text-slate-400 hover:text-slate-700 text-sm"
-              aria-label="پاک کردن"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {/* کلید فیلترهای تکمیلی (برند سازنده، مدل، تاریخ و مرتب‌سازی) */}
-        <button
-          onClick={() => setShowAdvancedFilters((prev) => !prev)}
-          className={`btn text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 border transition-all w-full sm:w-auto shrink-0 ${
-            activeFiltersCount > 0 || showAdvancedFilters
-              ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
-              : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
-          }`}
-        >
-          <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-          </svg>
-          <span>فیلترهای پیشرفته و مرتب‌سازی</span>
-          {activeFiltersCount > 0 && (
-            <span className="size-5 rounded-full bg-blue-600 text-white grid place-items-center text-[10px] font-bold nums">
-              {toFaDigits(activeFiltersCount)}
-            </span>
-          )}
-        </button>
       </div>
 
       {/* ۴. پنل فیلترهای پیشرفته: در دسکتاپ پنل آکاردئونی و در موبایل Bottom Sheet استاندارد */}
