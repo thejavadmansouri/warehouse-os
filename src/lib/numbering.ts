@@ -28,3 +28,16 @@ export async function nextInquiryNumber(): Promise<string> {
 
   return `RFQ-${year}-${String(counter.value).padStart(4, "0")}`;
 }
+
+export async function nextRmaNumber(): Promise<string> {
+  const year = shamsiYear();
+
+  const counter = await prisma.documentCounter.upsert({
+    where: { key: `rma:${year}` },
+    create: { key: `rma:${year}`, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+
+  return `RMA-${year}-${String(counter.value).padStart(4, "0")}`;
+}
+

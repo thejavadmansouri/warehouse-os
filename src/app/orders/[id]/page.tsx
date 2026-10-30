@@ -9,6 +9,7 @@ import { CustomerShell } from "@/components/customer-shell";
 import { faDate, faDateTime } from "@/lib/date";
 import { formatToman, toFaDigits } from "@/lib/digits";
 import { ORDER_STATUS } from "@/lib/status";
+import { SHIPMENT_STATUS_MAP, FREIGHT_PAYMENT_LABELS } from "@/lib/logistics";
 import { PayPanel } from "./pay-panel";
 
 const toneClass: Record<string, string> = {
@@ -31,7 +32,7 @@ export default async function OrderPage({
 
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { items: true, shipping: true },
+    include: { items: true, shipping: true, shipment: true, rmaRequests: true },
   });
 
   if (!order || order.customerId !== acc.customer.id) notFound();
@@ -69,6 +70,76 @@ export default async function OrderPage({
         {isNew && order.status === "PROFORMA" && (
           <div className="mt-4 p-4 card border-blue-200 bg-blue-50/60 rounded-xl text-xs leading-6 text-blue-900">
             سند با موفقیت ثبت شد و موجودی قطعات تا تاریخ <b>{order.expiresAt ? faDate(order.expiresAt) : "۲۴ ساعت"}</b> در انبار مرکزی کرمان رزرو گردید.
+          </div>
+        )}
+
+        {/* کارت رهگیری بیجک و وضعیت ارسال باربری کرمان */}
+        {order.shipment && (
+          <div className="mt-4 card p-4 sm:p-5 bg-white border-blue-200 shadow-2xs rounded-xl space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="size-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                <h3 className="font-extrabold text-sm text-slate-900">وضعیت ارسال و حواله باربری کرمان</h3>
+              </div>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-bold border ${
+                  SHIPMENT_STATUS_MAP[order.shipment.status]?.badgeClass || "bg-slate-100 text-slate-700"
+                }`}
+              >
+                {SHIPMENT_STATUS_MAP[order.shipment.status]?.label || order.shipment.status}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-3 rounded-lg border border-slate-200/70">
+              <div>
+                <span className="text-slate-500">شرکت باربری / حامل:</span>
+                <p className="font-bold text-slate-800 mt-0.5">{order.shipment.carrierName}</p>
+                {order.shipment.carrierPhone && (
+                  <p className="text-slate-400 font-mono nums mt-0.5">{order.shipment.carrierPhone}</p>
+                )}
+              </div>
+
+              <div>
+                <span className="text-slate-500">شماره بیجک / بارنامه:</span>
+                <p className="font-black text-sm text-blue-700 mt-0.5 nums">
+                  {order.shipment.waybillNumber ? toFaDigits(order.shipment.waybillNumber) : "در حال صدور توسط باربری"}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {FREIGHT_PAYMENT_LABELS[order.shipment.freightPaymentType] || order.shipment.freightPaymentType}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-slate-500">شهر مقصد در استان کرمان:</span>
+                <p className="font-bold text-slate-800 mt-0.5">{order.shipment.destinationCity}</p>
+                {order.shipment.shippedAt && (
+                  <p className="text-slate-500 nums mt-0.5">
+                    تحویل باربری: {faDate(order.shipment.shippedAt)}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {order.shipment.adminNote && (
+              <p className="text-xs text-slate-600 bg-blue-50/50 p-2.5 rounded-lg border border-blue-100">
+                <b>یادداشت ارسال:</b> {order.shipment.adminNote}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* دکمه ثبت درخواست مرجوعی برای فاکتورهای تسویه‌شده */}
+        {(order.status === "PAID" || order.status === "APPROVED_CREDIT") && (
+          <div className="mt-3 flex items-center justify-between bg-slate-100/70 px-4 py-2.5 rounded-xl text-xs text-slate-600 border border-slate-200/70">
+            <span>آیا قطعه‌ای با نقص فنی، شکستگی یا مغایرت دریافت کرده‌اید؟</span>
+            <Link
+              href="/rma"
+              prefetch={false}
+              className="text-blue-600 font-bold hover:underline flex items-center gap-1"
+            >
+              <span>ثبت درخواست گارانتی / مرجوعی (RMA)</span>
+              <span>←</span>
+            </Link>
           </div>
         )}
 
