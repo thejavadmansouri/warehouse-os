@@ -22,11 +22,12 @@ export type CartItem = {
 };
 
 /*
- * کاتالوگ مدرن سازمانی کاردو B2B:
- * - پالت استاندارد صنعتی (Slate 900، آبی کبالت، سفید تمیز)
- * - عملکرد پایدار و بدون رفرش یا پرش صفحه
- * - پشتیبانی همزمان از خرید فوری تکی و سبد چندقلمی عمده
- * - فیلترهای چیپسی لمسی مخصوص موبایل
+ * کاتالوگ پیشرفته سازمانی کاردو B2B:
+ * - فیلترهای چندگانه: خودرو، مدل، قسمت‌های خودرو، سازنده قطعه، تاریخ و موجودی
+ * - چیپس‌های لمسی سریع برای موبایل و تبلت
+ * - کشوی فیلترهای پیشرفته با نشانگر تعداد فیلترهای فعال
+ * - مرتب‌سازی هوشمند (جدیدترین، قیمت، موجودی)
+ * - بدون لرزش و بدون درخواست‌های تکراری
  */
 export function CatalogBrowser(props: {
   initialItems: CatalogItem[];
@@ -39,9 +40,19 @@ export function CatalogBrowser(props: {
   shipping: ShippingOption[];
 }) {
   const router = useRouter();
+
+  // فیلترهای اصلی
   const [query, setQuery] = useState("");
-  const [brand, setBrand] = useState("");
-  const [category, setCategory] = useState("");
+  const [carBrand, setCarBrand] = useState(""); // برند خودرو: پراید، پژو...
+  const [carModel, setCarModel] = useState(""); // مدل خودرو
+  const [category, setCategory] = useState(""); // قسمت خودرو: ترمز، موتور...
+  const [partBrand, setPartBrand] = useState(""); // سازنده قطعه: ایساکو، والئو...
+  const [dateFilter, setDateFilter] = useState("all"); // تاریخ: all, week, month, quarter
+  const [inStockOnly, setInStockOnly] = useState(false); // فقط موجود
+  const [sort, setSort] = useState("default"); // مرتب‌سازی
+
+  // وضعیت رابط و کشوها
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [items, setItems] = useState<CatalogItem[]>(props.initialItems);
   const [loading, setLoading] = useState(false);
   const [selectedQuickBuy, setSelectedQuickBuy] = useState<CatalogItem | null>(null);
@@ -55,14 +66,20 @@ export function CatalogBrowser(props: {
 
   const isInitialMount = useRef(true);
 
+  // واکشی کاتالوگ با فیلترها
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
 
     const qs = new URLSearchParams();
     if (query.trim()) qs.set("q", query.trim());
-    if (brand) qs.set("brand", brand);
+    if (carBrand) qs.set("brand", carBrand);
+    if (carModel) qs.set("model", carModel);
     if (category) qs.set("category", category);
+    if (partBrand) qs.set("partBrand", partBrand);
+    if (inStockOnly) qs.set("inStock", "true");
+    if (dateFilter !== "all") qs.set("dateFilter", dateFilter);
+    if (sort !== "default") qs.set("sort", sort);
 
     try {
       const res = await fetch(`/api/catalog?${qs.toString()}`);
@@ -79,10 +96,9 @@ export function CatalogBrowser(props: {
     } finally {
       setLoading(false);
     }
-  }, [query, brand, category]);
+  }, [query, carBrand, carModel, category, partBrand, inStockOnly, dateFilter, sort]);
 
   useEffect(() => {
-    // جلوگیری از فچ غیرضروری در اولین رندر سرور
     if (isInitialMount.current) {
       isInitialMount.current = false;
       return;
@@ -93,10 +109,55 @@ export function CatalogBrowser(props: {
     }, 280);
 
     return () => clearTimeout(t);
-  }, [query, brand, category, load]);
+  }, [query, carBrand, carModel, category, partBrand, inStockOnly, dateFilter, sort, load]);
 
-  const brands = useMemo(() => Array.from(new Set(items.map((i) => i.brand))).filter(Boolean).sort(), [items]);
-  const categories = useMemo(() => Array.from(new Set(items.map((i) => i.category))).filter(Boolean).sort(), [items]);
+  // استخراج لیست گزینه‌های فیلتر از کل کاتالوگ
+  const allCarBrands = useMemo(
+    () => Array.from(new Set(props.initialItems.map((i) => i.brand))).filter(Boolean).sort(),
+    [props.initialItems],
+  );
+
+  const allCategories = useMemo(
+    () => Array.from(new Set(props.initialItems.map((i) => i.category))).filter(Boolean).sort(),
+    [props.initialItems],
+  );
+
+  const allPartBrands = useMemo(
+    () => Array.from(new Set(props.initialItems.map((i) => i.partBrand))).filter(Boolean).sort() as string[],
+    [props.initialItems],
+  );
+
+  const allModels = useMemo(() => {
+    const list = props.initialItems
+      .filter((i) => !carBrand || i.brand === carBrand)
+      .map((i) => i.model)
+      .filter(Boolean) as string[];
+    return Array.from(new Set(list)).sort();
+  }, [props.initialItems, carBrand]);
+
+  // شمارش تعداد فیلترهای فعال
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (carBrand) count++;
+    if (carModel) count++;
+    if (category) count++;
+    if (partBrand) count++;
+    if (inStockOnly) count++;
+    if (dateFilter !== "all") count++;
+    if (sort !== "default") count++;
+    return count;
+  }, [carBrand, carModel, category, partBrand, inStockOnly, dateFilter, sort]);
+
+  const resetAllFilters = () => {
+    setQuery("");
+    setCarBrand("");
+    setCarModel("");
+    setCategory("");
+    setPartBrand("");
+    setInStockOnly(false);
+    setDateFilter("all");
+    setSort("default");
+  };
 
   // افزودن به سبد خرید چندقلمی
   const addToCart = (item: CatalogItem, qtyToAdd?: number) => {
@@ -205,13 +266,13 @@ export function CatalogBrowser(props: {
       )}
 
       {/* سر صفحه و وضعیت تخفیف‌ها */}
-      <div className="flex items-center justify-between gap-4 flex-wrap pb-2 border-b border-slate-200">
+      <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-slate-200">
         <div>
           <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900">
-            کاتالوگ و ثبت سفارش همکار
+            کاتالوگ قطعات یدکی خودرو
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-            تأمین دست‌اول قطعات یدکی با قیمت مصوب، تخفیف طبقاتی و تیراژ عمده
+            فیلتر پیشرفته بر اساس خودرو، مدل، قسمت فنی، برند سازنده قطعه و تاریخ ورود
           </p>
         </div>
 
@@ -222,7 +283,7 @@ export function CatalogBrowser(props: {
           </div>
           {props.customerDiscount > 0 && (
             <div className="border border-slate-200 rounded-lg px-3 py-1.5 bg-white shadow-2xs">
-              <span className="text-slate-500 font-medium">تخفیف اختصاصی: </span>
+              <span className="text-slate-500 font-medium">تخفیف همکار: </span>
               <b className="text-blue-600 nums font-bold text-sm">{toFaDigits(props.customerDiscount)}٪</b>
             </div>
           )}
@@ -240,40 +301,87 @@ export function CatalogBrowser(props: {
         </div>
       </div>
 
-      {/* فیلتر سریع برند خودروها (چیپس‌های لمسی مدرن) */}
-      <div className="mt-4 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-        <button
-          onClick={() => setBrand("")}
-          className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-            brand === ""
-              ? "bg-slate-900 text-white shadow-xs font-bold"
-              : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
-          }`}
-        >
-          همه خودروها
-        </button>
-        {brands.map((b) => (
+      {/* ۱. چیپس‌های لمسی سریع برای برند خودروها */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
+          <span>انتخاب خودرو:</span>
+          {carBrand && (
+            <button onClick={() => setCarBrand("")} className="text-blue-600 hover:underline">
+              همه خودروها
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
           <button
-            key={b}
-            onClick={() => setBrand(b === brand ? "" : b)}
+            onClick={() => setCarBrand("")}
             className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-              brand === b
-                ? "bg-blue-600 text-white shadow-xs font-bold"
+              carBrand === ""
+                ? "bg-slate-900 text-white shadow-xs font-bold"
                 : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
             }`}
           >
-            {b}
+            همه خودروها
           </button>
-        ))}
+          {allCarBrands.map((b) => (
+            <button
+              key={b}
+              onClick={() => setCarBrand(b === carBrand ? "" : b)}
+              className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
+                carBrand === b
+                  ? "bg-blue-600 text-white shadow-xs font-bold"
+                  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {b}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* جست‌وجو و انتخاب دسته‌بندی */}
-      <div className="mt-3 flex flex-col gap-2.5 sm:flex-row">
-        <div className="relative flex-1">
+      {/* ۲. چیپس‌های لمسی سریع برای قسمت‌ها و بخش‌های فنی خودرو */}
+      <div className="mt-3">
+        <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
+          <span>قسمت و بخش خودرو:</span>
+          {category && (
+            <button onClick={() => setCategory("")} className="text-blue-600 hover:underline">
+              همه قسمت‌ها
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+          <button
+            onClick={() => setCategory("")}
+            className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
+              category === ""
+                ? "bg-blue-50 text-blue-700 border border-blue-200 font-bold"
+                : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+            }`}
+          >
+            همه قسمت‌ها
+          </button>
+          {allCategories.map((c) => (
+            <button
+              key={c}
+              onClick={() => setCategory(c === category ? "" : c)}
+              className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
+                category === c
+                  ? "bg-blue-600 text-white shadow-xs font-bold"
+                  : "bg-white border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50"
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ۳. نوار جست‌وجو و دکمه بازکردن فیلترهای پیشرفته */}
+      <div className="mt-4 flex flex-col gap-2.5 sm:flex-row items-center">
+        <div className="relative flex-1 w-full">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="جست‌وجو بر اساس نام قطعه، کد فنی SKU، کد OEM یا مدل خودرو..."
+            placeholder="جست‌وجو با نام قطعه، کد فنی SKU، کد OEM یا قطعه‌ساز..."
             className="input py-2.5 text-xs sm:text-sm pl-8 border-slate-300 focus:border-blue-600 rounded-lg bg-white"
             autoComplete="off"
           />
@@ -287,19 +395,199 @@ export function CatalogBrowser(props: {
             </button>
           )}
         </div>
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="input sm:w-48 text-xs border-slate-300 focus:border-blue-600 rounded-lg bg-white"
+
+        {/* کلید فیلترهای تکمیلی (برند سازنده، مدل، تاریخ و مرتب‌سازی) */}
+        <button
+          onClick={() => setShowAdvancedFilters((prev) => !prev)}
+          className={`btn text-xs px-4 py-2.5 rounded-lg flex items-center gap-2 border transition-all w-full sm:w-auto shrink-0 ${
+            activeFiltersCount > 0 || showAdvancedFilters
+              ? "bg-blue-50 border-blue-300 text-blue-700 font-bold"
+              : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
+          }`}
         >
-          <option value="">همه دسته‌ها (ترمز، موتور...)</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+          <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+          </svg>
+          <span>فیلترهای پیشرفته و مرتب‌سازی</span>
+          {activeFiltersCount > 0 && (
+            <span className="size-5 rounded-full bg-blue-600 text-white grid place-items-center text-[10px] font-bold nums">
+              {toFaDigits(activeFiltersCount)}
+            </span>
+          )}
+        </button>
       </div>
+
+      {/* ۴. پنل کشویی فیلترهای پیشرفته (برند قطعه‌ساز، مدل خودرو، تاریخ، وضعیت موجودی و مرتب‌سازی) */}
+      {showAdvancedFilters && (
+        <div className="mt-3 p-4 sm:p-5 card bg-white border border-slate-200 rounded-xl shadow-xs space-y-4 animate-in fade-in slide-in-from-top-2 duration-150">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+            <span className="font-bold text-xs sm:text-sm text-slate-800">
+              تنظیمات فیلترهای تخصصی و مرتب‌سازی
+            </span>
+            <button
+              onClick={resetAllFilters}
+              className="text-xs text-rose-600 hover:underline font-medium"
+            >
+              پاک‌سازی همه فیلترها
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 text-xs">
+            {/* فیلتر برند سازنده قطعه */}
+            <div>
+              <label className="label block mb-1">برند سازنده قطعه (پارت برند):</label>
+              <select
+                value={partBrand}
+                onChange={(e) => setPartBrand(e.target.value)}
+                className="input text-xs border-slate-300 rounded-lg bg-white"
+              >
+                <option value="">همه برندهای سازنده</option>
+                {allPartBrands.map((pb) => (
+                  <option key={pb} value={pb}>
+                    {pb}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* فیلتر مدل خودرو */}
+            <div>
+              <label className="label block mb-1">مدل دقیق خودرو:</label>
+              <select
+                value={carModel}
+                onChange={(e) => setCarModel(e.target.value)}
+                className="input text-xs border-slate-300 rounded-lg bg-white"
+              >
+                <option value="">همه مدل‌ها</option>
+                {allModels.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* فیلتر تاریخ ورود به انبار */}
+            <div>
+              <label className="label block mb-1">تاریخ ورود به انبار:</label>
+              <select
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="input text-xs border-slate-300 rounded-lg bg-white"
+              >
+                <option value="all">همه زمان‌ها</option>
+                <option value="week">اقلام جدید (۷ روز اخیر)</option>
+                <option value="month">اقلام ماه اخیر (۳۰ روز)</option>
+                <option value="quarter">سه ماه اخیر (۹۰ روز)</option>
+              </select>
+            </div>
+
+            {/* مرتب‌سازی */}
+            <div>
+              <label className="label block mb-1">مرتب‌سازی بر اساس:</label>
+              <select
+                value={sort}
+                onChange={(e) => setSort(e.target.value)}
+                className="input text-xs border-slate-300 rounded-lg bg-white font-medium"
+              >
+                <option value="default">پیش‌فرض (خودرو و گروه کالا)</option>
+                <option value="newest">جدیدترین قطعات اضافه شده</option>
+                <option value="price_asc">ارزان‌ترین به گران‌ترین</option>
+                <option value="price_desc">گران‌ترین به ارزان‌ترین</option>
+                <option value="stock_desc">بیشترین موجودی انبار</option>
+              </select>
+            </div>
+          </div>
+
+          {/* فیلتر فقط کالاهای موجود */}
+          <div className="pt-2 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-slate-700 font-medium">
+              <input
+                type="checkbox"
+                checked={inStockOnly}
+                onChange={(e) => setInStockOnly(e.target.checked)}
+                className="size-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>فقط نمایش قطعات موجود در انبار مرکزی</span>
+            </label>
+
+            <span className="nums text-xs text-slate-500">
+              تعداد نتایج منطبق: <b className="text-slate-900 font-bold">{toFaDigits(items.length)}</b> قلم کالا
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* برچسب‌های فیلترهای فعال با امکان حذف تک‌تک */}
+      {activeFiltersCount > 0 && (
+        <div className="mt-3 flex items-center gap-1.5 flex-wrap text-[11px]">
+          <span className="text-slate-500 font-medium">فیلترهای فعال:</span>
+
+          {carBrand && (
+            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200">
+              <span>خودرو: {carBrand}</span>
+              <button onClick={() => setCarBrand("")} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          {category && (
+            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200">
+              <span>بخش: {category}</span>
+              <button onClick={() => setCategory("")} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          {partBrand && (
+            <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md border border-blue-200">
+              <span>سازنده: {partBrand}</span>
+              <button onClick={() => setPartBrand("")} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          {carModel && (
+            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200">
+              <span>مدل: {carModel}</span>
+              <button onClick={() => setCarModel("")} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          {dateFilter !== "all" && (
+            <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-200">
+              <span>
+                تاریخ: {dateFilter === "week" ? "هفته اخیر" : dateFilter === "month" ? "ماه اخیر" : "سه ماه اخیر"}
+              </span>
+              <button onClick={() => setDateFilter("all")} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          {inStockOnly && (
+            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200">
+              <span>فقط موجود</span>
+              <button onClick={() => setInStockOnly(false)} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          {sort !== "default" && (
+            <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-800 px-2 py-0.5 rounded-md border border-slate-200">
+              <span>
+                مرتب‌سازی:{" "}
+                {sort === "newest"
+                  ? "جدیدترین"
+                  : sort === "price_asc"
+                  ? "ارزان‌ترین"
+                  : sort === "price_desc"
+                  ? "گران‌ترین"
+                  : "بیشترین موجودی"}
+              </span>
+              <button onClick={() => setSort("default")} className="hover:text-rose-600">✕</button>
+            </span>
+          )}
+
+          <button onClick={resetAllFilters} className="text-rose-600 hover:underline ms-1 font-medium">
+            حذف همه
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="mt-3 card border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 rounded-lg">
@@ -309,31 +597,36 @@ export function CatalogBrowser(props: {
 
       {/* جدول نمایش قطعات کاتالوگ */}
       <div className="mt-4 card overflow-hidden border-slate-200 shadow-2xs rounded-xl bg-white">
-        <div className="hidden md:grid grid-cols-[8rem_1.4fr_6rem_9.5rem_9.5rem] gap-2 px-5 py-3 border-b border-slate-200 bg-slate-50/90 text-xs font-semibold text-slate-600">
-          <span>کد فنی کالا</span>
+        <div className="hidden md:grid grid-cols-[8.5rem_1.4fr_6rem_9.5rem_9.5rem] gap-2 px-5 py-3 border-b border-slate-200 bg-slate-50/90 text-xs font-semibold text-slate-600">
+          <span>کد فنی و برند</span>
           <span>شرح قطعه و مشخصات</span>
           <span className="text-center">موجودی انبار</span>
           <span className="text-left">قیمت همکار</span>
-          <span className="text-center">سفارش</span>
+          <span className="text-center">اقدام سفارش</span>
         </div>
 
         {loading ? (
           <div className="p-14 text-center text-xs text-slate-500 flex flex-col items-center gap-2.5">
             <span className="size-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <span>در حال جست‌وجو در کاتالوگ...</span>
+            <span>در حال واکشی قطعات مطابق فیلترها...</span>
           </div>
         ) : items.length === 0 ? (
           <div className="p-14 text-center text-xs text-slate-500 space-y-2.5">
-            <p className="font-bold text-slate-800 text-base">قطعه‌ای مطابق با جست‌وجوی شما پیدا نشد.</p>
+            <p className="font-bold text-slate-800 text-base">قطعه‌ای مطابق با این فیلترها پیدا نشد.</p>
             <p className="text-slate-500">
-              می‌توانید قطعه دلخواه خود را در بخش استعلام چندردیفی (RFQ) ارسال نمایید تا برایتان قیمت‌گذاری شود.
+              می‌توانید فیلترها را حذف کنید، یا قطعه مورد نظر را در استعلام چندردیفی (RFQ) ثبت نمایید.
             </p>
-            <button
-              onClick={() => router.push("/inquiries")}
-              className="btn btn-brass text-xs px-4 py-2 mt-2"
-            >
-              ثبت استعلام این قطعه (RFQ)
-            </button>
+            <div className="flex items-center justify-center gap-2 mt-2">
+              <button onClick={resetAllFilters} className="btn btn-ghost text-xs px-4 py-2">
+                پاک‌سازی فیلترها
+              </button>
+              <button
+                onClick={() => router.push("/inquiries")}
+                className="btn btn-brass text-xs px-4 py-2"
+              >
+                ثبت استعلام (RFQ)
+              </button>
+            </div>
           </div>
         ) : (
           <ul className="divide-y divide-slate-100">
@@ -344,13 +637,18 @@ export function CatalogBrowser(props: {
               return (
                 <li
                   key={item.id}
-                  className="p-3.5 sm:px-5 sm:py-4 md:grid md:grid-cols-[8rem_1.4fr_6rem_9.5rem_9.5rem] md:items-center gap-2 hover:bg-slate-50/60 transition-colors"
+                  className="p-3.5 sm:px-5 sm:py-4 md:grid md:grid-cols-[8.5rem_1.4fr_6rem_9.5rem_9.5rem] md:items-center gap-2 hover:bg-slate-50/60 transition-colors"
                 >
-                  {/* کد فنی */}
-                  <div className="flex items-center gap-2">
-                    <span className="nums text-[11px] font-mono font-semibold text-slate-700 border border-slate-200 rounded px-2 py-0.5 bg-slate-50">
+                  {/* کد فنی و سازنده */}
+                  <div className="flex flex-col gap-1">
+                    <span className="nums text-[11px] font-mono font-semibold text-slate-700 border border-slate-200 rounded px-2 py-0.5 bg-slate-50 self-start">
                       {item.sku}
                     </span>
+                    {item.partBrand && (
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200/60 rounded px-1.5 py-0.2 self-start">
+                        {item.partBrand}
+                      </span>
+                    )}
                     {item.oemCode && (
                       <span className="text-[10px] text-slate-400 font-mono hidden lg:inline">
                         OEM: {item.oemCode}
@@ -362,11 +660,11 @@ export function CatalogBrowser(props: {
                   <div className="mt-1 md:mt-0 min-w-0">
                     <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
                     <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
-                      <span className="font-semibold text-slate-700">{item.brand}</span>
+                      <span className="font-semibold text-slate-800">{item.brand}</span>
                       {item.model && <span>· {item.model}</span>}
-                      <span>· {item.category}</span>
+                      <span className="text-slate-400">· {item.category}</span>
                       {item.packSize > 1 && (
-                        <span className="text-blue-700 bg-blue-50 border border-blue-200/60 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
+                        <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
                           بسته {toFaDigits(item.packSize)} تایی
                         </span>
                       )}
@@ -412,7 +710,6 @@ export function CatalogBrowser(props: {
 
                   {/* دکمه‌های اقدام خرید */}
                   <div className="mt-3 md:mt-0 flex items-center gap-2 justify-end">
-                    {/* دکمه افزودن به سبد */}
                     <button
                       onClick={() => addToCart(item)}
                       disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
@@ -426,7 +723,6 @@ export function CatalogBrowser(props: {
                       {inCart ? `✓ در سبد (${toFaDigits(inCart.qty)})` : "+ سبد"}
                     </button>
 
-                    {/* دکمه خرید تکی فوری */}
                     <button
                       onClick={() => setSelectedQuickBuy(item)}
                       disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
@@ -501,7 +797,7 @@ export function CatalogBrowser(props: {
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-xs sm:text-sm text-slate-900 leading-snug">{c.item.name}</p>
                       <p className="text-[11px] text-slate-400 font-mono nums mt-0.5">
-                        {c.item.sku} · {c.item.brand}
+                        {c.item.sku} · {c.item.brand} {c.item.partBrand ? `· ${c.item.partBrand}` : ""}
                       </p>
                       <p className="text-xs text-blue-600 font-extrabold nums mt-1">
                         فی: {formatToman(c.item.price ?? 0)} تومان

@@ -12,11 +12,13 @@ export type CatalogSourceProduct = {
   brand: string;
   model: string | null;
   category: string;
+  partBrand: string | null;
   unit: string;
   packSize: number;
   minQty: number;
   stockQty: number;
   imageUrl: string | null;
+  createdAt: Date;
   price: unknown; // Prisma.Decimal
   volumePrices: { qtyFrom: number; discountPercent: unknown }[];
 };
@@ -29,11 +31,13 @@ export type CatalogItem = {
   brand: string;
   model: string | null;
   category: string;
+  partBrand: string | null;
   unit: string;
   packSize: number;
   minQty: number;
   stockQty: number;
   imageUrl: string | null;
+  createdAt: string;
   price: number | null;
   priceBefore: number | null;
   discountPercent: number | null;
@@ -64,11 +68,13 @@ export function mapCatalog(
       brand: p.brand,
       model: p.model,
       category: p.category,
+      partBrand: p.partBrand ?? null,
       unit: p.unit,
       packSize: p.packSize,
       minQty: p.minQty,
       stockQty: p.stockQty,
       imageUrl: p.imageUrl,
+      createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt),
       price: single ? single.unitPrice : null,
       priceBefore: priceVisible ? Number(p.price) : null,
       discountPercent: single ? single.discountPercent : null,
