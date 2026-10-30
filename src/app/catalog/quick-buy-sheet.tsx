@@ -12,6 +12,7 @@ type PayMode = "proforma" | "wallet" | "gateway" | "split" | "credit";
 
 export function QuickBuySheet(props: {
   item: CatalogItem;
+  initialQty?: number;
   shipping: ShippingOption[];
   wallet: number;
   availableCredit: number;
@@ -21,9 +22,11 @@ export function QuickBuySheet(props: {
   onClose: () => void;
   onCreated: (orderId: string) => void;
 }) {
-  const { item } = props;
+  const { item, initialQty } = props;
 
-  const [qty, setQtyState] = useState(item.minQty);
+  const [qty, setQtyState] = useState(
+    initialQty ? Math.min(item.stockQty, Math.max(item.minQty, initialQty)) : item.minQty,
+  );
   const [shippingId, setShippingId] = useState(props.shipping[0]?.id ?? "");
   const [payMode, setPayMode] = useState<PayMode>("gateway");
   const [busy, setBusy] = useState(false);
