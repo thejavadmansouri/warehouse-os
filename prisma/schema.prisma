@@ -101,6 +101,8 @@ model Product {
   volumePrices VolumePrice[]
   orderItems   OrderItem[]
   rmaRequests  RmaRequest[]
+  warehouseStocks WarehouseStock[]
+  transferItems StockTransferItem[]
 
   @@index([brand, model, category])
   @@index([isActive])
@@ -441,5 +443,93 @@ model RmaRequest {
   @@index([orderId])
   @@map("rma_requests")
 }
+
+/// وضعیت‌های حواله جابجایی کالا بین انبارها
+enum StockTransferStatus {
+  DRAFT       // پیش‌نویس حواله
+  IN_TRANSIT  // بارگیری و در حال حمل بین انبارها
+  RECEIVED    // تخلیه و دریافت کامل در انبار مقصد
+  CANCELLED   // لغو شده
+}
+
+/// انبار فیزیکی (انبار مرکزی کرمان، انبارهای منطقه‌ای رفسنجان، سیرجان، جیرفت و ...)
+model Warehouse {
+  id             String           @id @default(cuid())
+  code           String           @unique // WH-KERMAN-CENTRAL, WH-RAF-01, ...
+  name           String           // نام انبار
+  city           String           // کرمان، رفسنجان، سیرجان، جیرفت و ...
+  address        String
+  phone          String?
+  managerName    String?          // نام انباردار مسئول
+  isCentral      Boolean          @default(false)
+  isActive       Boolean          @default(true)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  stocks         WarehouseStock[]
+  transfersOut   StockTransfer[]  @relation("TransferSource")
+  transfersIn    StockTransfer[]  @relation("TransferDest")
+
+  @@index([city])
+  @@map("warehouses")
+}
+
+/// موجودی قطعه به تفکیک انبار و موقعیت قفسه
+model WarehouseStock {
+  id            String    @id @default(cuid())
+  warehouseId   String
+  warehouse     Warehouse @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  productId     String
+  product       Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  quantity      Int       @default(0) // موجودی فیزیکی
+  reservedQty   Int       @default(0) // رزرو شده در فاکتورها
+  shelfLocation String?   // لوکیشن قفسه: مثال A-12-3 (راهرو A، ردیف ۱۲، طبقه ۳)
+  minAlertQty   Int       @default(5)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([warehouseId, productId])
+  @@index([warehouseId])
+  @@index([productId])
+  @@map("warehouse_stocks")
+}
+
+/// حواله انتقال کالا بین انبارها (Warehouse Transfer)
+model StockTransfer {
+  id              String              @id @default(cuid())
+  number          String              @unique // TRF-1405-0001
+  fromWarehouseId String
+  fromWarehouse   Warehouse           @relation("TransferSource", fields: [fromWarehouseId], references: [id])
+  toWarehouseId   String
+  toWarehouse     Warehouse           @relation("TransferDest", fields: [toWarehouseId], references: [id])
+  status          StockTransferStatus @default(DRAFT)
+  driverName      String?             // نام راننده حامل
+  driverPhone     String?             // موبایل راننده
+  vehiclePlate    String?             // پلاک خودرو
+  dispatchedAt    DateTime?           // زمان خروج از انبار مبدأ
+  receivedAt      DateTime?           // زمان ورود به انبار مقصد
+  note            String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  items           StockTransferItem[]
+
+  @@index([fromWarehouseId])
+  @@index([toWarehouseId])
+  @@index([status])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String        @id @default(cuid())
+  transferId String
+  transfer   StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product       @relation(fields: [productId], references: [id])
+  qty        Int
+
+  @@map("stock_transfer_items")
+}
+
 
 

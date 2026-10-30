@@ -41,3 +41,16 @@ export async function nextRmaNumber(): Promise<string> {
   return `RMA-${year}-${String(counter.value).padStart(4, "0")}`;
 }
 
+export async function nextTransferNumber(): Promise<string> {
+  const year = shamsiYear();
+
+  const counter = await prisma.documentCounter.upsert({
+    where: { key: `transfer:${year}` },
+    create: { key: `transfer:${year}`, value: 1 },
+    update: { value: { increment: 1 } },
+  });
+
+  return `TRF-${year}-${String(counter.value).padStart(4, "0")}`;
+}
+
+

@@ -9,6 +9,7 @@ const tabs = [
   { href: "/admin", label: "مشتریان و همکاران" },
   { href: "/admin/products", label: "محصولات و موجودی" },
   { href: "/admin/import", label: "ورود گروهی (اکسل)" },
+  { href: "/admin/warehouses", label: "انبارها و شعب" },
   { href: "/admin/warehouse", label: "جمع‌آوری انبار" },
   { href: "/admin/orders", label: "اسناد و سفارش‌ها" },
   { href: "/admin/logistics", label: "لجستیک و باربری" },
