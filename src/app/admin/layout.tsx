@@ -8,6 +8,7 @@ import { LogoutButton } from "@/app/dashboard/logout-button";
 const tabs = [
   { href: "/admin", label: "مشتریان و همکاران" },
   { href: "/admin/products", label: "محصولات و موجودی" },
+  { href: "/admin/import", label: "ورود گروهی (اکسل)" },
   { href: "/admin/orders", label: "اسناد و پیش‌فاکتورها" },
   { href: "/admin/inquiries", label: "استعلام‌ها (RFQ)" },
   { href: "/admin/wallet", label: "کیف پول و اعتبار" },
