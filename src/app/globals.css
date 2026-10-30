@@ -1,38 +1,220 @@
 @import "tailwindcss";
 
+/*
+ * ─────────────────────────────────────────────
+ *  کاردو B2B — سیستم طراحی «دفتر و فاکتور»
+ *  کاغذ گرم، جوهر سرمه‌ای، خطوط مویی، اعداد جدولی
+ * ─────────────────────────────────────────────
+ */
+
 :root {
-  --background: #f8fafc;
-  --foreground: #14202e;
-  --primary: #0f2f4f;        /* blue پฤیتو — رنگ برند کاردو */
-  --primary-foreground: #ffffff;
-  --accent: #e8a413;         /* زرد خودرویی */
-  --muted: #64748b;
+  --paper: #f5f0e4;
+  --paper-raised: #fbf8f0;
+  --ink: #1b2530;
+  --ink-soft: #5b6875;
+  --rule: #d9cfb8;
+  --rule-strong: #c3b696;
+  --brass: #a9701c;
+  --brass-soft: #f0e2c6;
+  --ledger-green: #1f6b47;
+  --alarm: #a8362a;
+  --alarm-soft: #f7e3df;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-accent: var(--accent);
-  --color-muted: var(--muted);
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-brass: var(--brass);
+  --color-brass-soft: var(--brass-soft);
+  --color-ledger-green: var(--ledger-green);
+  --color-alarm: var(--alarm);
+  --color-alarm-soft: var(--alarm-soft);
   --font-sans: var(--font-vazirmatn), Vazirmatn, Tahoma, sans-serif;
 }
 
-:root {
-  color-scheme: light;
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
+  background-color: var(--paper);
+  /* بافت کاغذ: دو لایه‌ی بسیار محو */
+  background-image:
+    radial-gradient(rgba(120, 100, 60, 0.045) 1px, transparent 1px),
+    linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
+  background-size: 22px 22px, 100% 100%;
+  color: var(--ink);
   font-family: var(--font-sans);
+  font-feature-settings: "tnum";
 }
 
-/*
-   اعداد و قیمت‌ها همیشه با ارقام فارسی دیده می‌شوند — کلاس کمکی
-   (تبدیل واقعی با تابع toFaDigits در src/lib/digits.ts انجام می‌شود)
-*/
+/* اعداد همیشه جدولی و فارسی‌پسند */
 .nums {
-  font-feature-settings: "ss02";
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+@layer components {
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(27, 37, 48, 0.04);
+  }
+
+  .rule-y {
+    border-inline-start: 1px solid var(--rule);
+  }
+
+  .label {
+    font-size: 0.72rem;
+    color: var(--ink-soft);
+    letter-spacing: 0.02em;
+  }
+
+  .input {
+    width: 100%;
+    background: #fffdf7;
+    border: 1px solid var(--rule-strong);
+    border-radius: 3px;
+    padding: 0.6rem 0.7rem;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .input:focus {
+    border-color: var(--brass);
+    box-shadow: 0 0 0 3px rgba(169, 112, 28, 0.12);
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    border-radius: 3px;
+    padding: 0.62rem 1rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    transition: transform 0.08s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s;
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .btn:active {
+    transform: scale(0.985);
+  }
+
+  .btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--ink);
+    color: #f7f2e6;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: #0f1822;
+  }
+
+  .btn-brass {
+    background: var(--brass);
+    color: #fffaf0;
+  }
+
+  .btn-brass:hover:not(:disabled) {
+    background: #8e5c15;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: var(--rule-strong);
+    color: var(--ink);
+  }
+
+  .btn-ghost:hover:not(:disabled) {
+    background: rgba(169, 112, 28, 0.06);
+  }
+
+  .btn-quiet {
+    background: transparent;
+    color: var(--ink-soft);
+    padding: 0.35rem 0.5rem;
+    font-weight: 500;
+  }
+
+  .stamp {
+    border: 2px solid currentColor;
+    border-radius: 2px;
+    padding: 0.15rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    transform: rotate(-2deg);
+    display: inline-block;
+  }
+
+  .sheet-panel {
+    animation: sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .sheet-backdrop {
+    animation: fade-in 0.18s ease-out;
+  }
+
+  .row-enter {
+    animation: row-in 0.28s ease-out both;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* چاپ فاکتور — فقط کاغذ، بدون کروم */
+@media print {
+  body {
+    background: #fff !important;
+    background-image: none !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .print-sheet {
+    box-shadow: none !important;
+    border: none !important;
+  }
 }

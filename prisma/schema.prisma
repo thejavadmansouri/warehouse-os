@@ -1,5 +1,4 @@
-// کاردو B2B — اسکیمای فاز ۱ (ورود، مشتری، تأیید ادمین)
-// قیمت‌گذاری پله‌ای و استعلام در فازهای ۲–۴ اضافه می‌شوند.
+// کاردو B2B — اسکیمای کامل فاز ۲+ (کاتالوگ، خرید سریع، کیف پول، پرداخت، اعتبار)
 
 generator client {
   provider = "prisma-client-js"
@@ -13,40 +12,48 @@ datasource db {
 /// یک شرکت/مشتری عمده — ورود با موبایل یا یوزرنیم
 model Customer {
   id            String   @id @default(cuid())
-  companyName   String   // نام شرکت/فروشگاه
-  contactName   String   // نام نماینده
-  phone         String   @unique // شماره موبایل — مبنای ورود
-  username      String?  @unique // اختیاری: ورود با یوزرنیم/پسورد
-  passwordHash  String?  // پکنگ argon2 — فقط برای ورود یوزرنیم
-  nationalId    String?  // کد ملی نماینده
+  companyName   String
+  contactName   String
+  phone         String   @unique
+  username      String?  @unique
+  passwordHash  String?
+  nationalId    String?
   address       String?
-  status        CustomerStatus @default(PENDING) // تأیید دستی ادمین
+  status        CustomerStatus @default(PENDING)
   tierId        String?
   tier          Tier?    @relation(fields: [tierId], references: [id])
+  discountPercent Decimal @default(0) @db.Decimal(5, 2) // تخفیف اختصاصی مشتری
+  creditLimitOverride Decimal? @db.Decimal(18, 0) // جایگزین سقف طبقه
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
-  deletedAt     DateTime? // حذف نرم
+  deletedAt     DateTime?
 
+  orders        Order[]
+  walletTx      WalletTransaction[]
+  payments      Payment[]
+  inquiries     Inquiry[]
+
+  @@index([status])
   @@map("customers")
 }
 
-/// طبقه مشتری: طلایی/نقره‌ای/… — مبنای سقف اعتبار و تخفیف پایه
+/// طبقه مشتری — مبنای سقف اعتبار و تخفیف پایه
 model Tier {
   id          String   @id @default(cuid())
   name        String   @unique
-  creditLimit Decimal? @db.Decimal(18, 0) // سقف اعتبار (تومان)
-  baseDiscount Decimal? @db.Decimal(5, 2) // تخفیف پایه ٪
+  creditLimit Decimal? @db.Decimal(18, 0)
+  baseDiscount Decimal? @db.Decimal(5, 2)
   sortOrder   Int      @default(0)
   customers   Customer[]
 
   @@map("tiers")
 }
 
-/// کد OTP برای ورود با موبایل — در فاز ۱ ارزش «شبیه‌سازی‌شده» دارد
+/// کد OTP برای ورود با موبایل
 model OtpCode {
   id        String   @id @default(cuid())
   phone     String
-  code      String // هش‌شده ذخیره شود
+  code      String
   expiresAt DateTime
   consumedAt DateTime?
   createdAt DateTime @default(now())
@@ -55,27 +62,252 @@ model OtpCode {
   @@map("otp_codes")
 }
 
-/// ادمین پنل B2B — با یوزرنیم/پسورد وارد می‌شود (seed دستی)
+/// ادمین پنل B2B
 model AdminUser {
   id           String   @id @default(cuid())
   username     String   @unique
   passwordHash String
   name         String?
   createdAt    DateTime @default(now())
+  approvedOrders Order[] @relation("OrderApprover")
 
   @@map("admin_users")
 }
 
+/// محصول — کد فنی/OEM/بارکد، قیمت پایه، موجودی، بسته‌بندی
+model Product {
+  id          String  @id @default(cuid())
+  sku         String  @unique // کد فنی
+  oemCode     String?
+  barcode     String?
+  name        String
+  description String?
+  brand       String  // برند خودرو: پراید، ۲۰۶، …
+  model       String? // مدل خودرو
+  category    String  // دسته: ترمز، فیلتر، موتور، …
+  unit        String  @default("عدد") // واحد فروش
+  packSize    Int     @default(1) // گام سفارش (مثلاً جین ۴ عددی)
+  minQty      Int     @default(1) // حداقل سفارش
+  price       Decimal @db.Decimal(18, 0) // قیمت پایه به تومان
+  stockQty    Int     @default(0)
+  imageUrl    String?
+  isActive    Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  volumePrices VolumePrice[]
+  orderItems   OrderItem[]
+
+  @@index([brand, model, category])
+  @@index([isActive])
+  @@map("products")
+}
+
+/// تخفیف پله‌ای: از تعداد qtyFrom به بالا، این درصد تخفیف
+model VolumePrice {
+  id          String  @id @default(cuid())
+  productId   String
+  product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  qtyFrom     Int
+  discountPercent Decimal @db.Decimal(5, 2)
+
+  @@unique([productId, qtyFrom])
+  @@map("volume_prices")
+}
+
+/// روش ارسال — قابل مدیریت در آینده
+model ShippingMethod {
+  id        String  @id @default(cuid())
+  code      String  @unique // PICKUP | KERMAN_COURIER | FREIGHT
+  name      String
+  cost      Decimal @db.Decimal(18, 0) // کرایه ثابت (تومان) — باربری ۰ و پس‌کرایه
+  freeAbove Decimal? @db.Decimal(18, 0) // بالای این مبلغ رایگان
+  note      String?
+  isActive  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  orders    Order[]
+
+  @@map("shipping_methods")
+}
+
+/// پیش‌فاکتور / فاکتور
+model Order {
+  id            String   @id @default(cuid())
+  number        String   @unique // PF-1405-0001
+  customerId    String
+  customer      Customer @relation(fields: [customerId], references: [id])
+  status        OrderStatus @default(PROFORMA)
+  shippingId    String?
+  shipping      ShippingMethod? @relation(fields: [shippingId], references: [id])
+  shippingCost  Decimal  @default(0) @db.Decimal(18, 0)
+  subtotal      Decimal  @db.Decimal(18, 0)
+  discountTotal Decimal  @default(0) @db.Decimal(18, 0)
+  total         Decimal  @db.Decimal(18, 0)
+  paidWallet    Decimal  @default(0) @db.Decimal(18, 0)
+  paidGateway   Decimal  @default(0) @db.Decimal(18, 0)
+  creditAmount  Decimal  @default(0) @db.Decimal(18, 0)
+  note          String?
+  publicToken   String   @unique // لینک اشتراک بدون لاگین
+  expiresAt     DateTime? // رزرو موجودی
+  creditDueAt   DateTime?
+  approvedById  String?
+  approvedBy    AdminUser? @relation("OrderApprover", fields: [approvedById], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items         OrderItem[]
+  payments      Payment[]
+
+  @@index([customerId, createdAt])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String  @id @default(cuid())
+  orderId     String
+  order       Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product @relation(fields: [productId], references: [id])
+  name        String // عکس‌برداری از نام محصول در لحظه خرید
+  sku         String
+  unit        String
+  qty         Int
+  unitPrice   Decimal @db.Decimal(18, 0) // قیمت واحد پس از تخفیف
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  lineTotal   Decimal @db.Decimal(18, 0)
+
+  @@map("order_items")
+}
+
+/// تراکنش کیف پول (دفتر کل ساده، مبلغ علامت‌دار به تومان)
+model WalletTransaction {
+  id          String  @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  type        WalletTxType
+  amount      Decimal @db.Decimal(18, 0) // مثبت = افزایش، منفی = کاهش
+  balanceAfter Decimal @db.Decimal(18, 0)
+  refType     String? // ORDER | PAYMENT | MANUAL
+  refId       String?
+  idempotencyKey String @unique
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([customerId, createdAt])
+  @@map("wallet_transactions")
+}
+
+enum WalletTxType {
+  TOPUP_ONLINE
+  TOPUP_MANUAL
+  PURCHASE
+  REFUND
+  ADJUST
+}
+
+/// پرداخت آنلاین (درگاه) — برای سفارش یا شارژ کیف پول
+model Payment {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id])
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id])
+  purpose     PaymentPurpose
+  provider    String   @default("zarinpal")
+  amount      Decimal  @db.Decimal(18, 0) // تومان
+  authority   String?
+  refId       String?
+  status      PaymentStatus @default(PENDING)
+  idempotencyKey String @unique
+  createdAt   DateTime @default(now())
+  verifiedAt  DateTime?
+
+  @@index([customerId, createdAt])
+  @@map("payments")
+}
+
+enum PaymentPurpose {
+  ORDER
+  WALLET_TOPUP
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+}
+
+/// شمارنده اسناد — شماره‌گذاری پیش‌فاکتور بدون شکاف
+model DocumentCounter {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("document_counters")
+}
+
+enum OrderStatus {
+  PROFORMA // پیش‌فاکتور — منتظر پرداخت
+  AWAITING_CREDIT_APPROVAL // درخواست خرید اعتباری
+  APPROVED_CREDIT // اعتباری تأییدشده
+  PAID
+  CANCELLED
+  EXPIRED
+}
+
 enum CustomerStatus {
-  PENDING // در انتظار تأیید ادمین
+  PENDING
   REJECTED
   ACTIVE
   BLOCKED
 }
 
-/*
-  نکته‌های فاز بعد (به یاد بود — در Prisma سمت فاز ۲/۴ اضافه می‌شود):
-  - Product / Brand / VehicleModel / Fitment (اتصال قطعه به مدل خودرو)
-  - PriceRule: قیمت پله‌ای + تخفیف اختصاصی مشتری
-  - Inquiry (استعلام) و PreInvoice (پیش‌فاکتور) با ردیف‌ها و وضعیت‌ها
-*/
+/// استعلام قیمت B2B (RFQ) — چندردیفی، با امکان قیمت‌گذاری ادمین و تبدیل به سفارش
+model Inquiry {
+  id               String        @id @default(cuid())
+  number           String        @unique // RFQ-1405-0001
+  customerId       String
+  customer         Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  status           InquiryStatus @default(PENDING)
+  customerNote     String?
+  adminNote        String?
+  totalQuoted      Decimal?      @db.Decimal(18, 0)
+  convertedOrderId String?       // در صورت تبدیل به پیش‌فاکتور
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  items            InquiryItem[]
+
+  @@index([customerId, createdAt])
+  @@index([status])
+  @@map("inquiries")
+}
+
+model InquiryItem {
+  id              String   @id @default(cuid())
+  inquiryId       String
+  inquiry         Inquiry  @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  productId       String?
+  partName        String
+  sku             String?
+  brand           String?
+  model           String?
+  qty             Int      @default(1)
+  unit            String   @default("عدد")
+  targetPrice     Decimal? @db.Decimal(18, 0) // قیمت مدنظر مشتری (اختیاری)
+  quotedUnitPrice Decimal? @db.Decimal(18, 0) // قیمت پیشنهادی ادمین
+  lineTotal       Decimal? @db.Decimal(18, 0)
+  adminNote       String?
+
+  @@map("inquiry_items")
+}
+
+enum InquiryStatus {
+  PENDING   // در انتظار بررسی ادمین
+  ANSWERED  // قیمت‌گذاری شده توسط ادمین
+  CONVERTED // تبدیل‌شده به پیش‌فاکتور
+  REJECTED  // رد شده
+}
+

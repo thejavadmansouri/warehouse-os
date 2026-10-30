@@ -21,7 +21,13 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  if (pathname.startsWith("/dashboard")) {
+  const customerArea =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/catalog") ||
+    pathname.startsWith("/orders") ||
+    pathname.startsWith("/wallet");
+
+  if (customerArea) {
     if (session?.role !== "customer") {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
@@ -35,5 +41,11 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/dashboard/:path*"],
+  matcher: [
+    "/admin/:path*",
+    "/dashboard/:path*",
+    "/catalog/:path*",
+    "/orders/:path*",
+    "/wallet/:path*",
+  ],
 };

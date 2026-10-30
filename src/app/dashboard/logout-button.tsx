@@ -12,7 +12,7 @@ export function LogoutButton() {
         await fetch("/api/auth/logout", { method: "POST" });
         router.push("/login");
       }}
-      className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-muted hover:bg-slate-50 transition active:scale-[0.98]"
+      className="rounded-[2px] border border-rule px-3 py-1.5 text-xs text-ink-soft hover:bg-brass-soft/40 hover:text-ink transition-colors"
     >
       خروج
     </button>
