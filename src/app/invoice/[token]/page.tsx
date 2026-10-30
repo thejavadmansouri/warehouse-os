@@ -34,8 +34,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
   const isPaid = order.status === "PAID" || order.status === "APPROVED_CREDIT";
 
   return (
-    <main className="min-h-dvh py-4 sm:py-8 px-2 sm:px-4 flex justify-center bg-paper">
-      <div className="print-sheet card w-full max-w-[50rem] p-4 sm:p-8 bg-[#fffefb] border border-rule shadow-md text-ink">
+    <main className="min-h-dvh py-4 sm:py-8 px-2 sm:px-4 flex justify-center bg-slate-50">
+      <div className="print-sheet card w-full max-w-[52rem] p-4 sm:p-8 bg-white border border-slate-200 shadow-sm rounded-xl text-slate-900">
         {/* نوار بالایی ابزار در صفحه وب (مخفی در پرینت) */}
         <div className="no-print mb-6 pb-4 border-b border-rule flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
