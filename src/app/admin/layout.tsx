@@ -6,7 +6,9 @@ import { requireAdminPage } from "@/lib/server-account";
 import { LogoutButton } from "@/app/dashboard/logout-button";
 
 const tabs = [
+  { href: "/admin/analytics", label: "گزارشات و آمار" },
   { href: "/admin", label: "مشتریان و همکاران" },
+  { href: "/admin/tiers", label: "سطوح همکاری" },
   { href: "/admin/products", label: "محصولات و موجودی" },
   { href: "/admin/import", label: "ورود گروهی (اکسل)" },
   { href: "/admin/warehouses", label: "انبارها و شعب" },
