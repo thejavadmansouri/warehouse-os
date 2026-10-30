@@ -311,10 +311,10 @@ export function QuickBuySheet(props: {
                     key={mode}
                     onClick={() => setPayMode(mode)}
                     disabled={disabled}
-                    className={`h-11 text-xs px-2.5 rounded-xl border font-bold transition-all ${
+                    className={`h-11 text-xs px-2.5 rounded-xl border font-black transition-all ${
                       payMode === mode
-                        ? "border-blue-600 bg-blue-600 text-white shadow-xs"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        ? "border-blue-600 bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/25 scale-[1.02]"
+                        : "border-slate-200 bg-white text-slate-700 hover:border-blue-200"
                     } ${disabled ? "opacity-40 cursor-not-allowed" : ""}`}
                   >
                     {label}
@@ -337,10 +337,10 @@ export function QuickBuySheet(props: {
           <button
             onClick={submit}
             disabled={busy || (payMode === "wallet" && !canWallet) || qty < item.minQty}
-            className={`w-full h-12 rounded-xl text-sm font-bold shadow-md transition-all flex items-center justify-center gap-2 ${
+            className={`w-full h-12 rounded-xl text-sm font-black transition-all flex items-center justify-center gap-2 active:scale-98 ${
               payMode === "proforma"
-                ? "bg-slate-900 text-white hover:bg-slate-800"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+                ? "btn-blue"
+                : "btn-emerald"
             }`}
           >
             {busy ? "در حال ثبت سفارش..." : payLabels[payMode]}

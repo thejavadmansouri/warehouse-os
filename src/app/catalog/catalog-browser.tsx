@@ -290,10 +290,10 @@ export function CatalogBrowser(props: {
           {cart.length > 0 && (
             <button
               onClick={() => setShowCartDrawer(true)}
-              className="btn btn-brass text-xs px-3.5 py-1.5 flex items-center gap-2 shadow-xs"
+              className="btn btn-orange text-xs px-3.5 py-1.5 flex items-center gap-2 shadow-sm font-black rounded-lg"
             >
               <span>سبد سفارش</span>
-              <span className="nums font-bold bg-white text-blue-700 rounded-full px-1.5 py-0.5 text-[11px] leading-none">
+              <span className="nums font-black bg-white text-orange-700 rounded-full px-1.5 py-0.5 text-[11px] leading-none shadow-2xs">
                 {toFaDigits(cart.length)}
               </span>
             </button>
@@ -1120,9 +1120,9 @@ export function CatalogBrowser(props: {
                   type="button"
                   onClick={submitCartOrder}
                   disabled={checkoutBusy || cart.length === 0}
-                  className="btn btn-brass text-xs px-4 py-2.5 flex-2 font-bold rounded-lg shadow-sm"
+                  className="btn btn-emerald text-sm px-4 py-2.5 flex-2 font-black rounded-xl shadow-md shadow-emerald-500/25 active:scale-98"
                 >
-                  {checkoutBusy ? "در حال ثبت..." : "تأیید و صدور پیش‌فاکتور"}
+                  {checkoutBusy ? "در حال ثبت..." : "تأیید و صدور پیش‌فاکتور ←"}
                 </button>
               </div>
             </div>

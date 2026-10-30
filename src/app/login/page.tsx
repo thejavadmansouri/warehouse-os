@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
@@ -35,6 +35,27 @@ function LoginForm() {
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const codeInputRef = useRef<HTMLInputElement>(null);
+  const usernameInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (mode === "phone") {
+      if (step === "code") {
+        codeInputRef.current?.focus();
+      } else {
+        phoneInputRef.current?.focus();
+      }
+    } else {
+      if (!username) {
+        usernameInputRef.current?.focus();
+      } else if (!password) {
+        passwordInputRef.current?.focus();
+      }
+    }
+  }, [mode, step]);
 
   async function post(url: string, body: unknown) {
     setBusy(true);
@@ -102,12 +123,41 @@ function LoginForm() {
     }
   }
 
+  function handlePhoneSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!busy && phone.trim().length >= 10) {
+      requestOtp();
+    }
+  }
+
+  function handleCodeSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!busy && code.trim().length === 6) {
+      verifyOtp();
+    }
+  }
+
+  function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!username.trim()) {
+      usernameInputRef.current?.focus();
+      return;
+    }
+    if (!password) {
+      passwordInputRef.current?.focus();
+      return;
+    }
+    if (!busy) {
+      loginPassword();
+    }
+  }
+
   return (
     <main className="min-h-dvh flex flex-col bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200/80 bg-white/95 backdrop-blur-md">
         <div className="mx-auto w-full max-w-lg px-4 h-14 sm:h-15 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="size-8 grid place-items-center bg-slate-900 text-white text-sm font-bold rounded-lg shadow-sm">
+            <span className="size-8 grid place-items-center bg-blue-600 text-white text-sm font-bold rounded-lg shadow-sm">
               ک
             </span>
             <span className="font-extrabold tracking-tight text-base text-slate-900">
@@ -123,23 +173,23 @@ function LoginForm() {
       <div className="flex-1 grid place-items-center px-4 py-8">
         <div className="w-full max-w-sm">
           <div className="mb-5 text-center sm:text-start">
-            <span className="text-xs font-bold text-blue-600 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full inline-block">
+            <span className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full inline-block">
               پورتال همکاران و خریداران عمده
             </span>
-            <h1 className="text-xl sm:text-2xl font-extrabold tracking-tight text-slate-900 mt-2">ورود به حساب کاربری</h1>
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight text-slate-900 mt-2">ورود به حساب کاربری</h1>
             <p className="text-xs text-slate-500 mt-1">
               جهت مشاهده قیمت‌های عمده و ثبت سفارش وارد شوید.
             </p>
           </div>
 
-          <div className="card p-5 bg-white border border-slate-200 rounded-2xl shadow-xs">
-            <div className="grid grid-cols-2 border border-slate-200 rounded-xl overflow-hidden text-xs sm:text-sm font-bold p-0.5 bg-slate-100">
+          <div className="card p-5 bg-white border border-slate-200 rounded-2xl shadow-sm">
+            <div className="grid grid-cols-2 border border-slate-200 rounded-xl overflow-hidden text-xs sm:text-sm font-bold p-1 bg-slate-100/80 mb-4">
               <button
                 type="button"
                 onClick={() => setMode("phone")}
-                className={`py-2 rounded-lg transition-all ${
+                className={`py-2 rounded-lg transition-all font-bold ${
                   mode === "phone"
-                    ? "bg-white text-slate-900 shadow-2xs"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -148,9 +198,9 @@ function LoginForm() {
               <button
                 type="button"
                 onClick={() => setMode("password")}
-                className={`py-2 rounded-lg transition-all ${
+                className={`py-2 rounded-lg transition-all font-bold ${
                   mode === "password"
-                    ? "bg-white text-slate-900 shadow-2xs"
+                    ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
@@ -159,121 +209,161 @@ function LoginForm() {
             </div>
 
             {error && (
-              <p className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700">
+              <p className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700 font-medium">
                 {error}
               </p>
             )}
 
-            <div className="mt-4 flex flex-col gap-3">
+            <div>
               {mode === "phone" ? (
                 step === "phone" ? (
-                  <>
+                  <form onSubmit={handlePhoneSubmit} className="flex flex-col gap-3.5">
                     <label className="block">
-                      <span className="label block mb-1">شماره تلفن همراه</span>
+                      <span className="label block mb-1 font-bold text-slate-700">شماره تلفن همراه</span>
                       <input
+                        ref={phoneInputRef}
                         dir="ltr"
                         inputMode="tel"
                         autoComplete="tel"
                         placeholder="0912 345 6789"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="input text-center text-lg tracking-widest nums h-12 border-slate-300 rounded-xl"
+                        className="input text-center text-lg tracking-widest nums h-12 border-slate-300 rounded-xl font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                       />
                     </label>
                     <button
-                      onClick={requestOtp}
-                      disabled={busy || phone.length < 10}
-                      className="w-full h-12 rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 active:scale-98 text-white shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      type="submit"
+                      disabled={busy || phone.trim().length < 10}
+                      className="w-full h-12 rounded-xl text-sm font-black btn-blue active:scale-98 transition-all flex items-center justify-center gap-2"
                     >
-                      {busy ? "در حال ارسال…" : "دریافت کد تأیید"}
+                      {busy ? (
+                        "در حال ارسال…"
+                      ) : (
+                        <>
+                          <span>دریافت کد تأیید</span>
+                          <span className="text-[11px] font-normal px-2 py-0.5 rounded-md bg-white/20">اینتر ↵</span>
+                        </>
+                      )}
                     </button>
-                  </>
+                  </form>
                 ) : (
-                  <>
-                    {info && <p className="text-[11px] text-slate-500 leading-relaxed">{info}</p>}
+                  <form onSubmit={handleCodeSubmit} className="flex flex-col gap-3.5">
+                    {info && <p className="text-[11px] text-slate-500 leading-relaxed font-medium">{info}</p>}
                     {devCode && (
-                      <p
-                        dir="ltr"
-                        className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-center text-xl font-bold tracking-[0.3em] text-blue-700 nums"
+                      <button
+                        type="button"
+                        onClick={() => setCode(devCode)}
+                        title="کلیک برای درج خودکار کد تست"
+                        className="w-full text-center rounded-xl border border-blue-200 bg-blue-50/80 hover:bg-blue-100/80 p-2.5 transition-colors cursor-pointer group"
                       >
-                        {devCode}
-                      </p>
+                        <span className="block text-[10px] text-blue-600 font-bold mb-0.5">کد آزمایشی (کلیک جهت درج خودکار):</span>
+                        <span
+                          dir="ltr"
+                          className="text-2xl font-black tracking-[0.3em] text-blue-700 nums group-hover:scale-105 inline-block transition-transform"
+                        >
+                          {devCode}
+                        </span>
+                      </button>
                     )}
                     <label className="block">
-                      <span className="label block mb-1">کد ۶ رقمی</span>
+                      <span className="label block mb-1 font-bold text-slate-700">کد ۶ رقمی تأیید</span>
                       <input
+                        ref={codeInputRef}
                         dir="ltr"
                         inputMode="numeric"
                         maxLength={6}
                         placeholder="- - - - - -"
                         value={code}
                         onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                        className="input text-center text-2xl tracking-[0.4em] nums h-12 border-slate-300 rounded-xl"
+                        className="input text-center text-2xl tracking-[0.4em] nums h-12 border-slate-300 rounded-xl font-bold focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                       />
                     </label>
                     <button
-                      onClick={verifyOtp}
-                      disabled={busy || code.length !== 6}
-                      className="w-full h-12 rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 active:scale-98 text-white shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                      type="submit"
+                      disabled={busy || code.trim().length !== 6}
+                      className="w-full h-12 rounded-xl text-sm font-black btn-emerald active:scale-98 transition-all flex items-center justify-center gap-2"
                     >
-                      {busy ? "در حال بررسی…" : "ورود"}
+                      {busy ? (
+                        "در حال بررسی…"
+                      ) : (
+                        <>
+                          <span>ورود به سامانه</span>
+                          <span className="text-[11px] font-normal px-2 py-0.5 rounded-md bg-white/20">اینتر ↵</span>
+                        </>
+                      )}
                     </button>
                     <button
+                      type="button"
                       onClick={() => {
                         setStep("phone");
                         setDevCode(null);
                         setInfo(null);
                       }}
-                      className="text-xs text-slate-500 underline underline-offset-4 self-center"
+                      className="text-xs text-slate-500 hover:text-blue-600 underline underline-offset-4 self-center py-1 font-medium transition-colors"
                     >
                       تغییر شماره / ارسال دوباره
                     </button>
-                  </>
+                  </form>
                 )
               ) : (
-                <>
+                <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3.5">
                   <label className="block">
-                    <span className="label block mb-1">نام کاربری</span>
+                    <span className="label block mb-1 font-bold text-slate-700">نام کاربری</span>
                     <input
+                      ref={usernameInputRef}
                       dir="ltr"
                       autoComplete="username"
                       placeholder="username"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
-                      className="input h-11 border-slate-300 rounded-xl"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !password) {
+                          e.preventDefault();
+                          passwordInputRef.current?.focus();
+                        }
+                      }}
+                      className="input h-11 border-slate-300 rounded-xl font-medium focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                     />
                   </label>
                   <label className="block">
-                    <span className="label block mb-1">رمز عبور</span>
+                    <span className="label block mb-1 font-bold text-slate-700">رمز عبور</span>
                     <input
+                      ref={passwordInputRef}
                       dir="ltr"
                       type="password"
                       autoComplete="current-password"
                       placeholder="••••••••"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="input h-11 border-slate-300 rounded-xl"
+                      className="input h-11 border-slate-300 rounded-xl font-medium focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
                     />
                   </label>
                   <button
-                    onClick={loginPassword}
-                    disabled={busy || !username || !password}
-                    className="w-full h-12 rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 active:scale-98 text-white shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 mt-1"
+                    type="submit"
+                    disabled={busy || !username.trim() || !password}
+                    className="w-full h-12 rounded-xl text-sm font-black btn-blue active:scale-98 transition-all flex items-center justify-center gap-2 mt-1"
                   >
-                    {busy ? "در حال بررسی…" : "ورود"}
+                    {busy ? (
+                      "در حال بررسی…"
+                    ) : (
+                      <>
+                        <span>ورود به حساب</span>
+                        <span className="text-[11px] font-normal px-2 py-0.5 rounded-md bg-white/20">اینتر ↵</span>
+                      </>
+                    )}
                   </button>
-                  <p className="text-[10px] text-slate-400 text-center">
-                    ادمین و مشتریان با نام کاربری وارد می‌شوند.
+                  <p className="text-[11px] text-slate-500 text-center font-medium">
+                    ادمین و مشتریان با نام کاربری و رمز وارد می‌شوند.
                   </p>
-                </>
+                </form>
               )}
             </div>
           </div>
 
-          <p className="mt-4 text-center text-xs text-slate-500">
-            ثبت‌نام شرکت جدید؟{" "}
-            <Link href="/register" className="text-blue-600 font-bold hover:underline">
-              ثبت‌نام همکار عمده
+          <p className="mt-4 text-center text-xs text-slate-500 font-medium">
+            ثبت‌نام شرکت یا فروشگاه جدید؟{" "}
+            <Link href="/register" className="text-blue-600 font-extrabold hover:text-blue-700 hover:underline">
+              ثبت‌نام همکار عمده ←
             </Link>
           </p>
         </div>

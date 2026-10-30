@@ -70,7 +70,7 @@ export default function RegisterPage() {
             </div>
             <Link
               href="/login"
-              className="w-full h-12 rounded-xl text-sm font-bold bg-slate-900 hover:bg-slate-800 text-white shadow-sm flex items-center justify-center transition-all"
+              className="w-full h-12 rounded-xl text-sm font-black btn-blue active:scale-98 flex items-center justify-center transition-all"
             >
               ورود به حساب کاربری
             </Link>
@@ -96,9 +96,17 @@ export default function RegisterPage() {
             </p>
           </div>
 
-          <div className="card p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-xs flex flex-col gap-3">
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!busy && form.companyName && form.contactName && form.phone) {
+                submit();
+              }
+            }}
+            className="card p-5 sm:p-6 bg-white border border-slate-200 rounded-2xl shadow-sm flex flex-col gap-3.5"
+          >
             {error && (
-              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700">
+              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs text-rose-700 font-medium">
                 {error}
               </p>
             )}
@@ -110,13 +118,20 @@ export default function RegisterPage() {
             <Field label="شهر و نشانی فروشگاه (اختیاری)" value={form.address} onChange={set("address")} placeholder="کرمان، خیابان شریعتی، …" />
 
             <button
-              onClick={submit}
+              type="submit"
               disabled={busy || !form.companyName || !form.contactName || !form.phone}
-              className="w-full h-12 rounded-xl text-sm font-bold bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-sm transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 mt-1"
+              className="w-full h-12 rounded-xl text-sm font-black btn-blue active:scale-98 transition-all flex items-center justify-center gap-2 mt-1"
             >
-              {busy ? "در حال ثبت اطلاعات…" : "ثبت‌نام و افتتاح حساب"}
+              {busy ? (
+                "در حال ثبت اطلاعات…"
+              ) : (
+                <>
+                  <span>ثبت‌نام و افتتاح حساب</span>
+                  <span className="text-[11px] font-normal px-2 py-0.5 rounded-md bg-white/20">اینتر ↵</span>
+                </>
+              )}
             </button>
-          </div>
+          </form>
 
           <p className="mt-4 text-center text-xs text-slate-500">
             قبلاً حساب ساخته‌اید؟{" "}
