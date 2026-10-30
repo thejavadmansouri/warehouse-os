@@ -351,79 +351,79 @@ export function CatalogBrowser(props: {
           </button>
         </div>
 
-        {/* ۲. چیپس‌های لمسی سریع برای برند خودروها */}
-        <div className="pt-1 border-t border-slate-100">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
-            <span className="font-bold text-slate-700">انتخاب خودرو:</span>
-            {carBrand && (
-              <button onClick={() => setCarBrand("")} className="text-blue-600 hover:underline">
-                همه خودروها
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-            <button
-              onClick={() => setCarBrand("")}
-              className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-                carBrand === ""
-                  ? "bg-slate-900 text-white shadow-xs font-bold"
-                  : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
-              }`}
-            >
-              همه خودروها
-            </button>
-            {allCarBrands.map((b) => (
-              <button
-                key={b}
-                onClick={() => setCarBrand(b === carBrand ? "" : b)}
-                className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-                  carBrand === b
-                    ? "bg-blue-600 text-white shadow-xs font-bold"
-                    : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
-                }`}
-              >
-                {b}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* ۱. چیپس‌های لمسی سریع برای برند خودروها */}
+            <div className="pt-1 border-t border-slate-100">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
+                <span className="font-bold text-slate-700">انتخاب خودرو:</span>
+                {carBrand && (
+                  <button onClick={() => setCarBrand("")} className="text-blue-600 hover:underline font-bold">
+                    همه خودروها
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                <button
+                  onClick={() => setCarBrand("")}
+                  className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-bold ${
+                    carBrand === ""
+                      ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/25"
+                      : "bg-slate-50 border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-white"
+                  }`}
+                >
+                  همه خودروها
+                </button>
+                {allCarBrands.map((b) => (
+                  <button
+                    key={b}
+                    onClick={() => setCarBrand(b === carBrand ? "" : b)}
+                    className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-bold ${
+                      carBrand === b
+                        ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/25"
+                        : "bg-slate-50 border border-slate-200 text-slate-700 hover:border-blue-300 hover:bg-white"
+                    }`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* ۳. چیپس‌های لمسی سریع برای قسمت‌ها و بخش‌های فنی خودرو */}
-        <div>
-          <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
-            <span className="font-bold text-slate-700">قسمت و بخش خودرو:</span>
-            {category && (
-              <button onClick={() => setCategory("")} className="text-blue-600 hover:underline">
-                همه قسمت‌ها
-              </button>
-            )}
-          </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
-            <button
-              onClick={() => setCategory("")}
-              className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-                category === ""
-                  ? "bg-blue-50 text-blue-700 border border-blue-200 font-bold"
-                  : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
-              }`}
-            >
-              همه قسمت‌ها
-            </button>
-            {allCategories.map((c) => (
-              <button
-                key={c}
-                onClick={() => setCategory(c === category ? "" : c)}
-                className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-medium ${
-                  category === c
-                    ? "bg-blue-600 text-white shadow-xs font-bold"
-                    : "bg-slate-50 border border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-white"
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
+            {/* ۲. چیپس‌های لمسی سریع برای قسمت‌ها و بخش‌های فنی خودرو */}
+            <div>
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium mb-1.5">
+                <span className="font-bold text-slate-700">قسمت و بخش فنی خودرو:</span>
+                {category && (
+                  <button onClick={() => setCategory("")} className="text-orange-600 hover:underline font-bold">
+                    همه قسمت‌ها
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+                <button
+                  onClick={() => setCategory("")}
+                  className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-bold ${
+                    category === ""
+                      ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm shadow-orange-500/25"
+                      : "bg-slate-50 border border-slate-200 text-slate-700 hover:border-orange-300 hover:bg-white"
+                  }`}
+                >
+                  همه قسمت‌ها
+                </button>
+                {allCategories.map((c) => (
+                  <button
+                    key={c}
+                    onClick={() => setCategory(c === category ? "" : c)}
+                    className={`px-3.5 py-1.5 rounded-full shrink-0 transition-all font-bold ${
+                      category === c
+                        ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-sm shadow-orange-500/25"
+                        : "bg-slate-50 border border-slate-200 text-slate-700 hover:border-orange-300 hover:bg-white"
+                    }`}
+                  >
+                    {c}
+                  </button>
+                ))}
+              </div>
+            </div>
       </div>
 
       {/* ۴. پنل فیلترهای پیشرفته: در دسکتاپ پنل آکاردئونی و در موبایل Bottom Sheet استاندارد */}
@@ -816,10 +816,10 @@ export function CatalogBrowser(props: {
                         <div className="flex items-baseline gap-1">
                           {item.price !== null ? (
                             <>
-                              <span className="font-extrabold text-lg text-slate-900">
+                              <span className="font-black text-xl text-blue-700">
                                 {formatToman(item.price)}
                               </span>
-                              <span className="text-xs text-slate-500">تومان</span>
+                              <span className="text-xs text-slate-500 font-bold">تومان</span>
                             </>
                           ) : (
                             <span className="text-xs text-slate-400">پس از تأیید حساب</span>
@@ -833,13 +833,13 @@ export function CatalogBrowser(props: {
                       <button
                         onClick={() => addToCart(item)}
                         disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                        className={`h-11 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 border active:scale-98 ${
+                        className={`h-11 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 border active:scale-98 ${
                           inCart
-                            ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs"
+                            ? "bg-blue-50 border-blue-300 text-blue-700 shadow-2xs font-black"
                             : "bg-white border-slate-300 text-slate-700 hover:bg-slate-50"
                         }`}
                       >
-                        <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <svg className="size-4 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <circle cx="8" cy="21" r="1" />
                           <circle cx="19" cy="21" r="1" />
                           <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
@@ -850,7 +850,7 @@ export function CatalogBrowser(props: {
                       <button
                         onClick={() => setSelectedQuickBuy(item)}
                         disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                        className="h-11 rounded-lg text-xs font-bold bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:scale-98 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        className="h-11 rounded-xl text-xs font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm shadow-blue-500/25 hover:from-blue-700 hover:to-indigo-700 active:scale-98 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
                       >
                         <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
@@ -940,7 +940,7 @@ export function CatalogBrowser(props: {
                                 {formatToman(item.priceBefore)}
                               </span>
                             )}
-                            <span className="font-extrabold text-base text-slate-900">{formatToman(item.price)}</span>
+                            <span className="font-black text-base text-blue-700">{formatToman(item.price)}</span>
                             <span className="text-[11px] text-slate-400 font-normal ms-1">تومان</span>
                           </div>
                         ) : (
@@ -965,7 +965,7 @@ export function CatalogBrowser(props: {
                         <button
                           onClick={() => setSelectedQuickBuy(item)}
                           disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                          className="btn btn-brass text-xs px-3.5 py-1.5 rounded-lg font-bold shadow-xs"
+                          className="btn btn-blue text-xs px-3.5 py-1.5 rounded-lg font-bold shadow-xs hover:shadow-blue-500/20"
                         >
                           خرید فوری
                         </button>
@@ -997,9 +997,9 @@ export function CatalogBrowser(props: {
 
             <button
               onClick={() => setShowCartDrawer(true)}
-              className="btn btn-brass text-xs px-3 sm:px-4 py-2 font-bold shadow-sm hover:scale-102 transition-transform shrink-0"
+              className="btn btn-orange text-xs px-3.5 sm:px-5 py-2 font-black shadow-md shadow-orange-500/20 hover:scale-102 transition-transform shrink-0"
             >
-              مشاهده سبد
+              مشاهده سبد سفارش
             </button>
           </div>
         </div>

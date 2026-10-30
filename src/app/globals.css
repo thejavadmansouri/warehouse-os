@@ -10,20 +10,24 @@
  */
 
 :root {
-  --paper: #f8fafc;          /* Slate 50 — پس‌زمینه شفاف، تمیز و مدرن */
-  --paper-raised: #ffffff;   /* سفید خالص برای پنل‌ها، کارت‌ها و فرم‌ها */
-  --ink: #0f172a;            /* Slate 900 — مشکی سرمه‌ای صنعتی با ابهت و کنتراست بالا */
-  --ink-soft: #475569;       /* Slate 600 — متن ثانویه با خوانایی و کنتراست استاندارد */
-  --rule: #e2e8f0;           /* Slate 200 — خطوط مرزی مینیمال و شیک */
-  --rule-strong: #cbd5e1;    /* Slate 300 — حاشیه‌های کنترلی فرم‌ها */
-  --brass: #2563eb;          /* Blue 600 — آبی کبالت فناوری، اعتماد و لجستیک */
-  --brass-soft: #eff6ff;     /* Blue 50 — پس‌زمینه ملایم برای المان‌های فعال */
-  --ledger-green: #16a34a;   /* Green 600 — وضعیت موجودی و پرداخت موفق */
-  --ledger-green-soft: #f0fdf4; /* Green 50 */
-  --alarm: #dc2626;          /* Red 600 — ناموجودی، بدهی و خطا */
-  --alarm-soft: #fef2f2;     /* Red 50 */
-  --amber: #d97706;          /* Amber 600 — اعلان‌ها و تخفیف‌های ویژه */
-  --amber-soft: #fef3c7;     /* Amber 100 */
+  --paper: #f8fafc;          /* پس‌زمینه شفاف و پرانرژی */
+  --paper-raised: #ffffff;   /* سفید براق برای پنل‌ها و کارت‌ها */
+  --ink: #0b1329;            /* سرمه‌ای تیره عمیق با ابهت و کنتراست فوق‌العاده */
+  --ink-soft: #475569;       /* Slate 600 — متن ثانویه خوانا */
+  --rule: #e2e8f0;           /* حاشیه‌های تمیز */
+  --rule-strong: #cbd5e1;    /* خطوط مرزی کنترلی */
+  --brass: #1d4ed8;          /* آبی کبالت پویا و درخشان */
+  --brass-soft: #eff6ff;     /* آبی ملایم */
+  --energy-orange: #ea580c;  /* نارنجی پرانرژی صنعتی برای تخفیف‌ها و اکشن‌های فوری */
+  --energy-orange-soft: #fff7ed;
+  --ledger-green: #059669;   /* سبز زمردی پرانرژی برای موجودی و موفقیت */
+  --ledger-green-soft: #ecfdf5;
+  --alarm: #dc2626;          /* قرمز براق برای هشدار */
+  --alarm-soft: #fef2f2;
+  --amber: #d97706;          /* طلایی پرانرژی برای سطوح و اعتبار */
+  --amber-soft: #fef3c7;
+  --violet: #6366f1;         /* بنفش صیادی و بارنامه */
+  --violet-soft: #eef2ff;
 }
 
 @theme inline {
@@ -35,6 +39,7 @@
   --color-rule-strong: var(--rule-strong);
   --color-brass: var(--brass);
   --color-brass-soft: var(--brass-soft);
+  --color-energy-orange: var(--energy-orange);
   --color-ledger-green: var(--ledger-green);
   --color-alarm: var(--alarm);
   --color-alarm-soft: var(--alarm-soft);
@@ -122,13 +127,51 @@ body {
   }
 
   .btn-brass {
-    background: var(--brass);
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     color: #ffffff;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25);
   }
 
   .btn-brass:hover:not(:disabled) {
-    background: #1d4ed8;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-blue {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    color: #ffffff;
+    box-shadow: 0 3px 10px rgba(37, 99, 235, 0.25);
+  }
+
+  .btn-blue:hover:not(:disabled) {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-orange {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+    color: #ffffff;
+    box-shadow: 0 3px 10px rgba(234, 88, 12, 0.25);
+  }
+
+  .btn-orange:hover:not(:disabled) {
+    background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%);
+    box-shadow: 0 4px 14px rgba(234, 88, 12, 0.35);
+    transform: translateY(-1px);
+  }
+
+  .btn-emerald {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: #ffffff;
+    box-shadow: 0 3px 10px rgba(5, 150, 105, 0.25);
+  }
+
+  .btn-emerald:hover:not(:disabled) {
+    background: linear-gradient(135deg, #059669 0%, #047857 100%);
+    box-shadow: 0 4px 14px rgba(5, 150, 105, 0.35);
+    transform: translateY(-1px);
   }
 
   .btn-ghost {

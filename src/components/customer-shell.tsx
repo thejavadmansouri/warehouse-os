@@ -42,12 +42,14 @@ export function CustomerShell(props: CustomerShellProps) {
       shortLabel: "کاتالوگ",
       badge: "۱۰ هزار قطعه",
       icon: (
-        <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect width="7" height="7" x="3" y="3" rx="1.5" />
-          <rect width="7" height="7" x="14" y="3" rx="1.5" />
-          <rect width="7" height="7" x="14" y="14" rx="1.5" />
-          <rect width="7" height="7" x="3" y="14" rx="1.5" />
-        </svg>
+        <span className="size-8 rounded-lg bg-blue-100 text-blue-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <rect width="7" height="7" x="3" y="3" rx="1.5" />
+            <rect width="7" height="7" x="14" y="3" rx="1.5" />
+            <rect width="7" height="7" x="14" y="14" rx="1.5" />
+            <rect width="7" height="7" x="3" y="14" rx="1.5" />
+          </svg>
+        </span>
       ),
     },
     {
@@ -56,10 +58,12 @@ export function CustomerShell(props: CustomerShellProps) {
       label: "سفارش‌ها و پیش‌فاکتورها",
       shortLabel: "سفارش‌ها",
       icon: (
-        <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="m9 11 3 3L22 4" />
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-        </svg>
+        <span className="size-8 rounded-lg bg-emerald-100 text-emerald-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="m9 11 3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+        </span>
       ),
     },
     {
@@ -68,13 +72,14 @@ export function CustomerShell(props: CustomerShellProps) {
       label: "استعلام قیمت (RFQ)",
       shortLabel: "استعلام",
       icon: (
-        <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-          <path d="M14 2v6h6" />
-          <line x1="16" x2="8" y1="13" y2="13" />
-          <line x1="16" x2="8" y1="17" y2="17" />
-          <line x1="10" x2="8" y1="9" y2="9" />
-        </svg>
+        <span className="size-8 rounded-lg bg-purple-100 text-purple-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+            <line x1="16" x2="8" y1="13" y2="13" />
+            <line x1="16" x2="8" y1="17" y2="17" />
+          </svg>
+        </span>
       ),
     },
     {
@@ -83,10 +88,12 @@ export function CustomerShell(props: CustomerShellProps) {
       label: "کیف پول و خط اعتبار",
       shortLabel: "کیف پول",
       icon: (
-        <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a8 8 0 0 1-8 8H5a2 2 0 0 1-2-2V6" />
-          <circle cx="18" cy="14" r="1" />
-        </svg>
+        <span className="size-8 rounded-lg bg-amber-100 text-amber-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a8 8 0 0 1-8 8H5a2 2 0 0 1-2-2V6" />
+            <circle cx="18" cy="14" r="1" />
+          </svg>
+        </span>
       ),
     },
     {
@@ -96,12 +103,14 @@ export function CustomerShell(props: CustomerShellProps) {
       shortLabel: "چک‌ها",
       badge: "تأمین اعتبار",
       icon: (
-        <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <rect width="20" height="12" x="2" y="6" rx="2" />
-          <line x1="2" x2="22" y1="10" y2="10" />
-          <path d="M6 14h2" />
-          <path d="M10 14h6" />
-        </svg>
+        <span className="size-8 rounded-lg bg-indigo-100 text-indigo-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <rect width="20" height="12" x="2" y="6" rx="2" />
+            <line x1="2" x2="22" y1="10" y2="10" />
+            <path d="M6 14h2" />
+            <path d="M10 14h6" />
+          </svg>
+        </span>
       ),
     },
     {
@@ -110,12 +119,14 @@ export function CustomerShell(props: CustomerShellProps) {
       label: "خدمات پس از فروش و مرجوعی (RMA)",
       shortLabel: "مرجوعی",
       icon: (
-        <svg className="size-5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-          <path d="M21 3v5h-5" />
-          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-          <path d="M8 16H3v5" />
-        </svg>
+        <span className="size-8 rounded-lg bg-rose-100 text-rose-700 grid place-items-center group-hover:scale-105 transition-transform">
+          <svg className="size-4.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+            <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+            <path d="M21 3v5h-5" />
+            <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+            <path d="M8 16H3v5" />
+          </svg>
+        </span>
       ),
     },
   ];
@@ -123,9 +134,12 @@ export function CustomerShell(props: CustomerShellProps) {
   const tier = props.tierName || "برنزی";
 
   return (
-    <div className="min-h-dvh flex flex-col bg-slate-50 text-slate-900 selection:bg-blue-600 selection:text-white" dir="rtl">
+    <div className="min-h-dvh flex flex-col bg-slate-100/70 text-slate-900 selection:bg-blue-600 selection:text-white" dir="rtl">
+      {/* نوار رنگی پرانرژی بالای صفحه */}
+      <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500 w-full shrink-0" />
+
       {/* هدر بالایی — نمایش مشخصات همکار در بالا سمت راست */}
-      <header className="border-b border-slate-200/90 bg-white sticky top-0 z-30 shadow-2xs">
+      <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
         <div className="w-full px-3 sm:px-6 h-16 flex items-center justify-between gap-3">
           {/* بخش ۱: بالا سمت راست — اطلاعات کامل همکار و دکمه باز کردن منو */}
           <div className="flex items-center gap-2 sm:gap-3.5 min-w-0">
@@ -133,7 +147,7 @@ export function CustomerShell(props: CustomerShellProps) {
             <button
               type="button"
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-lg shrink-0"
+              className="lg:hidden p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl shrink-0"
               aria-label="باز کردن منوی دسترسی"
             >
               <svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -143,27 +157,33 @@ export function CustomerShell(props: CustomerShellProps) {
               </svg>
             </button>
 
-            {/* کارت مشخصات همکار در بالا سمت راست */}
-            <div className="flex items-center gap-2 sm:gap-3 bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl px-2.5 sm:px-3 py-1.5 transition-colors">
-              <span className="size-9 grid place-items-center bg-blue-600 text-white rounded-lg font-bold text-sm shrink-0 shadow-2xs">
+            {/* کارت مشخصات همکار در بالا سمت راست با گرادینت پرانرژی */}
+            <div className="flex items-center gap-2.5 sm:gap-3 bg-gradient-to-l from-slate-50 to-blue-50/50 hover:to-blue-50 border border-blue-200/70 rounded-2xl px-3 py-1.5 transition-all shadow-xs group">
+              <span className="size-9.5 grid place-items-center bg-gradient-to-br from-blue-600 to-indigo-700 text-white rounded-xl font-extrabold text-sm shrink-0 shadow-sm shadow-blue-500/25 group-hover:scale-105 transition-transform">
                 {props.companyName.charAt(0) || "ک"}
               </span>
               <div className="min-w-0 flex flex-col leading-tight">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="font-extrabold text-xs sm:text-sm text-slate-900 truncate max-w-[140px] sm:max-w-[200px]">
+                  <span className="font-black text-xs sm:text-sm text-slate-900 truncate max-w-[140px] sm:max-w-[200px]">
                     {props.companyName}
                   </span>
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs ${
+                    tier === "طلایی"
+                      ? "bg-gradient-to-r from-amber-500 to-amber-600 text-white"
+                      : tier === "نقره‌ای"
+                      ? "bg-gradient-to-r from-slate-600 to-slate-700 text-white"
+                      : "bg-gradient-to-r from-orange-500 to-amber-600 text-white"
+                  }`}>
                     سطح {tier}
                     {props.tierDiscount ? ` (${toFaDigits(props.tierDiscount)}٪)` : ""}
                   </span>
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
-                  {props.contactName && <span className="truncate max-w-[100px]">{props.contactName}</span>}
+                <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 font-medium">
+                  {props.contactName && <span className="truncate max-w-[100px] text-slate-700">{props.contactName}</span>}
                   {props.phone && (
                     <>
                       <span>·</span>
-                      <span dir="ltr" className="font-mono nums">{toFaDigits(props.phone)}</span>
+                      <span dir="ltr" className="font-mono nums text-slate-600">{toFaDigits(props.phone)}</span>
                     </>
                   )}
                 </div>
@@ -173,33 +193,33 @@ export function CustomerShell(props: CustomerShellProps) {
 
           {/* بخش ۲: بالا سمت چپ — وضعیت مالی، لوگو و دکمه خروج */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            {/* کیف پول و خط اعتبار */}
+            {/* کیف پول و خط اعتبار با رنگ پرانرژی زمردی و طلایی */}
             <Link
               href="/wallet"
               prefetch={false}
-              className="flex items-center gap-2 border border-slate-200 hover:border-blue-400 bg-white hover:bg-blue-50/40 rounded-xl px-2.5 sm:px-3 py-1.5 text-xs transition-all shadow-2xs group"
+              className="flex items-center gap-2.5 border border-emerald-200/90 hover:border-emerald-300 bg-gradient-to-r from-emerald-50 to-teal-50/70 hover:to-emerald-100/50 rounded-2xl px-3 py-1.5 text-xs transition-all shadow-xs group"
               title="مشاهده جزئیات کیف پول و اعتبار"
             >
               <div className="flex flex-col items-end leading-tight">
-                <span className="text-[10px] text-slate-500 group-hover:text-blue-600">کیف پول:</span>
-                <span className="nums font-extrabold text-slate-900 group-hover:text-blue-700 text-xs sm:text-sm">
-                  {formatToman(props.wallet)} <span className="text-[10px] font-normal text-slate-400">ت</span>
+                <span className="text-[10px] text-emerald-800 font-bold group-hover:text-emerald-900">کیف پول همکار:</span>
+                <span className="nums font-black text-emerald-950 text-xs sm:text-sm">
+                  {formatToman(props.wallet)} <span className="text-[10px] font-normal text-emerald-700">ت</span>
                 </span>
               </div>
               {props.availableCredit !== undefined && props.availableCredit > 0 && (
-                <div className="hidden sm:flex flex-col items-end leading-tight border-r border-slate-200 pr-2">
-                  <span className="text-[10px] text-slate-500">اعتبار باز:</span>
-                  <span className="nums font-bold text-amber-700 text-xs">
-                    {formatToman(props.availableCredit)} <span className="text-[10px] font-normal text-slate-400">ت</span>
+                <div className="hidden sm:flex flex-col items-end leading-tight border-r border-emerald-200 pr-2">
+                  <span className="text-[10px] text-amber-800 font-bold">اعتبار فعال:</span>
+                  <span className="nums font-black text-amber-900 text-xs">
+                    {formatToman(props.availableCredit)} <span className="text-[10px] font-normal text-amber-700">ت</span>
                   </span>
                 </div>
               )}
             </Link>
 
             {/* لوگوی کوچک کاردو در سمت چپ */}
-            <Link href="/catalog" prefetch={false} className="hidden md:flex items-center gap-1.5 shrink-0 pl-1">
-              <span className="font-extrabold text-sm text-slate-900">کاردو</span>
-              <span className="text-[10px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded">B2B</span>
+            <Link href="/catalog" prefetch={false} className="hidden md:flex items-center gap-1.5 shrink-0 pl-1 group">
+              <span className="font-black text-base tracking-tight text-slate-900 group-hover:text-blue-600 transition-colors">کاردو</span>
+              <span className="text-[10px] font-black bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-1.5 py-0.5 rounded shadow-2xs">B2B</span>
             </Link>
 
             <LogoutButton />
@@ -210,23 +230,25 @@ export function CustomerShell(props: CustomerShellProps) {
       {/* چیدمان بدنه: منوی سمت راست (Sidebar) + فضای میانی اصلی (Center Content) */}
       <div className="flex-1 flex w-full">
         {/* منوی ستونی سمت راست در دسکتاپ (Fixed / Sticky Desktop Sidebar) */}
-        <aside className="hidden lg:flex flex-col w-68 shrink-0 bg-white border-l border-slate-200/90 min-h-[calc(100vh-4rem)] p-4 space-y-4">
+        <aside className="hidden lg:flex flex-col w-72 shrink-0 bg-white border-l border-slate-200/90 min-h-[calc(100vh-4.25rem)] p-4 space-y-4 shadow-2xs">
           {/* کارت وضعیت حساب همکار در بالای سایدبار راست */}
-          <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/80 space-y-2">
+          <div className="p-4 bg-gradient-to-br from-slate-900 via-slate-850 to-indigo-950 text-white rounded-2xl shadow-md space-y-2.5">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-800">حساب همکار تجاری</span>
-              <span className="size-2 rounded-full bg-emerald-500" title="حساب فعال"></span>
+              <span className="text-[11px] text-slate-300 font-medium">حساب تجاری رسمی همکار</span>
+              <span className="size-2 rounded-full bg-emerald-400 animate-pulse" title="حساب فعال"></span>
             </div>
-            <p className="text-xs font-black text-slate-900 truncate">{props.companyName}</p>
-            <div className="pt-1.5 border-t border-slate-200/60 flex items-center justify-between text-[11px] text-slate-500">
-              <span>تخفیف همکاری:</span>
-              <b className="nums text-blue-700 font-bold text-xs">{toFaDigits(props.tierDiscount || 0)}٪</b>
+            <p className="text-sm font-black truncate">{props.companyName}</p>
+            <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-400">تخفیف همکاری شما:</span>
+              <span className="nums font-black text-amber-400 text-sm bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                {toFaDigits(props.tierDiscount || 0)}٪ تخفیف
+              </span>
             </div>
           </div>
 
           {/* لیست پیوندهای منوی راست */}
           <nav className="flex-1 space-y-1 text-xs">
-            <span className="text-[10px] font-bold text-slate-400 px-3 uppercase tracking-wider block mb-1">
+            <span className="text-[10px] font-black text-slate-400 px-3 uppercase tracking-wider block mb-1.5">
               منوی اصلی کاردو B2B
             </span>
             {navItems.map((item) => {
@@ -236,18 +258,20 @@ export function CustomerShell(props: CustomerShellProps) {
                   key={item.key}
                   href={item.href}
                   prefetch={false}
-                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl font-bold transition-all ${
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl font-bold transition-all group ${
                     isActive
-                      ? "bg-blue-50 text-blue-700 border border-blue-200/80 shadow-2xs"
-                      : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                      ? "bg-gradient-to-l from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25"
+                      : "text-slate-700 hover:text-slate-900 hover:bg-slate-50"
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
-                    <span className={isActive ? "text-blue-600" : "text-slate-400"}>{item.icon}</span>
-                    <span>{item.label}</span>
+                    {item.icon}
+                    <span className="text-xs">{item.label}</span>
                   </div>
                   {item.badge && (
-                    <span className="text-[10px] font-normal bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                      isActive ? "bg-white/20 text-white" : "bg-blue-50 text-blue-700"
+                    }`}>
                       {item.badge}
                     </span>
                   )}
@@ -257,17 +281,17 @@ export function CustomerShell(props: CustomerShellProps) {
           </nav>
 
           {/* جعبه اطلاعات انبار مرکزی و پشتیبانی کرمان در پایین منو */}
-          <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200/70 text-xs space-y-1.5">
-            <div className="flex items-center gap-1.5 font-bold text-blue-900">
-              <span className="size-2 rounded-full bg-blue-600"></span>
+          <div className="p-3.5 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-blue-500/10 rounded-2xl border border-amber-300/60 text-xs space-y-1.5 shadow-2xs">
+            <div className="flex items-center gap-1.5 font-extrabold text-slate-900">
+              <span className="size-2 rounded-full bg-amber-500 animate-ping"></span>
               <span>انبار مرکزی استان کرمان</span>
             </div>
-            <p className="text-[11px] text-blue-800 leading-4">
-              ارسال روزانه باربری به کلیه شهرستان‌ها از هاب میدان ترمینال کرمان
+            <p className="text-[11px] text-slate-600 leading-4">
+              ارسال روزانه باربری به رفسنجان، سیرجان، بم، جیرفت و تمام شهرستان‌ها
             </p>
-            <p className="text-[11px] text-slate-600 pt-1 border-t border-blue-200/50 flex justify-between">
-              <span>پشتیبانی فروش:</span>
-              <span dir="ltr" className="font-mono font-bold nums">۰۳۴-۳۳۲۰۰۰۰۰</span>
+            <p className="text-[11px] text-slate-700 pt-1.5 border-t border-amber-200/60 flex justify-between font-bold">
+              <span>پشتیبانی و باربری:</span>
+              <span dir="ltr" className="font-mono font-black nums text-blue-700">۰۳۴-۳۳۲۰۰۰۰۰</span>
             </p>
           </div>
         </aside>
@@ -277,18 +301,18 @@ export function CustomerShell(props: CustomerShellProps) {
           <div className="fixed inset-0 z-50 lg:hidden flex">
             {/* پس‌زمینه نیمه‌شفاف تیره */}
             <div
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity"
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity"
               onClick={() => setMobileMenuOpen(false)}
             />
 
             {/* کشوی منو که از سمت راست باز می‌شود */}
-            <div className="relative mr-0 w-72 max-w-[85vw] bg-white h-full shadow-2xl z-10 flex flex-col p-4 space-y-4 overflow-y-auto">
+            <div className="relative mr-0 w-76 max-w-[85vw] bg-white h-full shadow-2xl z-10 flex flex-col p-4 space-y-4 overflow-y-auto">
               <div className="flex items-center justify-between border-b pb-3">
                 <div className="flex items-center gap-2">
-                  <span className="size-8 grid place-items-center bg-slate-900 text-white rounded-lg font-bold text-sm">
+                  <span className="size-8 grid place-items-center bg-blue-600 text-white rounded-lg font-bold text-sm">
                     ک
                   </span>
-                  <span className="font-extrabold text-sm text-slate-900">منوی سامانه کاردو</span>
+                  <span className="font-black text-sm text-slate-900">منوی سامانه کاردو B2B</span>
                 </div>
                 <button
                   type="button"
@@ -300,12 +324,12 @@ export function CustomerShell(props: CustomerShellProps) {
               </div>
 
               {/* کارت مشخصات همکار در کشوی موبایل */}
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                <span className="font-extrabold text-slate-900 block">{props.companyName}</span>
-                <p className="text-slate-500">{props.contactName} · <span dir="ltr" className="nums font-mono">{props.phone}</span></p>
-                <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 font-bold">
-                  <span className="text-slate-600">کیف پول:</span>
-                  <span className="nums text-blue-700">{formatToman(props.wallet)} ت</span>
+              <div className="p-3.5 bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-xl shadow-xs text-xs space-y-1.5">
+                <span className="font-black text-sm block">{props.companyName}</span>
+                <p className="text-slate-300">{props.contactName} · <span dir="ltr" className="nums font-mono text-amber-300">{props.phone}</span></p>
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800 font-bold">
+                  <span className="text-slate-300">موجودی کیف پول:</span>
+                  <span className="nums text-emerald-400 font-black">{formatToman(props.wallet)} ت</span>
                 </div>
               </div>
 
@@ -321,12 +345,12 @@ export function CustomerShell(props: CustomerShellProps) {
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center justify-between px-3 py-2.5 rounded-xl font-bold ${
                         isActive
-                          ? "bg-blue-50 text-blue-700 border border-blue-200/80"
+                          ? "bg-gradient-to-l from-blue-600 to-indigo-600 text-white shadow-xs"
                           : "text-slate-700 hover:bg-slate-100"
                       }`}
                     >
                       <div className="flex items-center gap-2.5">
-                        <span className={isActive ? "text-blue-600" : "text-slate-400"}>{item.icon}</span>
+                        {item.icon}
                         <span>{item.label}</span>
                       </div>
                     </Link>
@@ -335,7 +359,7 @@ export function CustomerShell(props: CustomerShellProps) {
               </nav>
 
               <div className="pt-2 border-t text-xs">
-                <p className="text-slate-500 text-[11px] mb-2">تلفن انبار کرمان: ۰۳۴-۳۳۲۰۰۰۰۰</p>
+                <p className="text-slate-500 text-[11px] mb-2 font-medium">پشتیبانی انبار کرمان: ۰۳۴-۳۳۲۰۰۰۰۰</p>
                 <LogoutButton />
               </div>
             </div>
@@ -362,7 +386,7 @@ export function CustomerShell(props: CustomerShellProps) {
               >
                 <div
                   className={`p-1 rounded-lg transition-transform ${
-                    isActive ? "bg-blue-50 text-blue-600 scale-105" : ""
+                    isActive ? "scale-105" : ""
                   }`}
                 >
                   {item.icon}
