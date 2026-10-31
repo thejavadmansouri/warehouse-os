@@ -19,18 +19,18 @@ const nextConfig: NextConfig = {
     config.watchOptions = {
       ...config.watchOptions,
       followSymlinks: false,
-      ignored: (filePath: string) => {
-        if (!filePath) return false;
-        const normalized = filePath.replace(/\\/g, "/");
-        // هر مسیری خارج از پوشه پروژه را نادیده بگیر تا تغییرات روت C:\ باعث ری‌لود نشود
-        if (!normalized.startsWith(workspaceRoot)) {
-          return true;
-        }
-        if (normalized.includes("/node_modules/") || normalized.includes("/.git/")) {
-          return true;
-        }
-        return false;
-      },
+      ignored: [
+        "**/node_modules/**",
+        "**/.git/**",
+        "**/.next/**",
+        "C:/*.sys",
+        "C:/*.tmp",
+        "C:/DumpStack.log.tmp",
+        "C:/System Volume Information/**",
+        "C:/pagefile.sys",
+        "C:/swapfile.sys",
+        "C:/hiberfil.sys",
+      ],
     };
     return config;
   },

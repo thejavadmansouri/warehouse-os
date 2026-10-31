@@ -111,8 +111,8 @@ export function WarehouseView() {
       {/* سربرگ مخصوص نسخه چاپی */}
       <div className="hidden print:block text-center border-b pb-4 mb-4">
         <h2 className="text-xl font-black">شرکت کاردو — برگه جمع‌آوری تجمیعی انبار مرکزی کرمان</h2>
-        <p className="text-xs text-slate-600 mt-1">
-          تاریخ صدور: {new Date().toLocaleDateString("fa-IR")} ساعت {new Date().toLocaleTimeString("fa-IR")} · شامل {toFaDigits(orders.length)} فاکتور تسویه‌شده
+        <p className="text-xs text-slate-600 mt-1" suppressHydrationWarning>
+          تاریخ صدور: {new Date().toLocaleDateString("fa-IR")} · شامل {toFaDigits(orders.length)} فاکتور تسویه‌شده
         </p>
       </div>
 

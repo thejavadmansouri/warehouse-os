@@ -6,6 +6,13 @@ import { prisma } from "@/lib/prisma";
 export async function GET(req: NextRequest) {
   const user = await currentUser(req);
   if (!user) return apiError(401, "ANON", "وارد نشده‌اید");
+  if (user.role === "admin") {
+    return NextResponse.json({
+      ok: true,
+      unreadCount: 0,
+      notifications: [],
+    });
+  }
   if (user.role !== "customer") return apiError(403, "CUSTOMER_ONLY", "مسیر مخصوص مشتریان است");
 
   const [notifications, unreadCount] = await Promise.all([
