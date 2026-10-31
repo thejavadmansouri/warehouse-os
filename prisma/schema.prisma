@@ -35,6 +35,7 @@ model Customer {
   cheques       Cheque[]
   rmaRequests   RmaRequest[]
   notifications Notification[]
+  stockAlerts   StockAlert[]
 
   @@index([status])
   @@map("customers")
@@ -106,6 +107,7 @@ model Product {
   rmaRequests  RmaRequest[]
   warehouseStocks WarehouseStock[]
   transferItems StockTransferItem[]
+  stockAlerts   StockAlert[]
 
   @@index([brand, model, category])
   @@index([isActive])
@@ -606,6 +608,21 @@ model AdminNotification {
 
   @@index([read, createdAt])
   @@map("admin_notifications")
+}
+
+/// اشتراک اطلاع‌رسانی موجود شدن کالا («موجود شد خبرم کن»)
+model StockAlert {
+  id         String    @id @default(cuid())
+  customerId String
+  productId  String
+  customer   Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  product    Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  notifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([customerId, productId])
+  @@index([productId, notifiedAt])
+  @@map("stock_alerts")
 }
 
 

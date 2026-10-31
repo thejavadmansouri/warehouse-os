@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/api-key-auth";
+import { notifyBackInStock } from "@/lib/stock-alerts";
 
 /*
  * وب‌سرویس به‌روزرسانی موجودی و قیمت قطعات از نرم‌افزار حسابداری
@@ -43,11 +44,17 @@ export async function POST(req: NextRequest) {
       if (Object.keys(updateData).length === 0) continue;
 
       try {
-        await prisma.product.update({
+        const prod = await prisma.product.update({
           where: { sku },
           data: updateData,
+          select: { id: true, stockQty: true },
         });
         updatedCount++;
+
+        // اطلاع‌رسانی خودکار به متقاضیان در صورت شارژ موجودی
+        if (typeof updateData.stockQty === "number" && updateData.stockQty > 0) {
+          notifyBackInStock(prod.id, updateData.stockQty).catch(() => {});
+        }
       } catch {
         errors.push(`کد قطعه ${sku} در پایگاه داده کاردو یافت نشد`);
       }

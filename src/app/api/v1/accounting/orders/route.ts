@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
 
   const formatted = orders.map((o) => ({
     orderId: o.id,
-    orderNumber: o.orderNumber,
+    orderNumber: o.number,
     status: o.status,
     createdAt: o.createdAt.toISOString(),
     customer: {
@@ -68,11 +68,11 @@ export async function GET(req: NextRequest) {
       address: o.customer.address,
       tier: o.customer.tier?.name,
     },
-    paymentMethod: o.paymentMethod,
+    paymentMethod: Number(o.paidWallet) > 0 ? "WALLET" : Number(o.creditAmount) > 0 ? "CREDIT" : "GATEWAY",
     totals: {
       subtotal: Number(o.subtotal),
-      discount: Number(o.discount),
-      shippingCost: Number(o.shippingCost),
+      discount: Number(o.discountTotal || 0),
+      shippingCost: Number(o.shippingCost || 0),
       finalAmount: Number(o.total),
     },
     items: o.items.map((item) => ({
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       oemCode: item.product.oemCode,
       name: item.product.name,
       unit: item.product.unit,
-      quantity: item.quantity,
+      quantity: item.qty,
       unitPrice: Number(item.unitPrice),
       totalPrice: Number(item.totalPrice),
     })),

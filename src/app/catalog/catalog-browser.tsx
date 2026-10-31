@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { formatToman, toFaDigits } from "@/lib/digits";
 import type { CatalogItem } from "@/lib/catalog";
 import { QuickBuySheet } from "./quick-buy-sheet";
@@ -63,6 +64,52 @@ export function CatalogBrowser(props: {
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addedToast, setAddedToast] = useState<string | null>(null);
+
+  // سفارش مجدد هوشمند و هشدارهای موجودی
+  const [smartReorderItems, setSmartReorderItems] = useState<any[]>([]);
+  const [showSmartReorder, setShowSmartReorder] = useState(true);
+  const [subscribedAlerts, setSubscribedAlerts] = useState<Record<string, boolean>>({});
+  const [subscribingId, setSubscribingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/customer/smart-reorder")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.ok && Array.isArray(d.items)) {
+          setSmartReorderItems(d.items);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function handleStockAlert(productId: string) {
+    setSubscribingId(productId);
+    try {
+      const res = await fetch("/api/catalog/stock-alert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId }),
+      });
+      const d = await res.json();
+      if (d.ok) {
+        setSubscribedAlerts((prev) => ({ ...prev, [productId]: true }));
+        setAddedToast(d.message);
+      }
+    } catch {}
+    finally {
+      setSubscribingId(null);
+    }
+  }
+
+  function handleAddAllSmartReorder() {
+    smartReorderItems.forEach((it) => {
+      const full = items.find((x) => x.id === it.id);
+      if (full) {
+        addToCart(full, it.suggestedQty);
+      }
+    });
+    setAddedToast("تمام اقلام پیشنهادی به سبد خرید اضافه شدند");
+  }
 
   const isInitialMount = useRef(true);
 
@@ -362,6 +409,15 @@ export function CatalogBrowser(props: {
               <b className="text-blue-600 nums font-bold text-sm">{toFaDigits(props.customerDiscount)}٪</b>
             </div>
           )}
+          <Link
+            href="/catalog/print"
+            prefetch={false}
+            className="btn bg-slate-900 hover:bg-slate-800 text-white text-xs px-3 py-1.5 flex items-center gap-1.5 rounded-lg shadow-sm font-bold active:scale-95 transition-all"
+            title="دانلود کاتالوگ چاپی و اکسل قیمت‌ها"
+          >
+            <span>🖨️</span>
+            <span>کاتالوگ چاپی / PDF</span>
+          </Link>
           {cart.length > 0 && (
             <button
               onClick={() => setShowCartDrawer(true)}
@@ -792,6 +848,68 @@ export function CatalogBrowser(props: {
         </div>
       )}
 
+      {/* بخش سفارش مجدد هوشمند بر اساس خریدهای پیشین */}
+      {smartReorderItems.length > 0 && showSmartReorder && (
+        <div className="mt-4 p-4 sm:p-5 bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-slate-50 border border-amber-300 rounded-2xl shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-base">🔄</span>
+              <div>
+                <h3 className="text-xs sm:text-sm font-black text-slate-900">
+                  سفارش مجدد هوشمند (اقلام پرتکرار شما در ماه‌های اخیر)
+                </h3>
+                <p className="text-[11px] text-slate-500 hidden sm:block">
+                  این اقلام بر اساس بیشترین تکرار خرید شما با تعداد پیشنهادی آماده ثبت سریع هستند.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleAddAllSmartReorder}
+                className="text-xs font-black bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 px-3 py-1.5 rounded-xl transition-all shadow-xs"
+              >
+                افزودن همه به سبد ({toFaDigits(smartReorderItems.length)} قلم)
+              </button>
+              <button
+                onClick={() => setShowSmartReorder(false)}
+                className="text-xs text-slate-400 hover:text-slate-600 px-1.5 py-1"
+                title="بستن بخش پیشنهادی"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+            {smartReorderItems.map((sItem) => (
+              <div
+                key={sItem.id}
+                className="p-3 bg-white border border-slate-200/90 rounded-xl flex items-center justify-between gap-2 shadow-2xs hover:border-amber-400 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-bold text-slate-900 truncate">{sItem.name}</div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    <span className="nums font-bold text-amber-700">{formatToman(sItem.finalPrice)} ت</span>
+                    <span className="mx-1">·</span>
+                    <span>پیشنهاد: <b className="nums text-slate-800">{toFaDigits(sItem.suggestedQty)}</b> {sItem.unit}</span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const full = items.find((x) => x.id === sItem.id);
+                    if (full) addToCart(full, sItem.suggestedQty);
+                  }}
+                  className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white shrink-0 active:scale-95 transition-all shadow-xs"
+                >
+                  + سبد
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* نمایش قطعات کاتالوگ: طراحی اختصاصی دوگانه (جدول متراکم برای دسکتاپ، کارت‌های لمسی مدرن برای موبایل) */}
       <div className="mt-4">
         {loading ? (
@@ -972,48 +1090,65 @@ export function CatalogBrowser(props: {
                       )}
                     </div>
 
-                    {/* دکمه‌های اقدام خرید */}
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      {inCart ? (
-                        <div className="h-11 rounded-xl px-2.5 text-xs font-black bg-blue-50 border border-blue-300 text-blue-800 flex items-center justify-between gap-1 shadow-2xs">
-                          <span className="truncate">در سبد: {toFaDigits(inCart.qty)} {item.unit}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeCartItem(item.id)}
-                            className="size-6 grid place-items-center text-rose-500 hover:text-rose-700 hover:bg-rose-100 rounded-md transition-colors font-bold text-xs"
-                            title="حذف از سبد"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ) : (
+                    {/* دکمه‌های اقدام خرید یا هشدار موجودی */}
+                    {item.stockQty <= 0 ? (
+                      <div className="pt-1">
                         <button
                           type="button"
-                          onClick={() => addToCart(item, currentQty)}
-                          disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                          className="h-11 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 active:scale-98 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          onClick={() => handleStockAlert(item.id)}
+                          disabled={subscribingId === item.id || subscribedAlerts[item.id]}
+                          className={`w-full h-11 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 active:scale-98 cursor-pointer ${
+                            subscribedAlerts[item.id]
+                              ? "bg-emerald-50 border border-emerald-300 text-emerald-800"
+                              : "bg-linear-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 shadow-md shadow-orange-500/20"
+                          }`}
                         >
-                          <svg className="size-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="8" cy="21" r="1" />
-                            <circle cx="19" cy="21" r="1" />
-                            <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
-                          </svg>
-                          <span>+ سبد ({toFaDigits(currentQty)})</span>
+                          <span>{subscribedAlerts[item.id] ? "✓ درخواست اطلاع‌رسانی شما ثبت شد" : "موجود شد به من اطلاع بده 🔔"}</span>
                         </button>
-                      )}
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        {inCart ? (
+                          <div className="h-11 rounded-xl px-2.5 text-xs font-black bg-blue-50 border border-blue-300 text-blue-800 flex items-center justify-between gap-1 shadow-2xs">
+                            <span className="truncate">در سبد: {toFaDigits(inCart.qty)} {item.unit}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeCartItem(item.id)}
+                              className="size-6 grid place-items-center text-rose-500 hover:text-rose-700 hover:bg-rose-100 rounded-md transition-colors font-bold text-xs"
+                              title="حذف از سبد"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => addToCart(item, currentQty)}
+                            disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
+                            className="h-11 rounded-xl text-xs font-black bg-slate-900 hover:bg-slate-800 active:scale-98 text-white shadow-xs transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                          >
+                            <svg className="size-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="8" cy="21" r="1" />
+                              <circle cx="19" cy="21" r="1" />
+                              <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" />
+                            </svg>
+                            <span>+ سبد ({toFaDigits(currentQty)})</span>
+                          </button>
+                        )}
 
-                      <button
-                        type="button"
-                        onClick={() => setSelectedQuickBuy({ item, qty: currentQty })}
-                        disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
-                        className="h-11 rounded-xl text-xs font-black btn-blue active:scale-98 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
-                      >
-                        <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                        </svg>
-                        <span>خرید فوری ({toFaDigits(currentQty)})</span>
-                      </button>
-                    </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedQuickBuy({ item, qty: currentQty })}
+                          disabled={!props.canOrder || item.stockQty <= 0 || item.price === null}
+                          className="h-11 rounded-xl text-xs font-black btn-blue active:scale-98 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        >
+                          <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                          </svg>
+                          <span>خرید فوری ({toFaDigits(currentQty)})</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1137,8 +1272,23 @@ export function CatalogBrowser(props: {
                           </button>
                         </div>
 
-                        {/* دکمه‌های اقدام سفارش */}
-                        {inCart ? (
+                        {/* دکمه‌های اقدام سفارش یا هشدار موجودی */}
+                        {item.stockQty <= 0 ? (
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleStockAlert(item.id)}
+                              disabled={subscribingId === item.id || subscribedAlerts[item.id]}
+                              className={`text-[11px] font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer active:scale-95 ${
+                                subscribedAlerts[item.id]
+                                  ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                                  : "bg-amber-50 hover:bg-amber-100 border-amber-300 text-amber-900 shadow-2xs"
+                              }`}
+                            >
+                              <span>{subscribedAlerts[item.id] ? "✓ ثبت شد" : "موجود شد خبرم کن 🔔"}</span>
+                            </button>
+                          </div>
+                        ) : inCart ? (
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span className="text-[11px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-1 rounded-lg">
                               در سبد

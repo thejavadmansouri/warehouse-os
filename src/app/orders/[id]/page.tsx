@@ -67,12 +67,16 @@ export default async function OrderPage({
           </div>
           <div className="text-end">
             <span className={`inline-block text-xs font-bold px-3 py-1 rounded-full ${toneClass[st.tone]}`}>{st.label}</span>
-            <p className="text-xs text-blue-600 mt-2">
-              <Link href={`/invoice/${order.publicToken}`} target="_blank" className="font-medium hover:underline flex items-center justify-end gap-1">
+            <div className="flex flex-col items-end gap-1.5 mt-2">
+              <Link href={`/invoice/${order.publicToken}`} target="_blank" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
                 <span>نسخه چاپی A4</span>
                 <span>↗</span>
               </Link>
-            </p>
+              <Link href={`/orders/${order.id}/tax-invoice`} target="_blank" className="text-xs font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors">
+                <span>📄 صورت‌حساب رسمی سامانه مودیان</span>
+                <span>↗</span>
+              </Link>
+            </div>
           </div>
         </div>
 
