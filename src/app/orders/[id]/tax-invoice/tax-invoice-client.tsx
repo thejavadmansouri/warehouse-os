@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { formatToman, toFaDigits } from "@/lib/digits";
+import { formatToman, toFaDigits, numberToTomanWords } from "@/lib/digits";
 import { faDate } from "@/lib/date";
 
 export type TaxInvoiceProps = {
@@ -279,6 +279,10 @@ export function TaxInvoiceClient({ order, seller, buyer, fiscalTaxId }: TaxInvoi
             <div>
               <span className="font-bold text-slate-900">وضعیت سند: </span>
               <span className="font-bold text-emerald-700">تایید شده و ثبت در کارپوشه سامانه مودیان</span>
+            </div>
+            <div className="pt-1.5 border-t border-slate-200">
+              <span className="font-bold text-slate-900">مبلغ به حروف: </span>
+              <span className="font-extrabold text-slate-900">{numberToTomanWords(finalOfficialTotal)}</span>
             </div>
           </div>
 

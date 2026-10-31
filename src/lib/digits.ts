@@ -34,7 +34,7 @@ const TEENS = [
 const TENS = ["", "", "بیست", "سی", "چهل", "پنجاه", "شصت", "هفتاد", "هشتاد", "نود"];
 const HUNDREDS = [
   "",
-  "یکصد",
+  "صد",
   "دویست",
   "سیصد",
   "چهارصد",
@@ -44,7 +44,7 @@ const HUNDREDS = [
   "هشتصد",
   "نهصد",
 ];
-const SCALES = ["", "هزار", "میلیون", "میلیارد", "تریلیون"];
+const SCALES = ["", "هزار", "میلیون", "میلیارد", "تریلیون", "کوآدریلیون"];
 
 function threeDigitsToWords(n: number): string {
   if (n === 0) return "";
@@ -64,8 +64,14 @@ function threeDigitsToWords(n: number): string {
   return parts.join(" و ");
 }
 
+/**
+ * تبدیل عدد به حروف فارسی استاندارد
+ * مثال: 5206000 → پنج میلیون و دویست و شش هزار
+ */
 export function numberToFaWords(input: NumericLike): string {
-  const raw = typeof input === "number" ? input : Math.round(Number(input.toString()));
+  if (input === null || input === undefined) return "";
+  const cleaned = String(input).replace(/[^\d.-]/g, "");
+  const raw = Math.round(Number(cleaned));
   if (!Number.isFinite(raw) || raw === 0) return "صفر";
   let n = Math.abs(raw);
   const chunks: string[] = [];
@@ -78,9 +84,19 @@ export function numberToFaWords(input: NumericLike): string {
       const scale = SCALES[scaleIdx] ? ` ${SCALES[scaleIdx]}` : "";
       chunks.unshift(words + scale);
     }
-    n = Math.floor(n / 100);
+    n = Math.floor(n / 1000);
     scaleIdx++;
   }
 
   return (raw < 0 ? "منفی " : "") + chunks.join(" و ");
+}
+
+/**
+ * تبدیل مبلغ ریالی/تومانی به حروف همراه با واحد «تومان»
+ * مثال: 5206000 → پنج میلیون و دویست و شش هزار تومان
+ */
+export function numberToTomanWords(input: NumericLike): string {
+  const words = numberToFaWords(input);
+  if (!words || words === "صفر") return "صفر تومان";
+  return `${words} تومان`;
 }

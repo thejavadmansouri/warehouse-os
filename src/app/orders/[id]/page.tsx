@@ -10,7 +10,7 @@ import { CustomerShell } from "@/components/customer-shell";
 import { AdminShell } from "@/components/admin/admin-shell";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { faDate, faDateTime } from "@/lib/date";
-import { formatToman, toFaDigits } from "@/lib/digits";
+import { formatToman, toFaDigits, numberToTomanWords } from "@/lib/digits";
 import { ORDER_STATUS } from "@/lib/status";
 import { SHIPMENT_STATUS_MAP, FREIGHT_PAYMENT_LABELS } from "@/lib/logistics";
 import { PayPanel } from "./pay-panel";
@@ -245,6 +245,9 @@ export default async function OrderPage({
               <span className="nums text-lg sm:text-xl font-extrabold text-blue-600">
                 {formatToman(order.total)} <span className="text-xs font-normal text-slate-500">تومان</span>
               </span>
+            </div>
+            <div className="text-left text-xs text-slate-500 font-medium">
+              مبلغ به حروف: {numberToTomanWords(order.total)}
             </div>
             {Number(order.paidWallet) > 0 && (
               <Row label="پرداخت‌شده از کیف پول" value={`${formatToman(order.paidWallet)} تومان`} tone="green" />

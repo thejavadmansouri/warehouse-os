@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { formatToman, toFaDigits } from "@/lib/digits";
+import { formatToman, toFaDigits, numberToTomanWords } from "@/lib/digits";
 import { faDateTime } from "@/lib/date";
 import { OrderProgressBar } from "./order-progress-bar";
 
@@ -336,6 +336,9 @@ export function OrderDetailsModal({
                   <div className="text-xs text-slate-500">مبلغ نهایی قابل پرداخت:</div>
                   <div className="text-lg sm:text-xl font-black text-slate-900 nums">
                     {formatToman(order.total)}
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                    {numberToTomanWords(order.total)}
                   </div>
                 </div>
               </div>
