@@ -6,6 +6,8 @@ import Link from "next/link";
 import { formatToman, toFaDigits } from "@/lib/digits";
 import type { CatalogItem } from "@/lib/catalog";
 import { QuickBuySheet } from "./quick-buy-sheet";
+import { BrandMarquee } from "@/components/ui/brand-marquee";
+import { CustomerKpiCards } from "@/components/customer/customer-kpi-cards";
 
 export type { CatalogItem };
 
@@ -386,6 +388,20 @@ export function CatalogBrowser(props: {
           <span>{addedToast}</span>
         </div>
       )}
+
+      {/* ۱. کارت‌های داشبورد گرافیکی همکار (KPI Cards) */}
+      <CustomerKpiCards
+        wallet={props.wallet}
+        availableCredit={props.availableCredit}
+        creditLimit={props.creditLimit}
+        tierDiscount={props.tierDiscount}
+        customerDiscount={props.customerDiscount}
+      />
+
+      {/* ۲. اسلایدر متحرک برندهای معتبر قطعه‌سازی */}
+      <div className="mb-6 rounded-2xl overflow-hidden shadow-2xs border border-slate-200/80">
+        <BrandMarquee onSelectBrand={(brandName) => setPartBrand(brandName)} />
+      </div>
 
       {/* سر صفحه و وضعیت تخفیف‌ها */}
       <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-slate-200">
@@ -996,6 +1012,28 @@ export function CatalogBrowser(props: {
                           </span>
                         )}
                       </div>
+
+                      {/* برچسب‌های حرارتی و زنده (Live Badges) */}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                        {item.stockQty > 15 && (
+                          <span className="text-[10px] font-black text-rose-700 bg-rose-50 border border-rose-200/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <span>🔥</span>
+                            <span>پرفروش هفته کرمان</span>
+                          </span>
+                        )}
+                        {item.priceBefore && item.priceBefore > (item.price ?? 0) && (
+                          <span className="text-[10px] font-black text-amber-800 bg-amber-50 border border-amber-300 px-2 py-0.5 rounded-md flex items-center gap-1">
+                            <span>⚡</span>
+                            <span>آفر نقدی</span>
+                          </span>
+                        )}
+                        {item.stockQty > 0 && (
+                          <span className="text-[10px] font-medium text-emerald-800 bg-emerald-50/80 border border-emerald-200 px-1.5 py-0.5 rounded-md flex items-center gap-1">
+                            <span>📦</span>
+                            <span>انبار مرکزی: آماده ارسال</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* ردیف قیمت */}
@@ -1205,6 +1243,28 @@ export function CatalogBrowser(props: {
                           {hasVolumeDiscount && (
                             <span className="text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
                               تخفیف تیراژ
+                            </span>
+                          )}
+                        </div>
+
+                        {/* برچسب‌های حرارتی و زنده در دسکتاپ */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {item.stockQty > 15 && (
+                            <span className="text-[9px] font-black text-rose-700 bg-rose-50 border border-rose-200/80 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
+                              <span>🔥</span>
+                              <span>پرفروش هفته کرمان</span>
+                            </span>
+                          )}
+                          {item.priceBefore && item.priceBefore > (item.price ?? 0) && (
+                            <span className="text-[9px] font-black text-amber-800 bg-amber-50 border border-amber-300 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
+                              <span>⚡</span>
+                              <span>آفر ویژه</span>
+                            </span>
+                          )}
+                          {item.stockQty > 0 && (
+                            <span className="text-[9px] font-medium text-emerald-800 bg-emerald-50/80 border border-emerald-200 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
+                              <span>📦</span>
+                              <span>انبار مرکزی</span>
                             </span>
                           )}
                         </div>

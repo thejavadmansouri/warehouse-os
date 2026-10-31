@@ -4,6 +4,7 @@ import { requireCustomer } from "@/lib/server-account";
 import { faDate } from "@/lib/date";
 import { toFaDigits } from "@/lib/digits";
 import Link from "next/link";
+import { PrintButton } from "@/app/invoice/[token]/print-button";
 
 export const instant = false;
 
@@ -43,13 +44,7 @@ export default async function ShippingLabelPage({
         >
           ← بازگشت
         </Link>
-        <button
-          onClick={() => {}} // via client script below
-          className="text-xs font-bold px-4 py-2 rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition-all shadow-md"
-          id="print-btn"
-        >
-          🖨️ چاپ لیبل باربری (۱۰×۱۵ سانتی‌متر)
-        </button>
+        <PrintButton />
       </div>
 
       <script

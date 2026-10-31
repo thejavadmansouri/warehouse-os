@@ -6,6 +6,7 @@ import { formatToman, toFaDigits } from "@/lib/digits";
 import { LogoutButton } from "@/app/dashboard/logout-button";
 import { NotificationBell } from "@/components/notification-bell";
 import { AnnouncementBanner } from "@/components/ui/announcement-banner";
+import { MarketTicker } from "@/components/ui/market-ticker";
 
 export type CustomerShellProps = {
   companyName: string;
@@ -174,6 +175,9 @@ export function CustomerShell(props: CustomerShellProps) {
 
       {/* بنر اطلاعیه فوری و سراسری کاردو */}
       <AnnouncementBanner target="CUSTOMER" />
+
+      {/* تابلوی زنده نوسانات بازار قطعات و لجستیک کرمان */}
+      <MarketTicker />
 
       {/* هدر بالایی — نمایش مشخصات همکار در بالا سمت راست */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
