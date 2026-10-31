@@ -1391,6 +1391,10 @@ export default function PosPage() {
         return;
       }
 
+      if (rows.length === 1) {
+        rows[0].quantity = rows[0].available;
+      }
+
       const payload: Partial<Cart> = {
         lines: rows,
         customer: c,
@@ -1407,9 +1411,9 @@ export default function PosPage() {
       // حساب باز: پولی پرداخت نشده — تنها راهِ برگشت، کسر از حساب. مشتریِ
       // بدهکار (مانده‌ی کلِ مثبت) هم پیش‌فرضش کسر از حساب است، حتی اگر خودِ
       // فاکتور نقدی تسویه شده باشد؛ پولش به صندوق رفته و طلبکار کردنش فقط
-      // اعتبارِ معلقِ گیج‌کننده می‌سازد.
+      // اعتبارِ معلقِ گیج‌کننده می‌سازد. در غیر این صورت پیش‌فرض CASH (نقدی) است.
       setRefundMethod(
-        data.isOpenAccount || (data.customerBalance ?? 0) > 0 ? "CREDIT" : "",
+        data.isOpenAccount || (data.customerBalance ?? 0) > 0 ? "CREDIT" : "CASH",
       );
       setReturnReason("");
       setShowCustomer(false);
@@ -2322,6 +2326,10 @@ export default function PosPage() {
           : undefined,
 
       find: { run: () => setShowInvoices(true) },
+      quickReturn: {
+        run: () => setShowInvoices(true),
+        label: "مرجوعی سریع",
+      },
       quotes: { run: () => setShowQuotes(true) },
       blankQuotes: {
         run: () => setShowBlankQuotes(true),
@@ -3311,6 +3319,37 @@ export default function PosPage() {
                 </div>
                 {returning && (
                   <>
+                    <div className="flex items-center gap-1.5 self-end pb-0.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs px-2.5 font-medium border-amber-500/40 text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-950/40"
+                        onClick={() => {
+                          setLines((prev) =>
+                            prev.map((l) => ({ ...l, quantity: l.available ?? 0 }))
+                          );
+                        }}
+                        title="مرجوع کردن تمام اقلام این فاکتور"
+                      >
+                        مرجوعی همه
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setLines((prev) =>
+                            prev.map((l) => ({ ...l, quantity: 0 }))
+                          );
+                        }}
+                        title="صفر کردن تعداد همه اقلام"
+                      >
+                        صفر
+                      </Button>
+                    </div>
+
                     <label className="flex w-40 shrink-0 flex-col gap-1 text-[10px] text-muted-foreground">
                       روش برگشت وجه
                       <select
@@ -3322,7 +3361,6 @@ export default function PosPage() {
                         title="روش برگشت وجه"
                         className="h-7 w-full rounded-md border bg-background px-2 text-xs disabled:opacity-60"
                       >
-                        <option value="">انتخاب روش</option>
                         <option value="CASH">نقدی از صندوق</option>
                         <option value="CARD">کارت‌خوان</option>
                         {returning.hasCustomer && (

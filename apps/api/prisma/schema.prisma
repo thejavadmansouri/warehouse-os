@@ -2095,7 +2095,7 @@ model ShopSettings {
   /// سایت تومان است چون همه‌ی رقبای اینترنتی تومان نشان می‌دهند و مشتری
   /// عددِ ریالی را اشتباه می‌خواند.
   storedUnit    CurrencyUnit @default(RIAL)
-  panelUnit     CurrencyUnit @default(RIAL)
+  panelUnit     CurrencyUnit @default(TOMAN)
   siteUnit      CurrencyUnit @default(TOMAN)
 
   updatedAt     DateTime @updatedAt

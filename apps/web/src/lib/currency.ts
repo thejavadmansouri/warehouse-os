@@ -31,7 +31,7 @@ const LABELS: Record<CurrencyUnit, string> = {
  */
 let config: { stored: CurrencyUnit; panel: CurrencyUnit } = {
   stored: "RIAL",
-  panel: "RIAL",
+  panel: "TOMAN",
 };
 
 /** یک بار موقع بالا آمدن پنل، از `/shop-settings`. */

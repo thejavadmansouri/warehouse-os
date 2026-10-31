@@ -13,11 +13,11 @@ import {
   Ban, Check, ChevronLeft, ChevronRight, CreditCard, Eye, FileClock, FilePlus,
   FileSpreadsheet, MessageSquare, Minus, Package, Percent, Plus, Printer,
   ClipboardList, FileSearch, Keyboard, PackagePlus, PackageX, PenLine, ReceiptText,
-  Repeat, Search, Send, User, Wallet, type LucideIcon,
+  Repeat, Search, Send, User, Wallet, Undo2, type LucideIcon,
 } from "lucide-react";
 
 export type CommandId =
-  | "new" | "prev" | "next" | "find" | "quotes" | "blankQuotes"
+  | "new" | "prev" | "next" | "find" | "quickReturn" | "quotes" | "blankQuotes"
   | "addRow" | "delRow" | "discount" | "lineNote"
   | "party" | "ledger" | "kardex"
   | "print" | "preview" | "excel" | "sms"
@@ -92,6 +92,8 @@ export const COMMANDS: CommandSpec[] = [
     match: (e) => e.altKey && e.key === "PageDown" },
   { id: "find",  group: "سند", icon: ReceiptText, label: "فاکتورها", keyLabel: "Ctrl+F",
     match: (e) => mod(e) && !e.shiftKey && letter(e, "f") },
+  { id: "quickReturn", group: "سند", icon: Undo2, label: "مرجوعی سریع", keyLabel: "Alt+R",
+    match: (e) => e.altKey && !mod(e) && letter(e, "r") },
 
   { id: "quotes", group: "سند", icon: FileSearch, label: "پیش‌فاکتورهای باز", keyLabel: "Alt+Q",
     match: (e) => e.altKey && !mod(e) && letter(e, "q") },
