@@ -36,6 +36,7 @@ model Customer {
   rmaRequests   RmaRequest[]
   notifications Notification[]
   stockAlerts   StockAlert[]
+  searchLogs    CustomerSearchLog[]
 
   @@index([status])
   @@map("customers")
@@ -624,6 +625,24 @@ model StockAlert {
   @@index([productId, notifiedAt])
   @@map("stock_alerts")
 }
+
+/// لاگ و تحلیل رفتار جستجوی مشتریان در کاتالوگ قطعات (CRM Search Analytics)
+model CustomerSearchLog {
+  id           String    @id @default(cuid())
+  customerId   String?
+  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  query        String    // متن جستجو (مثلاً: کمک پراید، دیسک ۲۰۶)
+  category     String?   // فیلتر دسته انتخابی
+  brand        String?   // فیلتر خودرو
+  partBrand    String?   // فیلتر برند سازنده
+  resultsCount Int       @default(0) // تعداد نتایج یافت‌شده
+  createdAt    DateTime  @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([query])
+  @@map("customer_search_logs")
+}
+
 
 
 

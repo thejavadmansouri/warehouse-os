@@ -62,12 +62,16 @@ export async function GET(req: NextRequest) {
  * (تنها نقطه‌ای که پسورد روشن دیده می‌شود — ادمین حضوری به مشتری می‌دهد).
  */
 const createSchema = z.object({
-  companyName: z.string().trim().min(3),
-  contactName: z.string().trim().min(2),
-  phone: z.string().min(10),
-  username: z.string().trim().min(3).optional(),
-  password: z.string().min(8, "رمز حداقل ۸ کاراکتر").optional(),
-  tierId: z.string().trim().optional(),
+  companyName: z.string().trim().min(2, "نام فروشگاه حداقل ۲ کاراکتر"),
+  contactName: z.string().trim().min(2, "نام رابط حداقل ۲ کاراکتر"),
+  phone: z.string().min(10, "شماره موبایل نامعتبر است"),
+  username: z.string().trim().min(3).optional().nullable(),
+  password: z.string().min(6, "رمز حداقل ۶ کاراکتر").optional(),
+  nationalId: z.string().trim().optional().nullable(),
+  address: z.string().trim().optional().nullable(),
+  tierId: z.string().trim().optional().nullable(),
+  discountPercent: z.number().min(0).max(100).optional(),
+  creditLimitOverride: z.number().min(0).optional().nullable(),
 });
 
 export async function POST(req: NextRequest) {
@@ -113,8 +117,12 @@ export async function POST(req: NextRequest) {
       companyName: input.companyName,
       contactName: input.contactName,
       phone,
-      username: input.username,
-      tierId: input.tierId,
+      username: input.username || null,
+      nationalId: input.nationalId || null,
+      address: input.address || null,
+      tierId: input.tierId || null,
+      discountPercent: input.discountPercent ?? 0,
+      creditLimitOverride: input.creditLimitOverride ?? null,
       passwordHash: await argon2.hash(tempPassword),
       status: "ACTIVE",
     },

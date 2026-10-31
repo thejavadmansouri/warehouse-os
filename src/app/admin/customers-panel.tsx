@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toFaDigits } from "@/lib/digits";
 import { faDate } from "@/lib/date";
+import Link from "next/link";
 
 /*
  * صف تأیید مشتری — هر تصمیم مستقیم به API می‌رود و لیست تازه می‌شود.
@@ -87,7 +88,13 @@ export function CustomersPanel(props: {
               </p>
             </div>
 
-            <div className="flex shrink-0 gap-1.5">
+            <div className="flex shrink-0 items-center gap-1.5">
+              <Link
+                href={`/admin/customers/${c.id}`}
+                className="rounded-lg border border-stone-200 bg-stone-50 px-2.5 py-1.5 text-xs font-semibold text-stone-700 hover:bg-stone-100"
+              >
+                بررسی پرونده
+              </Link>
               <button
                 onClick={() => act(c.id, "activate")}
                 disabled={busyId === c.id}

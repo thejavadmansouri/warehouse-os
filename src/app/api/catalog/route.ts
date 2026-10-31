@@ -122,5 +122,21 @@ export async function GET(req: NextRequest) {
     priceVisible,
   );
 
+  // ثبت لاگ جستجو در تاریخچه هوشمند CRM مشتری
+  if (q.length >= 2 || brand || category || partBrand) {
+    prisma.customerSearchLog
+      .create({
+        data: {
+          customerId: customer.id,
+          query: q || `${brand} ${category} ${partBrand}`.trim(),
+          brand: brand || null,
+          category: category || null,
+          partBrand: partBrand || null,
+          resultsCount: items.length,
+        },
+      })
+      .catch(() => {});
+  }
+
   return NextResponse.json({ ok: true, priceVisible, items, total: items.length });
 }
