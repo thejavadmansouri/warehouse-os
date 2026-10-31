@@ -41,6 +41,10 @@ export function CatalogBrowser(props: {
   tierDiscount: number;
   customerDiscount: number;
   shipping: ShippingOption[];
+  tierName?: string | null;
+  inTransitCount?: number;
+  activeChequesCount?: number;
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
 
@@ -396,7 +400,7 @@ export function CatalogBrowser(props: {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 py-6 pb-28">
+    <div className="mx-auto w-full max-w-6xl px-3 sm:px-6 py-3 sm:py-6 pb-28">
       {/* اعلان موقت (Toast) */}
       {addedToast && (
         <div className="fixed top-18 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white text-xs px-4 py-2.5 rounded-full shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-3 duration-200">
@@ -405,17 +409,21 @@ export function CatalogBrowser(props: {
         </div>
       )}
 
-      {/* ۱. کارت‌های داشبورد گرافیکی همکار (KPI Cards) */}
+      {/* ۱. کارت‌های داشبورد گرافیکی همکار (KPI Cards) — بهینه‌شده، فشرده و متناسب با موبایل */}
       <CustomerKpiCards
         wallet={props.wallet}
         availableCredit={props.availableCredit}
         creditLimit={props.creditLimit}
+        tierName={props.tierName}
         tierDiscount={props.tierDiscount}
         customerDiscount={props.customerDiscount}
+        inTransitCount={props.inTransitCount}
+        activeChequesCount={props.activeChequesCount}
+        isAdmin={props.isAdmin}
       />
 
       {/* ۲. اسلایدر متحرک برندهای معتبر قطعه‌سازی */}
-      <div className="mb-6 rounded-2xl overflow-hidden shadow-2xs border border-slate-200/80">
+      <div className="mb-4 sm:mb-6 rounded-xl sm:rounded-2xl overflow-hidden shadow-2xs border border-slate-200/80">
         <BrandMarquee onSelectBrand={(brandName) => setPartBrand(brandName)} />
       </div>
 

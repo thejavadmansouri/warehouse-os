@@ -41,7 +41,8 @@ export default async function CatalogPage() {
     customerAcc = await requireCustomer();
   }
 
-  const [products, shipping] = await Promise.all([
+  // واکشی داده‌های کاتالوگ و آمار واقعی وضعیت همکار / ادمین
+  const [products, shipping, inTransitCount, activeChequesCount] = await Promise.all([
     prisma.product.findMany({
       where: isAdmin ? undefined : { isActive: true },
       include: { volumePrices: { orderBy: { qtyFrom: "asc" } } },
@@ -52,6 +53,30 @@ export default async function CatalogPage() {
       where: { isActive: true },
       orderBy: { sortOrder: "asc" },
     }),
+    customerAcc
+      ? prisma.order.count({
+          where: {
+            customerId: customerAcc.customer.id,
+            status: { in: ["APPROVED_CREDIT", "PAID"] },
+          },
+        })
+      : isAdmin
+      ? prisma.order.count({
+          where: { status: { in: ["AWAITING_CREDIT_APPROVAL", "PAID"] } },
+        })
+      : 0,
+    customerAcc
+      ? prisma.cheque.count({
+          where: {
+            customerId: customerAcc.customer.id,
+            status: { in: ["RECEIVED", "REGISTERED_SAYAD"] },
+          },
+        })
+      : isAdmin
+      ? prisma.cheque.count({
+          where: { status: "RECEIVED" },
+        })
+      : 0,
   ]);
 
   const initialItems = mapCatalog(
@@ -72,6 +97,10 @@ export default async function CatalogPage() {
       creditLimit={customerAcc?.creditLimit ?? 0}
       tierDiscount={customerAcc?.tierDiscount ?? 0}
       customerDiscount={customerAcc?.customerDiscount ?? 0}
+      tierName={customerAcc?.customer?.tier?.name ?? null}
+      inTransitCount={inTransitCount}
+      activeChequesCount={activeChequesCount}
+      isAdmin={isAdmin}
       shipping={shipping.map((s) => ({
         id: s.id,
         name: s.name,
