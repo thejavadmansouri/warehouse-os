@@ -98,3 +98,8 @@ apps/api/logs/
 
 # ── رسانهٔ تبلیغاتی (ویدیو/بنر رندر‌شده) — ۲۵۰ مگابایت، نه سورس ──
 promo/
+
+# ── خروجی اکسپورت‌های پارسیان (داده مالی واقعی) ──
+tools/parsian-exporter/Export_Parsian_*/
+*.tok.tmp
+.tok.tmp
