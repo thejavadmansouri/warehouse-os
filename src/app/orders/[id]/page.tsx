@@ -76,6 +76,10 @@ export default async function OrderPage({
                 <span>📄 صورت‌حساب رسمی سامانه مودیان</span>
                 <span>↗</span>
               </Link>
+              <Link href={`/orders/${order.id}/shipping-label`} target="_blank" className="text-xs font-bold text-slate-800 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-2.5 py-1 rounded-lg flex items-center gap-1 transition-colors">
+                <span>🏷️ برچسب باربری کارتن (۱۰×۱۵)</span>
+                <span>↗</span>
+              </Link>
             </div>
           </div>
         </div>
