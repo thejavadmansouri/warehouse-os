@@ -3,10 +3,16 @@ import { prisma } from "@/lib/prisma";
 import { apiError } from "@/lib/api";
 import { currentUser } from "@/lib/current-user";
 import { mapCatalog } from "@/lib/catalog";
+import {
+  tokenizeQuery,
+  buildTokenWhereClause,
+  scoreProductMatch,
+} from "@/lib/persian-search";
 
 /*
- * کاتالوگ پیشرفته B2B — فیلترهای چندگانه:
+ * کاتالوگ پیشرفته B2B — فیلترهای چندگانه و موتور جستجوی هوشمند پوز کاردو:
  * برند خودرو، مدل خودرو، قسمت و بخش خودرو، برند سازنده قطعه، تاریخ و موجودی
+ * جستجوی پیشوندی توکنیزه شده (مثال: «کم پرا» -> کمک فنر پراید)
  */
 export async function GET(req: NextRequest) {
   const user = await currentUser(req);
@@ -42,7 +48,10 @@ export async function GET(req: NextRequest) {
     createdAtCondition = { gte: new Date(Date.now() - 90 * 24 * 3600 * 1000) };
   }
 
-  // مرتب‌سازی
+  // توکن‌سازی هوشمند به سبک پوز کاردو
+  const tokens = q ? tokenizeQuery(q) : [];
+
+  // مرتب‌سازی پایه در دیتابیس
   let orderBy: any = [{ brand: "asc" }, { category: "asc" }, { name: "asc" }];
   if (sort === "newest") {
     orderBy = [{ createdAt: "desc" }];
@@ -54,33 +63,55 @@ export async function GET(req: NextRequest) {
     orderBy = [{ stockQty: "desc" }];
   }
 
-  const products = await prisma.product.findMany({
+  const baseWhere = {
+    isActive: true,
+    ...(brand ? { brand } : {}),
+    ...(model ? { model: { contains: model, mode: "insensitive" as const } } : {}),
+    ...(category ? { category } : {}),
+    ...(partBrand ? { partBrand } : {}),
+    ...(inStock ? { stockQty: { gt: 0 } } : {}),
+    ...(createdAtCondition ? { createdAt: createdAtCondition } : {}),
+  };
+
+  let products = await prisma.product.findMany({
     where: {
-      isActive: true,
-      ...(brand ? { brand } : {}),
-      ...(model ? { model: { contains: model, mode: "insensitive" } } : {}),
-      ...(category ? { category } : {}),
-      ...(partBrand ? { partBrand } : {}),
-      ...(inStock ? { stockQty: { gt: 0 } } : {}),
-      ...(createdAtCondition ? { createdAt: createdAtCondition } : {}),
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: q, mode: "insensitive" } },
-              { sku: { contains: q, mode: "insensitive" } },
-              { oemCode: { contains: q, mode: "insensitive" } },
-              { brand: { contains: q, mode: "insensitive" } },
-              { model: { contains: q, mode: "insensitive" } },
-              { category: { contains: q, mode: "insensitive" } },
-              { partBrand: { contains: q, mode: "insensitive" } },
-            ],
-          }
-        : {}),
+      ...baseWhere,
+      ...(tokens.length > 0 ? buildTokenWhereClause(tokens) : {}),
     },
     include: { volumePrices: { orderBy: { qtyFrom: "asc" } } },
-    orderBy,
+    orderBy: sort === "default" && tokens.length > 0 ? undefined : orderBy,
     take: 300,
   });
+
+  // الگوریتم Fallback یکی‌کم (n-1) برگرفته از پوز کاردو:
+  // اگر کاربر چند کلمه وارد کرد اما محصولی پیدا نشد (به دلیل یک کلمه اضافه یا اشتباه املایی جزئی)،
+  // با زیرمجموعه‌های n-1 کلمه‌ای جستجو می‌کنیم تا کاربر نتیجه خالی نبیند
+  if (products.length === 0 && tokens.length >= 2) {
+    for (let skip = 0; skip < tokens.length && products.length === 0; skip++) {
+      const subsetTokens = tokens.filter((_, i) => i !== skip);
+      products = await prisma.product.findMany({
+        where: {
+          ...baseWhere,
+          ...buildTokenWhereClause(subsetTokens),
+        },
+        include: { volumePrices: { orderBy: { qtyFrom: "asc" } } },
+        take: 100,
+      });
+    }
+  }
+
+  // اگر سورت پیش‌فرض است و سرچ انجام شده، مرتب‌سازی امتیازی پوز کاردو را اعمال می‌کنیم
+  if (sort === "default" && tokens.length > 0) {
+    products.sort((a, b) => {
+      const scoreB = scoreProductMatch(b, q, tokens);
+      const scoreA = scoreProductMatch(a, q, tokens);
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      // در صورت تساوی امتیاز، موجودی بیشتر و نام کوتاه‌تر بالاتر بیاید
+      return b.stockQty - a.stockQty || a.name.length - b.name.length;
+    });
+  }
 
   const items = mapCatalog(
     products,
