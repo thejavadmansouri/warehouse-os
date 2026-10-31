@@ -23,12 +23,12 @@ export async function middleware(req: NextRequest) {
 
   const customerArea =
     pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/catalog") ||
+    pathname === "/catalog" ||
     pathname.startsWith("/orders") ||
     pathname.startsWith("/wallet");
 
   if (customerArea) {
-    if (session?.role !== "customer") {
+    if (session?.role !== "customer" && session?.role !== "admin") {
       const url = req.nextUrl.clone();
       url.pathname = "/login";
       url.searchParams.set("next", pathname);

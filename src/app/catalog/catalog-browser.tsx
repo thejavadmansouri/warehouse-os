@@ -243,6 +243,22 @@ export function CatalogBrowser(props: {
     setCart((prev) => prev.filter((c) => c.item.id !== productId));
   };
 
+  // بررسی پارامتر add در URL برای اضافه شدن خودکار قطعه از صفحه جزییات کالا
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const addId = params.get("add");
+    const addQty = parseInt(params.get("qty") || "0", 10);
+    if (addId) {
+      const target = items.find((it) => it.id === addId);
+      if (target) {
+        addToCart(target, addQty > 0 ? addQty : undefined);
+        setShowCartDrawer(true);
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, [items]);
+
   // مدیریت تعداد انتخابی در لحظه برای هر کالا
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>({});
   const [rawInputValues, setRawInputValues] = useState<Record<string, string>>({});
@@ -992,26 +1008,50 @@ export function CatalogBrowser(props: {
                     </div>
 
                     {/* نام قطعه و جزئیات سازگاری */}
-                    <div>
-                      <h3 className="font-bold text-sm text-slate-900 leading-snug">{item.name}</h3>
-                      <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-2 flex-wrap">
-                        <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded">
-                          {item.brand} {item.model ? `· ${item.model}` : ""}
-                        </span>
-                        <span className="text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded">
-                          {item.category}
-                        </span>
-                        {item.packSize > 1 && (
-                          <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[11px] nums">
-                            بسته {toFaDigits(item.packSize)} تایی
-                          </span>
+                    <div className="flex gap-3 items-start">
+                      {/* تصویر بندانگشتی قطعه */}
+                      <Link
+                        href={`/catalog/${item.id}`}
+                        className="size-16 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden hover:border-amber-400 transition"
+                      >
+                        {item.imageUrl ? (
+                          <img
+                            src={item.imageUrl}
+                            alt={item.name}
+                            className="max-h-full max-w-full object-contain"
+                          />
+                        ) : (
+                          <span className="text-xl text-slate-300">⚙️</span>
                         )}
-                        {hasVolumeDiscount && (
-                          <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[11px] font-medium">
-                            تخفیف تیراژ
+                      </Link>
+
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/catalog/${item.id}`}
+                          className="font-extrabold text-sm text-slate-900 leading-snug hover:text-amber-600 transition block"
+                        >
+                          {item.name}
+                        </Link>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1 flex-wrap">
+                          <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                            {item.brand} {item.model ? `· ${item.model}` : ""}
                           </span>
-                        )}
+                          <span className="text-slate-600 bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
+                            {item.category}
+                          </span>
+                          {item.packSize > 1 && (
+                            <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded text-[10px] nums">
+                              بسته {toFaDigits(item.packSize)} تایی
+                            </span>
+                          )}
+                          {hasVolumeDiscount && (
+                            <span className="text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded text-[10px] font-bold">
+                              تخفیف تیراژ
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    </div>
 
                       {/* برچسب‌های حرارتی و زنده (Live Badges) */}
                       <div className="flex items-center gap-1.5 flex-wrap mt-2">
@@ -1034,7 +1074,6 @@ export function CatalogBrowser(props: {
                           </span>
                         )}
                       </div>
-                    </div>
 
                     {/* ردیف قیمت */}
                     <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
@@ -1229,23 +1268,52 @@ export function CatalogBrowser(props: {
                         )}
                       </div>
 
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm text-slate-900 leading-snug">{item.name}</p>
-                        <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
-                          <span className="font-semibold text-slate-800">{item.brand}</span>
-                          {item.model && <span>· {item.model}</span>}
-                          <span className="text-slate-400">· {item.category}</span>
-                          {item.packSize > 1 && (
-                            <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
-                              بسته {toFaDigits(item.packSize)} تایی
-                            </span>
+                      <div className="min-w-0 flex items-start gap-3">
+                        <Link
+                          href={`/catalog/${item.id}`}
+                          className="size-12 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center shrink-0 overflow-hidden hover:border-amber-400 transition"
+                          title="مشاهده شناسنامه و عکس قطعه"
+                        >
+                          {item.imageUrl ? (
+                            <img
+                              src={item.imageUrl}
+                              alt={item.name}
+                              className="max-h-full max-w-full object-contain"
+                            />
+                          ) : (
+                            <span className="text-base text-slate-300">⚙️</span>
                           )}
-                          {hasVolumeDiscount && (
-                            <span className="text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
-                              تخفیف تیراژ
-                            </span>
-                          )}
-                        </div>
+                        </Link>
+
+                        <div className="min-w-0 flex-1">
+                          <Link
+                            href={`/catalog/${item.id}`}
+                            className="font-extrabold text-sm text-slate-900 leading-snug hover:text-amber-600 transition block truncate"
+                          >
+                            {item.name}
+                          </Link>
+                          <div className="flex items-center gap-2 text-xs text-slate-500 mt-1 flex-wrap">
+                            <span className="font-semibold text-slate-800">{item.brand}</span>
+                            {item.model && <span>· {item.model}</span>}
+                            <span className="text-slate-400">· {item.category}</span>
+                            {item.packSize > 1 && (
+                              <span className="text-slate-700 bg-slate-100 border border-slate-200 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
+                                بسته {toFaDigits(item.packSize)} تایی
+                              </span>
+                            )}
+                            {hasVolumeDiscount && (
+                              <span className="text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded text-[10px] nums font-medium">
+                                تخفیف تیراژ
+                              </span>
+                            )}
+                            <Link
+                              href={`/catalog/${item.id}`}
+                              className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5"
+                            >
+                              <span>مشاهده عکس و شناسنامه</span>
+                              <span>↗</span>
+                            </Link>
+                          </div>
 
                         {/* برچسب‌های حرارتی و زنده در دسکتاپ */}
                         <div className="flex items-center gap-1.5 flex-wrap mt-1">
@@ -1269,6 +1337,7 @@ export function CatalogBrowser(props: {
                           )}
                         </div>
                       </div>
+                    </div>
 
                       <div className="text-center text-xs">
                         {item.stockQty > 0 ? (

@@ -352,6 +352,19 @@ function ProductRow(props: { product: AdminProduct; onError: (m: string) => void
           <button onClick={toggleActive} disabled={busy} className="btn btn-ghost px-3 py-1.5 text-xs">
             {product.isActive ? "غیرفعال کن" : "فعال کن"}
           </button>
+          <a
+            href={`/catalog/${product.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn btn-ghost px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 font-bold"
+          >
+            <span>مشاهده صفحه و ویرایش عکس</span>
+            <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+          </a>
           <span className="text-[10px] text-ink-soft ms-auto">
             {formatToman(product.price)} تومان
           </span>
