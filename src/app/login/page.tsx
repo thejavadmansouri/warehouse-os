@@ -106,7 +106,7 @@ function LoginForm() {
   async function verifyOtp() {
     const data = await post("/api/auth/otp/verify", { phone, code });
 
-    if (data) router.push(next || "/dashboard");
+    if (data) router.push(next || "/catalog");
   }
 
   async function loginPassword() {

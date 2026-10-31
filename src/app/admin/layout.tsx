@@ -4,10 +4,15 @@ export const instant = false;
 import Link from "next/link";
 import { requireAdminPage } from "@/lib/server-account";
 import { LogoutButton } from "@/app/dashboard/logout-button";
+import { AnnouncementBanner } from "@/components/ui/announcement-banner";
 
 const tabs = [
   { href: "/admin/analytics", label: "گزارشات و آمار" },
   { href: "/admin", label: "مشتریان و همکاران" },
+  { href: "/admin/staff", label: "حسابداران و پرسنل" },
+  { href: "/admin/api-keys", label: "اتصال حسابداری (API)" },
+  { href: "/admin/notifications/send", label: "ارسال اعلان" },
+  { href: "/admin/design-system", label: "دیزاین سیستم" },
   { href: "/admin/tiers", label: "سطوح همکاری" },
   { href: "/admin/products", label: "محصولات و موجودی" },
   { href: "/admin/import", label: "ورود گروهی (اکسل)" },
@@ -26,6 +31,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="min-h-dvh flex flex-col bg-slate-50 text-slate-900 selection:bg-blue-600 selection:text-white">
+      {/* بنر اطلاعیه سراسری مدیران */}
+      <AnnouncementBanner target="ADMIN" />
+
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-2xs">
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6 h-15 flex items-center justify-between gap-4">
           <div className="flex items-center gap-6">

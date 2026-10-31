@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatToman, toFaDigits } from "@/lib/digits";
 import { LogoutButton } from "@/app/dashboard/logout-button";
 import { NotificationBell } from "@/components/notification-bell";
+import { AnnouncementBanner } from "@/components/ui/announcement-banner";
 
 export type CustomerShellProps = {
   companyName: string;
@@ -170,6 +171,9 @@ export function CustomerShell(props: CustomerShellProps) {
     <div className="min-h-dvh flex flex-col bg-slate-100/70 text-slate-900 selection:bg-blue-600 selection:text-white" dir="rtl">
       {/* نوار رنگی پرانرژی بالای صفحه */}
       <div className="h-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-amber-500 w-full shrink-0" />
+
+      {/* بنر اطلاعیه فوری و سراسری کاردو */}
+      <AnnouncementBanner target="CUSTOMER" />
 
       {/* هدر بالایی — نمایش مشخصات همکار در بالا سمت راست */}
       <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">

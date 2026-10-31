@@ -94,9 +94,9 @@ export async function POST(req: NextRequest) {
 
   verifyAttempts.delete(phone);
 
-  // نشست صادر می‌شود؛ PENDING هم میتواند وارد شود — فقط قیمت/کاتالوگ قفل است
+  // نشست صادر می‌شود؛ مشتری مستقیم به کاتالوگ هدایت می‌شود
   return setSessionCookie(
     { sub: customer.id, role: "customer", status: customer.status },
-    { ok: true, status: customer.status, role: "customer", redirect: "/dashboard" },
+    { ok: true, status: customer.status, role: "customer", redirect: "/catalog" },
   );
 }

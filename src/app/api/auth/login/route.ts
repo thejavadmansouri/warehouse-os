@@ -91,6 +91,6 @@ export async function POST(req: NextRequest) {
 
   return setSessionCookie(
     { sub: customer!.id, role: "customer", status: customer!.status },
-    { ok: true, status: customer!.status, role: "customer", redirect: "/dashboard" },
+    { ok: true, status: customer!.status, role: "customer", redirect: "/catalog" },
   );
 }

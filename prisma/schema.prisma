@@ -65,12 +65,14 @@ model OtpCode {
   @@map("otp_codes")
 }
 
-/// ادمین پنل B2B
+/// ادمین پنل B2B و پرسنل (مدیر ارشد، حسابدار، انباردار)
 model AdminUser {
   id           String   @id @default(cuid())
   username     String   @unique
   passwordHash String
   name         String?
+  role         String   @default("ADMIN") // ADMIN, ACCOUNTANT, WAREHOUSE
+  isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
   approvedOrders Order[] @relation("OrderApprover")
 
@@ -560,6 +562,52 @@ model Notification {
   @@index([createdAt])
   @@map("notifications")
 }
+
+/// کلیدهای API برای نرم‌افزارهای حسابداری (پارسیان، هلو، سپیدار و...)
+model ApiKey {
+  id          String    @id @default(cuid())
+  name        String    // نام اتصال (مثلاً: حسابداری پارسیان شعبه ۱)
+  key         String    @unique // توکن امن احراز هویت
+  system      String?   // PARSIAN, SEPPO, HOLOO, OTHER
+  role        String    @default("ACCOUNTING")
+  isActive    Boolean   @default(true)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@map("api_keys")
+}
+
+/// بنرها و اطلاعیه‌های همگانی سیستم برای مدیران و کاربران
+model Announcement {
+  id        String    @id @default(cuid())
+  title     String
+  message   String
+  level     String    @default("INFO") // INFO, SUCCESS, WARNING, URGENT
+  target    String    @default("ALL")  // ALL, CUSTOMER, ADMIN
+  link      String?
+  isActive  Boolean   @default(true)
+  startsAt  DateTime  @default(now())
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([isActive, target])
+  @@map("announcements")
+}
+
+/// اعلان‌های داخلی مدیریت (سفارش جدید، چک، ثبت‌نام کاربر جدید، لاگ سیستم مالی)
+model AdminNotification {
+  id        String   @id @default(cuid())
+  title     String
+  message   String
+  type      String   @default("INFO") // ORDER, CHEQUE, CUSTOMER, ACCOUNTING, SYSTEM
+  link      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([read, createdAt])
+  @@map("admin_notifications")
+}
+
 
 
 
