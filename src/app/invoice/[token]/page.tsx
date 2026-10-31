@@ -7,6 +7,7 @@ import { faDate } from "@/lib/date";
 import { formatToman, toFaDigits, numberToFaWords } from "@/lib/digits";
 import { ORDER_STATUS } from "@/lib/status";
 import { PrintButton } from "./print-button";
+import { OrderProgressBar } from "@/components/orders/order-progress-bar";
 
 export default async function InvoicePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -16,6 +17,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
     include: {
       items: true,
       shipping: true,
+      shipment: true,
       customer: {
         select: {
           companyName: true,
@@ -45,6 +47,19 @@ export default async function InvoicePage({ params }: { params: Promise<{ token:
             </span>
           </div>
           <PrintButton />
+        </div>
+
+        {/* نوار پیشرفت مرحله‌ای و درصدی روند سفارش (مخفی در پرینت) */}
+        <div className="no-print mb-6">
+          <OrderProgressBar
+            orderStatus={order.status}
+            shipmentStatus={order.shipment?.status}
+            paidAt={isPaid ? order.updatedAt : null}
+            shippedAt={order.shipment?.shippedAt}
+            deliveredAt={order.shipment?.deliveredAt}
+            waybillNumber={order.shipment?.waybillNumber}
+            carrierName={order.shipment?.carrierName}
+          />
         </div>
 
         {/* سربرگ رسمی سند */}

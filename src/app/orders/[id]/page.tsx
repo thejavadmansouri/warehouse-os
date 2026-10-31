@@ -1,16 +1,20 @@
 // داده‌ی شخصی/پویا — بدون پیش‌ساخت
 export const instant = false;
 
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
 import { requireCustomer } from "@/lib/server-account";
 import { CustomerShell } from "@/components/customer-shell";
+import { AdminShell } from "@/components/admin/admin-shell";
+import { SESSION_COOKIE, verifySession } from "@/lib/session";
 import { faDate, faDateTime } from "@/lib/date";
 import { formatToman, toFaDigits } from "@/lib/digits";
 import { ORDER_STATUS } from "@/lib/status";
 import { SHIPMENT_STATUS_MAP, FREIGHT_PAYMENT_LABELS } from "@/lib/logistics";
 import { PayPanel } from "./pay-panel";
+import { OrderProgressBar } from "@/components/orders/order-progress-bar";
 
 const toneClass: Record<string, string> = {
   amber: "text-amber-700 bg-amber-50 border border-amber-200",
@@ -26,32 +30,44 @@ export default async function OrderPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ new?: string }>;
 }) {
-  const acc = await requireCustomer();
   const { id } = await params;
   const { new: isNew } = await searchParams;
 
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const session = await verifySession(token ?? "");
+  if (!session) redirect(`/login?next=/orders/${id}`);
+
+  const isAdmin = session.role === "admin";
+  let acc: any = null;
+  let admin: any = null;
+
+  if (isAdmin) {
+    admin = await prisma.adminUser.findUnique({ where: { id: session.sub } });
+    if (!admin) redirect("/login");
+  } else {
+    acc = await requireCustomer();
+  }
+
   const order = await prisma.order.findUnique({
     where: { id },
-    include: { items: true, shipping: true, shipment: true, rmaRequests: true },
+    include: {
+      items: true,
+      shipping: true,
+      shipment: true,
+      rmaRequests: true,
+      customer: { include: { tier: true } },
+    },
   });
 
-  if (!order || order.customerId !== acc.customer.id) notFound();
+  if (!order) notFound();
+  if (!isAdmin && order.customerId !== acc?.customer?.id) notFound();
 
   const st = ORDER_STATUS[order.status] ?? ORDER_STATUS.PROFORMA;
   const remaining = Number(order.total) - Number(order.paidWallet) - Number(order.paidGateway);
 
-  return (
-    <CustomerShell
-      companyName={acc.customer.companyName}
-      contactName={acc.customer.contactName}
-      phone={acc.customer.phone}
-      tierName={acc.customer.tier?.name}
-      tierDiscount={acc.tierDiscount}
-      wallet={acc.wallet}
-      availableCredit={acc.availableCredit}
-      active="orders"
-    >
-      <div className="mx-auto w-full max-w-4xl px-3 sm:px-6 py-6 pb-24">
+  const content = (
+    <div className="mx-auto w-full max-w-4xl px-3 sm:px-6 py-6 pb-24">
         <div className="flex items-start justify-between gap-3 pb-4 border-b border-slate-200">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -82,6 +98,19 @@ export default async function OrderPage({
               </Link>
             </div>
           </div>
+        </div>
+
+        {/* نوار پیشرفت مرحله‌ای و درصدی رسیدن کالا به مشتری */}
+        <div className="mt-5">
+          <OrderProgressBar
+            orderStatus={order.status}
+            shipmentStatus={order.shipment?.status}
+            paidAt={(order.status === "PAID" || order.status === "APPROVED_CREDIT") ? order.updatedAt : null}
+            shippedAt={order.shipment?.shippedAt}
+            deliveredAt={order.shipment?.deliveredAt}
+            waybillNumber={order.shipment?.waybillNumber}
+            carrierName={order.shipment?.carrierName}
+          />
         </div>
 
         {isNew && order.status === "PROFORMA" && (
@@ -243,6 +272,35 @@ export default async function OrderPage({
           </div>
         )}
       </div>
+  );
+
+  if (isAdmin) {
+    return (
+      <AdminShell
+        admin={{
+          id: admin.id,
+          username: admin.username,
+          name: admin.name,
+          role: admin.role,
+        }}
+      >
+        {content}
+      </AdminShell>
+    );
+  }
+
+  return (
+    <CustomerShell
+      companyName={acc.customer.companyName}
+      contactName={acc.customer.contactName}
+      phone={acc.customer.phone}
+      tierName={acc.customer.tier?.name}
+      tierDiscount={acc.tierDiscount}
+      wallet={acc.wallet}
+      availableCredit={acc.availableCredit}
+      active="orders"
+    >
+      {content}
     </CustomerShell>
   );
 }
