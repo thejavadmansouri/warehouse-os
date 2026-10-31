@@ -14,13 +14,34 @@ Write-Host "=================================================================" -
 Write-Host ""
 
 # تنظیمات اتصال
-$ServerInstances = @("localhost", "127.0.0.1", ".", "(local)", ".\SQLEXPRESS")
+# ۱. شناسایی سرویس‌های فعال SQL Server روی سیستم (چه پیش‌فرض و چه Named Instance مثل SQLEXPRESS یا PARSIAN)
+$discoveredInstances = [System.Collections.Generic.List[string]]::new()
+$discoveredInstances.Add("localhost")
+$discoveredInstances.Add("127.0.0.1")
+$discoveredInstances.Add(".")
+
+try {
+    $services = Get-Service -Name "MSSQL*" -ErrorAction SilentlyContinue
+    foreach ($s in $services) {
+        if ($s.Name -eq "MSSQLSERVER") {
+            if (-not $discoveredInstances.Contains("localhost")) { $discoveredInstances.Add("localhost") }
+        } elseif ($s.Name -like "MSSQL$*") {
+            $instName = $s.Name.Substring(6)
+            $discoveredInstances.Add(".\$instName")
+            $discoveredInstances.Add("localhost\$instName")
+        }
+    }
+} catch {}
+
+$discoveredInstances.Add(".\SQLEXPRESS")
+$discoveredInstances.Add("(local)")
+
 $ConnectedConn = $null
 $ServerUsed = ""
 
 Write-Host "🔍 در حال جستجوی سرویس SQL Server پارسیان..." -ForegroundColor Gray
 
-foreach ($srv in $ServerInstances) {
+foreach ($srv in $discoveredInstances) {
     try {
         $testConnStr = "Server=${srv};Database=master;Integrated Security=True;Connect Timeout=3;"
         $conn = New-Object System.Data.SqlClient.SqlConnection($testConnStr)
@@ -58,27 +79,35 @@ if (-not $ConnectedConn) {
 
 Write-Host "✅ اتصال موفق به SQL Server برقرار شد: [$ServerUsed]" -ForegroundColor Green
 
-# جستجوی دیتابیس‌های پارسیان
+# جستجوی دیتابیس‌های پارسیان (مستقل از درایو دیسک C, D, E و ...)
 $cmd = $ConnectedConn.CreateCommand()
-$cmd.CommandText = "SELECT name FROM sysdatabases WHERE name LIKE 'db_%' OR name LIKE '%parsian%';"
+$cmd.CommandText = "SELECT name, filename FROM sysdatabases WHERE name LIKE 'db_%' OR name LIKE '%parsian%';"
 $reader = $cmd.ExecuteReader()
 $parsianDbs = @()
+$dbPaths = @{}
 while ($reader.Read()) {
-    $parsianDbs += $reader["name"].ToString()
+    $dName = $reader["name"].ToString()
+    $parsianDbs += $dName
+    $dbPaths[$dName] = $reader["filename"].ToString()
 }
 $reader.Close()
 
 if ($parsianDbs.Count -eq 0) {
-    Write-Host "⚠️ هیچ دیتابیسی با پیشوند db_ یا نام parsian پیدا نشد." -ForegroundColor Yellow
+    Write-Host "⚠️ هیچ دیتابیسی با پیشوند db_ یا نام parsian در سرور پیدا نشد." -ForegroundColor Yellow
     $dbName = Read-Host "لطفاً نام دیتابیس پارسیان را دستی وارد کنید (مثلاً db_1404)"
     if ([string]::IsNullOrWhiteSpace($dbName)) { $dbName = "db_1404" }
 } elseif ($parsianDbs.Count -eq 1) {
     $dbName = $parsianDbs[0]
     Write-Host "🎯 دیتابیس پارسیان شناسایی شد: [$dbName]" -ForegroundColor Cyan
+    if ($dbPaths.ContainsKey($dbName)) {
+        Write-Host "   📍 مسیر فیزیکی روی دیسک: $($dbPaths[$dbName])" -ForegroundColor DarkGray
+    }
 } else {
-    Write-Host "دیتابیس‌های پارسیان پیدا شده:" -ForegroundColor Cyan
+    Write-Host "دیتابیس‌های پارسیان پیدا شده در سرور:" -ForegroundColor Cyan
     for ($i = 0; $i -lt $parsianDbs.Count; $i++) {
-        Write-Host " [$i] $($parsianDbs[$i])" -ForegroundColor White
+        $d = $parsianDbs[$i]
+        $p = $dbPaths[$d]
+        Write-Host " [$i] $d (مسیر دیسک: $p)" -ForegroundColor White
     }
     # انتخاب خودکار آخرین سال مالی (مثلاً db_1404)
     $dbName = $parsianDbs[0]
