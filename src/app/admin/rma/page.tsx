@@ -1,6 +1,8 @@
 import { requireAdminPage } from "@/lib/server-account";
 import { RmaAdminView } from "./rma-admin-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "مدیریت مرجوعی، گارانتی و RMA | کاردو B2B",
 };

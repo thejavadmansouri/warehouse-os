@@ -1,17 +1,15 @@
 // Service Worker کاردو B2B — نسخه غیرفعال در لوکال‌هاست جهت جلوگیری از رفرش مکرر
-self.addEventListener("install", (event) => {
+self.addEventListener("install", () => {
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
+  // هرگز clients.claim() را صدا نزن تا controllerchange و رفرش مکرر رخ ندهد
   event.waitUntil(
     self.registration.unregister().then(() => {
-      return self.clients.claim();
+      if (typeof caches !== "undefined") {
+        return caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))));
+      }
     })
   );
-});
-
-// هیچ درخواستی را اینترسپت نکن تا تداخلی با HMR رخ ندهد
-self.addEventListener("fetch", (event) => {
-  return;
 });

@@ -1,6 +1,8 @@
 import { requireAdminPage } from "@/lib/server-account";
 import { LogisticsView } from "./logistics-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "مدیریت لجستیک و ارسال باربری کرمان | کاردو B2B",
 };

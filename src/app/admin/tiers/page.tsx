@@ -1,6 +1,8 @@
 import { requireAdminPage } from "@/lib/server-account";
 import { TiersView } from "./tiers-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "مدیریت سطوح همکاری و تخفیف‌های B2B | کاردو B2B",
 };

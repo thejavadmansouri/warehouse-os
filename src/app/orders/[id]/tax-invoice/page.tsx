@@ -4,6 +4,8 @@ import { requireCustomer } from "@/lib/server-account";
 import { TaxInvoiceClient } from "./tax-invoice-client";
 import crypto from "crypto";
 
+export const instant = false;
+
 export const metadata = {
   title: "صورت‌حساب رسمی سامانه مودیان و دارایی | کاردو B2B",
 };
@@ -54,7 +56,7 @@ export default async function TaxInvoicePage({
           unit: it.product.unit,
           quantity: it.qty,
           unitPrice: Number(it.unitPrice),
-          totalPrice: Number(it.totalPrice),
+          totalPrice: Number(it.lineTotal),
         })),
       }}
       seller={{

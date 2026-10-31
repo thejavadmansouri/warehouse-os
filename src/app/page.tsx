@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, verifySession } from "@/lib/session";
 
+export const instant = false;
+
 /*
  * صفحه‌ی ورودی کاردو B2B
  * کاربرانی که وارد شده‌اند مستقیماً به کاتالوگ یا پنل هدایت می‌شوند.

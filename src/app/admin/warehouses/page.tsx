@@ -1,6 +1,8 @@
 import { requireAdminPage } from "@/lib/server-account";
 import { WarehousesView } from "./warehouses-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "مدیریت چندانباره و شعب توزیع استان کرمان | کاردو B2B",
 };

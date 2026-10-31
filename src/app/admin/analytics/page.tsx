@@ -1,6 +1,8 @@
 import { requireAdminPage } from "@/lib/server-account";
 import { AnalyticsView } from "./analytics-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "داشبورد هوش تجاری و گزارشات فروش B2B | کاردو B2B",
 };

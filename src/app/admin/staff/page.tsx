@@ -2,6 +2,8 @@ import { requireAdminPage } from "@/lib/server-account";
 import { prisma } from "@/lib/prisma";
 import { StaffClient } from "./staff-client";
 
+export const instant = false;
+
 export const metadata = {
   title: "مدیریت پرسنل و حسابداران | کاردو B2B",
 };

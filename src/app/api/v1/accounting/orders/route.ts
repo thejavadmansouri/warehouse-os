@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
       unit: item.product.unit,
       quantity: item.qty,
       unitPrice: Number(item.unitPrice),
-      totalPrice: Number(item.totalPrice),
+      totalPrice: Number(item.lineTotal),
     })),
   }));
 

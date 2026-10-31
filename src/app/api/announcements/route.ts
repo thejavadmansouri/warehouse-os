@@ -10,14 +10,20 @@ export async function GET(req: NextRequest) {
   const items = await prisma.announcement.findMany({
     where: {
       isActive: true,
-      OR: [
-        { target: "ALL" },
-        { target: target },
-      ],
       startsAt: { lte: now },
-      OR: [
-        { expiresAt: null },
-        { expiresAt: { gt: now } },
+      AND: [
+        {
+          OR: [
+            { target: "ALL" },
+            { target: target },
+          ],
+        },
+        {
+          OR: [
+            { expiresAt: null },
+            { expiresAt: { gt: now } },
+          ],
+        },
       ],
     },
     orderBy: { createdAt: "desc" },

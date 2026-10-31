@@ -1,6 +1,8 @@
 import { requireAdminPage } from "@/lib/server-account";
 import { WarehouseView } from "./warehouse-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "پنل جمع‌آوری و بسته‌بندی انبار مرکزی کرمان | کاردو B2B",
 };

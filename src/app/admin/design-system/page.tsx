@@ -4,6 +4,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
+export const instant = false;
+
 export const metadata = {
   title: "دیزاین سیستم کاردو B2B | Kardo Design System",
 };

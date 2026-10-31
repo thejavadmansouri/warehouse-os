@@ -2,6 +2,8 @@ import { requireCustomer } from "@/lib/server-account";
 import { CustomerShell } from "@/components/customer-shell";
 import { RmaView } from "./rma-view";
 
+export const instant = false;
+
 export const metadata = {
   title: "خدمات پس از فروش و مرجوعی قطعه (RMA) | کاردو B2B",
 };

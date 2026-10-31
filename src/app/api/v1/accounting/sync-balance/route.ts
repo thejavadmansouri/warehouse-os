@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { validateApiKey } from "@/lib/api-key-auth";
+import { walletBalance } from "@/lib/wallet";
 
 /*
  * وب‌سرویس به‌روزرسانی مانده‌حساب دفتری و سقف اعتبار مشتری از نرم‌افزار حسابداری
@@ -39,33 +40,45 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "مشتری در سامانه کاردو یافت نشد" }, { status: 404 });
     }
 
-    const updateData: any = {};
+    const currentBal = await walletBalance(customer.id);
+    let finalBal = currentBal;
+
     if (typeof body.walletBalance === "number") {
-      updateData.walletBalance = body.walletBalance;
-    }
-    if (typeof body.creditLimit === "number" && body.creditLimit >= 0) {
-      updateData.creditLimit = body.creditLimit;
+      const diff = body.walletBalance - currentBal;
+      if (diff !== 0) {
+        finalBal = body.walletBalance;
+        await prisma.walletTransaction.create({
+          data: {
+            customerId: customer.id,
+            type: diff > 0 ? "TOPUP_MANUAL" : "ADJUST",
+            amount: diff,
+            balanceAfter: finalBal,
+            refType: "ACCOUNTING_SYNC",
+            idempotencyKey: `sync-${customer.id}-${Date.now()}`,
+            note: `همگام‌سازی از نرم‌افزار حسابداری (${auth.apiKey?.system ?? "API"})`,
+          },
+        });
+      }
     }
 
-    const updated = await prisma.customer.update({
-      where: { id: customer.id },
-      data: updateData,
-      select: {
-        id: true,
-        companyName: true,
-        phone: true,
-        walletBalance: true,
-        creditLimit: true,
-      },
-    });
+    let creditLimit = Number(customer.creditLimitOverride ?? 0);
+    if (typeof body.creditLimit === "number" && body.creditLimit >= 0) {
+      creditLimit = body.creditLimit;
+      await prisma.customer.update({
+        where: { id: customer.id },
+        data: { creditLimitOverride: body.creditLimit },
+      });
+    }
 
     return NextResponse.json({
       ok: true,
-      message: `مانده‌حساب همکار «${updated.companyName}» با موفقیت به‌روزرسانی شد.`,
+      message: `مانده‌حساب همکار «${customer.companyName}» با موفقیت به‌روزرسانی شد.`,
       customer: {
-        ...updated,
-        walletBalance: Number(updated.walletBalance),
-        creditLimit: Number(updated.creditLimit),
+        id: customer.id,
+        companyName: customer.companyName,
+        phone: customer.phone,
+        walletBalance: finalBal,
+        creditLimit: creditLimit,
       },
     });
   } catch (err: any) {

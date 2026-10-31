@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { requireCustomer } from "@/lib/server-account";
 import { PrintCatalogClient, PrintCatalogItem } from "./print-client";
 
+export const instant = false;
+
 export const metadata = {
   title: "کاتالوگ و لیست قیمت چاپی (PDF) | کاردو B2B",
 };
@@ -10,7 +12,7 @@ export default async function PrintCatalogPage() {
   const acc = await requireCustomer();
   const customer = acc.customer;
 
-  const totalDiscount = (acc.tierDiscount || 0) + (customer.customerDiscount || 0);
+  const totalDiscount = (acc.tierDiscount || 0) + (acc.customerDiscount || 0);
 
   const products = await prisma.product.findMany({
     where: { isActive: true },

@@ -5,6 +5,8 @@ import { faDate } from "@/lib/date";
 import { toFaDigits } from "@/lib/digits";
 import Link from "next/link";
 
+export const instant = false;
+
 export const metadata = {
   title: "برچسب باربری و الصاق روی کارتن | کاردو B2B",
 };
@@ -114,7 +116,7 @@ export default async function ShippingLabelPage({
           <div>
             <span className="text-slate-500 font-medium">شماره بیجک: </span>
             <span className="font-mono font-bold text-slate-900">
-              {order.shipment?.trackingNumber || "ثبت در باربری"}
+              {order.shipment?.waybillNumber || "ثبت در باربری"}
             </span>
           </div>
           <div>
